@@ -2,8 +2,9 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Swords, Trophy, Loader2 } from "lucide-react";
-import { useSolPrice } from "@/hooks/useSolPrice";
 
+// TODO [POLYMARKET]: Replace lamports with native USD amounts
+// once the database schema is migrated.
 const LAMPORTS = 1_000_000_000;
 
 interface Fight {
@@ -53,6 +54,11 @@ function calcOdds(poolA: number, poolB: number) {
   };
 }
 
+// Convert legacy lamports to display value (USD during migration)
+function toDisplayAmount(lamports: number): number {
+  return lamports / LAMPORTS;
+}
+
 export default function FightCard({
   fight,
   onPredict,
@@ -76,11 +82,10 @@ export default function FightCard({
   isSoccerEvent?: boolean;
   eventHasStarted?: boolean;
 }) {
-  const { formatUsd } = useSolPrice();
   const { oddsA, oddsB } = calcOdds(fight.pool_a_lamports, fight.pool_b_lamports);
-  const totalPool = (fight.pool_a_lamports + fight.pool_b_lamports) / LAMPORTS;
-  const poolASol = fight.pool_a_lamports / LAMPORTS;
-  const poolBSol = fight.pool_b_lamports / LAMPORTS;
+  const totalPool = toDisplayAmount(fight.pool_a_lamports + fight.pool_b_lamports);
+  const poolA = toDisplayAmount(fight.pool_a_lamports);
+  const poolB = toDisplayAmount(fight.pool_b_lamports);
 
   const isClaimable = ["confirmed", "settled"].includes(fight.status);
   const hasWinningEntries =
@@ -91,7 +96,6 @@ export default function FightCard({
   const claimsOpen =
     fight.claims_open_at && new Date() >= new Date(fight.claims_open_at);
 
-  // UI-level guard: if event has started and fight is still "open" in DB, show as LOCKED
   const displayStatus = (eventHasStarted && fight.status === "open") ? "locked" : fight.status;
   const badge = STATUS_BADGE[displayStatus] || STATUS_BADGE.open;
   const canPredict = displayStatus === "open";
@@ -99,7 +103,6 @@ export default function FightCard({
   const isSoccer = fight.source === "api-football";
   const hasLogos = isSoccer && !!(fight.home_logo && fight.away_logo);
 
-  // Parse title
   const titleParts = fight.title.split(' — ');
   const fightLabel = titleParts[0] || fight.title;
   const weight = fight.weight_class || titleParts[1] || null;
@@ -108,7 +111,6 @@ export default function FightCard({
   if (isSoccer) {
     return (
       <Card className="bg-card border-primary/20 overflow-hidden relative">
-        {/* Compact status bar */}
         <div className="px-4 py-2 border-b border-border/20 flex items-center justify-between">
           <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Match Prediction</span>
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badge.className}`}>
@@ -116,10 +118,8 @@ export default function FightCard({
           </span>
         </div>
 
-        {/* Matchup area */}
         <div className="px-4 pt-5 pb-3 sm:px-6">
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-5" dir="ltr">
-            {/* Home */}
             <SoccerTeamColumn
               name={fight.fighter_a_name}
               odds={oddsA}
@@ -128,13 +128,9 @@ export default function FightCard({
               logo={hasLogos ? fight.home_logo : undefined}
               isWinner={fight.winner === "fighter_a" && isClaimable}
             />
-
-            {/* Center divider */}
             <div className="flex flex-col items-center gap-1">
               <span className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">vs</span>
             </div>
-
-            {/* Away */}
             <SoccerTeamColumn
               name={fight.fighter_b_name}
               odds={oddsB}
@@ -151,19 +147,16 @@ export default function FightCard({
           <div className="flex flex-col">
             <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Prize Pool</span>
             <span className="text-lg sm:text-xl font-bold text-primary font-['Cinzel'] leading-tight">
-              {totalPool.toFixed(2)} SOL
+              ${totalPool.toFixed(2)}
             </span>
-            {formatUsd(totalPool) && (
-              <span className="text-[10px] text-muted-foreground/70">{formatUsd(totalPool)}</span>
-            )}
           </div>
           <div className="flex gap-3 text-[10px] text-muted-foreground">
             <div className="text-center">
-              <span className="block font-bold text-foreground text-xs">{poolASol.toFixed(2)}</span>
+              <span className="block font-bold text-foreground text-xs">${poolA.toFixed(2)}</span>
               <span>Home</span>
             </div>
             <div className="text-center">
-              <span className="block font-bold text-foreground text-xs">{poolBSol.toFixed(2)}</span>
+              <span className="block font-bold text-foreground text-xs">${poolB.toFixed(2)}</span>
               <span>Away</span>
             </div>
           </div>
@@ -181,7 +174,6 @@ export default function FightCard({
           </div>
         )}
 
-        {/* Claim button */}
         {hasWinningEntries && claimsOpen && (
           <div className="px-4 sm:px-6 pb-4">
             <Button
@@ -241,12 +233,11 @@ export default function FightCard({
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3" dir="ltr">
           <FighterColumn
             name={fight.fighter_a_name}
-            poolSol={poolASol}
+            poolAmount={poolA}
             odds={oddsA}
             isWinner={fight.winner === "fighter_a" && isClaimable}
             canPredict={canPredict}
             onPredict={() => wallet ? onPredict(fight, "fighter_a") : onWalletRequired?.()}
-            formatUsd={formatUsd}
           />
           <div className="flex flex-col items-center gap-0.5">
             <Swords className="w-5 h-5 text-primary/60" />
@@ -254,20 +245,18 @@ export default function FightCard({
           </div>
           <FighterColumn
             name={fight.fighter_b_name}
-            poolSol={poolBSol}
+            poolAmount={poolB}
             odds={oddsB}
             isWinner={fight.winner === "fighter_b" && isClaimable}
             canPredict={canPredict}
             onPredict={() => wallet ? onPredict(fight, "fighter_b") : onWalletRequired?.()}
-            formatUsd={formatUsd}
           />
         </div>
 
         <div className="mt-3 pt-3 border-t border-border/30 flex items-center justify-between">
           <span className="text-[10px] text-muted-foreground">Total Pool</span>
           <span className="text-xs font-bold text-primary">
-            {totalPool.toFixed(2)} SOL
-            {formatUsd(totalPool) && <span className="text-[10px] text-muted-foreground font-normal ml-1.5">{formatUsd(totalPool)}</span>}
+            ${totalPool.toFixed(2)}
           </span>
         </div>
 
@@ -283,7 +272,6 @@ export default function FightCard({
           </div>
         )}
 
-        {/* Claim button */}
         {hasWinningEntries && claimsOpen && (
           <Button
             className="w-full mt-3 bg-gradient-to-r from-primary to-accent text-primary-foreground font-bold"
@@ -308,10 +296,10 @@ export default function FightCard({
 }
 
 function FighterColumn({
-  name, poolSol, odds, isWinner, canPredict, onPredict, formatUsd, logo, isSoccer,
+  name, poolAmount, odds, isWinner, canPredict, onPredict, logo, isSoccer,
 }: {
-  name: string; poolSol: number; odds: number; isWinner: boolean;
-  canPredict: boolean; onPredict: () => void; formatUsd: (sol: number) => string;
+  name: string; poolAmount: number; odds: number; isWinner: boolean;
+  canPredict: boolean; onPredict: () => void;
   logo?: string | null; isSoccer?: boolean;
 }) {
   const [logoError, setLogoError] = useState(false);
@@ -330,8 +318,7 @@ function FighterColumn({
       )}
       <p className={`font-bold text-foreground ${isSoccer && showLogo ? 'text-base sm:text-lg' : showLogo ? 'text-[15px]' : 'text-sm'}`}>{name}</p>
       <p className={`text-muted-foreground mt-1 ${isSoccer ? 'text-xs sm:text-sm' : 'text-xs'}`}>
-        {poolSol.toFixed(2)} SOL
-        {formatUsd(poolSol) && <span className="block text-[10px] text-muted-foreground/70">{formatUsd(poolSol)}</span>}
+        ${poolAmount.toFixed(2)}
       </p>
       <p className={`text-primary font-bold ${isSoccer ? 'text-xl sm:text-2xl' : 'text-lg'}`}>{odds.toFixed(2)}x</p>
       {canPredict && (
