@@ -972,6 +972,18 @@ function AdminFightCard({
         {fight.featured && (
           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400">⭐ FEATURED</span>
         )}
+        {/* Trading allowlist toggle */}
+        <div className="flex items-center gap-1.5 ml-auto">
+          <span className={`text-[10px] font-bold ${fight.trading_allowed ? 'text-green-400' : 'text-muted-foreground'}`}>
+            {fight.trading_allowed ? '✅ TRADABLE' : '🚫 NOT TRADABLE'}
+          </span>
+          <Switch
+            checked={fight.trading_allowed}
+            onCheckedChange={(checked) => onAction("toggleTrading", { fight_id: fight.id, trading_allowed: checked })}
+            disabled={busy}
+            className="scale-75"
+          />
+        </div>
       </div>
 
       {/* Review required banner */}
