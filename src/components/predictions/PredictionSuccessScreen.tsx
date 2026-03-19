@@ -73,13 +73,20 @@ export default function PredictionSuccessScreen({
   setShowShare,
   tradeResult,
 }: Props) {
-  const status = tradeResult?.trade_status;
+  // Short-lived polling for non-final statuses
+  const liveStatus = useTradeStatusPoll(
+    tradeResult?.trade_order_id,
+    tradeResult?.trade_status,
+  );
+
+  // Use live-polled status if available, otherwise initial
+  const status = liveStatus?.status ?? tradeResult?.trade_status;
   const { icon, title, subtitle } = getStatusDisplay(status);
   const isFailed = status === "failed";
 
-  // Prefer backend values, fall back to frontend estimates
+  // Prefer live backend values → initial backend values → frontend estimates
   const displayAmount = tradeResult?.requested_amount_usdc ?? amountNum;
-  const displayFee = tradeResult?.fee_usdc ?? null;
+  const displayFee = liveStatus?.fee_usdc ?? tradeResult?.fee_usdc ?? null;
   const displayNet = tradeResult?.net_amount_usdc ?? null;
 
   return (
