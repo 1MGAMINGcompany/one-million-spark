@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { createRemoteJWKSet, jwtVerify } from "npm:jose@5";
 
 /**
  * prediction-submit — Production trade execution gateway.
