@@ -157,6 +157,29 @@ Deno.serve(async (req) => {
   let tradeOrderId: string | null = null;
   let normalizedWallet: string | null = null;
 
+  // ── Optional Privy JWT extraction for identity binding ──
+  // If present, we extract the trusted DID to bind to prediction_accounts.
+  // Not required for trade submission (wallet is still the primary key),
+  // but enables server-side ownership resolution in other endpoints.
+  let privyDid: string | null = null;
+  {
+    const privyToken = req.headers.get("x-privy-token");
+    const appId = Deno.env.get("VITE_PRIVY_APP_ID");
+    if (privyToken && privyToken.length >= 20 && appId) {
+      try {
+        const jwks = createRemoteJWKSet(new URL("https://auth.privy.io/.well-known/jwks.json"));
+        const { payload } = await jwtVerify(privyToken, jwks, {
+          issuer: "privy.io",
+          audience: appId,
+        });
+        privyDid = (payload.sub as string) || null;
+      } catch (e) {
+        // Non-fatal: DID binding is best-effort during submission
+        console.warn("[prediction-submit] Privy JWT extraction failed (non-fatal):", (e as Error).message);
+      }
+    }
+  }
+
   try {
     const body = await req.json();
     const { fight_id, wallet, fighter_pick, amount_usd, slippage_bps: clientSlippage } = body;
