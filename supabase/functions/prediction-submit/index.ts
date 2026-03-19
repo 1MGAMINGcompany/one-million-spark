@@ -1,11 +1,21 @@
 import { createClient } from "@supabase/supabase-js";
 
+/**
+ * prediction-submit — Source-aware prediction submission.
+ *
+ * Polymarket-backed events: Orders routed through user's CLOB credentials
+ * Native 1MGAMING events: Local pool accounting only
+ *
+ * Builder wallet is NEVER used as the user's trading identity.
+ */
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const CLOB_BASE = "https://clob.polymarket.com";
 const MIN_PREDICTION_USD = 1.0;
 const DEFAULT_FEE_BPS = 500;
 
@@ -14,6 +24,78 @@ const json = (data: unknown, status = 200) =>
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+
+/**
+ * Generate HMAC signature for Polymarket CLOB API authentication.
+ */
+async function generateClobHmac(
+  apiSecret: string,
+  timestamp: string,
+  method: string,
+  path: string,
+  body: string = "",
+): Promise<string> {
+  const message = timestamp + method + path + body;
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(apiSecret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(message));
+  return btoa(String.fromCharCode(...new Uint8Array(sig)));
+}
+
+/**
+ * Submit a BUY order to Polymarket CLOB using user's credentials.
+ */
+async function submitClobOrder(
+  session: { pm_api_key: string; pm_api_secret: string; pm_passphrase: string },
+  tokenId: string,
+  price: number,
+  size: number,
+): Promise<{ orderId: string | null; status: string; error?: string }> {
+  const orderBody = JSON.stringify({
+    tokenID: tokenId,
+    price: price.toFixed(2),
+    size: size.toFixed(2),
+    side: "BUY",
+    feeRateBps: 0,
+    nonce: Date.now().toString(),
+    expiration: "0", // GTC
+    taker: "0x0000000000000000000000000000000000000000",
+  });
+
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const path = "/order";
+  const hmac = await generateClobHmac(session.pm_api_secret, timestamp, "POST", path, orderBody);
+
+  const res = await fetch(`${CLOB_BASE}${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "POLY_API_KEY": session.pm_api_key,
+      "POLY_SIGNATURE": hmac,
+      "POLY_PASSPHRASE": session.pm_passphrase,
+      "POLY_TIMESTAMP": timestamp,
+    },
+    body: orderBody,
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`[prediction-submit] CLOB order failed (${res.status}): ${errText}`);
+    return { orderId: null, status: "clob_error", error: errText };
+  }
+
+  const data = await res.json();
+  return {
+    orderId: data.orderID || data.id || null,
+    status: data.orderID ? "submitted" : "accepted",
+  };
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -29,7 +111,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { fight_id, wallet, fighter_pick, amount_usd } = body;
 
-    // ── Kill switch check ──
+    // ── Kill switch ──
     const { data: settings } = await supabase
       .from("prediction_settings")
       .select("predictions_enabled")
@@ -58,7 +140,7 @@ Deno.serve(async (req) => {
       return json({ error: "Invalid wallet address" }, 400);
     }
 
-    // ── Validate fight exists and is open ──
+    // ── Validate fight ──
     const { data: fight, error: fightErr } = await supabase
       .from("prediction_fights")
       .select("*")
@@ -70,30 +152,26 @@ Deno.serve(async (req) => {
       return json({ error: "Predictions are closed for this fight" }, 400);
     }
 
-    // ── Source-aware commission calculation ──
+    // ── Commission calculation ──
     const commissionBps = Number(fight.commission_bps ?? DEFAULT_FEE_BPS);
     const fee_usd = Number((parsedAmount * commissionBps / 10_000).toFixed(6));
     const pool_usd = Number((parsedAmount - fee_usd).toFixed(6));
     const shares = Math.floor(pool_usd * 100);
 
-    // ══════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════
     // SOURCE-AWARE ORDER ROUTING
-    // ══════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════
     const isPolymarketBacked = !!(fight.polymarket_market_id && fight.polymarket_outcome_a_token);
     let polymarket_order_id: string | null = null;
     let polymarket_status = "pending";
 
     if (isPolymarketBacked) {
-      // ── POLYMARKET USER-AUTHENTICATED ORDER PATH ──
-      // User identity is separate from builder identity.
-      // The builder wallet is for platform attribution only.
-
       const walletLower = normalizedWallet.toLowerCase();
 
-      // Step 1: Check user's Polymarket session
+      // Get user's Polymarket session
       const { data: pmSession } = await supabase
         .from("polymarket_user_sessions")
-        .select("id, status, pm_api_key, pm_api_secret, pm_passphrase, pm_derived_address, ctf_allowance_set, expires_at")
+        .select("id, status, pm_api_key, pm_api_secret, pm_passphrase, pm_derived_address, expires_at")
         .eq("wallet", walletLower)
         .maybeSingle();
 
@@ -105,55 +183,41 @@ Deno.serve(async (req) => {
         ? Number(fight.price_a || 0.5)
         : Number(fight.price_b || 0.5);
 
-      if (pmSession?.status === "active" && pmSession.pm_api_key) {
-        // ── LIVE ORDER PATH: User has active Polymarket credentials ──
-        // Place order using USER's credentials (not builder wallet)
-        //
-        // Production implementation:
-        //   const orderPayload = {
-        //     tokenID: tokenId,
-        //     price: price,
-        //     size: pool_usd,
-        //     side: "BUY",
-        //     feeRateBps: 0,
-        //     nonce: Date.now().toString(),
-        //     expiration: 0, // GTC
-        //   };
-        //
-        //   // Sign with USER's derived key (EIP-712)
-        //   const signedOrder = signEIP712Order(orderPayload, pmSession.pm_derived_address);
-        //
-        //   // Submit to CLOB using USER's API credentials
-        //   const orderRes = await fetch("https://clob.polymarket.com/order", {
-        //     method: "POST",
-        //     headers: {
-        //       "Content-Type": "application/json",
-        //       "POLY_API_KEY": pmSession.pm_api_key,
-        //       "POLY_SIGNATURE": generateHmacSignature(pmSession.pm_api_secret, ...),
-        //       "POLY_PASSPHRASE": pmSession.pm_passphrase,
-        //       "POLY_TIMESTAMP": Date.now().toString(),
-        //     },
-        //     body: JSON.stringify(signedOrder),
-        //   });
-        //
-        //   const orderData = await orderRes.json();
-        //   polymarket_order_id = orderData.orderID;
-        //   polymarket_status = "submitted";
+      const isSessionValid = pmSession?.status === "active"
+        && pmSession.pm_api_key
+        && pmSession.pm_api_secret
+        && pmSession.pm_passphrase
+        && (!pmSession.expires_at || new Date(pmSession.expires_at) > new Date());
 
-        polymarket_status = "credentials_ready";
-        console.log(`[prediction-submit] Polymarket order ready: user=${walletLower}, token=${tokenId}, amount=$${pool_usd}, price=${price}`);
+      if (isSessionValid && tokenId) {
+        // ── LIVE ORDER: Submit to Polymarket CLOB via user's credentials ──
+        const orderResult = await submitClobOrder(
+          {
+            pm_api_key: pmSession!.pm_api_key!,
+            pm_api_secret: pmSession!.pm_api_secret!,
+            pm_passphrase: pmSession!.pm_passphrase!,
+          },
+          tokenId,
+          price,
+          pool_usd,
+        );
+
+        polymarket_order_id = orderResult.orderId;
+        polymarket_status = orderResult.orderId ? "submitted" : orderResult.status;
+
+        if (orderResult.error) {
+          console.warn(`[prediction-submit] CLOB order issue: ${orderResult.error}`);
+        }
+
+        console.log(`[prediction-submit] Polymarket order: user=${walletLower}, token=${tokenId}, amount=$${pool_usd}, price=${price}, status=${polymarket_status}`);
       } else {
-        // ── DEFERRED ORDER PATH: User doesn't have active PM credentials ──
-        // Record the intent. The order will be placed once:
-        // 1. POLYMARKET_API_KEY secret is configured
-        // 2. User completes polymarket-auth flow
+        // ── DEFERRED: User needs PM auth first ──
         polymarket_status = "awaiting_user_auth";
-        console.log(`[prediction-submit] Polymarket deferred: user=${walletLower} needs PM auth, token=${tokenId}, amount=$${pool_usd}`);
+        console.log(`[prediction-submit] Polymarket deferred: user=${walletLower} needs PM auth`);
       }
     }
-    // else: Native 1MGAMING event — no Polymarket routing needed
 
-    // ── Insert prediction entry (USD-based) ──
+    // ── Insert prediction entry ──
     const { data: entry, error: insertErr } = await supabase
       .from("prediction_entries")
       .insert({
@@ -175,7 +239,7 @@ Deno.serve(async (req) => {
 
     if (insertErr) throw insertErr;
 
-    // ── Update fight pool totals (USD) ──
+    // ── Update fight pool totals ──
     const { error: updateErr } = await supabase.rpc("prediction_update_pool_usd", {
       p_fight_id: fight_id,
       p_pool_usd: pool_usd,
@@ -184,7 +248,6 @@ Deno.serve(async (req) => {
     });
 
     if (updateErr) {
-      // Fallback: direct update
       const poolCol = fighter_pick === "fighter_a" ? "pool_a_usd" : "pool_b_usd";
       const sharesCol = fighter_pick === "fighter_a" ? "shares_a" : "shares_b";
       const newPoolVal = (fighter_pick === "fighter_a" ? fight.pool_a_usd : fight.pool_b_usd) + pool_usd;
@@ -206,6 +269,7 @@ Deno.serve(async (req) => {
       shares,
       polymarket_backed: isPolymarketBacked,
       polymarket_status: isPolymarketBacked ? polymarket_status : undefined,
+      polymarket_order_id: polymarket_order_id || undefined,
     });
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : String(err) }, 500);
