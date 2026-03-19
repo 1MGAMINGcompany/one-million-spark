@@ -24,8 +24,14 @@ const LEGACY_DEFAULT_FEE_BPS = 500;
 /** Only these statuses allow new trades */
 const TRADABLE_STATUSES = new Set(["open"]);
 
-/** Max age (ms) for cached price data to be considered fresh */
+/** Max age (ms) for cached price data to be considered fresh (general gate) */
 const MAX_PRICE_STALENESS_MS = 10 * 60 * 1000; // 10 minutes
+
+/** Strict freshness for fallback when live price is unavailable */
+const FALLBACK_MAX_PRICE_AGE_MS = 60 * 1000; // 60 seconds
+
+/** Max order size (USDC) allowed when falling back to cached price */
+const FALLBACK_MAX_ORDER_USDC = 25;
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
