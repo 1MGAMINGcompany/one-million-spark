@@ -888,9 +888,13 @@ export type Database = {
           auto_resolve: boolean
           automation_paused: boolean
           automation_status: string
+          category: string | null
           created_at: string
+          enrichment_notes: string | null
           event_date: string | null
           event_name: string
+          featured: boolean
+          featured_priority: number
           id: string
           is_test: boolean
           last_automation_check_at: string | null
@@ -921,9 +925,13 @@ export type Database = {
           auto_resolve?: boolean
           automation_paused?: boolean
           automation_status?: string
+          category?: string | null
           created_at?: string
+          enrichment_notes?: string | null
           event_date?: string | null
           event_name: string
+          featured?: boolean
+          featured_priority?: number
           id?: string
           is_test?: boolean
           last_automation_check_at?: string | null
@@ -954,9 +962,13 @@ export type Database = {
           auto_resolve?: boolean
           automation_paused?: boolean
           automation_status?: string
+          category?: string | null
           created_at?: string
+          enrichment_notes?: string | null
           event_date?: string | null
           event_name?: string
+          featured?: boolean
+          featured_priority?: number
           id?: string
           is_test?: boolean
           last_automation_check_at?: string | null
@@ -997,13 +1009,20 @@ export type Database = {
           auto_resolve: boolean
           away_logo: string | null
           claims_open_at: string | null
+          commission_bps: number
           confirmed_at: string | null
           created_at: string
+          enrichment_notes: string | null
           event_id: string | null
           event_name: string
+          explainer_card: string | null
+          featured: boolean
+          featured_priority: number
           fight_class: string | null
           fighter_a_name: string
+          fighter_a_photo: string | null
           fighter_b_name: string
+          fighter_b_photo: string | null
           home_logo: string | null
           id: string
           method: string | null
@@ -1032,6 +1051,7 @@ export type Database = {
           shares_a: number
           shares_b: number
           source: string
+          stats_json: Json | null
           status: string
           title: string
           updated_at: string
@@ -1042,13 +1062,20 @@ export type Database = {
           auto_resolve?: boolean
           away_logo?: string | null
           claims_open_at?: string | null
+          commission_bps?: number
           confirmed_at?: string | null
           created_at?: string
+          enrichment_notes?: string | null
           event_id?: string | null
           event_name?: string
+          explainer_card?: string | null
+          featured?: boolean
+          featured_priority?: number
           fight_class?: string | null
           fighter_a_name: string
+          fighter_a_photo?: string | null
           fighter_b_name: string
+          fighter_b_photo?: string | null
           home_logo?: string | null
           id?: string
           method?: string | null
@@ -1077,6 +1104,7 @@ export type Database = {
           shares_a?: number
           shares_b?: number
           source?: string
+          stats_json?: Json | null
           status?: string
           title: string
           updated_at?: string
@@ -1087,13 +1115,20 @@ export type Database = {
           auto_resolve?: boolean
           away_logo?: string | null
           claims_open_at?: string | null
+          commission_bps?: number
           confirmed_at?: string | null
           created_at?: string
+          enrichment_notes?: string | null
           event_id?: string | null
           event_name?: string
+          explainer_card?: string | null
+          featured?: boolean
+          featured_priority?: number
           fight_class?: string | null
           fighter_a_name?: string
+          fighter_a_photo?: string | null
           fighter_b_name?: string
+          fighter_b_photo?: string | null
           home_logo?: string | null
           id?: string
           method?: string | null
@@ -1122,6 +1157,7 @@ export type Database = {
           shares_a?: number
           shares_b?: number
           source?: string
+          stats_json?: Json | null
           status?: string
           title?: string
           updated_at?: string
