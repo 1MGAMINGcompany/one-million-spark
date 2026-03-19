@@ -7,7 +7,9 @@ const corsHeaders = {
 };
 
 const MIN_PREDICTION_USD = 1.0; // $1 minimum prediction
-const FEE_BPS = 500; // 5% platform fee
+// Commission is now source-aware: read from fight.commission_bps
+// 200 bps (2%) for Polymarket imports, 500 bps (5%) for native 1MGAMING events
+const DEFAULT_FEE_BPS = 500;
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
