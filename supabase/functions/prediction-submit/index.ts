@@ -348,6 +348,59 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ═══════════════════════════════════════════════════
+    // 6) EXPLICIT FEE MODEL
+    // ═══════════════════════════════════════════════════
+    const systemFeeBps = controls ? Number(controls.default_fee_bps) : LEGACY_DEFAULT_FEE_BPS;
+    const effectiveFeeBps = fight.commission_bps != null ? Number(fight.commission_bps) : systemFeeBps;
+    const fee_usd = Number((parsedAmount * effectiveFeeBps / 10_000).toFixed(6));
+    const net_amount_usdc = Number((parsedAmount - fee_usd).toFixed(6));
+    const shares = Math.floor(net_amount_usdc * 100);
+
+    // Slippage: use client value capped by system max
+    const systemMaxSlippage = controls ? Number(controls.max_slippage_bps) : 300;
+    const effectiveSlippage = clientSlippage != null
+      ? Math.min(Number(clientSlippage), systemMaxSlippage)
+      : systemMaxSlippage;
+
+    // Expected price from cached data
+    const expectedPrice = isPolymarketBacked
+      ? Number(fighter_pick === "fighter_a" ? (fight.price_a || 0.5) : (fight.price_b || 0.5))
+      : null;
+
+    // ═══════════════════════════════════════════════════
+    // SLIPPAGE CHECK — fetch live price and compare
+    // ═══════════════════════════════════════════════════
+    if (isPolymarketBacked && tokenId && expectedPrice != null && expectedPrice > 0) {
+      try {
+        const priceRes = await fetch(`${CLOB_BASE}/price?token_id=${tokenId}&side=BUY`);
+        if (priceRes.ok) {
+          const priceData = await priceRes.json();
+          const livePrice = parseFloat(priceData?.price || "0");
+
+          if (livePrice > 0) {
+            const slippageBps = Math.abs(livePrice - expectedPrice) / expectedPrice * 10_000;
+            if (slippageBps > effectiveSlippage) {
+              await auditLog(supabase, null, normalizedWallet, "slippage_rejected", { fight_id, token_id: tokenId }, {
+                error_code: "slippage_exceeded",
+                expected_price: expectedPrice, live_price: livePrice,
+                slippage_bps: Math.round(slippageBps), max_slippage_bps: effectiveSlippage,
+              });
+              return json({
+                error: "Price has moved beyond acceptable range. Please retry.",
+                error_code: "slippage_exceeded",
+                expected_price: expectedPrice,
+                live_price: livePrice,
+              }, 400);
+            }
+          }
+        }
+      } catch (slipErr) {
+        // Non-blocking: if live price fetch fails, proceed with cached price
+        console.warn("[prediction-submit] Live price check failed, proceeding with cached:", slipErr);
+      }
+    }
+
     await auditLog(supabase, null, normalizedWallet, "controls_passed", {
       fight_id, fee_bps: effectiveFeeBps, slippage_bps: effectiveSlippage, is_polymarket: isPolymarketBacked,
     });
