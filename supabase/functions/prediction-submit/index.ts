@@ -68,10 +68,11 @@ Deno.serve(async (req) => {
       return json({ error: "Invalid wallet address" }, 400);
     }
 
-    const fee_usd = Number((parsedAmount * FEE_BPS / 10_000).toFixed(6));
-    const pool_usd = Number((parsedAmount - fee_usd).toFixed(6));
-    // Shares are integer cents for atomic pool math
-    const shares = Math.floor(pool_usd * 100);
+    // Source-aware commission: read from fight record, fallback to default
+    const feeBps = Number(fight?.commission_bps ?? DEFAULT_FEE_BPS);
+
+    // NOTE: We need fight data before calculating fees, so we move fee calc after fight fetch.
+    // This is handled below after fight validation.
 
     // ── Validate fight exists and is open ──
     const { data: fight, error: fightErr } = await supabase
