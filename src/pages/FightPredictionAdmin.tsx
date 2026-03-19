@@ -17,8 +17,17 @@ import {
 import {
   Shield, Plus, Lock, Trophy, Loader2, Play, CheckCircle, Ban,
   ArrowDown, Trash2, Eye, AlertTriangle, RefreshCw, Power, Download,
-  Archive, EyeOff, Filter, ChevronUp, ChevronDown, Users,
+  Archive, EyeOff, Filter, ChevronUp, ChevronDown, Users, Settings,
+  Save,
 } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useWallet } from "@/hooks/useWallet";
 import { toast } from "sonner";
@@ -434,6 +443,9 @@ export default function FightPredictionAdmin() {
             ))}
           </div>
         </Card>
+
+        {/* ── Runtime System Controls ── */}
+        <RuntimeControlsPanel wallet={address!} />
 
         {/* ── Event Ingest ── */}
         <Card className="bg-card border-border/50 p-4">
@@ -1495,6 +1507,212 @@ function AutomationStatusPanel({
 const BDL_LEAGUES = ["UFC", "Bellator", "PFL", "ONE"];
 const TSDB_LEAGUES_LIST = ["Boxing", "Top Rank"];
 const APIFB_LEAGUES_LIST = ["Premier League", "La Liga", "Champions League", "MLS"];
+interface SystemControls {
+  id: string;
+  predictions_enabled: boolean;
+  new_orders_enabled: boolean;
+  max_order_usdc: number;
+  max_daily_user_usdc: number;
+  default_fee_bps: number;
+  max_slippage_bps: number;
+  allowed_market_mode: string;
+}
+
+function RuntimeControlsPanel({ wallet }: { wallet: string }) {
+  const [controls, setControls] = useState<SystemControls | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+
+  // Local form state
+  const [form, setForm] = useState({
+    predictions_enabled: true,
+    new_orders_enabled: true,
+    max_order_usdc: 250,
+    max_daily_user_usdc: 1000,
+    default_fee_bps: 200,
+    max_slippage_bps: 300,
+    allowed_market_mode: "allowlist",
+  });
+
+  const loadControls = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke("prediction-admin", {
+        body: { action: "getSystemControls", wallet },
+      });
+      if (error) throw error;
+      if (data?.controls) {
+        setControls(data.controls);
+        setForm({
+          predictions_enabled: data.controls.predictions_enabled,
+          new_orders_enabled: data.controls.new_orders_enabled,
+          max_order_usdc: data.controls.max_order_usdc,
+          max_daily_user_usdc: data.controls.max_daily_user_usdc,
+          default_fee_bps: data.controls.default_fee_bps,
+          max_slippage_bps: data.controls.max_slippage_bps,
+          allowed_market_mode: data.controls.allowed_market_mode,
+        });
+        setDirty(false);
+      }
+    } catch (err: any) {
+      toast.error("Failed to load system controls");
+    } finally {
+      setLoading(false);
+    }
+  }, [wallet]);
+
+  useEffect(() => { loadControls(); }, [loadControls]);
+
+  const updateField = (key: string, value: any) => {
+    setForm(prev => ({ ...prev, [key]: value }));
+    setDirty(true);
+  };
+
+  const validate = (): string | null => {
+    if (form.max_order_usdc <= 0 || form.max_order_usdc > 100000) return "Max order must be $0.01–$100,000";
+    if (form.max_daily_user_usdc <= 0 || form.max_daily_user_usdc > 1000000) return "Max daily must be $0.01–$1,000,000";
+    if (form.default_fee_bps < 0 || form.default_fee_bps > 5000) return "Fee must be 0–5000 bps (0–50%)";
+    if (form.max_slippage_bps < 0 || form.max_slippage_bps > 10000) return "Slippage must be 0–10000 bps (0–100%)";
+    return null;
+  };
+
+  const handleSave = async () => {
+    const err = validate();
+    if (err) { toast.error(err); return; }
+
+    setSaving(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("prediction-admin", {
+        body: { action: "updateSystemControls", wallet, ...form },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (data?.controls) {
+        setControls(data.controls);
+        setDirty(false);
+      }
+      toast.success("System controls updated");
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <Card className="bg-card border-border/50 p-4">
+        <div className="flex items-center gap-2 text-muted-foreground text-sm">
+          <Loader2 className="w-4 h-4 animate-spin" /> Loading system controls…
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="bg-card border-border/50 p-4">
+      <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+        <Settings className="w-4 h-4 text-primary" /> Runtime Controls
+      </h2>
+      <p className="text-xs text-muted-foreground mb-4">
+        Live system parameters for prediction trade execution. Changes take effect immediately.
+      </p>
+
+      <div className="space-y-4">
+        {/* Boolean toggles */}
+        <div className="space-y-3">
+          {([
+            { key: "predictions_enabled" as const, label: "Predictions Enabled", desc: "Master switch for prediction system" },
+            { key: "new_orders_enabled" as const, label: "New Orders Enabled", desc: "Allow new trade orders to be placed" },
+          ]).map(({ key, label, desc }) => (
+            <div key={key} className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-foreground">{label}</p>
+                <p className="text-xs text-muted-foreground">{desc}</p>
+              </div>
+              <Switch
+                checked={form[key]}
+                onCheckedChange={(v) => updateField(key, v)}
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* Numeric fields */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Max Order (USDC)</Label>
+            <Input
+              type="number"
+              min={1}
+              max={100000}
+              value={form.max_order_usdc}
+              onChange={(e) => updateField("max_order_usdc", Number(e.target.value))}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Max Daily / User (USDC)</Label>
+            <Input
+              type="number"
+              min={1}
+              max={1000000}
+              value={form.max_daily_user_usdc}
+              onChange={(e) => updateField("max_daily_user_usdc", Number(e.target.value))}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Default Fee (bps)</Label>
+            <Input
+              type="number"
+              min={0}
+              max={5000}
+              value={form.default_fee_bps}
+              onChange={(e) => updateField("default_fee_bps", Number(e.target.value))}
+            />
+            <p className="text-[10px] text-muted-foreground">{(form.default_fee_bps / 100).toFixed(1)}%</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Max Slippage (bps)</Label>
+            <Input
+              type="number"
+              min={0}
+              max={10000}
+              value={form.max_slippage_bps}
+              onChange={(e) => updateField("max_slippage_bps", Number(e.target.value))}
+            />
+            <p className="text-[10px] text-muted-foreground">{(form.max_slippage_bps / 100).toFixed(1)}%</p>
+          </div>
+        </div>
+
+        {/* Market mode select */}
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Allowed Market Mode</Label>
+          <Select value={form.allowed_market_mode} onValueChange={(v) => updateField("allowed_market_mode", v)}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="allowlist">Allowlist Only</SelectItem>
+              <SelectItem value="all">All Markets</SelectItem>
+              <SelectItem value="none">None (Disabled)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Save button */}
+        <Button
+          onClick={handleSave}
+          disabled={!dirty || saving}
+          className="w-full gap-2"
+        >
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          {saving ? "Saving…" : dirty ? "Save Changes" : "No Changes"}
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
 const PROVIDERS = [
   { key: "all", label: "All Providers" },
   { key: "balldontlie", label: "BALLDONTLIE (MMA)" },
