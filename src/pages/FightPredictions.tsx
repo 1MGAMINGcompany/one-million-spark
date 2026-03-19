@@ -2,13 +2,9 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Swords, TrendingUp, ChevronDown, ChevronUp, Loader2, Radio, Clock, Trophy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useWallet } from "@/hooks/useWallet";
+import { usePrivy } from "@privy-io/react-auth";
+import { usePrivyWallet } from "@/hooks/usePrivyWallet";
 import { toast } from "sonner";
-import {
-  PublicKey,
-  SystemProgram,
-  Transaction,
-} from "@solana/web3.js";
 import Navbar from "@/components/Navbar";
 import EventSection, { parseSport } from "@/components/predictions/EventSection";
 import predictionsHero from "@/assets/predictions-hero.jpeg";
@@ -20,12 +16,15 @@ import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
 import { useMyReferralCode } from "@/hooks/useMyReferralCode";
 import type { Fight } from "@/components/predictions/FightCard";
 
+// TODO [POLYMARKET]: Replace lamports-based pool math with USD/USDC
+// once the database schema is migrated from Solana lamports.
 const LAMPORTS = 1_000_000_000;
 const FEE_RATE = 0.05;
-const PREDICTION_FEE_WALLET = new PublicKey("GA4oxfEHPCjo7KTLWMyxjq2J5tEScihqvFh5rFMM88JX");
-const PREDICTION_POOL_WALLET = new PublicKey(
-  import.meta.env.VITE_PREDICTION_POOL_WALLET || "5iPJcXt3TtfGkMS7joPXXJxmNwpiaP9bAKg9gbaYwM71"
-);
+
+// DEPRECATED: Solana wallet addresses — will be removed when Polygon
+// payment edge functions are implemented.
+// const PREDICTION_FEE_WALLET = ...
+// const PREDICTION_POOL_WALLET = ...
 
 const ALL_SPORTS = ["ALL", "MUAY THAI", "BOXING", "MMA", "FUTBOL"];
 
@@ -94,7 +93,9 @@ function StatusSectionHeader({ section, count }: { section: StatusSection; count
 }
 
 export default function FightPredictions() {
-  const { address, publicKey, isConnected, sendTransaction, connection } = useWallet();
+  // Use Privy EVM wallet for predictions (Polygon)
+  const { walletAddress: address, isPrivyUser } = usePrivyWallet();
+  const { authenticated, login } = usePrivy();
   const referralCode = useMyReferralCode(address ?? null);
   const { t } = useTranslation();
   const [fights, setFights] = useState<Fight[]>([]);
@@ -111,6 +112,8 @@ export default function FightPredictions() {
   const [showWalletGate, setShowWalletGate] = useState(false);
   const [showPredictionSuccess, setShowPredictionSuccess] = useState(false);
   const [claimShareData, setClaimShareData] = useState<{ eventTitle: string; solWon: number; fighterName?: string; sport?: string } | null>(null);
+
+  const isConnected = authenticated && isPrivyUser;
 
   const loadFights = useCallback(async () => {
     const [fightsRes, eventsRes] = await Promise.all([
@@ -155,12 +158,10 @@ export default function FightPredictions() {
   // Group fights by event
   const groupedEvents = useMemo(() => {
     const eventMap = new Map(events.map(e => [e.id, e]));
-    // Build set of approved event IDs for filtering
     const approvedEventIds = new Set(events.map(e => e.id));
     const groups: Record<string, { event?: PredictionEvent; fights: Fight[] }> = {};
 
     fights.forEach((f) => {
-      // Skip fights belonging to non-approved (archived/dismissed) events
       if (f.event_id && !approvedEventIds.has(f.event_id)) return;
 
       let groupKey: string;
@@ -195,73 +196,55 @@ export default function FightPredictions() {
     );
   }, [groupedEvents, activeSport]);
 
-  // Categorize events into status sections (each event appears ONCE)
+  // Categorize events into status sections
   const { liveEvents, todayEvents, upcomingEvents, pastEvents, staleLiveKeys } = useMemo(() => {
     const now = new Date();
     const nowMs = now.getTime();
     const todayStr = now.toDateString();
+    const tomorrowStart = new Date(now);
+    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+    tomorrowStart.setHours(0, 0, 0, 0);
 
     const live: [string, { event?: PredictionEvent; fights: Fight[] }][] = [];
     const today: [string, { event?: PredictionEvent; fights: Fight[] }][] = [];
     const upcoming: [string, { event?: PredictionEvent; fights: Fight[] }][] = [];
     const past: [string, { event?: PredictionEvent; fights: Fight[] }][] = [];
+    const staleKeys = new Set<string>();
 
-    const staleLiveKeys = new Set<string>();
+    for (const [eventName, group] of Object.entries(filteredEvents)) {
+      const event = group.event;
+      const eventDateStr = event?.event_date;
+      const eventMs = eventDateStr ? new Date(eventDateStr).getTime() : null;
 
-    Object.entries(filteredEvents).forEach(([eventName, group]) => {
-      const hasLive = group.fights.some(f => f.status === "live");
-      const ev = group.event;
-      const eventDate = ev?.event_date || null;
-      const eventMs = eventDate ? new Date(eventDate).getTime() : null;
+      const hasLiveFights = group.fights.some(f => f.status === "live");
+      const hasOpenFights = group.fights.some(f => f.status === "open");
+      const allSettledOrPast = group.fights.every(f =>
+        ["settled", "confirmed", "result_selected", "draw", "refund_pending", "refunds_processing", "refunds_complete", "cancelled"].includes(f.status)
+      );
 
-      if (hasLive) {
-        // Stale-live guard: started >6h ago OR on a previous calendar day
-        const isStaleLive = eventMs != null && (
-          (nowMs - eventMs) > 6 * 60 * 60 * 1000 ||
-          new Date(eventMs).toDateString() !== todayStr
-        );
+      // Stale-live: started >6h ago OR on a previous calendar day
+      const isStaleLive = eventMs != null && (
+        (nowMs - eventMs) > 6 * 60 * 60 * 1000 ||
+        new Date(eventMs).toDateString() !== todayStr
+      );
 
-        if (isStaleLive) {
-          console.warn('[predictions] stale-live event demoted:', { eventName, eventDate, status: 'live' });
-          staleLiveKeys.add(eventName);
-          past.push([eventName, group]);
-        } else {
-          live.push([eventName, group]);
-        }
+      if (hasLiveFights && !isStaleLive) {
+        live.push([eventName, group]);
+      } else if (allSettledOrPast || (hasLiveFights && isStaleLive)) {
+        past.push([eventName, group]);
+        if (hasLiveFights && isStaleLive) staleKeys.add(eventName);
+      } else if (eventMs && eventMs > tomorrowStart.getTime()) {
+        upcoming.push([eventName, group]);
+      } else if (hasOpenFights || (eventMs && new Date(eventMs).toDateString() === todayStr)) {
+        today.push([eventName, group]);
+      } else if (eventMs && eventMs < nowMs) {
+        past.push([eventName, group]);
       } else {
-        // Use full timestamp comparisons — not just calendar date
-        const eventLocalDate = eventMs != null ? new Date(eventMs).toDateString() : null;
-        const hasStarted = eventMs != null && eventMs <= nowMs;
-        const isEventToday = eventLocalDate === todayStr;
-
-        if (hasStarted) {
-          // Event already started — if it's today's calendar date, keep in today; otherwise past
-          if (isEventToday) {
-            today.push([eventName, group]);
-          } else {
-            // Yesterday or older — NEVER in TODAY
-            past.push([eventName, group]);
-          }
-        } else if (eventMs == null) {
-          // No date — treat as upcoming
-          upcoming.push([eventName, group]);
-        } else if (isEventToday) {
-          today.push([eventName, group]);
-        } else {
-          upcoming.push([eventName, group]);
-        }
+        upcoming.push([eventName, group]);
       }
+    }
 
-      // Debug diagnostic for any event landing in an unexpected bucket
-      if (eventMs != null && eventMs <= nowMs) {
-        const bucket = hasLive
-          ? (staleLiveKeys.has(eventName) ? 'past(stale-live)' : 'live')
-          : (new Date(eventMs).toDateString() === todayStr ? 'today' : 'past');
-        console.debug('[predictions:grouping]', { eventName, eventDate, nowLocal: now.toISOString(), bucket });
-      }
-    });
-
-    return { liveEvents: live, todayEvents: today, upcomingEvents: upcoming, pastEvents: past, staleLiveKeys };
+    return { liveEvents: live, todayEvents: today, upcomingEvents: upcoming, pastEvents: past, staleLiveKeys: staleKeys };
   }, [filteredEvents, events]);
 
   const hotFightIds = useMemo(() => {
@@ -276,68 +259,35 @@ export default function FightPredictions() {
     return ["BOXING", "MMA", "FUTBOL"].filter(s => !existingSports.has(s));
   }, [groupedEvents]);
 
-  const handleSubmit = async (amountSol: number) => {
-    if (!selectedFight || !selectedPick || !publicKey || !isConnected) return;
+  // TODO [POLYMARKET]: Replace this entire function with Polygon/Polymarket
+  // transaction execution. The new flow should:
+  // 1. Build an EVM transaction (or Polymarket CLOB order)
+  // 2. Send via server-side gas-sponsored execution (edge function)
+  // 3. Verify on Polygon before recording in DB
+  const handleSubmit = async (amountUsd: number) => {
+    if (!selectedFight || !selectedPick || !isConnected || !address) return;
     setSubmitting(true);
     try {
-      const amountLamports = Math.round(amountSol * LAMPORTS);
-      const feeLamports = Math.floor(amountLamports * FEE_RATE);
-      const poolLamports = amountLamports - feeLamports;
-
-      const tx = new Transaction().add(
-        SystemProgram.transfer({
-          fromPubkey: publicKey,
-          toPubkey: PREDICTION_FEE_WALLET,
-          lamports: feeLamports,
-        }),
-        SystemProgram.transfer({
-          fromPubkey: publicKey,
-          toPubkey: PREDICTION_POOL_WALLET,
-          lamports: poolLamports,
-        })
-      );
-
-      const { data: bhData, error: bhError } = await supabase.functions.invoke("solana-rpc-read", {
-        body: { method: "getLatestBlockhash", params: [{ commitment: "confirmed" }] },
-      });
-      if (bhError || !bhData?.ok) throw new Error("Failed to get recent blockhash via proxy");
-      const blockhash = bhData.result.value.blockhash;
-
-      tx.recentBlockhash = blockhash;
-      tx.feePayer = publicKey;
-      const signature = await sendTransaction(tx, connection);
-      const confirmStart = Date.now();
-      let confirmed = false;
-      while (Date.now() - confirmStart < 60_000 && !confirmed) {
-        const { data: sigData } = await supabase.functions.invoke("solana-rpc-read", {
-          body: { method: "getSignatureStatuses", params: [[signature]] },
-        });
-        const status = sigData?.result?.value?.[0];
-        if (status?.confirmationStatus === "confirmed" || status?.confirmationStatus === "finalized") {
-          if (status.err) throw new Error("Transaction failed on-chain");
-          confirmed = true;
-        } else {
-          await new Promise(r => setTimeout(r, 2000));
-        }
-      }
-      if (!confirmed) throw new Error("Transaction confirmation timeout");
-
+      // MIGRATION: Solana transaction building has been removed.
+      // Prediction submission now goes through a server-side edge function
+      // that will handle Polygon transaction execution with gas sponsorship.
+      
+      // For now, record the prediction intent server-side
       const { data, error } = await supabase.functions.invoke("prediction-submit", {
         body: {
           fight_id: selectedFight.id,
           wallet: address,
           fighter_pick: selectedPick,
-          amount_lamports: amountLamports,
-          fee_lamports: feeLamports,
-          pool_lamports: poolLamports,
-          tx_signature: signature,
+          amount_usd: amountUsd,
+          chain: "polygon",
+          // TODO [POLYMARKET]: Include Polymarket order details here
         },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
       toast.success("Prediction submitted!", {
-        description: `${amountSol} SOL on ${selectedPick === "fighter_a" ? selectedFight.fighter_a_name : selectedFight.fighter_b_name}`,
+        description: `$${amountUsd.toFixed(2)} on ${selectedPick === "fighter_a" ? selectedFight.fighter_a_name : selectedFight.fighter_b_name}`,
       });
       setShowPredictionSuccess(true);
       loadFights();
@@ -356,13 +306,14 @@ export default function FightPredictions() {
     const userPick = userEntries.find(e => e.fight_id === fightId);
     setClaiming(true);
     try {
+      // TODO [POLYMARKET]: Update claim to use Polygon payout
       const { data, error } = await supabase.functions.invoke("prediction-claim", {
-        body: { fight_id: fightId, wallet: address },
+        body: { fight_id: fightId, wallet: address, chain: "polygon" },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      const solWon = data.reward_sol || 0;
-      toast.success("Reward claimed!", { description: `${solWon.toFixed(4)} SOL sent` });
+      const amountWon = data.reward_sol || data.reward_usd || 0;
+      toast.success("Reward claimed!", { description: `$${amountWon.toFixed(2)} sent to your wallet` });
       await loadUserEntries();
       if (SOCIAL_SHARE_ENABLED) {
         const pickedName = userPick
@@ -370,7 +321,7 @@ export default function FightPredictions() {
           : undefined;
         setClaimShareData({
           eventTitle: f?.title || f?.event_name || "Prediction Win",
-          solWon,
+          solWon: amountWon,
           fighterName: pickedName || undefined,
           sport: f?.event_name,
         });
@@ -390,7 +341,15 @@ export default function FightPredictions() {
 
   const handlePredict = (fight: Fight, pick: "fighter_a" | "fighter_b") => {
     if (fight.status !== "open") return;
-    if (!isConnected) { setShowWalletGate(true); return; }
+    if (!isConnected) {
+      // Trigger Privy login if not authenticated
+      if (!authenticated) {
+        login();
+      } else {
+        setShowWalletGate(true);
+      }
+      return;
+    }
     setSelectedFight(fight);
     setSelectedPick(pick);
   };
@@ -409,7 +368,10 @@ export default function FightPredictions() {
         onClaim={handleClaim}
         claiming={claiming}
         hotFightIds={hotFightIds}
-        onWalletRequired={() => setShowWalletGate(true)}
+        onWalletRequired={() => {
+          if (!authenticated) login();
+          else setShowWalletGate(true);
+        }}
         event={group.event}
         isStaleLive={staleLiveKeys.has(eventName)}
       />
@@ -512,7 +474,7 @@ export default function FightPredictions() {
               </div>
             )}
 
-            {/* AWAITING RESULTS (past started events) */}
+            {/* AWAITING RESULTS */}
             {pastEvents.length > 0 && (
               <div>
                 <StatusSectionHeader section="past" count={pastEvents.length} />
@@ -556,7 +518,7 @@ export default function FightPredictions() {
                       </span>
                     </div>
                     <span className="text-xs font-bold text-primary whitespace-nowrap ml-2">
-                      {(entry.amount_lamports / LAMPORTS).toFixed(2)} SOL
+                      ${(entry.amount_lamports / LAMPORTS).toFixed(2)}
                     </span>
                   </div>
                 ))
@@ -581,7 +543,7 @@ export default function FightPredictions() {
                       <p className="text-xs text-muted-foreground">{f?.title || ""}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-bold text-primary">{(entry.amount_lamports / LAMPORTS).toFixed(2)} SOL</p>
+                      <p className="text-sm font-bold text-primary">${(entry.amount_lamports / LAMPORTS).toFixed(2)}</p>
                       {entry.claimed && <p className="text-xs text-green-400">✓ Claimed</p>}
                     </div>
                   </div>
@@ -607,8 +569,8 @@ export default function FightPredictions() {
       <WalletGateModal
         isOpen={showWalletGate}
         onClose={() => setShowWalletGate(false)}
-        title="Connect to Predict"
-        description="You need a wallet to place predictions and earn rewards."
+        title="Sign In to Predict"
+        description="Create an account to place predictions and earn rewards."
       />
 
       {SOCIAL_SHARE_ENABLED && claimShareData && (
