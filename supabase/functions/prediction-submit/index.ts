@@ -1,11 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
 
 /**
- * prediction-submit — Source-aware prediction submission.
+ * prediction-submit — Production trade execution gateway.
  *
  * Polymarket-backed events: Orders routed through user's CLOB credentials
  * Native 1MGAMING events: Local pool accounting only
  *
+ * Lifecycle: requested → submitted → filled/partial_fill/failed
+ * Explicit fee model (Pattern 2): fee shown separately, never hidden in spread.
  * Builder wallet is NEVER used as the user's trading identity.
  */
 
@@ -17,7 +19,7 @@ const corsHeaders = {
 
 const CLOB_BASE = "https://clob.polymarket.com";
 const MIN_PREDICTION_USD = 1.0;
-const DEFAULT_FEE_BPS = 500;
+const LEGACY_DEFAULT_FEE_BPS = 500;
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -25,9 +27,8 @@ const json = (data: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-/**
- * Generate HMAC signature for Polymarket CLOB API authentication.
- */
+// ── Helpers ──────────────────────────────────────────────
+
 async function generateClobHmac(
   apiSecret: string,
   timestamp: string,
@@ -48,9 +49,6 @@ async function generateClobHmac(
   return btoa(String.fromCharCode(...new Uint8Array(sig)));
 }
 
-/**
- * Submit a BUY order to Polymarket CLOB using user's credentials.
- */
 async function submitClobOrder(
   session: { pm_api_key: string; pm_api_secret: string; pm_passphrase: string },
   tokenId: string,
@@ -64,7 +62,7 @@ async function submitClobOrder(
     side: "BUY",
     feeRateBps: 0,
     nonce: Date.now().toString(),
-    expiration: "0", // GTC
+    expiration: "0",
     taker: "0x0000000000000000000000000000000000000000",
   });
 
@@ -97,31 +95,95 @@ async function submitClobOrder(
   };
 }
 
+/** Compact audit log writer — never includes secrets */
+async function auditLog(
+  supabase: any,
+  tradeOrderId: string | null,
+  wallet: string | null,
+  action: string,
+  requestPayload: Record<string, unknown> | null = null,
+  responsePayload: Record<string, unknown> | null = null,
+) {
+  try {
+    await supabase.from("prediction_trade_audit_log").insert({
+      trade_order_id: tradeOrderId,
+      wallet,
+      action,
+      request_payload_json: requestPayload,
+      response_payload_json: responsePayload,
+    });
+  } catch (e) {
+    console.warn("[prediction-submit] audit log write failed:", e);
+  }
+}
+
+/** Update trade order status + optional fields */
+async function updateTradeOrder(
+  supabase: any,
+  tradeOrderId: string,
+  updates: Record<string, unknown>,
+) {
+  await supabase
+    .from("prediction_trade_orders")
+    .update(updates)
+    .eq("id", tradeOrderId);
+}
+
+// ── Main handler ─────────────────────────────────────────
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+
+  let tradeOrderId: string | null = null;
+  let normalizedWallet: string | null = null;
+
   try {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
-
     const body = await req.json();
-    const { fight_id, wallet, fighter_pick, amount_usd } = body;
+    const { fight_id, wallet, fighter_pick, amount_usd, slippage_bps: clientSlippage } = body;
 
-    // ── Kill switch ──
-    const { data: settings } = await supabase
+    normalizedWallet = wallet ? String(wallet).trim().toLowerCase() : null;
+
+    // ═══════════════════════════════════════════════════
+    // 1) LOAD SYSTEM CONTROLS
+    // ═══════════════════════════════════════════════════
+    const { data: controls } = await supabase
+      .from("prediction_system_controls")
+      .select("*")
+      .limit(1)
+      .single();
+
+    // Also check legacy kill switch for backward compat
+    const { data: legacySettings } = await supabase
       .from("prediction_settings")
       .select("predictions_enabled")
       .eq("id", "global")
       .single();
 
-    if (settings && !settings.predictions_enabled) {
+    if (legacySettings && !legacySettings.predictions_enabled) {
+      await auditLog(supabase, null, normalizedWallet, "trade_failed", { fight_id }, { reason: "legacy_kill_switch" });
       return json({ error: "Predictions are currently disabled by admin" }, 403);
     }
 
+    if (controls && !controls.predictions_enabled) {
+      await auditLog(supabase, null, normalizedWallet, "trade_failed", { fight_id }, { reason: "predictions_disabled" });
+      return json({ error: "Predictions are currently disabled" }, 403);
+    }
+
+    if (controls && !controls.new_orders_enabled) {
+      await auditLog(supabase, null, normalizedWallet, "trade_failed", { fight_id }, { reason: "new_orders_disabled" });
+      return json({ error: "New prediction orders are temporarily paused" }, 403);
+    }
+
+    // ═══════════════════════════════════════════════════
+    // BASIC VALIDATION
+    // ═══════════════════════════════════════════════════
     if (!fight_id || !wallet || !fighter_pick || !amount_usd) {
       return json({ error: "Missing required fields (fight_id, wallet, fighter_pick, amount_usd)" }, 400);
     }
@@ -131,57 +193,188 @@ Deno.serve(async (req) => {
     }
 
     const parsedAmount = Number(amount_usd);
-    if (isNaN(parsedAmount) || parsedAmount < MIN_PREDICTION_USD) {
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      return json({ error: "Amount must be greater than 0" }, 400);
+    }
+    if (parsedAmount < MIN_PREDICTION_USD) {
       return json({ error: `Minimum prediction is $${MIN_PREDICTION_USD}` }, 400);
     }
 
-    const normalizedWallet = String(wallet).trim();
     if (!normalizedWallet || normalizedWallet.length < 10) {
       return json({ error: "Invalid wallet address" }, 400);
     }
 
-    // ── Validate fight ──
+    // ═══════════════════════════════════════════════════
+    // 4) PER-ORDER LIMIT CHECK
+    // ═══════════════════════════════════════════════════
+    const maxOrderUsdc = controls ? Number(controls.max_order_usdc) : 250;
+    if (parsedAmount > maxOrderUsdc) {
+      await auditLog(supabase, null, normalizedWallet, "trade_failed", { amount_usd: parsedAmount }, { reason: "exceeds_max_order", max: maxOrderUsdc });
+      return json({ error: `Maximum order size is $${maxOrderUsdc}` }, 400);
+    }
+
+    await auditLog(supabase, null, normalizedWallet, "request_received", {
+      fight_id, fighter_pick, amount_usd: parsedAmount,
+    });
+
+    // ═══════════════════════════════════════════════════
+    // 2) RESOLVE USER ACCOUNT
+    // ═══════════════════════════════════════════════════
+    let accountId: string | null = null;
+    {
+      const { data: existing } = await supabase
+        .from("prediction_accounts")
+        .select("id")
+        .eq("wallet_evm", normalizedWallet)
+        .maybeSingle();
+
+      if (existing) {
+        accountId = existing.id;
+        await supabase
+          .from("prediction_accounts")
+          .update({ last_active_at: new Date().toISOString() })
+          .eq("id", accountId);
+      } else {
+        const { data: created } = await supabase
+          .from("prediction_accounts")
+          .insert({ wallet_evm: normalizedWallet, auth_provider: "privy" })
+          .select("id")
+          .single();
+        accountId = created?.id ?? null;
+      }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // 3) DAILY LIMIT CHECK
+    // ═══════════════════════════════════════════════════
+    const maxDailyUsdc = controls ? Number(controls.max_daily_user_usdc) : 1000;
+    {
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data: recentOrders } = await supabase
+        .from("prediction_trade_orders")
+        .select("requested_amount_usdc")
+        .eq("wallet", normalizedWallet)
+        .gte("created_at", since)
+        .not("status", "in", '("failed","cancelled")');
+
+      const dailyTotal = (recentOrders || []).reduce(
+        (sum: number, o: { requested_amount_usdc: number }) => sum + Number(o.requested_amount_usdc),
+        0,
+      );
+
+      if (dailyTotal + parsedAmount > maxDailyUsdc) {
+        await auditLog(supabase, null, normalizedWallet, "trade_failed", { amount_usd: parsedAmount, daily_total: dailyTotal }, { reason: "daily_limit_exceeded", max: maxDailyUsdc });
+        return json({ error: `Daily limit of $${maxDailyUsdc} would be exceeded. Current 24h total: $${dailyTotal.toFixed(2)}` }, 400);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // VALIDATE FIGHT
+    // ═══════════════════════════════════════════════════
     const { data: fight, error: fightErr } = await supabase
       .from("prediction_fights")
       .select("*")
       .eq("id", fight_id)
       .single();
 
-    if (fightErr || !fight) return json({ error: "Fight not found" }, 404);
+    if (fightErr || !fight) {
+      await auditLog(supabase, null, normalizedWallet, "trade_failed", { fight_id }, { reason: "fight_not_found" });
+      return json({ error: "Fight not found" }, 404);
+    }
     if (fight.status !== "open") {
+      await auditLog(supabase, null, normalizedWallet, "trade_failed", { fight_id, fight_status: fight.status }, { reason: "fight_not_open" });
       return json({ error: "Predictions are closed for this fight" }, 400);
     }
 
-    // ── Commission calculation ──
-    const commissionBps = Number(fight.commission_bps ?? DEFAULT_FEE_BPS);
-    const fee_usd = Number((parsedAmount * commissionBps / 10_000).toFixed(6));
-    const pool_usd = Number((parsedAmount - fee_usd).toFixed(6));
-    const shares = Math.floor(pool_usd * 100);
+    // ═══════════════════════════════════════════════════
+    // 6) EXPLICIT FEE MODEL
+    // ═══════════════════════════════════════════════════
+    const systemFeeBps = controls ? Number(controls.default_fee_bps) : LEGACY_DEFAULT_FEE_BPS;
+    // Per-fight override takes precedence if set
+    const effectiveFeeBps = fight.commission_bps != null ? Number(fight.commission_bps) : systemFeeBps;
+    const fee_usd = Number((parsedAmount * effectiveFeeBps / 10_000).toFixed(6));
+    const net_amount_usdc = Number((parsedAmount - fee_usd).toFixed(6));
+    const shares = Math.floor(net_amount_usdc * 100);
 
-    // ══════════════════════════════════════════════════
-    // SOURCE-AWARE ORDER ROUTING
-    // ══════════════════════════════════════════════════
+    // Slippage: use client value capped by system max
+    const systemMaxSlippage = controls ? Number(controls.max_slippage_bps) : 300;
+    const effectiveSlippage = clientSlippage != null
+      ? Math.min(Number(clientSlippage), systemMaxSlippage)
+      : systemMaxSlippage;
+
+    // ═══════════════════════════════════════════════════
+    // SOURCE-AWARE ROUTING PREP
+    // ═══════════════════════════════════════════════════
     const isPolymarketBacked = !!(fight.polymarket_market_id && fight.polymarket_outcome_a_token);
+
+    const tokenId = isPolymarketBacked
+      ? (fighter_pick === "fighter_a" ? fight.polymarket_outcome_a_token : fight.polymarket_outcome_b_token)
+      : null;
+
+    const expectedPrice = isPolymarketBacked
+      ? Number(fighter_pick === "fighter_a" ? (fight.price_a || 0.5) : (fight.price_b || 0.5))
+      : null;
+
+    // Validate Polymarket tokens exist for CLOB path
+    if (isPolymarketBacked && !tokenId) {
+      await auditLog(supabase, null, normalizedWallet, "trade_failed", { fight_id, fighter_pick }, { reason: "missing_token_id" });
+      return json({ error: "Market token configuration incomplete for this outcome" }, 400);
+    }
+
+    await auditLog(supabase, null, normalizedWallet, "controls_passed", {
+      fight_id, fee_bps: effectiveFeeBps, slippage_bps: effectiveSlippage, is_polymarket: isPolymarketBacked,
+    });
+
+    // ═══════════════════════════════════════════════════
+    // 5) CREATE INITIAL TRADE RECORD
+    // ═══════════════════════════════════════════════════
+    const { data: tradeOrder, error: tradeInsertErr } = await supabase
+      .from("prediction_trade_orders")
+      .insert({
+        account_id: accountId,
+        wallet: normalizedWallet,
+        fight_id,
+        prediction_event_id: fight.event_id || null,
+        polymarket_market_id: fight.polymarket_market_id || null,
+        token_id: tokenId,
+        side: fighter_pick,
+        order_type: "marketable_limit",
+        requested_amount_usdc: parsedAmount,
+        expected_price: expectedPrice,
+        expected_shares: shares,
+        fee_bps: effectiveFeeBps,
+        fee_usdc: fee_usd,
+        slippage_bps: effectiveSlippage,
+        status: "requested",
+      })
+      .select("id")
+      .single();
+
+    if (tradeInsertErr) throw tradeInsertErr;
+    tradeOrderId = tradeOrder.id;
+
+    await auditLog(supabase, tradeOrderId, normalizedWallet, "trade_record_created", {
+      requested_amount_usdc: parsedAmount, fee_usdc: fee_usd, net_amount_usdc: net_amount_usdc,
+    });
+
+    // ═══════════════════════════════════════════════════
+    // 8) EXECUTION PATH
+    // ═══════════════════════════════════════════════════
     let polymarket_order_id: string | null = null;
     let polymarket_status = "pending";
+    let filledAmountUsdc = 0;
+    let filledShares = 0;
+    let avgFillPrice: number | null = null;
+    let tradeStatus = "requested";
 
     if (isPolymarketBacked) {
-      const walletLower = normalizedWallet.toLowerCase();
+      const walletLower = normalizedWallet;
 
-      // Get user's Polymarket session
       const { data: pmSession } = await supabase
         .from("polymarket_user_sessions")
         .select("id, status, pm_api_key, pm_api_secret, pm_passphrase, pm_derived_address, expires_at")
         .eq("wallet", walletLower)
         .maybeSingle();
-
-      const tokenId = fighter_pick === "fighter_a"
-        ? fight.polymarket_outcome_a_token
-        : fight.polymarket_outcome_b_token;
-
-      const price = fighter_pick === "fighter_a"
-        ? Number(fight.price_a || 0.5)
-        : Number(fight.price_b || 0.5);
 
       const isSessionValid = pmSession?.status === "active"
         && pmSession.pm_api_key
@@ -190,34 +383,107 @@ Deno.serve(async (req) => {
         && (!pmSession.expires_at || new Date(pmSession.expires_at) > new Date());
 
       if (isSessionValid && tokenId) {
-        // ── LIVE ORDER: Submit to Polymarket CLOB via user's credentials ──
+        // Mark as submitted
+        await updateTradeOrder(supabase, tradeOrderId, {
+          status: "submitted",
+          submitted_at: new Date().toISOString(),
+        });
+        tradeStatus = "submitted";
+
+        await auditLog(supabase, tradeOrderId, normalizedWallet, "order_submit_started", {
+          token_id: tokenId, price: expectedPrice, size: net_amount_usdc,
+        });
+
         const orderResult = await submitClobOrder(
           {
             pm_api_key: pmSession!.pm_api_key!,
             pm_api_secret: pmSession!.pm_api_secret!,
             pm_passphrase: pmSession!.pm_passphrase!,
           },
-          tokenId,
-          price,
-          pool_usd,
+          tokenId!,
+          expectedPrice!,
+          net_amount_usdc,
         );
 
         polymarket_order_id = orderResult.orderId;
-        polymarket_status = orderResult.orderId ? "submitted" : orderResult.status;
 
-        if (orderResult.error) {
-          console.warn(`[prediction-submit] CLOB order issue: ${orderResult.error}`);
+        // Audit the result (no secrets)
+        await auditLog(supabase, tradeOrderId, normalizedWallet, "order_submit_result", null, {
+          order_id: orderResult.orderId,
+          clob_status: orderResult.status,
+          has_error: !!orderResult.error,
+          error_snippet: orderResult.error ? orderResult.error.substring(0, 200) : null,
+        });
+
+        if (orderResult.orderId) {
+          // Treat CLOB acceptance as filled for now (CLOB may partially fill async)
+          polymarket_status = "submitted";
+          tradeStatus = "filled";
+          filledAmountUsdc = net_amount_usdc;
+          filledShares = shares;
+          avgFillPrice = expectedPrice;
+
+          await updateTradeOrder(supabase, tradeOrderId, {
+            status: "filled",
+            polymarket_order_id: orderResult.orderId,
+            filled_amount_usdc: filledAmountUsdc,
+            filled_shares: filledShares,
+            avg_fill_price: avgFillPrice,
+            finalized_at: new Date().toISOString(),
+          });
+        } else {
+          // CLOB rejection
+          polymarket_status = orderResult.status;
+          tradeStatus = "failed";
+
+          await updateTradeOrder(supabase, tradeOrderId, {
+            status: "failed",
+            error_code: "clob_rejected",
+            error_message: orderResult.error ? orderResult.error.substring(0, 500) : "CLOB order rejected",
+            finalized_at: new Date().toISOString(),
+          });
+
+          await auditLog(supabase, tradeOrderId, normalizedWallet, "trade_failed", null, {
+            reason: "clob_rejected", clob_status: orderResult.status,
+          });
+
+          return json({
+            error: "Order was rejected by the exchange",
+            trade_order_id: tradeOrderId,
+            trade_status: "failed",
+          }, 502);
         }
 
-        console.log(`[prediction-submit] Polymarket order: user=${walletLower}, token=${tokenId}, amount=$${pool_usd}, price=${price}, status=${polymarket_status}`);
+        console.log(`[prediction-submit] Polymarket order: user=${walletLower}, token=${tokenId}, amount=$${net_amount_usdc}, price=${expectedPrice}, status=${polymarket_status}`);
       } else {
-        // ── DEFERRED: User needs PM auth first ──
+        // Deferred: user needs PM auth
         polymarket_status = "awaiting_user_auth";
+        tradeStatus = "requested";
+
+        await updateTradeOrder(supabase, tradeOrderId, {
+          status: "requested",
+          error_code: "awaiting_user_auth",
+        });
+
         console.log(`[prediction-submit] Polymarket deferred: user=${walletLower} needs PM auth`);
       }
+    } else {
+      // Native 1MGAMING event — mark as filled immediately (local pool)
+      tradeStatus = "filled";
+      filledAmountUsdc = net_amount_usdc;
+      filledShares = shares;
+
+      await updateTradeOrder(supabase, tradeOrderId, {
+        status: "filled",
+        filled_amount_usdc: filledAmountUsdc,
+        filled_shares: filledShares,
+        finalized_at: new Date().toISOString(),
+      });
     }
 
-    // ── Insert prediction entry ──
+    // ═══════════════════════════════════════════════════
+    // 9) COMPATIBILITY: LEGACY prediction_entries INSERT
+    // ═══════════════════════════════════════════════════
     const { data: entry, error: insertErr } = await supabase
       .from("prediction_entries")
       .insert({
@@ -226,7 +492,7 @@ Deno.serve(async (req) => {
         fighter_pick,
         amount_usd: parsedAmount,
         fee_usd,
-        pool_usd,
+        pool_usd: net_amount_usdc,
         shares,
         polymarket_order_id,
         polymarket_status: isPolymarketBacked ? polymarket_status : null,
@@ -239,10 +505,10 @@ Deno.serve(async (req) => {
 
     if (insertErr) throw insertErr;
 
-    // ── Update fight pool totals ──
+    // ── Update fight pool totals (legacy compat) ──
     const { error: updateErr } = await supabase.rpc("prediction_update_pool_usd", {
       p_fight_id: fight_id,
-      p_pool_usd: pool_usd,
+      p_pool_usd: net_amount_usdc,
       p_shares: shares,
       p_side: fighter_pick,
     });
@@ -250,7 +516,7 @@ Deno.serve(async (req) => {
     if (updateErr) {
       const poolCol = fighter_pick === "fighter_a" ? "pool_a_usd" : "pool_b_usd";
       const sharesCol = fighter_pick === "fighter_a" ? "shares_a" : "shares_b";
-      const newPoolVal = (fighter_pick === "fighter_a" ? fight.pool_a_usd : fight.pool_b_usd) + pool_usd;
+      const newPoolVal = (fighter_pick === "fighter_a" ? fight.pool_a_usd : fight.pool_b_usd) + net_amount_usdc;
       const newSharesVal = (fighter_pick === "fighter_a" ? fight.shares_a : fight.shares_b) + shares;
 
       await supabase
@@ -259,12 +525,26 @@ Deno.serve(async (req) => {
         .eq("id", fight_id);
     }
 
+    // ═══════════════════════════════════════════════════
+    // FINAL AUDIT + RESPONSE
+    // ═══════════════════════════════════════════════════
+    await auditLog(supabase, tradeOrderId, normalizedWallet, "trade_finalized", null, {
+      trade_status: tradeStatus, entry_id: entry?.id,
+    });
+
     return json({
       success: true,
+      // New canonical fields
+      trade_order_id: tradeOrderId,
+      trade_status: tradeStatus,
+      requested_amount_usdc: parsedAmount,
+      fee_usdc: fee_usd,
+      net_amount_usdc,
+      fee_bps: effectiveFeeBps,
+      // Legacy compat fields
       entry,
-      pool_contribution_usd: pool_usd,
-      fee_usd,
-      commission_bps: commissionBps,
+      pool_contribution_usd: net_amount_usdc,
+      commission_bps: effectiveFeeBps,
       source: fight.source || "manual",
       shares,
       polymarket_backed: isPolymarketBacked,
@@ -272,6 +552,21 @@ Deno.serve(async (req) => {
       polymarket_order_id: polymarket_order_id || undefined,
     });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : String(err) }, 500);
+    const errorMsg = err instanceof Error ? err.message : String(err);
+
+    // Best-effort: update trade order and audit on unexpected error
+    if (tradeOrderId) {
+      await updateTradeOrder(supabase, tradeOrderId, {
+        status: "failed",
+        error_code: "internal_error",
+        error_message: errorMsg.substring(0, 500),
+        finalized_at: new Date().toISOString(),
+      });
+    }
+    await auditLog(supabase, tradeOrderId, normalizedWallet, "trade_failed", null, {
+      reason: "internal_error", message: errorMsg.substring(0, 300),
+    });
+
+    return json({ error: errorMsg, trade_order_id: tradeOrderId }, 500);
   }
 });
