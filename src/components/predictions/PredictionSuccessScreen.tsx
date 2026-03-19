@@ -77,6 +77,7 @@ export default function PredictionSuccessScreen({
   const liveStatus = useTradeStatusPoll(
     tradeResult?.trade_order_id,
     tradeResult?.trade_status,
+    wallet,
   );
 
   // Use live-polled status if available, otherwise initial

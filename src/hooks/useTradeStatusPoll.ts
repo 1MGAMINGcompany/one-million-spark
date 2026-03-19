@@ -1,7 +1,9 @@
 /**
  * Short-lived polling hook for trade order status.
- * Polls prediction_trade_orders for up to ~18s (6 polls × 3s)
+ * Polls the prediction-trade-status edge function for up to ~18s (6 polls × 3s)
  * when the initial status is non-final (submitted/requested/partial_fill).
+ *
+ * Security: Uses a controlled backend endpoint instead of direct table reads.
  */
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,6 +23,7 @@ interface PollState {
 export function useTradeStatusPoll(
   tradeOrderId: string | undefined,
   initialStatus: string | undefined,
+  wallet?: string,
 ) {
   const [live, setLive] = useState<PollState | null>(null);
   const pollCount = useRef(0);
@@ -30,6 +33,7 @@ export function useTradeStatusPoll(
   const shouldPoll =
     !!tradeOrderId &&
     !!initialStatus &&
+    !!wallet &&
     !FINAL_STATUSES.has(initialStatus);
 
   useEffect(() => {
@@ -43,18 +47,20 @@ export function useTradeStatusPoll(
       pollCount.current += 1;
 
       try {
-        const { data, error } = await supabase
-          .from("prediction_trade_orders")
-          .select("status, fee_usdc, filled_shares, avg_fill_price")
-          .eq("id", tradeOrderId!)
-          .maybeSingle();
+        const { data, error } = await supabase.functions.invoke(
+          "prediction-trade-status",
+          {
+            body: { trade_order_id: tradeOrderId, wallet },
+          },
+        );
 
         if (error || !data) return;
 
-        const newStatus = data.status as string;
+        const newStatus = data.trade_status as string;
         setLive({
           status: newStatus,
           fee_usdc: typeof data.fee_usdc === "number" ? data.fee_usdc : undefined,
+          net_amount_usdc: typeof data.net_amount_usdc === "number" ? data.net_amount_usdc : undefined,
           filled_shares: typeof data.filled_shares === "number" ? data.filled_shares : undefined,
           avg_fill_price: typeof data.avg_fill_price === "number" ? data.avg_fill_price : undefined,
         });
@@ -78,7 +84,7 @@ export function useTradeStatusPoll(
       stopped.current = true;
       clearInterval(id);
     };
-  }, [shouldPoll, tradeOrderId]);
+  }, [shouldPoll, tradeOrderId, wallet]);
 
   return live;
 }
