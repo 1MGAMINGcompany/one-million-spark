@@ -1823,3 +1823,205 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
     </div>
   );
 }
+
+// ── Polymarket Sync Panel ──
+function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string; busy: boolean; onComplete: () => void }) {
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [searchBusy, setSearchBusy] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[] | null>(null);
+  const [lastSyncResult, setLastSyncResult] = useState<any>(null);
+  const [selectedTag, setSelectedTag] = useState("sports");
+  const [importingId, setImportingId] = useState<string | null>(null);
+
+  const TAGS = ["sports", "politics", "crypto", "entertainment", "science"];
+
+  const runSync = async () => {
+    setSyncBusy(true);
+    setLastSyncResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("polymarket-sync", {
+        body: { wallet, action: "sync", tag: selectedTag, limit: 50 },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setLastSyncResult(data);
+      toast.success(`Synced ${data.markets_upserted} markets from ${data.total_events} events`);
+      onComplete();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSyncBusy(false);
+    }
+  };
+
+  const runSearch = async () => {
+    if (!searchQuery.trim()) return;
+    setSearchBusy(true);
+    setSearchResults(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("polymarket-sync", {
+        body: { wallet, action: "search", query: searchQuery },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setSearchResults(data.results || []);
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSearchBusy(false);
+    }
+  };
+
+  const importSingle = async (pmEventId: string, title: string) => {
+    setImportingId(pmEventId);
+    try {
+      const { data, error } = await supabase.functions.invoke("polymarket-sync", {
+        body: { wallet, action: "import_single", polymarket_event_id: pmEventId },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`Imported "${title}" — ${data.imported} market(s)`);
+      onComplete();
+      // Mark as imported in search results
+      setSearchResults(prev => prev?.map(r =>
+        String(r.id) === String(pmEventId) ? { ...r, imported: true } : r
+      ) || null);
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setImportingId(null);
+    }
+  };
+
+  const refreshPrices = async () => {
+    setSyncBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("polymarket-prices", { body: {} });
+      if (error) throw error;
+      toast.success(`Updated prices for ${data?.updated || 0} markets`);
+      onComplete();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSyncBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Tag selector */}
+      <div className="flex flex-wrap gap-1.5">
+        {TAGS.map(t => (
+          <button
+            key={t}
+            onClick={() => setSelectedTag(t)}
+            className={`text-xs px-2.5 py-1 rounded-full border transition-colors capitalize ${
+              selectedTag === t
+                ? "bg-purple-500/20 text-purple-400 border-purple-500/40"
+                : "bg-muted/30 text-muted-foreground border-border/30 hover:border-border"
+            }`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {/* Sync + Price buttons */}
+      <div className="grid grid-cols-2 gap-2">
+        <Button
+          className="bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 border border-purple-500/30"
+          onClick={runSync}
+          disabled={syncBusy || parentBusy}
+        >
+          {syncBusy ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Download className="w-4 h-4 mr-2" />}
+          Sync {selectedTag}
+        </Button>
+        <Button
+          variant="outline"
+          className="border-border text-foreground"
+          onClick={refreshPrices}
+          disabled={syncBusy || parentBusy}
+        >
+          {syncBusy ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+          Refresh Prices
+        </Button>
+      </div>
+
+      {/* Sync results */}
+      {lastSyncResult && (
+        <div className="bg-muted/30 border border-border/30 rounded-lg p-3 text-xs space-y-1">
+          <p className="text-foreground font-medium">✅ Sync Complete</p>
+          <p className="text-muted-foreground">
+            Events: {lastSyncResult.total_events} · Markets upserted: {lastSyncResult.markets_upserted} · Skipped: {lastSyncResult.skipped}
+          </p>
+        </div>
+      )}
+
+      {/* Search */}
+      <div className="flex gap-2">
+        <Input
+          placeholder="Search Polymarket..."
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && runSearch()}
+          className="flex-1"
+        />
+        <Button
+          variant="outline"
+          onClick={runSearch}
+          disabled={searchBusy || !searchQuery.trim()}
+        >
+          {searchBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+        </Button>
+      </div>
+
+      {/* Search results */}
+      {searchResults && (
+        <div className="space-y-2 max-h-[400px] overflow-y-auto">
+          {searchResults.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-4">No results found</p>
+          )}
+          {searchResults.map((event: any) => (
+            <div key={event.id} className="bg-background/60 border border-border/30 rounded-lg p-3 text-xs">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-foreground font-bold truncate">{event.title}</p>
+                  <p className="text-muted-foreground text-[10px]">{event.markets?.length || 0} market(s)</p>
+                  {event.markets?.map((m: any, i: number) => (
+                    <div key={i} className="mt-1 text-[10px] text-muted-foreground">
+                      <span>{m.question}</span>
+                      {m.outcomePrices?.length >= 2 && (
+                        <span className="ml-1.5 text-purple-400 font-bold">
+                          {(parseFloat(m.outcomePrices[0]) * 100).toFixed(0)}¢ / {(parseFloat(m.outcomePrices[1]) * 100).toFixed(0)}¢
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  {event.imported ? (
+                    <span className="text-[10px] font-bold text-green-400">✅ Imported</span>
+                  ) : (
+                    <button
+                      onClick={() => importSingle(event.id, event.title)}
+                      disabled={!!importingId}
+                      className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30 hover:bg-purple-500/30 transition-colors disabled:opacity-50"
+                    >
+                      {importingId === String(event.id) ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Download className="w-3 h-3" />
+                      )}
+                      Import
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
