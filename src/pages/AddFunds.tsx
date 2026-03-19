@@ -1,241 +1,263 @@
-import { usePrivy } from "@privy-io/react-auth";
+import { useState } from "react";
+import { usePrivy, useFundWallet } from "@privy-io/react-auth";
 import { useLogin } from "@privy-io/react-auth";
-import { CreditCard, Shield, Zap, CheckCircle2, Wallet, DollarSign, Users, Loader2 } from "lucide-react";
+import {
+  CreditCard,
+  Shield,
+  Zap,
+  CheckCircle2,
+  Wallet,
+  DollarSign,
+  Copy,
+  ExternalLink,
+  Loader2,
+  ArrowRight,
+  AlertTriangle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { useTranslation } from "react-i18next";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
 import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
+import { toast } from "sonner";
 
 const AddFunds = () => {
-  const { t } = useTranslation();
   const navigate = useNavigate();
   const { authenticated } = usePrivy();
   const { login } = useLogin();
   const { walletAddress, isPrivyUser } = usePrivyWallet();
-  const { usdc_balance_formatted, usdc_balance, is_loading: usdcLoading, error: usdcError } = usePolygonUSDC();
+  const {
+    usdc_balance_formatted,
+    usdc_balance,
+    is_loading: usdcLoading,
+    error: usdcError,
+  } = usePolygonUSDC();
+  const { fundWallet } = useFundWallet();
+  const [funding, setFunding] = useState(false);
 
   const isLoggedIn = authenticated && isPrivyUser && !!walletAddress;
+  const hasBalance = (usdc_balance ?? 0) > 0;
+
+  const handleCopyAddress = async () => {
+    if (!walletAddress) return;
+    try {
+      await navigator.clipboard.writeText(walletAddress);
+      toast.success("Wallet address copied!");
+    } catch {
+      toast.error("Could not copy address");
+    }
+  };
+
+  const handleFundWallet = async () => {
+    if (!walletAddress) return;
+    setFunding(true);
+    try {
+      await fundWallet({ address: walletAddress });
+    } catch (e: any) {
+      if (e?.message !== "CLOSED_MODAL" && e?.message !== "User closed modal") {
+        console.error("[AddFunds] fundWallet error:", e);
+        toast.error("Could not open funding. Please try again.");
+      }
+    } finally {
+      setFunding(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-background py-12 px-4">
-      <div className="max-w-2xl mx-auto">
-        {/* Hero Section */}
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 border border-primary/20 mx-auto mb-4">
-            <DollarSign className="h-8 w-8 text-primary" />
+    <div className="min-h-screen bg-background py-8 px-4">
+      <div className="max-w-lg mx-auto">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 border border-primary/20 mx-auto mb-3">
+            <DollarSign className="h-7 w-7 text-primary" />
           </div>
-          <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-3 font-cinzel">
-            Add Funds
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2 font-cinzel">
+            {isLoggedIn ? "Your Wallet" : "Add Funds"}
           </h1>
-          <p className="text-xl text-primary font-medium mb-2">
-            Fast, simple, and secure ✨
-          </p>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             {isLoggedIn
-              ? "Your account is ready — add USDC to start playing and predicting."
-              : "Create an account in seconds, then add funds with your favorite payment method."}
+              ? "Fund your account with USDC to start predicting."
+              : "Create an account in seconds — a secure wallet is set up automatically."}
           </p>
         </div>
 
-        {/* How It Works - Visual Flow */}
-        <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10 border border-primary/20 rounded-xl p-6 mb-8">
-          <div className="flex items-center justify-center gap-4 md:gap-8">
-            <div className="text-center">
-              <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-2">
-                <Wallet className="h-5 w-5 text-primary" />
-              </div>
-              <p className="text-sm font-medium">Sign Up</p>
-            </div>
-            <div className="text-primary text-2xl">→</div>
-            <div className="text-center">
-              <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-2">
-                <CreditCard className="h-5 w-5 text-primary" />
-              </div>
-              <p className="text-sm font-medium">Add USDC</p>
-            </div>
-            <div className="text-primary text-2xl">→</div>
-            <div className="text-center">
-              <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-2">
-                <Zap className="h-5 w-5 text-primary" />
-              </div>
-              <p className="text-sm font-medium">Play!</p>
-            </div>
-          </div>
-          <p className="text-center text-muted-foreground text-sm mt-4">
-            Takes less than 2 minutes to get started
-          </p>
-        </div>
-
-        {/* Wallet Status */}
-        {isLoggedIn && (
-          <div className="bg-card border border-primary/30 rounded-lg p-4 mb-6">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <CheckCircle2 className="h-5 w-5 text-green-500" />
-                <div>
-                  <p className="text-sm text-green-400 font-medium">Account Connected</p>
-                  <p className="font-mono text-xs text-muted-foreground">{walletAddress?.slice(0, 8)}...{walletAddress?.slice(-6)}</p>
-                </div>
-              </div>
-              <span className="text-xs px-2 py-1 rounded bg-green-500/20 text-green-400">
-                Polygon
-              </span>
-            </div>
-            <div className="bg-muted/30 rounded-lg p-3 flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">USDC Balance</p>
-                {usdcLoading ? (
-                  <div className="flex items-center gap-1.5">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">Loading...</span>
+        {/* ── Not logged in ── */}
+        {!isLoggedIn && (
+          <div className="space-y-5">
+            {/* Visual flow */}
+            <div className="bg-card border border-border rounded-xl p-5">
+              <div className="flex items-center justify-center gap-3 md:gap-6 mb-4">
+                {[
+                  { icon: Wallet, label: "Sign Up" },
+                  { icon: CreditCard, label: "Add USDC" },
+                  { icon: Zap, label: "Predict!" },
+                ].map((step, i) => (
+                  <div key={step.label} className="flex items-center gap-3">
+                    {i > 0 && <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />}
+                    <div className="text-center">
+                      <div className="w-10 h-10 rounded-full bg-primary/15 flex items-center justify-center mx-auto mb-1">
+                        <step.icon className="h-4 w-4 text-primary" />
+                      </div>
+                      <p className="text-xs font-medium text-foreground">{step.label}</p>
+                    </div>
                   </div>
-                ) : usdcError ? (
-                  <p className="text-sm text-muted-foreground">Unable to load balance</p>
-                ) : (
-                  <p className="text-xl font-bold text-foreground">
-                    ${usdc_balance_formatted ?? "0.00"}
-                  </p>
-                )}
+                ))}
               </div>
-              <div className="text-right">
-                <span className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary font-medium">
-                  USDC
-                </span>
-              </div>
+              <p className="text-center text-muted-foreground text-xs">
+                Takes less than 2 minutes · No extensions or seed phrases
+              </p>
+            </div>
+
+            <Button onClick={() => login()} className="w-full" size="lg">
+              <Wallet className="mr-2 h-5 w-5" />
+              Sign Up / Log In
+            </Button>
+
+            <div className="bg-muted/20 border border-border/50 rounded-xl p-4">
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li className="flex items-start gap-2">
+                  <Shield className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                  We create a secure wallet for you automatically
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                  No crypto experience needed — just sign up and fund
+                </li>
+                <li className="flex items-start gap-2">
+                  <Zap className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                  Gas fees are covered — you only need USDC
+                </li>
+              </ul>
             </div>
           </div>
         )}
 
-        <div className="space-y-5">
-          {/* Step 1: Create Account */}
-          <section className="bg-card border border-border rounded-xl p-6">
-            <div className="flex items-start gap-4">
-              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold shrink-0">
-                1
-              </div>
-              <div className="flex-1">
-                <h2 className="text-lg font-semibold text-foreground mb-1">
-                  {isLoggedIn ? "✅ Account Created" : "Create Your Account"}
-                </h2>
-                <p className="text-muted-foreground text-sm mb-4">
-                  {isLoggedIn
-                    ? "Your secure wallet was created automatically when you signed up."
-                    : "Sign up with email, Google, or Twitter. A secure wallet is created for you automatically — no extensions or seed phrases needed."}
+        {/* ── Logged in ── */}
+        {isLoggedIn && (
+          <div className="space-y-4">
+            {/* Balance card */}
+            <div className="bg-card border border-border rounded-2xl overflow-hidden">
+              {/* Balance display */}
+              <div className="p-6 text-center">
+                <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider">
+                  USDC Balance
                 </p>
-
-                {!isLoggedIn && (
-                  <Button onClick={() => login()} className="w-full" size="lg">
-                    <Wallet className="mr-2 h-4 w-4" />
-                    Sign Up / Log In
-                  </Button>
+                {usdcLoading ? (
+                  <div className="flex items-center justify-center gap-2 py-2">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    <span className="text-muted-foreground">Loading...</span>
+                  </div>
+                ) : usdcError ? (
+                  <p className="text-lg text-muted-foreground">Unable to load balance</p>
+                ) : (
+                  <p className="text-4xl font-bold text-foreground tracking-tight">
+                    ${usdc_balance_formatted ?? "0.00"}
+                  </p>
                 )}
+                <p className="text-xs text-muted-foreground mt-1">on Polygon</p>
               </div>
-            </div>
-          </section>
 
-          {/* Step 2: Add Funds */}
-          <section className="bg-card border border-border rounded-xl p-6 relative overflow-hidden">
-            <div className="absolute top-4 right-4">
-              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-xs font-medium">
-                <Zap className="h-3 w-3" />
-                No exchanges needed!
-              </span>
-            </div>
-
-            <div className="flex items-start gap-4">
-              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold shrink-0">
-                2
-              </div>
-              <div className="flex-1">
-                <h2 className="text-lg font-semibold text-foreground mb-1">
-                  Add USDC to Your Wallet
-                </h2>
-                <p className="text-muted-foreground text-sm mb-4">
-                  Buy USDC instantly with your card. Funds arrive in seconds.
-                </p>
-
-                {/* Payment Methods */}
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/50 text-sm">
-                    <CreditCard className="h-4 w-4 text-primary" />
-                    Credit Card
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/50 text-sm">
-                    <span className="text-base"></span>
-                    Apple Pay
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/50 text-sm">
-                    <span className="text-base">G</span>
-                    Google Pay
-                  </span>
-                </div>
-
+              {/* Primary CTA */}
+              <div className="px-5 pb-5">
                 <Button
-                  onClick={() => {
-                    if (!isLoggedIn) {
-                      login();
-                    } else {
-                      // Privy fund wallet flow — will be wired to Polygon USDC fiat onramp
-                      window.open("https://app.moonpay.com/swap?defaultCurrencyCode=usdc_polygon", "_blank");
-                    }
-                  }}
+                  onClick={handleFundWallet}
+                  disabled={funding}
                   size="lg"
                   variant="gold"
                   className="w-full text-lg"
                 >
-                  <CreditCard className="mr-2 h-5 w-5" />
-                  {isLoggedIn ? "Buy USDC" : "Sign Up & Buy USDC"}
+                  {funding ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Opening...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="mr-2 h-5 w-5" />
+                      Add USDC
+                    </>
+                  )}
                 </Button>
-
-                <p className="text-xs text-muted-foreground mt-3">
-                  Already have USDC or crypto? You can also send USDC (Polygon) to your wallet address above.
+                <p className="text-center text-xs text-muted-foreground mt-2">
+                  Buy with card, Apple Pay, or Google Pay
                 </p>
               </div>
             </div>
-          </section>
 
-          {/* Quick Info */}
-          <section className="bg-muted/20 border border-border/50 rounded-xl p-5">
-            <h3 className="font-medium text-foreground mb-3">Quick Info</h3>
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
-                Entry fees, prizes, and predictions are in USDC
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
-                Network fees are covered for you (gas-sponsored)
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
-                Winners receive prizes minus 5% platform fee
-              </li>
-              <li className="flex items-start gap-2">
-                <Shield className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
-                Your wallet is secured by Privy — no seed phrases to lose
-              </li>
-            </ul>
-          </section>
-
-          {/* Fun CTA - Play with Friends */}
-          <section className="bg-gradient-to-r from-primary/20 to-primary/10 border border-primary/30 rounded-xl p-6 text-center">
-            <div className="flex justify-center mb-3">
-              <div className="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center">
-                <Users className="h-7 w-7 text-primary" />
+            {/* Wallet address card */}
+            <div className="bg-card border border-border rounded-xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                  Your Wallet Address
+                </p>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={handleCopyAddress}
+                    className="p-1.5 rounded-md hover:bg-muted/50 transition-colors"
+                    title="Copy address"
+                  >
+                    <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                  </button>
+                  <a
+                    href={`https://polygonscan.com/address/${walletAddress}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1.5 rounded-md hover:bg-muted/50 transition-colors"
+                    title="View on Polygonscan"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                  </a>
+                </div>
               </div>
+              <p className="font-mono text-xs text-foreground break-all select-all">
+                {walletAddress}
+              </p>
+              <p className="text-xs text-muted-foreground mt-2">
+                Already have USDC? Send it directly to this address on <strong>Polygon network only</strong>.
+              </p>
             </div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">
-              🎮 Ready to play with friends?
-            </h3>
-            <p className="text-muted-foreground text-sm mb-4">
-              Create a private room and share the link — your friends can join anytime!
-            </p>
-            <Button onClick={() => navigate("/create-room")} variant="default" size="lg">
-              Create a Private Room
-            </Button>
-          </section>
-        </div>
+
+            {/* Network warning */}
+            <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 flex items-start gap-2.5">
+              <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+              <p className="text-xs text-amber-200/80">
+                <strong>Important:</strong> Only send USDC on the <strong>Polygon</strong> network. Funds sent on other networks (Ethereum, Solana, etc.) cannot be recovered.
+              </p>
+            </div>
+
+            {/* Success CTA when funded */}
+            {hasBalance && (
+              <div className="bg-gradient-to-r from-primary/15 to-primary/5 border border-primary/25 rounded-xl p-5 text-center">
+                <CheckCircle2 className="h-8 w-8 text-primary mx-auto mb-2" />
+                <h3 className="font-semibold text-foreground mb-1">You're ready!</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Your account is funded — start making predictions now.
+                </p>
+                <Button onClick={() => navigate("/predictions")} size="lg" className="w-full">
+                  Go to Predictions
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            )}
+
+            {/* Quick info */}
+            <div className="bg-muted/20 border border-border/50 rounded-xl p-4">
+              <ul className="space-y-2 text-xs text-muted-foreground">
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+                  Predictions and prizes are in USDC
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+                  Gas fees are covered for you
+                </li>
+                <li className="flex items-start gap-2">
+                  <Shield className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+                  Wallet secured by Privy — no seed phrases
+                </li>
+              </ul>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
