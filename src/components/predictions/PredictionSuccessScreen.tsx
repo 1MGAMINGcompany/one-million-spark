@@ -1,5 +1,7 @@
+import { useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, Eye, Clock, Trophy, Share2, AlertTriangle, Loader2 } from "lucide-react";
+import { usePrivy } from "@privy-io/react-auth";
 import SocialShareModal from "@/components/SocialShareModal";
 import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
 import { useTradeStatusPoll } from "@/hooks/useTradeStatusPoll";
