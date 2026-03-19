@@ -438,6 +438,17 @@ export default function FightPredictionAdmin() {
           <IngestPanel wallet={address!} busy={busy} onComplete={loadData} />
         </Card>
 
+        {/* ── Polymarket Sync ── */}
+        <Card className="bg-card border-border/50 p-4">
+          <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+            <Download className="w-4 h-4 text-accent-foreground" /> Polymarket Sync
+          </h2>
+          <p className="text-xs text-muted-foreground mb-3">
+            Import and sync prediction markets from Polymarket. Markets are imported as drafts requiring admin approval.
+          </p>
+          <PolymarketSyncPanel wallet={address!} busy={busy} onComplete={loadData} />
+        </Card>
+
         {/* ── Create Event ── */}
         <Card className="bg-card border-border/50 p-4">
           <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
