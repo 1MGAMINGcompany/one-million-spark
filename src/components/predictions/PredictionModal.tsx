@@ -206,7 +206,7 @@ export default function PredictionModal({
                 <span className="text-foreground font-medium">${amountNum.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Fee (5%)</span>
+                <span className="text-muted-foreground">Fee ({feeLabel})</span>
                 <span className="text-destructive font-medium">-${fee.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm">

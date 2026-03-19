@@ -96,3 +96,9 @@ verify_jwt = false
 
 [functions.rebuild-leaderboard]
 verify_jwt = false
+
+[functions.polymarket-auth]
+verify_jwt = false
+
+[functions.polymarket-positions]
+verify_jwt = false
