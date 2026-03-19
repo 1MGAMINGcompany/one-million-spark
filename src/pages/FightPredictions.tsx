@@ -248,8 +248,15 @@ export default function FightPredictions() {
   const hotFightIds = useMemo(() => {
     const sorted = [...fights]
       .filter(f => f.status === "open")
-      .sort((a, b) => (b.pool_a_lamports + b.pool_b_lamports) - (a.pool_a_lamports + a.pool_b_lamports));
-    return new Set(sorted.slice(0, 3).filter(f => (f.pool_a_lamports + f.pool_b_lamports) > 0).map(f => f.id));
+      .sort((a, b) => {
+        const poolA = ((a as any).pool_a_usd || a.pool_a_lamports / 1e9) + ((a as any).pool_b_usd || a.pool_b_lamports / 1e9);
+        const poolB = ((b as any).pool_a_usd || b.pool_a_lamports / 1e9) + ((b as any).pool_b_usd || b.pool_b_lamports / 1e9);
+        return poolB - poolA;
+      });
+    return new Set(sorted.slice(0, 3).filter(f => {
+      const pool = ((f as any).pool_a_usd || f.pool_a_lamports / 1e9) + ((f as any).pool_b_usd || f.pool_b_lamports / 1e9);
+      return pool > 0;
+    }).map(f => f.id));
   }, [fights]);
 
   const comingSoonSports = useMemo(() => {
