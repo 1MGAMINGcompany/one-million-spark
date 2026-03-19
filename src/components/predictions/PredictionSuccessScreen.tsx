@@ -75,11 +75,16 @@ export default function PredictionSuccessScreen({
   setShowShare,
   tradeResult,
 }: Props) {
+  // Privy access token for authenticated polling
+  const { getAccessToken } = usePrivy();
+  const stableGetToken = useCallback(() => getAccessToken(), [getAccessToken]);
+
   // Short-lived polling for non-final statuses
   const liveStatus = useTradeStatusPoll(
     tradeResult?.trade_order_id,
     tradeResult?.trade_status,
     wallet,
+    stableGetToken,
   );
 
   // Use live-polled status if available, otherwise initial
