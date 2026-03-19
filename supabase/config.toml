@@ -108,3 +108,6 @@ verify_jwt = false
 
 [functions.polymarket-sync]
 verify_jwt = false
+
+[functions.prediction-trade-reconcile]
+verify_jwt = false
