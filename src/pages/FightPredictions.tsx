@@ -548,7 +548,7 @@ export default function FightPredictions() {
                       <p className="text-xs text-muted-foreground">{f?.title || ""}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-bold text-primary">${(entry.amount_lamports / LAMPORTS).toFixed(2)}</p>
+                      <p className="text-sm font-bold text-primary">${(entry.amount_usd ?? entry.amount_lamports / 1_000_000_000).toFixed(2)}</p>
                       {entry.claimed && <p className="text-xs text-green-400">✓ Claimed</p>}
                     </div>
                   </div>
