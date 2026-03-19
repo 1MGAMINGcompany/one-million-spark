@@ -67,6 +67,16 @@ interface Fight {
   claims_open_at: string | null;
   confirmed_at: string | null;
   settled_at: string | null;
+  // Polymarket mapping
+  source: string;
+  polymarket_market_id: string | null;
+  polymarket_condition_id: string | null;
+  polymarket_slug: string | null;
+  polymarket_active: boolean;
+  polymarket_question: string | null;
+  price_a: number;
+  price_b: number;
+  polymarket_last_synced_at: string | null;
 }
 
 /** Return total pool in USD. Falls back to legacy lamports→SOL conversion for old data. */
