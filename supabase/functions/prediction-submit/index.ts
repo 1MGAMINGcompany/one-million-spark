@@ -357,6 +357,21 @@ Deno.serve(async (req) => {
     }
 
     // ═══════════════════════════════════════════════════
+    // MARKET ALLOWLIST ENFORCEMENT
+    // ═══════════════════════════════════════════════════
+    const marketMode = controls?.allowed_market_mode ?? "all";
+
+    if (marketMode === "none") {
+      await auditLog(supabase, null, normalizedWallet, "trade_failed", { fight_id }, { reason: "trading_disabled_by_policy", mode: "none" });
+      return json({ error: "All trading is currently disabled by policy", error_code: "trading_disabled_by_policy" }, 403);
+    }
+
+    if (marketMode === "allowlist" && !fight.trading_allowed) {
+      await auditLog(supabase, null, normalizedWallet, "trade_failed", { fight_id }, { reason: "market_not_allowlisted", mode: "allowlist" });
+      return json({ error: "This market is not currently enabled for trading", error_code: "market_not_allowlisted" }, 403);
+    }
+
+    // ═══════════════════════════════════════════════════
     // SOURCE-AWARE ROUTING PREP (moved up for validation)
     // ═══════════════════════════════════════════════════
     const isPolymarketBacked = !!(fight.polymarket_market_id && fight.polymarket_outcome_a_token);
