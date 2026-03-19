@@ -70,8 +70,11 @@ interface Fight {
   claims_open_at: string | null;
   confirmed_at: string | null;
   settled_at: string | null;
-  // Polymarket mapping
+  // Source & commission
   source: string;
+  commission_bps: number;
+  featured: boolean;
+  // Polymarket mapping
   polymarket_market_id: string | null;
   polymarket_condition_id: string | null;
   polymarket_slug: string | null;
@@ -80,6 +83,11 @@ interface Fight {
   price_a: number;
   price_b: number;
   polymarket_last_synced_at: string | null;
+  // Enrichment
+  fighter_a_photo: string | null;
+  fighter_b_photo: string | null;
+  enrichment_notes: string | null;
+  explainer_card: string | null;
 }
 
 /** Return total pool in USD. Falls back to legacy lamports→SOL conversion for old data. */
@@ -927,23 +935,31 @@ function AdminFightCard({
   }, [s, timerExpired, busy, fight.id, onAction]);
   const totalPoolUsd = getFightPoolUsd(fight).toFixed(2);
 
-  const isPolymarket = !!fight.polymarket_market_id;
+  const isPolymarket = fight.source === "polymarket";
+  const isNative = fight.source === "manual" || !fight.source;
+  const commissionPct = ((fight.commission_bps ?? 500) / 100).toFixed(0);
 
   return (
     <div className={`bg-background/80 border border-border/30 rounded-lg p-4 ${fight.review_required ? 'ring-2 ring-yellow-500/40' : isBotConfirmed ? 'ring-1 ring-blue-500/30' : isPolymarket ? 'ring-1 ring-purple-500/20' : ''}`}>
-      {/* Polymarket badge */}
-      {isPolymarket && (
-        <div className="flex items-center gap-2 mb-2 text-purple-400">
-          <span className="text-xs font-bold">🟣 POLYMARKET</span>
-          <span className="text-[10px] text-muted-foreground ml-auto">
-            {fight.price_a > 0 && fight.price_b > 0 ? (
-              <>
+      {/* Source badge row */}
+      <div className="flex items-center gap-2 mb-2 flex-wrap">
+        {isPolymarket ? (
+          <>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400">🟣 POLYMARKET</span>
+            {fight.price_a > 0 && fight.price_b > 0 && (
+              <span className="text-[10px] text-muted-foreground">
                 {fight.fighter_a_name} {(fight.price_a * 100).toFixed(0)}¢ · {fight.fighter_b_name} {(fight.price_b * 100).toFixed(0)}¢
-              </>
-            ) : "Prices unavailable"}
-          </span>
-        </div>
-      )}
+              </span>
+            )}
+          </>
+        ) : (
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/20 text-primary">🏠 NATIVE</span>
+        )}
+        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted/50 text-muted-foreground">{commissionPct}% fee</span>
+        {fight.featured && (
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400">⭐ FEATURED</span>
+        )}
+      </div>
 
       {/* Review required banner */}
       {fight.review_required && (

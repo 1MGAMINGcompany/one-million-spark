@@ -7,7 +7,9 @@ const corsHeaders = {
 };
 
 const MIN_PREDICTION_USD = 1.0; // $1 minimum prediction
-const FEE_BPS = 500; // 5% platform fee
+// Commission is now source-aware: read from fight.commission_bps
+// 200 bps (2%) for Polymarket imports, 500 bps (5%) for native 1MGAMING events
+const DEFAULT_FEE_BPS = 500;
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -66,10 +68,11 @@ Deno.serve(async (req) => {
       return json({ error: "Invalid wallet address" }, 400);
     }
 
-    const fee_usd = Number((parsedAmount * FEE_BPS / 10_000).toFixed(6));
-    const pool_usd = Number((parsedAmount - fee_usd).toFixed(6));
-    // Shares are integer cents for atomic pool math
-    const shares = Math.floor(pool_usd * 100);
+    // Source-aware commission: read from fight record, fallback to default
+    const feeBps = Number(fight?.commission_bps ?? DEFAULT_FEE_BPS);
+
+    // NOTE: We need fight data before calculating fees, so we move fee calc after fight fetch.
+    // This is handled below after fight validation.
 
     // ── Validate fight exists and is open ──
     const { data: fight, error: fightErr } = await supabase
@@ -82,6 +85,13 @@ Deno.serve(async (req) => {
     if (fight.status !== "open") {
       return json({ error: "Predictions are closed for this fight" }, 400);
     }
+
+    // ── Source-aware commission calculation ──
+    const commissionBps = Number(fight.commission_bps ?? DEFAULT_FEE_BPS);
+    const fee_usd = Number((parsedAmount * commissionBps / 10_000).toFixed(6));
+    const pool_usd = Number((parsedAmount - fee_usd).toFixed(6));
+    // Shares are integer cents for atomic pool math
+    const shares = Math.floor(pool_usd * 100);
 
     // ══════════════════════════════════════════════════════
     // POLYMARKET ORDER ROUTING
@@ -184,6 +194,8 @@ Deno.serve(async (req) => {
       entry,
       pool_contribution_usd: pool_usd,
       fee_usd,
+      commission_bps: commissionBps,
+      source: fight.source || "manual",
       shares,
       polymarket_backed: isPolymarketBacked,
       polymarket_status,
