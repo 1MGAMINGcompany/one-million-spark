@@ -317,7 +317,7 @@ export default function FightPredictions() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      const amountWon = data.reward_sol || data.reward_usd || 0;
+      const amountWon = data.reward_usd || data.reward_sol || 0;
       toast.success("Reward claimed!", { description: `$${amountWon.toFixed(2)} sent to your wallet` });
       await loadUserEntries();
       if (SOCIAL_SHARE_ENABLED) {
@@ -326,7 +326,7 @@ export default function FightPredictions() {
           : undefined;
         setClaimShareData({
           eventTitle: f?.title || f?.event_name || "Prediction Win",
-          solWon: amountWon,
+          amountWon,
           fighterName: pickedName || undefined,
           sport: f?.event_name,
         });
