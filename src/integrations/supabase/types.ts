@@ -906,6 +906,36 @@ export type Database = {
         }
         Relationships: []
       }
+      prediction_accounts: {
+        Row: {
+          auth_provider: string | null
+          created_at: string
+          id: string
+          last_active_at: string
+          status: string
+          wallet_evm: string | null
+          wallet_solana: string | null
+        }
+        Insert: {
+          auth_provider?: string | null
+          created_at?: string
+          id?: string
+          last_active_at?: string
+          status?: string
+          wallet_evm?: string | null
+          wallet_solana?: string | null
+        }
+        Update: {
+          auth_provider?: string | null
+          created_at?: string
+          id?: string
+          last_active_at?: string
+          status?: string
+          wallet_evm?: string | null
+          wallet_solana?: string | null
+        }
+        Relationships: []
+      }
       prediction_admins: {
         Row: {
           wallet: string
@@ -1304,6 +1334,195 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      prediction_system_controls: {
+        Row: {
+          allowed_market_mode: string
+          created_at: string
+          default_fee_bps: number
+          id: string
+          max_daily_user_usdc: number
+          max_order_usdc: number
+          max_slippage_bps: number
+          new_orders_enabled: boolean
+          predictions_enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          allowed_market_mode?: string
+          created_at?: string
+          default_fee_bps?: number
+          id?: string
+          max_daily_user_usdc?: number
+          max_order_usdc?: number
+          max_slippage_bps?: number
+          new_orders_enabled?: boolean
+          predictions_enabled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          allowed_market_mode?: string
+          created_at?: string
+          default_fee_bps?: number
+          id?: string
+          max_daily_user_usdc?: number
+          max_order_usdc?: number
+          max_slippage_bps?: number
+          new_orders_enabled?: boolean
+          predictions_enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      prediction_trade_audit_log: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          request_payload_json: Json | null
+          response_payload_json: Json | null
+          trade_order_id: string | null
+          wallet: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          request_payload_json?: Json | null
+          response_payload_json?: Json | null
+          trade_order_id?: string | null
+          wallet?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          request_payload_json?: Json | null
+          response_payload_json?: Json | null
+          trade_order_id?: string | null
+          wallet?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prediction_trade_audit_log_trade_order_id_fkey"
+            columns: ["trade_order_id"]
+            isOneToOne: false
+            referencedRelation: "prediction_trade_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      prediction_trade_orders: {
+        Row: {
+          account_id: string | null
+          avg_fill_price: number | null
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          expected_price: number | null
+          expected_shares: number | null
+          fee_bps: number
+          fee_usdc: number
+          fight_id: string
+          filled_amount_usdc: number
+          filled_shares: number
+          finalized_at: string | null
+          id: string
+          order_type: string
+          polymarket_market_id: string | null
+          polymarket_order_id: string | null
+          prediction_event_id: string | null
+          quote_expires_at: string | null
+          reconciled_at: string | null
+          requested_amount_usdc: number
+          side: string
+          slippage_bps: number
+          status: string
+          submitted_at: string | null
+          token_id: string | null
+          wallet: string
+        }
+        Insert: {
+          account_id?: string | null
+          avg_fill_price?: number | null
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          expected_price?: number | null
+          expected_shares?: number | null
+          fee_bps?: number
+          fee_usdc?: number
+          fight_id: string
+          filled_amount_usdc?: number
+          filled_shares?: number
+          finalized_at?: string | null
+          id?: string
+          order_type?: string
+          polymarket_market_id?: string | null
+          polymarket_order_id?: string | null
+          prediction_event_id?: string | null
+          quote_expires_at?: string | null
+          reconciled_at?: string | null
+          requested_amount_usdc?: number
+          side: string
+          slippage_bps?: number
+          status?: string
+          submitted_at?: string | null
+          token_id?: string | null
+          wallet: string
+        }
+        Update: {
+          account_id?: string | null
+          avg_fill_price?: number | null
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          expected_price?: number | null
+          expected_shares?: number | null
+          fee_bps?: number
+          fee_usdc?: number
+          fight_id?: string
+          filled_amount_usdc?: number
+          filled_shares?: number
+          finalized_at?: string | null
+          id?: string
+          order_type?: string
+          polymarket_market_id?: string | null
+          polymarket_order_id?: string | null
+          prediction_event_id?: string | null
+          quote_expires_at?: string | null
+          reconciled_at?: string | null
+          requested_amount_usdc?: number
+          side?: string
+          slippage_bps?: number
+          status?: string
+          submitted_at?: string | null
+          token_id?: string | null
+          wallet?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prediction_trade_orders_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "prediction_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prediction_trade_orders_fight_id_fkey"
+            columns: ["fight_id"]
+            isOneToOne: false
+            referencedRelation: "prediction_fights"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prediction_trade_orders_prediction_event_id_fkey"
+            columns: ["prediction_event_id"]
+            isOneToOne: false
+            referencedRelation: "prediction_events"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       presence_heartbeats: {
         Row: {
