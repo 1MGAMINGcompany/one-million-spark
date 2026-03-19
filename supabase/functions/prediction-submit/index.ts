@@ -21,6 +21,12 @@ const CLOB_BASE = "https://clob.polymarket.com";
 const MIN_PREDICTION_USD = 1.0;
 const LEGACY_DEFAULT_FEE_BPS = 500;
 
+/** Only these statuses allow new trades */
+const TRADABLE_STATUSES = new Set(["open"]);
+
+/** Max age (ms) for cached price data to be considered fresh */
+const MAX_PRICE_STALENESS_MS = 10 * 60 * 1000; // 10 minutes
+
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
