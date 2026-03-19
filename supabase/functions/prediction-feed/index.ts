@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
 
     let query = supabase
       .from("prediction_entries")
-      .select("id, fight_id, wallet, fighter_pick, amount_lamports, created_at")
+      .select("id, fight_id, wallet, fighter_pick, amount_usd, amount_lamports, created_at")
       .order("created_at", { ascending: false })
       .limit(50);
 
