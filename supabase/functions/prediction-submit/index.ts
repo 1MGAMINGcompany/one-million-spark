@@ -254,26 +254,51 @@ Deno.serve(async (req) => {
     });
 
     // ═══════════════════════════════════════════════════
-    // 2) RESOLVE USER ACCOUNT
+    // 2) RESOLVE USER ACCOUNT (with Privy DID binding)
     // ═══════════════════════════════════════════════════
     let accountId: string | null = null;
     {
-      const { data: existing } = await supabase
-        .from("prediction_accounts")
-        .select("id")
-        .eq("wallet_evm", normalizedWallet)
-        .maybeSingle();
+      // Prefer lookup by privy_did if available (trusted identity)
+      let existing: { id: string } | null = null;
+      if (privyDid) {
+        const { data } = await supabase
+          .from("prediction_accounts")
+          .select("id")
+          .eq("privy_did", privyDid)
+          .maybeSingle();
+        existing = data;
+      }
+      // Fallback: lookup by wallet_evm (backward compat for pre-DID accounts)
+      if (!existing) {
+        const { data } = await supabase
+          .from("prediction_accounts")
+          .select("id")
+          .eq("wallet_evm", normalizedWallet)
+          .maybeSingle();
+        existing = data;
+      }
 
       if (existing) {
         accountId = existing.id;
+        // Update: bind privy_did if newly available, refresh last_active_at
+        const updatePayload: Record<string, unknown> = {
+          last_active_at: new Date().toISOString(),
+          wallet_evm: normalizedWallet,
+        };
+        if (privyDid) updatePayload.privy_did = privyDid;
         await supabase
           .from("prediction_accounts")
-          .update({ last_active_at: new Date().toISOString() })
+          .update(updatePayload)
           .eq("id", accountId);
       } else {
+        const insertPayload: Record<string, unknown> = {
+          wallet_evm: normalizedWallet,
+          auth_provider: "privy",
+        };
+        if (privyDid) insertPayload.privy_did = privyDid;
         const { data: created } = await supabase
           .from("prediction_accounts")
-          .insert({ wallet_evm: normalizedWallet, auth_provider: "privy" })
+          .insert(insertPayload)
           .select("id")
           .single();
         accountId = created?.id ?? null;
