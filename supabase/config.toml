@@ -102,3 +102,6 @@ verify_jwt = false
 
 [functions.polymarket-positions]
 verify_jwt = false
+
+[functions.polymarket-prices]
+verify_jwt = false
