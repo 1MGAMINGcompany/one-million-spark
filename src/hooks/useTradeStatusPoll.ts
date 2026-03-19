@@ -4,6 +4,9 @@
  * when the initial status is non-final (submitted/requested/partial_fill).
  *
  * Security: Uses a controlled backend endpoint with Privy JWT authentication.
+ * Ownership is resolved server-side from the Privy DID → prediction_accounts mapping.
+ * The wallet parameter is sent as a temporary fallback for users whose DID
+ * hasn't been bound yet; it will be removed once all users are migrated.
  */
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -34,7 +37,6 @@ export function useTradeStatusPoll(
   const shouldPoll =
     !!tradeOrderId &&
     !!initialStatus &&
-    !!wallet &&
     !FINAL_STATUSES.has(initialStatus);
 
   useEffect(() => {
@@ -54,7 +56,8 @@ export function useTradeStatusPoll(
         const { data, error } = await supabase.functions.invoke(
           "prediction-trade-status",
           {
-            body: { trade_order_id: tradeOrderId, wallet },
+            // wallet sent as temporary fallback for pre-DID-binding compat
+            body: { trade_order_id: tradeOrderId, ...(wallet ? { wallet } : {}) },
             headers: token ? { "x-privy-token": token } : {},
           },
         );
