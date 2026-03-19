@@ -523,7 +523,7 @@ export default function FightPredictions() {
                       </span>
                     </div>
                     <span className="text-xs font-bold text-primary whitespace-nowrap ml-2">
-                      ${(entry.amount_lamports / LAMPORTS).toFixed(2)}
+                      ${(entry.amount_usd ?? entry.amount_lamports / 1_000_000_000).toFixed(2)}
                     </span>
                   </div>
                 ))
