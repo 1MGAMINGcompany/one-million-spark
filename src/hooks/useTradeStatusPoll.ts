@@ -3,7 +3,7 @@
  * Polls the prediction-trade-status edge function for up to ~18s (6 polls × 3s)
  * when the initial status is non-final (submitted/requested/partial_fill).
  *
- * Security: Uses a controlled backend endpoint instead of direct table reads.
+ * Security: Uses a controlled backend endpoint with Privy JWT authentication.
  */
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,6 +24,7 @@ export function useTradeStatusPoll(
   tradeOrderId: string | undefined,
   initialStatus: string | undefined,
   wallet?: string,
+  getAccessToken?: () => Promise<string | null>,
 ) {
   const [live, setLive] = useState<PollState | null>(null);
   const pollCount = useRef(0);
@@ -47,10 +48,14 @@ export function useTradeStatusPoll(
       pollCount.current += 1;
 
       try {
+        // Get fresh Privy access token for each poll
+        const token = getAccessToken ? await getAccessToken() : null;
+
         const { data, error } = await supabase.functions.invoke(
           "prediction-trade-status",
           {
             body: { trade_order_id: tradeOrderId, wallet },
+            headers: token ? { "x-privy-token": token } : {},
           },
         );
 
@@ -84,7 +89,7 @@ export function useTradeStatusPoll(
       stopped.current = true;
       clearInterval(id);
     };
-  }, [shouldPoll, tradeOrderId, wallet]);
+  }, [shouldPoll, tradeOrderId, wallet, getAccessToken]);
 
   return live;
 }

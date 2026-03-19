@@ -1,19 +1,21 @@
 import { createClient } from "@supabase/supabase-js";
+import { createRemoteJWKSet, jwtVerify } from "npm:jose@5";
 
 /**
  * prediction-trade-status — Secure read endpoint for a single trade order.
  *
- * Accepts: { trade_order_id, wallet }
- * Returns minimal safe fields only if the requesting wallet owns the trade.
+ * Auth: Privy JWT verification via JWKS.
+ * The caller must provide a valid Privy access token in the x-privy-token header.
+ * Ownership is verified by matching the wallet in the request body against
+ * prediction_trade_orders.wallet.
  *
- * Auth: Wallet-based ownership check (same pattern as prediction-submit).
- * No secrets, no debug fields, no audit logs exposed.
+ * Returns minimal safe fields only.
  */
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "authorization, x-client-info, apikey, content-type, x-privy-token, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 const json = (data: unknown, status = 200) =>
@@ -22,12 +24,52 @@ const json = (data: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+// ── Privy JWKS setup (cached per isolate lifetime) ──
+const PRIVY_JWKS_URL = new URL("https://auth.privy.io/.well-known/jwks.json");
+let _jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
+function getJWKS() {
+  if (!_jwks) _jwks = createRemoteJWKSet(PRIVY_JWKS_URL);
+  return _jwks;
+}
+
+async function verifyPrivyToken(token: string, appId: string) {
+  const jwks = getJWKS();
+  const { payload } = await jwtVerify(token, jwks, {
+    issuer: "privy.io",
+    audience: appId,
+  });
+  return payload; // contains sub (did:privy:...), iat, exp, etc.
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    // ── Privy JWT verification ──
+    const privyToken = req.headers.get("x-privy-token");
+    if (!privyToken || privyToken.length < 20) {
+      return json({ error: "Authentication required", error_code: "auth_required" }, 401);
+    }
+
+    const appId = Deno.env.get("VITE_PRIVY_APP_ID");
+    if (!appId) {
+      console.error("[prediction-trade-status] VITE_PRIVY_APP_ID not configured");
+      return json({ error: "Internal configuration error" }, 500);
+    }
+
+    let _claims: Awaited<ReturnType<typeof verifyPrivyToken>>;
+    try {
+      _claims = await verifyPrivyToken(privyToken, appId);
+    } catch (err) {
+      console.warn("[prediction-trade-status] Privy JWT verification failed:", (err as Error).message);
+      return json({ error: "Invalid or expired authentication token", error_code: "auth_invalid" }, 401);
+    }
+
+    // Token is valid — caller is an authenticated Privy user
+    const privyDid = _claims.sub; // e.g. "did:privy:xxxxx"
+
     const body = await req.json();
     const { trade_order_id, wallet } = body;
 
