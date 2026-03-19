@@ -752,6 +752,84 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ── System Controls ──
+
+    if (action === "getSystemControls") {
+      const { data, error } = await supabase
+        .from("prediction_system_controls")
+        .select("*")
+        .limit(1)
+        .single();
+      if (error) throw error;
+      return json({ controls: data });
+    }
+
+    if (action === "updateSystemControls") {
+      const {
+        predictions_enabled,
+        new_orders_enabled,
+        max_order_usdc,
+        max_daily_user_usdc,
+        default_fee_bps,
+        max_slippage_bps,
+        allowed_market_mode,
+      } = body;
+
+      // Validate numeric fields
+      if (max_order_usdc !== undefined && (typeof max_order_usdc !== "number" || max_order_usdc <= 0 || max_order_usdc > 100000)) {
+        return json({ error: "max_order_usdc must be between 0 and 100,000" }, 400);
+      }
+      if (max_daily_user_usdc !== undefined && (typeof max_daily_user_usdc !== "number" || max_daily_user_usdc <= 0 || max_daily_user_usdc > 1000000)) {
+        return json({ error: "max_daily_user_usdc must be between 0 and 1,000,000" }, 400);
+      }
+      if (default_fee_bps !== undefined && (typeof default_fee_bps !== "number" || default_fee_bps < 0 || default_fee_bps > 5000)) {
+        return json({ error: "default_fee_bps must be between 0 and 5000 (0-50%)" }, 400);
+      }
+      if (max_slippage_bps !== undefined && (typeof max_slippage_bps !== "number" || max_slippage_bps < 0 || max_slippage_bps > 10000)) {
+        return json({ error: "max_slippage_bps must be between 0 and 10000 (0-100%)" }, 400);
+      }
+      if (allowed_market_mode !== undefined && !["allowlist", "all", "none"].includes(allowed_market_mode)) {
+        return json({ error: "allowed_market_mode must be one of: allowlist, all, none" }, 400);
+      }
+
+      const updates: Record<string, any> = { updated_at: new Date().toISOString() };
+      if (typeof predictions_enabled === "boolean") updates.predictions_enabled = predictions_enabled;
+      if (typeof new_orders_enabled === "boolean") updates.new_orders_enabled = new_orders_enabled;
+      if (max_order_usdc !== undefined) updates.max_order_usdc = max_order_usdc;
+      if (max_daily_user_usdc !== undefined) updates.max_daily_user_usdc = max_daily_user_usdc;
+      if (default_fee_bps !== undefined) updates.default_fee_bps = default_fee_bps;
+      if (max_slippage_bps !== undefined) updates.max_slippage_bps = max_slippage_bps;
+      if (allowed_market_mode !== undefined) updates.allowed_market_mode = allowed_market_mode;
+
+      // Get the first (and only) row
+      const { data: existing } = await supabase
+        .from("prediction_system_controls")
+        .select("id")
+        .limit(1)
+        .single();
+
+      if (!existing) return json({ error: "System controls row not found" }, 500);
+
+      const { data, error } = await supabase
+        .from("prediction_system_controls")
+        .update(updates)
+        .eq("id", existing.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Audit log
+      await supabase.from("automation_logs").insert({
+        action: "update_system_controls",
+        admin_wallet: wallet,
+        source: "prediction-admin",
+        details: updates,
+      });
+
+      return json({ controls: data });
+    }
+
     return json({ error: "Unknown action" }, 400);
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), {

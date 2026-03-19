@@ -17,8 +17,17 @@ import {
 import {
   Shield, Plus, Lock, Trophy, Loader2, Play, CheckCircle, Ban,
   ArrowDown, Trash2, Eye, AlertTriangle, RefreshCw, Power, Download,
-  Archive, EyeOff, Filter, ChevronUp, ChevronDown, Users,
+  Archive, EyeOff, Filter, ChevronUp, ChevronDown, Users, Settings,
+  Save,
 } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useWallet } from "@/hooks/useWallet";
 import { toast } from "sonner";
