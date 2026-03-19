@@ -62,6 +62,7 @@ export default function PredictionModal({
 }) {
   const referralCode = useMyReferralCode(wallet ?? null);
   const [amount, setAmount] = useState("");
+  const amountNum = parseFloat(amount) || 0;
   const feeRate = getFeeRate(fight);
   const fee = amountNum * feeRate;
   const poolContribution = amountNum - fee;
