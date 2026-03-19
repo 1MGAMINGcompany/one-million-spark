@@ -898,7 +898,7 @@ function AdminFightCard({
       });
     }
   }, [s, timerExpired, busy, fight.id, onAction]);
-  const totalPoolSol = ((fight.pool_a_lamports + fight.pool_b_lamports) / LAMPORTS).toFixed(4);
+  const totalPoolUsd = getFightPoolUsd(fight).toFixed(2);
 
   return (
     <div className={`bg-background/80 border border-border/30 rounded-lg p-4 ${fight.review_required ? 'ring-2 ring-yellow-500/40' : isBotConfirmed ? 'ring-1 ring-blue-500/30' : ''}`}>
