@@ -26,7 +26,9 @@ export function PrivyProviderWrapper({ children }: PrivyProviderWrapperProps) {
         defaultChain: polygon,
         supportedChains: [polygon],
         embeddedWallets: {
-          createOnLogin: "users-without-wallets",
+          ethereum: {
+            createOnLogin: "users-without-wallets",
+          },
           // NOTE: Gas sponsorship is configured in the Privy dashboard
           // and enforced server-side via edge functions. Do NOT add
           // client-side gas policies here.
