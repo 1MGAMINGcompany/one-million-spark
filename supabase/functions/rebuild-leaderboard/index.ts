@@ -9,7 +9,9 @@ const corsHeaders = {
 
 interface PredictionEntry {
   wallet: string;
+  amount_usd: number | null;
   amount_lamports: number;
+  reward_usd: number | null;
   reward_lamports: number | null;
   fighter_pick: string;
   created_at: string;
@@ -20,8 +22,19 @@ interface WalletStats {
   total_predictions: number;
   wins: number;
   losses: number;
-  total_sol_played: number;
-  total_sol_won: number;
+  total_usd_played: number;
+  total_usd_won: number;
+}
+
+/** Get entry amount in USD — prefers new column, falls back to legacy lamports */
+function entryAmountUsd(e: PredictionEntry): number {
+  if (e.amount_usd != null && Number(e.amount_usd) > 0) return Number(e.amount_usd);
+  return (e.amount_lamports || 0) / 1e9;
+}
+
+function entryRewardUsd(e: PredictionEntry): number {
+  if (e.reward_usd != null && Number(e.reward_usd) > 0) return Number(e.reward_usd);
+  return (e.reward_lamports || 0) / 1e9;
 }
 
 function aggregateEntries(entries: PredictionEntry[]): Map<string, WalletStats> {
@@ -32,18 +45,18 @@ function aggregateEntries(entries: PredictionEntry[]): Map<string, WalletStats> 
 
     let stats = map.get(e.wallet);
     if (!stats) {
-      stats = { total_predictions: 0, wins: 0, losses: 0, total_sol_played: 0, total_sol_won: 0 };
+      stats = { total_predictions: 0, wins: 0, losses: 0, total_usd_played: 0, total_usd_won: 0 };
       map.set(e.wallet, stats);
     }
 
     stats.total_predictions++;
-    stats.total_sol_played += (e.amount_lamports || 0) / 1e9;
+    stats.total_usd_played += entryAmountUsd(e);
 
     const fight = e.prediction_fights;
     if (fight && fight.winner && ["confirmed", "settled"].includes(fight.status)) {
       if (fight.winner === e.fighter_pick) {
         stats.wins++;
-        stats.total_sol_won += (e.reward_lamports || 0) / 1e9;
+        stats.total_usd_won += entryRewardUsd(e);
       } else {
         stats.losses++;
       }
@@ -61,7 +74,7 @@ async function fetchAllEntries(supabase: any): Promise<PredictionEntry[]> {
   while (true) {
     const { data, error } = await supabase
       .from("prediction_entries")
-      .select("wallet, amount_lamports, reward_lamports, fighter_pick, created_at, prediction_fights(status, winner)")
+      .select("wallet, amount_usd, amount_lamports, reward_usd, reward_lamports, fighter_pick, created_at, prediction_fights(status, winner)")
       .range(offset, offset + batchSize - 1);
 
     if (error) {
@@ -147,12 +160,11 @@ Deno.serve(async (req: Request) => {
     const rows: any[] = [];
 
     for (const { period, data } of periodData) {
-      // Prediction leaderboard rows
       const predList = Array.from(data.entries())
         .map(([wallet, stats]) => ({
           wallet,
           ...stats,
-          net_sol: stats.total_sol_won - stats.total_sol_played,
+          net_sol: stats.total_usd_won - stats.total_usd_played,
           win_rate: stats.total_predictions > 0 ? stats.wins / stats.total_predictions : 0,
         }))
         .sort((a, b) => b.net_sol - a.net_sol || b.wins - a.wins);
@@ -165,8 +177,8 @@ Deno.serve(async (req: Request) => {
           total_entries: entry.total_predictions,
           wins: entry.wins,
           losses: entry.losses,
-          total_sol_played: Math.round(entry.total_sol_played * 1e6) / 1e6,
-          total_sol_won: Math.round(entry.total_sol_won * 1e6) / 1e6,
+          total_sol_played: Math.round(entry.total_usd_played * 1e6) / 1e6,
+          total_sol_won: Math.round(entry.total_usd_won * 1e6) / 1e6,
           net_sol: Math.round(entry.net_sol * 1e6) / 1e6,
           win_rate: Math.round(entry.win_rate * 1000) / 1000,
           rank: idx + 1,
@@ -184,7 +196,7 @@ Deno.serve(async (req: Request) => {
     const combinedList = Array.from(allWallets)
       .map((wallet) => {
         const pred = predAllTime.get(wallet) || {
-          total_predictions: 0, wins: 0, losses: 0, total_sol_played: 0, total_sol_won: 0,
+          total_predictions: 0, wins: 0, losses: 0, total_usd_played: 0, total_usd_won: 0,
         };
         const profile = profileMap.get(wallet) || {
           games_played: 0, wins: 0, losses: 0, total_sol_won: 0,
@@ -193,17 +205,17 @@ Deno.serve(async (req: Request) => {
         const totalEntries = profile.games_played + pred.total_predictions;
         const totalWins = profile.wins + pred.wins;
         const totalLosses = profile.losses + pred.losses;
-        const totalSolWon = Number(profile.total_sol_won) + pred.total_sol_won;
-        const netSol = totalSolWon - pred.total_sol_played;
+        const totalWon = Number(profile.total_sol_won) + pred.total_usd_won;
+        const netAmount = totalWon - pred.total_usd_played;
 
         return {
           wallet,
           total_entries: totalEntries,
           wins: totalWins,
           losses: totalLosses,
-          total_sol_played: pred.total_sol_played,
-          total_sol_won: totalSolWon,
-          net_sol: netSol,
+          total_sol_played: pred.total_usd_played,
+          total_sol_won: totalWon,
+          net_sol: netAmount,
           win_rate: totalEntries > 0 ? totalWins / totalEntries : 0,
         };
       })
