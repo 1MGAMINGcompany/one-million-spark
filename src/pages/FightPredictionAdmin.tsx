@@ -692,6 +692,9 @@ function AdminEventCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             {event.is_test && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400">TEST</span>}
+            {event.polymarket_event_id && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400">🟣 POLYMARKET</span>
+            )}
             <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
               event.status === 'draft' ? 'bg-muted text-muted-foreground' :
               event.status === 'approved' ? 'bg-green-500/20 text-green-400' :
