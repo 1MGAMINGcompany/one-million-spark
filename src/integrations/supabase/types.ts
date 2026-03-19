@@ -775,6 +775,30 @@ export type Database = {
         }
         Relationships: []
       }
+      polymarket_sync_state: {
+        Row: {
+          id: string
+          last_cursor: string | null
+          last_synced_at: string | null
+          markets_synced: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          last_cursor?: string | null
+          last_synced_at?: string | null
+          markets_synced?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          last_cursor?: string | null
+          last_synced_at?: string | null
+          markets_synced?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       prediction_admins: {
         Row: {
           wallet: string
@@ -798,6 +822,8 @@ export type Database = {
           fight_id: string
           fighter_pick: string
           id: string
+          polymarket_order_id: string | null
+          polymarket_status: string | null
           pool_lamports: number
           pool_usd: number | null
           reward_lamports: number | null
@@ -816,6 +842,8 @@ export type Database = {
           fight_id: string
           fighter_pick: string
           id?: string
+          polymarket_order_id?: string | null
+          polymarket_status?: string | null
           pool_lamports: number
           pool_usd?: number | null
           reward_lamports?: number | null
@@ -834,6 +862,8 @@ export type Database = {
           fight_id?: string
           fighter_pick?: string
           id?: string
+          polymarket_order_id?: string | null
+          polymarket_status?: string | null
           pool_lamports?: number
           pool_usd?: number | null
           reward_lamports?: number | null
@@ -867,6 +897,8 @@ export type Database = {
           league_logo: string | null
           location: string | null
           organization: string | null
+          polymarket_event_id: string | null
+          polymarket_slug: string | null
           requires_admin_approval: boolean
           result_confidence: number | null
           result_detected_at: string | null
@@ -898,6 +930,8 @@ export type Database = {
           league_logo?: string | null
           location?: string | null
           organization?: string | null
+          polymarket_event_id?: string | null
+          polymarket_slug?: string | null
           requires_admin_approval?: boolean
           result_confidence?: number | null
           result_detected_at?: string | null
@@ -929,6 +963,8 @@ export type Database = {
           league_logo?: string | null
           location?: string | null
           organization?: string | null
+          polymarket_event_id?: string | null
+          polymarket_slug?: string | null
           requires_admin_approval?: boolean
           result_confidence?: number | null
           result_detected_at?: string | null
@@ -971,10 +1007,21 @@ export type Database = {
           home_logo: string | null
           id: string
           method: string | null
+          polymarket_active: boolean | null
+          polymarket_condition_id: string | null
+          polymarket_end_date: string | null
+          polymarket_last_synced_at: string | null
+          polymarket_market_id: string | null
+          polymarket_outcome_a_token: string | null
+          polymarket_outcome_b_token: string | null
+          polymarket_question: string | null
+          polymarket_slug: string | null
           pool_a_lamports: number
           pool_a_usd: number
           pool_b_lamports: number
           pool_b_usd: number
+          price_a: number | null
+          price_b: number | null
           refund_status: string | null
           refunds_completed_at: string | null
           refunds_started_at: string | null
@@ -1005,10 +1052,21 @@ export type Database = {
           home_logo?: string | null
           id?: string
           method?: string | null
+          polymarket_active?: boolean | null
+          polymarket_condition_id?: string | null
+          polymarket_end_date?: string | null
+          polymarket_last_synced_at?: string | null
+          polymarket_market_id?: string | null
+          polymarket_outcome_a_token?: string | null
+          polymarket_outcome_b_token?: string | null
+          polymarket_question?: string | null
+          polymarket_slug?: string | null
           pool_a_lamports?: number
           pool_a_usd?: number
           pool_b_lamports?: number
           pool_b_usd?: number
+          price_a?: number | null
+          price_b?: number | null
           refund_status?: string | null
           refunds_completed_at?: string | null
           refunds_started_at?: string | null
@@ -1039,10 +1097,21 @@ export type Database = {
           home_logo?: string | null
           id?: string
           method?: string | null
+          polymarket_active?: boolean | null
+          polymarket_condition_id?: string | null
+          polymarket_end_date?: string | null
+          polymarket_last_synced_at?: string | null
+          polymarket_market_id?: string | null
+          polymarket_outcome_a_token?: string | null
+          polymarket_outcome_b_token?: string | null
+          polymarket_question?: string | null
+          polymarket_slug?: string | null
           pool_a_lamports?: number
           pool_a_usd?: number
           pool_b_lamports?: number
           pool_b_usd?: number
+          price_a?: number | null
+          price_b?: number | null
           refund_status?: string | null
           refunds_completed_at?: string | null
           refunds_started_at?: string | null
