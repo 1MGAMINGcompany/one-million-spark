@@ -52,6 +52,8 @@ interface Fight {
   fighter_b_name: string;
   pool_a_lamports: number;
   pool_b_lamports: number;
+  pool_a_usd: number;
+  pool_b_usd: number;
   shares_a: number;
   shares_b: number;
   status: string;
@@ -65,6 +67,13 @@ interface Fight {
   claims_open_at: string | null;
   confirmed_at: string | null;
   settled_at: string | null;
+}
+
+/** Return total pool in USD. Falls back to legacy lamports→SOL conversion for old data. */
+function getFightPoolUsd(fight: Fight): number {
+  const usd = (fight.pool_a_usd ?? 0) + (fight.pool_b_usd ?? 0);
+  if (usd > 0) return usd;
+  return (fight.pool_a_lamports + fight.pool_b_lamports) / 1_000_000_000;
 }
 
 const LAMPORTS = 1_000_000_000;
