@@ -585,7 +585,7 @@ export default function FightPredictions() {
           variant="claim_win"
           eventTitle={claimShareData.eventTitle}
           gameTitle={claimShareData.fighterName}
-          solWon={claimShareData.solWon}
+          amountWon={claimShareData.amountWon}
           wallet={address || undefined}
           referralCode={referralCode ?? undefined}
           sport={claimShareData.sport}
