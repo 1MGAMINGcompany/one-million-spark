@@ -9,6 +9,7 @@ import SocialShareModal from "@/components/SocialShareModal";
 import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
 import PredictionSuccessScreen from "./PredictionSuccessScreen";
 import TradeTicket from "./TradeTicket";
+import type { TradeResult } from "./tradeResultTypes";
 
 const MIN_USD = 1.0;
 
@@ -51,6 +52,7 @@ export default function PredictionModal({
   submitting,
   showSuccess,
   wallet,
+  tradeResult,
 }: {
   fight: Fight;
   pick: "fighter_a" | "fighter_b";
@@ -59,6 +61,7 @@ export default function PredictionModal({
   submitting: boolean;
   showSuccess?: boolean;
   wallet?: string;
+  tradeResult?: TradeResult | null;
 }) {
   const referralCode = useMyReferralCode(wallet ?? null);
   const { usdc_balance, usdc_balance_formatted, is_loading: balanceLoading } = usePolygonUSDC();
@@ -92,6 +95,7 @@ export default function PredictionModal({
         referralCode={referralCode}
         showShare={showShare}
         setShowShare={setShowShare}
+        tradeResult={tradeResult}
       />
     );
   }

@@ -15,6 +15,7 @@ import SocialShareModal from "@/components/SocialShareModal";
 import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
 import { useMyReferralCode } from "@/hooks/useMyReferralCode";
 import type { Fight } from "@/components/predictions/FightCard";
+import type { TradeResult } from "@/components/predictions/tradeResultTypes";
 
 const FEE_RATE = 0.05;
 
@@ -109,6 +110,7 @@ export default function FightPredictions() {
   const [activeSport, setActiveSport] = useState("ALL");
   const [showWalletGate, setShowWalletGate] = useState(false);
   const [showPredictionSuccess, setShowPredictionSuccess] = useState(false);
+  const [lastTradeResult, setLastTradeResult] = useState<TradeResult | null>(null);
   const [claimShareData, setClaimShareData] = useState<{ eventTitle: string; amountWon: number; fighterName?: string; sport?: string } | null>(null);
 
   const isConnected = authenticated && isPrivyUser;
@@ -290,6 +292,17 @@ export default function FightPredictions() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
+
+      // Capture backend result for the success screen
+      setLastTradeResult({
+        trade_order_id: data?.trade_order_id,
+        trade_status: data?.trade_status,
+        requested_amount_usdc: data?.requested_amount_usdc,
+        fee_usdc: data?.fee_usdc,
+        fee_bps: data?.fee_bps,
+        net_amount_usdc: data?.net_amount_usdc,
+        entry_id: data?.entry_id,
+      });
 
       toast.success("Prediction submitted!", {
         description: `$${amountUsd.toFixed(2)} on ${selectedPick === "fighter_a" ? selectedFight.fighter_a_name : selectedFight.fighter_b_name}`,
@@ -563,11 +576,12 @@ export default function FightPredictions() {
         <PredictionModal
           fight={selectedFight}
           pick={selectedPick}
-          onClose={() => { setSelectedFight(null); setSelectedPick(null); setShowPredictionSuccess(false); }}
+          onClose={() => { setSelectedFight(null); setSelectedPick(null); setShowPredictionSuccess(false); setLastTradeResult(null); }}
           onSubmit={handleSubmit}
           submitting={submitting}
           showSuccess={showPredictionSuccess}
           wallet={address || undefined}
+          tradeResult={lastTradeResult}
         />
       )}
 
