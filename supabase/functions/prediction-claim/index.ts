@@ -6,9 +6,9 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// ── V1 Safety Guardrails (USD-based) ──
-const MAX_CLAIM_USD = 500;          // $500 per single claim
-const DAILY_CEILING_USD = 5_000;    // $5,000 daily total payouts
+// ── Safety Guardrails (USD-based) ──
+const MAX_CLAIM_USD = 500;
+const DAILY_CEILING_USD = 5_000;
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -81,10 +81,68 @@ Deno.serve(async (req) => {
       return json({ error: "No unclaimed winning predictions" }, 400);
     }
 
-    // Calculate total user shares
-    const userShares = entries.reduce((sum: number, e: any) => sum + Number(e.shares), 0);
+    // ══════════════════════════════════════════════════════
+    // POLYMARKET vs LOCAL claim path
+    // ══════════════════════════════════════════════════════
+    const isPolymarketBacked = !!(fight.polymarket_market_id);
 
-    // Total winning pool shares
+    if (isPolymarketBacked) {
+      // ── POLYMARKET REDEMPTION PATH ──
+      // In production, this would:
+      // 1. Check user's Polymarket CTF position via Data API
+      // 2. Redeem winning outcome tokens for USDC
+      // 3. Transfer USDC to user's Polygon wallet
+      // 4. Record the redemption tx hash
+      //
+      // For now, mark entries as claimed with calculated reward.
+      // The actual USDC distribution will be handled once the
+      // Polymarket order flow is fully connected.
+
+      const userShares = entries.reduce((sum: number, e: any) => sum + Number(e.shares), 0);
+      const totalWinningShares = fight.winner === "fighter_a"
+        ? Number(fight.shares_a)
+        : Number(fight.shares_b);
+
+      if (totalWinningShares <= 0) {
+        return json({ error: "No winning shares in pool" }, 400);
+      }
+
+      const totalPoolUsd = (Number(fight.pool_a_usd) + Number(fight.pool_b_usd)) > 0
+        ? Number(fight.pool_a_usd) + Number(fight.pool_b_usd)
+        : (Number(fight.pool_a_lamports) + Number(fight.pool_b_lamports)) / 1_000_000_000;
+
+      const rewardUsd = Number(((userShares / totalWinningShares) * totalPoolUsd).toFixed(6));
+
+      if (rewardUsd > MAX_CLAIM_USD) {
+        return json({ error: "Claim exceeds per-claim safety limit", max_usd: MAX_CLAIM_USD, reward_usd: rewardUsd }, 400);
+      }
+
+      // Mark entries as claimed
+      const entryIds = entries.map((e: any) => e.id);
+      await supabase
+        .from("prediction_entries")
+        .update({
+          claimed: true,
+          reward_usd: rewardUsd,
+          reward_lamports: 0,
+          polymarket_status: "redemption_pending",
+        })
+        .in("id", entryIds);
+
+      return json({
+        success: true,
+        reward_usd: rewardUsd,
+        entries_claimed: entryIds.length,
+        payout_method: "polymarket_redemption_pending",
+        // TODO: Once Polymarket order flow is live, this will include:
+        // redemption_tx: "0x...",
+        // usdc_amount: rewardUsd,
+      });
+    }
+
+    // ── LOCAL (non-Polymarket) claim path ──
+    // For niche markets not backed by Polymarket
+    const userShares = entries.reduce((sum: number, e: any) => sum + Number(e.shares), 0);
     const totalWinningShares = fight.winner === "fighter_a"
       ? Number(fight.shares_a)
       : Number(fight.shares_b);
@@ -93,24 +151,17 @@ Deno.serve(async (req) => {
       return json({ error: "No winning shares in pool" }, 400);
     }
 
-    // Total pool (both sides, USD-first with legacy fallback)
     const totalPoolUsd = (Number(fight.pool_a_usd) + Number(fight.pool_b_usd)) > 0
       ? Number(fight.pool_a_usd) + Number(fight.pool_b_usd)
       : (Number(fight.pool_a_lamports) + Number(fight.pool_b_lamports)) / 1_000_000_000;
 
-    // User reward in USD
     const rewardUsd = Number(((userShares / totalWinningShares) * totalPoolUsd).toFixed(6));
 
-    // ── GUARDRAIL 1: Per-claim cap ──
     if (rewardUsd > MAX_CLAIM_USD) {
-      return json({
-        error: "Claim exceeds per-claim safety limit",
-        max_usd: MAX_CLAIM_USD,
-        reward_usd: rewardUsd,
-      }, 400);
+      return json({ error: "Claim exceeds per-claim safety limit", max_usd: MAX_CLAIM_USD, reward_usd: rewardUsd }, 400);
     }
 
-    // ── GUARDRAIL 2: Daily payout ceiling ──
+    // Daily ceiling check
     const todayStart = new Date();
     todayStart.setUTCHours(0, 0, 0, 0);
 
@@ -135,14 +186,6 @@ Deno.serve(async (req) => {
       }, 429);
     }
 
-    // ── TODO: Polymarket integration point ──
-    // When Polymarket is connected, execute the payout here:
-    // 1. Redeem winning Polymarket shares
-    // 2. Transfer USDC to user's wallet on Polygon
-    // 3. Record the tx hash on the entry
-    // For now, we mark entries as claimed with the calculated reward.
-    // Manual payouts can be processed by admin.
-
     // Mark entries as claimed
     const entryIds = entries.map((e: any) => e.id);
     await supabase
@@ -150,7 +193,6 @@ Deno.serve(async (req) => {
       .update({
         claimed: true,
         reward_usd: rewardUsd,
-        // Legacy field for backward compat
         reward_lamports: 0,
       })
       .in("id", entryIds);
@@ -159,8 +201,7 @@ Deno.serve(async (req) => {
       success: true,
       reward_usd: rewardUsd,
       entries_claimed: entryIds.length,
-      // No on-chain signature yet — will be added with Polymarket integration
-      payout_method: "pending_polymarket",
+      payout_method: "local_pool",
     });
   } catch (err: any) {
     return json({ error: err.message }, 500);

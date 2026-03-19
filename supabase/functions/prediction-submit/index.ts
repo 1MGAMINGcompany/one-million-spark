@@ -83,12 +83,52 @@ Deno.serve(async (req) => {
       return json({ error: "Predictions are closed for this fight" }, 400);
     }
 
-    // ── TODO: Polymarket integration point ──
-    // When Polymarket is connected, execute the trade here:
-    // 1. Call Polymarket CLOB API to place the order
-    // 2. Verify the fill / partial fill
-    // 3. Store the Polymarket order ID on the entry
-    // For now, we record the prediction entry server-side without on-chain execution.
+    // ══════════════════════════════════════════════════════
+    // POLYMARKET ORDER ROUTING
+    // ══════════════════════════════════════════════════════
+    let polymarket_order_id: string | null = null;
+    let polymarket_status = "pending";
+    const isPolymarketBacked = !!(fight.polymarket_market_id && fight.polymarket_outcome_a_token);
+
+    if (isPolymarketBacked) {
+      // Determine which token to buy
+      const tokenId = fighter_pick === "fighter_a"
+        ? fight.polymarket_outcome_a_token
+        : fight.polymarket_outcome_b_token;
+
+      // ── TODO: POLYMARKET CLOB ORDER PLACEMENT ──
+      // This is where the actual Polymarket order would be placed.
+      // Requirements for production:
+      // 1. POLYMARKET_API_KEY and POLYMARKET_API_SECRET must be configured
+      // 2. Builder wallet must be funded with USDC on Polygon
+      // 3. CTF allowance must be set for the exchange contract
+      // 4. Order must be signed with EIP-712 using builder credentials
+      //
+      // Implementation steps:
+      //   const apiKey = Deno.env.get("POLYMARKET_API_KEY");
+      //   const apiSecret = Deno.env.get("POLYMARKET_API_SECRET");
+      //   const passphrase = Deno.env.get("POLYMARKET_PASSPHRASE");
+      //
+      //   const orderPayload = {
+      //     tokenID: tokenId,
+      //     price: fighter_pick === "fighter_a" ? fight.price_a : fight.price_b,
+      //     size: pool_usd,  // USDC amount
+      //     side: "BUY",
+      //     feeRateBps: 0,   // Maker fee
+      //     nonce: Date.now(),
+      //     expiration: 0,   // GTC
+      //   };
+      //
+      //   // Sign and submit to https://clob.polymarket.com/order
+      //   const orderRes = await fetch("https://clob.polymarket.com/order", { ... });
+      //   polymarket_order_id = orderRes.orderID;
+      //   polymarket_status = "submitted";
+      //
+      // For now, mark as "awaiting_integration" with the token mapping recorded.
+
+      polymarket_status = "awaiting_integration";
+      console.log(`[prediction-submit] Polymarket-backed fight ${fight_id}: token=${tokenId}, amount=$${pool_usd}`);
+    }
 
     // ── Insert prediction entry (USD-based) ──
     const { data: entry, error: insertErr } = await supabase
@@ -101,6 +141,8 @@ Deno.serve(async (req) => {
         fee_usd,
         pool_usd,
         shares,
+        polymarket_order_id,
+        polymarket_status,
         // Legacy columns set to 0 for schema compatibility
         amount_lamports: 0,
         fee_lamports: 0,
@@ -143,6 +185,8 @@ Deno.serve(async (req) => {
       pool_contribution_usd: pool_usd,
       fee_usd,
       shares,
+      polymarket_backed: isPolymarketBacked,
+      polymarket_status,
     });
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : String(err) }, 500);
