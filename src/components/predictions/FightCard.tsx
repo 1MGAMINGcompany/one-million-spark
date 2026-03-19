@@ -28,6 +28,14 @@ interface Fight {
   home_logo?: string | null;
   away_logo?: string | null;
   source?: string | null;
+  commission_bps?: number | null;
+  price_a?: number | null;
+  price_b?: number | null;
+  fighter_a_photo?: string | null;
+  fighter_b_photo?: string | null;
+  explainer_card?: string | null;
+  stats_json?: any;
+  featured?: boolean;
 }
 
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {

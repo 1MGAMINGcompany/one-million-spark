@@ -799,6 +799,113 @@ export type Database = {
         }
         Relationships: []
       }
+      polymarket_user_positions: {
+        Row: {
+          avg_price: number
+          condition_id: string
+          created_at: string
+          current_value: number
+          fight_id: string | null
+          id: string
+          outcome_index: number
+          pm_order_id: string | null
+          pm_order_status: string | null
+          realized_pnl: number
+          size: number
+          synced_at: string
+          token_id: string | null
+          updated_at: string
+          wallet: string
+        }
+        Insert: {
+          avg_price?: number
+          condition_id: string
+          created_at?: string
+          current_value?: number
+          fight_id?: string | null
+          id?: string
+          outcome_index?: number
+          pm_order_id?: string | null
+          pm_order_status?: string | null
+          realized_pnl?: number
+          size?: number
+          synced_at?: string
+          token_id?: string | null
+          updated_at?: string
+          wallet: string
+        }
+        Update: {
+          avg_price?: number
+          condition_id?: string
+          created_at?: string
+          current_value?: number
+          fight_id?: string | null
+          id?: string
+          outcome_index?: number
+          pm_order_id?: string | null
+          pm_order_status?: string | null
+          realized_pnl?: number
+          size?: number
+          synced_at?: string
+          token_id?: string | null
+          updated_at?: string
+          wallet?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "polymarket_user_positions_fight_id_fkey"
+            columns: ["fight_id"]
+            isOneToOne: false
+            referencedRelation: "prediction_fights"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      polymarket_user_sessions: {
+        Row: {
+          authenticated_at: string | null
+          created_at: string
+          ctf_allowance_set: boolean
+          expires_at: string | null
+          id: string
+          pm_api_key: string | null
+          pm_api_secret: string | null
+          pm_derived_address: string | null
+          pm_passphrase: string | null
+          status: string
+          updated_at: string
+          wallet: string
+        }
+        Insert: {
+          authenticated_at?: string | null
+          created_at?: string
+          ctf_allowance_set?: boolean
+          expires_at?: string | null
+          id?: string
+          pm_api_key?: string | null
+          pm_api_secret?: string | null
+          pm_derived_address?: string | null
+          pm_passphrase?: string | null
+          status?: string
+          updated_at?: string
+          wallet: string
+        }
+        Update: {
+          authenticated_at?: string | null
+          created_at?: string
+          ctf_allowance_set?: boolean
+          expires_at?: string | null
+          id?: string
+          pm_api_key?: string | null
+          pm_api_secret?: string | null
+          pm_derived_address?: string | null
+          pm_passphrase?: string | null
+          status?: string
+          updated_at?: string
+          wallet?: string
+        }
+        Relationships: []
+      }
       prediction_admins: {
         Row: {
           wallet: string

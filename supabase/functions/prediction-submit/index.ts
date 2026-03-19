@@ -6,9 +6,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const MIN_PREDICTION_USD = 1.0; // $1 minimum prediction
-// Commission is now source-aware: read from fight.commission_bps
-// 200 bps (2%) for Polymarket imports, 500 bps (5%) for native 1MGAMING events
+const MIN_PREDICTION_USD = 1.0;
 const DEFAULT_FEE_BPS = 500;
 
 const json = (data: unknown, status = 200) =>
@@ -25,19 +23,11 @@ Deno.serve(async (req) => {
   try {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
     const body = await req.json();
-    const {
-      fight_id,
-      wallet,
-      fighter_pick,
-      amount_usd,
-      // Legacy fields accepted but ignored for backward compat
-      amount_lamports: _legacyLamports,
-      tx_signature: _legacyTxSig,
-    } = body;
+    const { fight_id, wallet, fighter_pick, amount_usd } = body;
 
     // ── Kill switch check ──
     const { data: settings } = await supabase
@@ -68,12 +58,6 @@ Deno.serve(async (req) => {
       return json({ error: "Invalid wallet address" }, 400);
     }
 
-    // Source-aware commission: read from fight record, fallback to default
-    const feeBps = Number(fight?.commission_bps ?? DEFAULT_FEE_BPS);
-
-    // NOTE: We need fight data before calculating fees, so we move fee calc after fight fetch.
-    // This is handled below after fight validation.
-
     // ── Validate fight exists and is open ──
     const { data: fight, error: fightErr } = await supabase
       .from("prediction_fights")
@@ -90,55 +74,84 @@ Deno.serve(async (req) => {
     const commissionBps = Number(fight.commission_bps ?? DEFAULT_FEE_BPS);
     const fee_usd = Number((parsedAmount * commissionBps / 10_000).toFixed(6));
     const pool_usd = Number((parsedAmount - fee_usd).toFixed(6));
-    // Shares are integer cents for atomic pool math
     const shares = Math.floor(pool_usd * 100);
 
     // ══════════════════════════════════════════════════════
-    // POLYMARKET ORDER ROUTING
+    // SOURCE-AWARE ORDER ROUTING
     // ══════════════════════════════════════════════════════
+    const isPolymarketBacked = !!(fight.polymarket_market_id && fight.polymarket_outcome_a_token);
     let polymarket_order_id: string | null = null;
     let polymarket_status = "pending";
-    const isPolymarketBacked = !!(fight.polymarket_market_id && fight.polymarket_outcome_a_token);
 
     if (isPolymarketBacked) {
-      // Determine which token to buy
+      // ── POLYMARKET USER-AUTHENTICATED ORDER PATH ──
+      // User identity is separate from builder identity.
+      // The builder wallet is for platform attribution only.
+
+      const walletLower = normalizedWallet.toLowerCase();
+
+      // Step 1: Check user's Polymarket session
+      const { data: pmSession } = await supabase
+        .from("polymarket_user_sessions")
+        .select("id, status, pm_api_key, pm_api_secret, pm_passphrase, pm_derived_address, ctf_allowance_set, expires_at")
+        .eq("wallet", walletLower)
+        .maybeSingle();
+
       const tokenId = fighter_pick === "fighter_a"
         ? fight.polymarket_outcome_a_token
         : fight.polymarket_outcome_b_token;
 
-      // ── TODO: POLYMARKET CLOB ORDER PLACEMENT ──
-      // This is where the actual Polymarket order would be placed.
-      // Requirements for production:
-      // 1. POLYMARKET_API_KEY and POLYMARKET_API_SECRET must be configured
-      // 2. Builder wallet must be funded with USDC on Polygon
-      // 3. CTF allowance must be set for the exchange contract
-      // 4. Order must be signed with EIP-712 using builder credentials
-      //
-      // Implementation steps:
-      //   const apiKey = Deno.env.get("POLYMARKET_API_KEY");
-      //   const apiSecret = Deno.env.get("POLYMARKET_API_SECRET");
-      //   const passphrase = Deno.env.get("POLYMARKET_PASSPHRASE");
-      //
-      //   const orderPayload = {
-      //     tokenID: tokenId,
-      //     price: fighter_pick === "fighter_a" ? fight.price_a : fight.price_b,
-      //     size: pool_usd,  // USDC amount
-      //     side: "BUY",
-      //     feeRateBps: 0,   // Maker fee
-      //     nonce: Date.now(),
-      //     expiration: 0,   // GTC
-      //   };
-      //
-      //   // Sign and submit to https://clob.polymarket.com/order
-      //   const orderRes = await fetch("https://clob.polymarket.com/order", { ... });
-      //   polymarket_order_id = orderRes.orderID;
-      //   polymarket_status = "submitted";
-      //
-      // For now, mark as "awaiting_integration" with the token mapping recorded.
+      const price = fighter_pick === "fighter_a"
+        ? Number(fight.price_a || 0.5)
+        : Number(fight.price_b || 0.5);
 
-      polymarket_status = "awaiting_integration";
-      console.log(`[prediction-submit] Polymarket-backed fight ${fight_id}: token=${tokenId}, amount=$${pool_usd}`);
+      if (pmSession?.status === "active" && pmSession.pm_api_key) {
+        // ── LIVE ORDER PATH: User has active Polymarket credentials ──
+        // Place order using USER's credentials (not builder wallet)
+        //
+        // Production implementation:
+        //   const orderPayload = {
+        //     tokenID: tokenId,
+        //     price: price,
+        //     size: pool_usd,
+        //     side: "BUY",
+        //     feeRateBps: 0,
+        //     nonce: Date.now().toString(),
+        //     expiration: 0, // GTC
+        //   };
+        //
+        //   // Sign with USER's derived key (EIP-712)
+        //   const signedOrder = signEIP712Order(orderPayload, pmSession.pm_derived_address);
+        //
+        //   // Submit to CLOB using USER's API credentials
+        //   const orderRes = await fetch("https://clob.polymarket.com/order", {
+        //     method: "POST",
+        //     headers: {
+        //       "Content-Type": "application/json",
+        //       "POLY_API_KEY": pmSession.pm_api_key,
+        //       "POLY_SIGNATURE": generateHmacSignature(pmSession.pm_api_secret, ...),
+        //       "POLY_PASSPHRASE": pmSession.pm_passphrase,
+        //       "POLY_TIMESTAMP": Date.now().toString(),
+        //     },
+        //     body: JSON.stringify(signedOrder),
+        //   });
+        //
+        //   const orderData = await orderRes.json();
+        //   polymarket_order_id = orderData.orderID;
+        //   polymarket_status = "submitted";
+
+        polymarket_status = "credentials_ready";
+        console.log(`[prediction-submit] Polymarket order ready: user=${walletLower}, token=${tokenId}, amount=$${pool_usd}, price=${price}`);
+      } else {
+        // ── DEFERRED ORDER PATH: User doesn't have active PM credentials ──
+        // Record the intent. The order will be placed once:
+        // 1. POLYMARKET_API_KEY secret is configured
+        // 2. User completes polymarket-auth flow
+        polymarket_status = "awaiting_user_auth";
+        console.log(`[prediction-submit] Polymarket deferred: user=${walletLower} needs PM auth, token=${tokenId}, amount=$${pool_usd}`);
+      }
     }
+    // else: Native 1MGAMING event — no Polymarket routing needed
 
     // ── Insert prediction entry (USD-based) ──
     const { data: entry, error: insertErr } = await supabase
@@ -152,8 +165,7 @@ Deno.serve(async (req) => {
         pool_usd,
         shares,
         polymarket_order_id,
-        polymarket_status,
-        // Legacy columns set to 0 for schema compatibility
+        polymarket_status: isPolymarketBacked ? polymarket_status : null,
         amount_lamports: 0,
         fee_lamports: 0,
         pool_lamports: 0,
@@ -175,17 +187,12 @@ Deno.serve(async (req) => {
       // Fallback: direct update
       const poolCol = fighter_pick === "fighter_a" ? "pool_a_usd" : "pool_b_usd";
       const sharesCol = fighter_pick === "fighter_a" ? "shares_a" : "shares_b";
-      const newPoolVal =
-        (fighter_pick === "fighter_a" ? fight.pool_a_usd : fight.pool_b_usd) + pool_usd;
-      const newSharesVal =
-        (fighter_pick === "fighter_a" ? fight.shares_a : fight.shares_b) + shares;
+      const newPoolVal = (fighter_pick === "fighter_a" ? fight.pool_a_usd : fight.pool_b_usd) + pool_usd;
+      const newSharesVal = (fighter_pick === "fighter_a" ? fight.shares_a : fight.shares_b) + shares;
 
       await supabase
         .from("prediction_fights")
-        .update({
-          [poolCol]: newPoolVal,
-          [sharesCol]: newSharesVal,
-        })
+        .update({ [poolCol]: newPoolVal, [sharesCol]: newSharesVal })
         .eq("id", fight_id);
     }
 
@@ -198,7 +205,7 @@ Deno.serve(async (req) => {
       source: fight.source || "manual",
       shares,
       polymarket_backed: isPolymarketBacked,
-      polymarket_status,
+      polymarket_status: isPolymarketBacked ? polymarket_status : undefined,
     });
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : String(err) }, 500);
