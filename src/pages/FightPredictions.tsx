@@ -110,6 +110,7 @@ export default function FightPredictions() {
   const [activeSport, setActiveSport] = useState("ALL");
   const [showWalletGate, setShowWalletGate] = useState(false);
   const [showPredictionSuccess, setShowPredictionSuccess] = useState(false);
+  const [lastTradeResult, setLastTradeResult] = useState<TradeResult | null>(null);
   const [claimShareData, setClaimShareData] = useState<{ eventTitle: string; amountWon: number; fighterName?: string; sport?: string } | null>(null);
 
   const isConnected = authenticated && isPrivyUser;
