@@ -133,6 +133,7 @@ export default function EventSection({
   const config = SPORT_CONFIG[sport] || SPORT_CONFIG["MUAY THAI"];
 
   const totalPool = getTotalPoolUsd(fights);
+  const allPolymarket = fights.every(f => f.source === "polymarket") && totalPool === 0;
   const openCount = eventHasStarted ? 0 : fights.filter(f => f.status === "open").length;
   const liveCount = fights.filter(f => f.status === "live").length;
 
