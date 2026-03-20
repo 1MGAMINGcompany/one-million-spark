@@ -4,6 +4,7 @@ import { Swords, TrendingUp, ChevronDown, ChevronUp, Loader2, Radio, Clock, Trop
 import { supabase } from "@/integrations/supabase/client";
 import { usePrivy } from "@privy-io/react-auth";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
+import { usePrivyFeeTransfer } from "@/hooks/usePrivyFeeTransfer";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import EventSection, { parseSport } from "@/components/predictions/EventSection";
