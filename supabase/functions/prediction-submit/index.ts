@@ -946,26 +946,15 @@ Deno.serve(async (req) => {
     let tradeStatus = "requested";
 
     if (isPolymarketBacked) {
-      const walletLower = normalizedWallet;
+      // ── Shared backend CLOB credentials (no per-user sessions) ──
+      const pmApiKey = Deno.env.get("PM_API_KEY");
+      const pmApiSecret = Deno.env.get("PM_API_SECRET");
+      const pmPassphrase = Deno.env.get("PM_PASSPHRASE");
+      const pmTradingKey = Deno.env.get("PM_TRADING_KEY");
 
-      const { data: pmSession } = await supabase
-        .from("polymarket_user_sessions")
-        .select(
-          "id, status, pm_api_key, pm_api_secret, pm_passphrase, pm_trading_key, pm_derived_address, expires_at",
-        )
-        .eq("wallet", walletLower)
-        .maybeSingle();
+      const isCredsValid = pmApiKey && pmApiSecret && pmPassphrase && pmTradingKey;
 
-      const isSessionValid =
-        pmSession?.status === "active" &&
-        pmSession.pm_api_key &&
-        pmSession.pm_api_secret &&
-        pmSession.pm_passphrase &&
-        pmSession.pm_trading_key &&
-        (!pmSession.expires_at ||
-          new Date(pmSession.expires_at) > new Date());
-
-      if (isSessionValid && tokenId) {
+      if (isCredsValid && tokenId) {
         // Mark as submitted
         await updateTradeOrder(supabase, tradeOrderId, {
           status: "submitted",
@@ -984,10 +973,10 @@ Deno.serve(async (req) => {
         // ── EIP-712 signed CLOB order submission ──
         const orderResult = await buildAndSubmitClobOrder(
           {
-            pm_api_key: pmSession!.pm_api_key!,
-            pm_api_secret: pmSession!.pm_api_secret!,
-            pm_passphrase: pmSession!.pm_passphrase!,
-            pm_trading_key: pmSession!.pm_trading_key!,
+            pm_api_key: pmApiKey!,
+            pm_api_secret: pmApiSecret!,
+            pm_passphrase: pmPassphrase!,
+            pm_trading_key: pmTradingKey!,
           },
           tokenId!,
           expectedPrice!,
