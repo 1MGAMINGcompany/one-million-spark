@@ -1019,7 +1019,7 @@ Deno.serve(async (req) => {
             const reconPath = `/order/${orderResult.orderId}`;
             const reconTs = Math.floor(Date.now() / 1000).toString();
             const reconHmac = await generateClobHmac(
-              pmSession!.pm_api_secret!,
+              pmApiSecret!,
               reconTs,
               "GET",
               reconPath,
@@ -1034,9 +1034,9 @@ Deno.serve(async (req) => {
             const reconRes = await fetch(`${CLOB_BASE}${reconPath}`, {
               headers: {
                 "Content-Type": "application/json",
-                POLY_API_KEY: pmSession!.pm_api_key!,
+                POLY_API_KEY: pmApiKey!,
                 POLY_SIGNATURE: reconHmac,
-                POLY_PASSPHRASE: pmSession!.pm_passphrase!,
+                POLY_PASSPHRASE: pmPassphrase!,
                 POLY_TIMESTAMP: reconTs,
               },
               signal: reconController.signal,
