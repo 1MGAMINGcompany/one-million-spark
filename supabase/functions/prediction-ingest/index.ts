@@ -632,7 +632,6 @@ Deno.serve(async (req) => {
                     .eq("id", newEvent.id);
                 }
               }
-              }
 
               await supabase.from("automation_logs").insert({
                 event_id: newEvent.id,
