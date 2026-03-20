@@ -255,6 +255,20 @@ async function transferFeeViaPrivy(
       return { success: false, error: "privy_wallet_not_found" };
     }
 
+    // SECURITY GATE: Privy user-owned embedded wallets (owner_id present)
+    // require a user authorization signature header for server-side RPC.
+    // Basic auth alone is NOT sufficient per Privy docs:
+    // "Wallets with owner_id present must provide an authorization signature."
+    // We cannot produce this signature server-side without the user's key material.
+    // Fail closed until a client-side authorization flow is implemented.
+    const hasOwnerId = !!embeddedWallet.owner_id;
+    if (hasOwnerId) {
+      return {
+        success: false,
+        error: "privy_user_authorization_required",
+      };
+    }
+
     // Step 2: Encode ERC20 transfer(address,uint256) calldata
     const feeRaw = BigInt(Math.floor(feeUsdc * 10 ** USDC_DECIMALS));
     const transferSelector = "a9059cbb";
