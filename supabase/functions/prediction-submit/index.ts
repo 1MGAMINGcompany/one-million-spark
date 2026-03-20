@@ -1088,6 +1088,10 @@ Deno.serve(async (req) => {
                   filledAmountUsdc = Number(reconUpdates.filled_amount_usdc);
                   if (reconPrice > 0) avgFillPrice = reconPrice;
                 }
+                // Set finalized_at only when we have confirmed fill data
+                if (newStatus === "filled") {
+                  reconUpdates.finalized_at = new Date().toISOString();
+                }
                 if (newStatus !== tradeStatus) {
                   reconUpdates.status = newStatus;
                   tradeStatus = newStatus;
