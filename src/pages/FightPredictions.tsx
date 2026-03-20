@@ -284,11 +284,30 @@ export default function FightPredictions() {
     if (!selectedFight || !selectedPick || !isConnected || !address) return;
     setSubmitting(true);
     try {
-      // Step 0: Gate Polymarket-backed fights on PM credentials
+      // Step 0: Auto-derive Polymarket credentials on first attempt
       if (selectedFight.source === "polymarket" && !pmSession.canTrade) {
-        throw new Error(
-          "Please enable Polymarket trading first (see banner above the events).",
-        );
+        toast.info("Setting up Polymarket connection…", {
+          description: "Sign once to enable trading. This only happens the first time.",
+        });
+        const privyWallet = wallets.find((w) => w.walletClientType === "privy");
+        if (!privyWallet) {
+          throw new Error("No embedded wallet found. Please refresh and try again.");
+        }
+        const provider = await privyWallet.getEthereumProvider();
+        const signMessage = async (msg: string): Promise<string> => {
+          const result = await provider.request({
+            method: "personal_sign",
+            params: [msg, privyWallet.address],
+          });
+          return result as string;
+        };
+        const deriveResult = await pmSession.deriveCredentials(signMessage);
+        if (!deriveResult.success) {
+          throw new Error(
+            deriveResult.error || "Polymarket connection failed. Please try again.",
+          );
+        }
+        toast.success("Polymarket connected!");
       }
 
       // Step 1: Get Privy access token FIRST (before any money moves)
