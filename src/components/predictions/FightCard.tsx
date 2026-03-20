@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Swords, Trophy, Loader2 } from "lucide-react";
+import { Swords, Trophy, Loader2, HelpCircle } from "lucide-react";
 
 interface Fight {
   id: string;
@@ -36,6 +36,26 @@ interface Fight {
   explainer_card?: string | null;
   stats_json?: any;
   featured?: boolean;
+}
+
+/** Build a clear human-readable prediction question from the fight data */
+function buildQuestion(fight: Fight, isSoccer: boolean): string {
+  // Polymarket titles are already questions (e.g. "Will Villarreal CF win?")
+  if (fight.source === "polymarket" && fight.title && fight.title.includes("?")) {
+    return fight.title;
+  }
+  if (isSoccer) {
+    return `Who will win: ${fight.fighter_a_name} or ${fight.fighter_b_name}?`;
+  }
+  return `Who wins: ${fight.fighter_a_name} vs ${fight.fighter_b_name}?`;
+}
+
+/** Sport-specific fallback icon */
+function SportFallbackIcon({ isSoccer, className }: { isSoccer: boolean; className?: string }) {
+  if (isSoccer) {
+    return <span className={className || "text-2xl"}>⚽</span>;
+  }
+  return <span className={className || "text-2xl"}>🥊</span>;
 }
 
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {
@@ -129,14 +149,22 @@ export default function FightCard({
   if (isSoccer) {
     return (
       <Card className="bg-card border-primary/20 overflow-hidden relative">
-        <div className="px-4 py-2 border-b border-border/20 flex items-center justify-between">
+      <div className="px-4 py-2.5 border-b border-border/20 flex items-center justify-between">
           <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Match Prediction</span>
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badge.className}`}>
             {badge.label}
           </span>
         </div>
 
-        <div className="px-4 pt-5 pb-3 sm:px-6">
+        {/* Clear prediction question */}
+        <div className="px-4 sm:px-6 pt-3 pb-1">
+          <p className="text-xs sm:text-sm font-semibold text-center text-foreground/80 flex items-center justify-center gap-1.5">
+            <HelpCircle className="w-3.5 h-3.5 text-primary/60 flex-shrink-0" />
+            {buildQuestion(fight, true)}
+          </p>
+        </div>
+
+        <div className="px-4 pt-3 pb-3 sm:px-6">
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-5" dir="ltr">
             <SoccerTeamColumn
               name={fight.fighter_a_name}
@@ -252,6 +280,12 @@ export default function FightCard({
       </div>
 
       <div className="p-4">
+        {/* Clear prediction question */}
+        <p className="text-xs sm:text-sm font-semibold text-center text-foreground/80 mb-3 flex items-center justify-center gap-1.5">
+          <HelpCircle className="w-3.5 h-3.5 text-primary/60 flex-shrink-0" />
+          {buildQuestion(fight, false)}
+        </p>
+
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3" dir="ltr">
           <FighterColumn
             name={fight.fighter_a_name}
@@ -260,6 +294,7 @@ export default function FightCard({
             isWinner={fight.winner === "fighter_a" && isClaimable}
             canPredict={canPredict}
             onPredict={() => wallet ? onPredict(fight, "fighter_a") : onWalletRequired?.()}
+            photo={fight.fighter_a_photo}
           />
           <div className="flex flex-col items-center gap-0.5">
             <Swords className="w-5 h-5 text-primary/60" />
@@ -272,6 +307,7 @@ export default function FightCard({
             isWinner={fight.winner === "fighter_b" && isClaimable}
             canPredict={canPredict}
             onPredict={() => wallet ? onPredict(fight, "fighter_b") : onWalletRequired?.()}
+            photo={fight.fighter_b_photo}
           />
         </div>
 
@@ -318,14 +354,15 @@ export default function FightCard({
 }
 
 function FighterColumn({
-  name, poolAmount, odds, isWinner, canPredict, onPredict, logo, isSoccer,
+  name, poolAmount, odds, isWinner, canPredict, onPredict, logo, isSoccer, photo,
 }: {
   name: string; poolAmount: number; odds: number; isWinner: boolean;
   canPredict: boolean; onPredict: () => void;
-  logo?: string | null; isSoccer?: boolean;
+  logo?: string | null; isSoccer?: boolean; photo?: string | null;
 }) {
-  const [logoError, setLogoError] = useState(false);
-  const showLogo = logo && !logoError;
+  const [imgError, setImgError] = useState(false);
+  const showLogo = logo && !imgError;
+  const showPhoto = !showLogo && photo && !imgError;
 
   return (
     <div className="text-center">
@@ -334,9 +371,23 @@ function FighterColumn({
           src={logo}
           alt=""
           className={`object-contain mx-auto ${isSoccer ? 'w-10 h-10 sm:w-12 sm:h-12 mb-2 drop-shadow-md' : 'w-7 h-7 mb-1.5'}`}
-          onError={() => setLogoError(true)}
+          onError={() => setImgError(true)}
           loading="lazy"
         />
+      )}
+      {showPhoto && (
+        <img
+          src={photo!}
+          alt={name}
+          className="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover mx-auto mb-1.5 ring-2 ring-primary/20"
+          onError={() => setImgError(true)}
+          loading="lazy"
+        />
+      )}
+      {!showLogo && !showPhoto && (
+        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-muted/40 flex items-center justify-center mx-auto mb-1.5">
+          <span className="text-lg">🥊</span>
+        </div>
       )}
       <p className={`font-bold text-foreground ${isSoccer && showLogo ? 'text-base sm:text-lg' : showLogo ? 'text-[15px]' : 'text-sm'}`}>{name}</p>
       <p className={`text-muted-foreground mt-1 ${isSoccer ? 'text-xs sm:text-sm' : 'text-xs'}`}>
