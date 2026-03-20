@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Swords, TrendingUp, ChevronDown, ChevronUp, Loader2, Radio, Clock, Trophy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { usePrivy, useWallets } from "@privy-io/react-auth";
+import { usePrivy } from "@privy-io/react-auth";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
 import { usePrivyFeeTransfer } from "@/hooks/usePrivyFeeTransfer";
 import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
@@ -99,10 +99,9 @@ export default function FightPredictions() {
   // Use Privy EVM wallet for predictions (Polygon)
   const { walletAddress: address, isPrivyUser } = usePrivyWallet();
   const { authenticated, login, getAccessToken } = usePrivy();
-  const { wallets } = useWallets();
   const { approveFeeAllowance } = usePrivyFeeTransfer();
   const { relayer_allowance } = usePolygonUSDC();
-  const pmSession = usePolymarketSession();
+  usePolymarketSession(); // kept for hook stability
   const referralCode = useMyReferralCode(address ?? null);
   const { t } = useTranslation();
   const [fights, setFights] = useState<Fight[]>([]);
@@ -284,31 +283,8 @@ export default function FightPredictions() {
     if (!selectedFight || !selectedPick || !isConnected || !address) return;
     setSubmitting(true);
     try {
-      // Step 0: Auto-derive Polymarket credentials on first attempt
-      if (selectedFight.source === "polymarket" && !pmSession.canTrade) {
-        toast.info("Setting up Polymarket connection…", {
-          description: "Sign once to enable trading. This only happens the first time.",
-        });
-        const privyWallet = wallets.find((w) => w.walletClientType === "privy");
-        if (!privyWallet) {
-          throw new Error("No embedded wallet found. Please refresh and try again.");
-        }
-        const provider = await privyWallet.getEthereumProvider();
-        const signMessage = async (msg: string): Promise<string> => {
-          const result = await provider.request({
-            method: "personal_sign",
-            params: [msg, privyWallet.address],
-          });
-          return result as string;
-        };
-        const deriveResult = await pmSession.deriveCredentials(signMessage);
-        if (!deriveResult.success) {
-          throw new Error(
-            deriveResult.error || "Polymarket connection failed. Please try again.",
-          );
-        }
-        toast.success("Polymarket connected!");
-      }
+      // Polymarket credentials are now handled server-side (shared backend keys)
+      // No SIWE signing required from users
 
       // Step 1: Get Privy access token FIRST (before any money moves)
       const privyToken = await getAccessToken();

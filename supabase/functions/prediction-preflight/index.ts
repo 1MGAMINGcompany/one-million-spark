@@ -29,7 +29,7 @@ const JWKS_URL = new URL("https://auth.privy.io/.well-known/jwks.json");
 async function verifyWithRetry(
   privyToken: string,
   appId: string,
-  maxAttempts = 2,
+  maxAttempts = 3,
 ) {
   let lastError: Error | undefined;
 
