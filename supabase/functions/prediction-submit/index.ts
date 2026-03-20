@@ -355,26 +355,69 @@ Deno.serve(async (req) => {
   let tradeOrderId: string | null = null;
   let normalizedWallet: string | null = null;
 
-  // ── Optional Privy JWT extraction for identity binding ──
+  // ── REQUIRED Privy JWT verification for identity binding ──
   let privyDid: string | null = null;
+  let privyEmbeddedWalletAddress: string | null = null;
   {
     const privyToken = req.headers.get("x-privy-token");
     const appId = Deno.env.get("VITE_PRIVY_APP_ID");
-    if (privyToken && privyToken.length >= 20 && appId) {
+    const appSecret = Deno.env.get("PRIVY_APP_SECRET");
+
+    if (!privyToken || privyToken.length < 20 || !appId) {
+      await auditLog(supabase, null, null, "auth_required_failed", null, {
+        reason: !privyToken ? "missing_privy_token" : !appId ? "missing_app_id" : "token_too_short",
+      });
+      return json({ error: "Authentication required", error_code: "auth_required" }, 401);
+    }
+
+    try {
+      const jwks = createRemoteJWKSet(
+        new URL("https://auth.privy.io/.well-known/jwks.json"),
+      );
+      const { payload } = await jwtVerify(privyToken, jwks, {
+        issuer: "privy.io",
+        audience: appId,
+      });
+      privyDid = (payload.sub as string) || null;
+    } catch (e) {
+      await auditLog(supabase, null, null, "auth_required_failed", null, {
+        reason: "jwt_verification_failed",
+        error: (e as Error).message,
+      });
+      return json({ error: "Authentication failed", error_code: "auth_failed" }, 401);
+    }
+
+    if (!privyDid) {
+      await auditLog(supabase, null, null, "auth_required_failed", null, {
+        reason: "no_did_in_token",
+      });
+      return json({ error: "Authentication failed — no identity", error_code: "auth_no_did" }, 401);
+    }
+
+    // Fetch the authenticated user's embedded wallet from Privy
+    if (appId && appSecret) {
       try {
-        const jwks = createRemoteJWKSet(
-          new URL("https://auth.privy.io/.well-known/jwks.json"),
-        );
-        const { payload } = await jwtVerify(privyToken, jwks, {
-          issuer: "privy.io",
-          audience: appId,
+        const basicAuth = btoa(`${appId}:${appSecret}`);
+        const userRes = await fetch(`https://api.privy.io/v1/users/${privyDid}`, {
+          headers: {
+            Authorization: `Basic ${basicAuth}`,
+            "privy-app-id": appId,
+          },
         });
-        privyDid = (payload.sub as string) || null;
+        if (userRes.ok) {
+          const userData = await userRes.json();
+          const embeddedWallet = userData.linked_accounts?.find(
+            (a: any) =>
+              a.type === "wallet" &&
+              a.wallet_client_type === "privy" &&
+              a.chain_type === "ethereum",
+          );
+          if (embeddedWallet?.address) {
+            privyEmbeddedWalletAddress = String(embeddedWallet.address).trim().toLowerCase();
+          }
+        }
       } catch (e) {
-        console.warn(
-          "[prediction-submit] Privy JWT extraction failed (non-fatal):",
-          (e as Error).message,
-        );
+        console.warn("[prediction-submit] Privy wallet lookup failed:", (e as Error).message);
       }
     }
   }
@@ -390,6 +433,16 @@ Deno.serve(async (req) => {
     } = body;
 
     normalizedWallet = wallet ? String(wallet).trim().toLowerCase() : null;
+
+    // ── WALLET VERIFICATION: client wallet must match Privy embedded wallet ──
+    if (privyEmbeddedWalletAddress && normalizedWallet !== privyEmbeddedWalletAddress) {
+      await auditLog(supabase, null, normalizedWallet, "wallet_mismatch", null, {
+        submitted_wallet: normalizedWallet,
+        privy_wallet: privyEmbeddedWalletAddress,
+        privy_did: privyDid,
+      });
+      return json({ error: "Wallet does not match authenticated user", error_code: "wallet_mismatch" }, 403);
+    }
 
     // ═══════════════════════════════════════════════════
     // 1) LOAD SYSTEM CONTROLS
@@ -803,13 +856,13 @@ Deno.serve(async (req) => {
     let feeCollected = false;
     let feeTxHash: string | null = null;
 
-    if (fee_usd > 0.01 && privyDid) {
+    if (fee_usd > 0.01) {
       await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_transfer_started", {
         fee_usdc: fee_usd,
         treasury: TREASURY_WALLET,
       });
 
-      const feeResult = await transferFeeViaPrivy(privyDid, fee_usd);
+      const feeResult = await transferFeeViaPrivy(privyDid!, fee_usd);
 
       if (feeResult.success) {
         feeCollected = true;
@@ -818,18 +871,9 @@ Deno.serve(async (req) => {
           tx_hash: feeTxHash,
           fee_usdc: fee_usd,
         });
-      } else if (feeResult.error === "privy_server_not_configured") {
-        // Allow trade without fee collection when PRIVY_APP_SECRET is not yet configured
-        console.warn(
-          "[prediction-submit] PRIVY_APP_SECRET not configured — fee recorded but not collected",
-        );
-        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_transfer_skipped", null, {
-          reason: "privy_server_not_configured",
-          fee_usdc: fee_usd,
-        });
       } else {
-        // Hard fail — fee transfer attempted but failed
-        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_transfer_failed", null, {
+        // Hard fail — fee transfer required but failed
+        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_required_but_failed", null, {
           error: feeResult.error,
           fee_usdc: fee_usd,
         });
@@ -850,12 +894,6 @@ Deno.serve(async (req) => {
           502,
         );
       }
-    } else if (fee_usd > 0.01 && !privyDid) {
-      // No Privy DID available — can't transfer fee
-      await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_transfer_skipped", null, {
-        reason: "no_privy_did",
-        fee_usdc: fee_usd,
-      });
     }
 
     // ═══════════════════════════════════════════════════
