@@ -862,6 +862,38 @@ Deno.serve(async (req) => {
         );
       }
 
+      // ── Replay protection: reject reused fee_tx_hash ──
+      const { data: existingUsage } = await supabase
+        .from("prediction_trade_orders")
+        .select("id")
+        .eq("fee_tx_hash", feeTxHash)
+        .not("status", "eq", "failed")
+        .limit(1)
+        .maybeSingle();
+
+      if (existingUsage) {
+        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_tx_hash_reused", null, {
+          fee_tx_hash: feeTxHash,
+          existing_trade_id: existingUsage.id,
+        });
+
+        await updateTradeOrder(supabase, tradeOrderId, {
+          status: "failed",
+          error_code: "fee_tx_hash_reused",
+          error_message: "This fee transaction hash has already been used for another trade.",
+          finalized_at: new Date().toISOString(),
+        });
+
+        return json(
+          {
+            error: "Fee transaction already used. Each prediction requires a new fee transfer.",
+            error_code: "fee_tx_hash_reused",
+            trade_order_id: tradeOrderId,
+          },
+          409,
+        );
+      }
+
       await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_verification_started", {
         fee_usdc: fee_usd,
         fee_tx_hash: feeTxHash,
@@ -872,6 +904,10 @@ Deno.serve(async (req) => {
 
       if (verifyResult.success) {
         feeCollected = true;
+
+        // Persist fee_tx_hash on the trade record (unique constraint prevents reuse)
+        await updateTradeOrder(supabase, tradeOrderId, { fee_tx_hash: feeTxHash });
+
         await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_verified_onchain", null, {
           tx_hash: feeTxHash,
           fee_usdc: fee_usd,
