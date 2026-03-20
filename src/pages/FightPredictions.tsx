@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { usePrivy } from "@privy-io/react-auth";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
 import { usePrivyFeeTransfer } from "@/hooks/usePrivyFeeTransfer";
+import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import EventSection, { parseSport } from "@/components/predictions/EventSection";
