@@ -10,7 +10,6 @@ interface Fight {
   fighter_b_name: string;
   pool_a_lamports: number;
   pool_b_lamports: number;
-  // New USD columns (used when available)
   pool_a_usd?: number;
   pool_b_usd?: number;
   shares_a: number;
@@ -36,11 +35,13 @@ interface Fight {
   explainer_card?: string | null;
   stats_json?: any;
   featured?: boolean;
+  fighter_a_record?: string | null;
+  fighter_b_record?: string | null;
+  venue?: string | null;
+  referee?: string | null;
 }
 
-/** Build a clear human-readable prediction question from the fight data */
 function buildQuestion(fight: Fight, isSoccer: boolean): string {
-  // Polymarket titles are already questions (e.g. "Will Villarreal CF win?")
   if (fight.source === "polymarket" && fight.title && fight.title.includes("?")) {
     return fight.title;
   }
@@ -50,7 +51,6 @@ function buildQuestion(fight: Fight, isSoccer: boolean): string {
   return `Who wins: ${fight.fighter_a_name} vs ${fight.fighter_b_name}?`;
 }
 
-/** Sport-specific fallback icon */
 function SportFallbackIcon({ isSoccer, className }: { isSoccer: boolean; className?: string }) {
   if (isSoccer) {
     return <span className={className || "text-2xl"}>⚽</span>;
@@ -73,7 +73,6 @@ const STATUS_BADGE: Record<string, { label: string; className: string }> = {
 };
 
 function calcOdds(poolA: number, poolB: number, priceA?: number | null, priceB?: number | null) {
-  // Prefer Polymarket prices when available (0–1 range → odds = 1/price)
   if (priceA && priceA > 0 && priceB && priceB > 0) {
     return {
       oddsA: +(1 / priceA).toFixed(2),
@@ -88,13 +87,84 @@ function calcOdds(poolA: number, poolB: number, priceA?: number | null, priceB?:
   };
 }
 
-/** Get USD pool value — prefers new USD columns, falls back to legacy lamports / 1e9 */
 function getPoolUsd(fight: Fight): { poolA: number; poolB: number } {
   if ((fight.pool_a_usd != null && fight.pool_a_usd > 0) || (fight.pool_b_usd != null && fight.pool_b_usd > 0)) {
     return { poolA: fight.pool_a_usd ?? 0, poolB: fight.pool_b_usd ?? 0 };
   }
-  // Legacy fallback: treat lamports as 1:1 USD placeholder
   return { poolA: fight.pool_a_lamports / 1_000_000_000, poolB: fight.pool_b_lamports / 1_000_000_000 };
+}
+
+/** Derive probability percentages from Polymarket prices */
+function getProbabilities(fight: Fight): { probA: number; probB: number } | null {
+  if (fight.price_a && fight.price_a > 0 && fight.price_b && fight.price_b > 0) {
+    return {
+      probA: Math.round(fight.price_a * 100),
+      probB: Math.round(fight.price_b * 100),
+    };
+  }
+  return null;
+}
+
+/** Probability split bar component */
+function ProbabilityBar({ probA, probB, nameA, nameB }: { probA: number; probB: number; nameA: string; nameB: string }) {
+  return (
+    <div className="w-full">
+      <div className="flex justify-between text-[10px] font-bold mb-1">
+        <span className="text-blue-400">{probA}%</span>
+        <span className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Live Odds</span>
+        <span className="text-red-400">{probB}%</span>
+      </div>
+      <div className="h-2 rounded-full overflow-hidden flex bg-muted/30">
+        <div
+          className="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-500"
+          style={{ width: `${probA}%` }}
+        />
+        <div
+          className="h-full bg-gradient-to-r from-red-400 to-red-500 transition-all duration-500"
+          style={{ width: `${probB}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** Polymarket attribution badge */
+function PolymarketBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-muted-foreground/70 bg-muted/20 px-2 py-0.5 rounded-full">
+      <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" opacity="0.5" />
+        <path d="M8 12l3 3 5-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      Powered by Polymarket
+    </span>
+  );
+}
+
+/** Pool strip for Polymarket events — shows live odds instead of $0 */
+function PolymarketPoolStrip({ fight, isSoccer }: { fight: Fight; isSoccer: boolean }) {
+  const probs = getProbabilities(fight);
+  if (!probs) {
+    return (
+      <div className="flex flex-col items-center gap-1">
+        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Liquidity</span>
+        <PolymarketBadge />
+      </div>
+    );
+  }
+  return (
+    <div className="w-full space-y-2">
+      <ProbabilityBar
+        probA={probs.probA}
+        probB={probs.probB}
+        nameA={fight.fighter_a_name}
+        nameB={fight.fighter_b_name}
+      />
+      <div className="flex items-center justify-center">
+        <PolymarketBadge />
+      </div>
+    </div>
+  );
 }
 
 export default function FightCard({
@@ -124,6 +194,7 @@ export default function FightCard({
   const { oddsA, oddsB } = calcOdds(poolA, poolB, fight.price_a, fight.price_b);
   const totalPool = poolA + poolB;
   const isPolymarketPool = fight.source === "polymarket" && totalPool === 0;
+  const isFeatured = fight.featured === true;
 
   const isClaimable = ["confirmed", "settled"].includes(fight.status);
   const hasWinningEntries =
@@ -146,17 +217,23 @@ export default function FightCard({
   const weight = fight.weight_class || titleParts[1] || null;
   const fightClass = fight.fight_class || titleParts[2] || null;
 
+  const featuredBorder = isFeatured ? "border-primary/40 shadow-[0_0_20px_hsl(var(--primary)/0.12)]" : "border-border/50";
+
   if (isSoccer) {
     return (
-      <Card className="bg-card border-primary/20 overflow-hidden relative">
-      <div className="px-4 py-2.5 border-b border-border/20 flex items-center justify-between">
+      <Card className={`bg-card overflow-hidden relative ${isFeatured ? 'border-primary/40 shadow-[0_0_20px_hsl(var(--primary)/0.12)]' : 'border-primary/20'}`}>
+        {isFeatured && (
+          <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[9px] font-bold px-2.5 py-0.5 rounded-bl-lg uppercase tracking-wider z-10">
+            Featured
+          </div>
+        )}
+        <div className="px-4 py-2.5 border-b border-border/20 flex items-center justify-between">
           <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Match Prediction</span>
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badge.className}`}>
             {badge.label}
           </span>
         </div>
 
-        {/* Clear prediction question */}
         <div className="px-4 sm:px-6 pt-3 pb-1">
           <p className="text-xs sm:text-sm font-semibold text-center text-foreground/80 flex items-center justify-center gap-1.5">
             <HelpCircle className="w-3.5 h-3.5 text-primary/60 flex-shrink-0" />
@@ -188,29 +265,39 @@ export default function FightCard({
           </div>
         </div>
 
-        {/* Pool strip */}
-        <div className="bg-primary/8 border-t border-primary/15 px-4 sm:px-6 py-3 flex items-center justify-between">
-          <div className="flex flex-col">
-            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-              {isPolymarketPool ? "Liquidity" : "Prize Pool"}
-            </span>
-            <span className="text-lg sm:text-xl font-bold text-primary font-['Cinzel'] leading-tight">
-              {isPolymarketPool ? "Polymarket" : `$${totalPool.toFixed(2)}`}
-            </span>
-          </div>
-          {!isPolymarketPool && (
-            <div className="flex gap-3 text-[10px] text-muted-foreground">
-              <div className="text-center">
-                <span className="block font-bold text-foreground text-xs">${poolA.toFixed(2)}</span>
-                <span>Home</span>
+        {/* Pool strip / Polymarket odds */}
+        <div className="bg-primary/8 border-t border-primary/15 px-4 sm:px-6 py-3">
+          {isPolymarketPool ? (
+            <PolymarketPoolStrip fight={fight} isSoccer={true} />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col">
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Prize Pool</span>
+                <span className="text-lg sm:text-xl font-bold text-primary font-['Cinzel'] leading-tight">
+                  ${totalPool.toFixed(2)}
+                </span>
               </div>
-              <div className="text-center">
-                <span className="block font-bold text-foreground text-xs">${poolB.toFixed(2)}</span>
-                <span>Away</span>
+              <div className="flex gap-3 text-[10px] text-muted-foreground">
+                <div className="text-center">
+                  <span className="block font-bold text-foreground text-xs">${poolA.toFixed(2)}</span>
+                  <span>Home</span>
+                </div>
+                <div className="text-center">
+                  <span className="block font-bold text-foreground text-xs">${poolB.toFixed(2)}</span>
+                  <span>Away</span>
+                </div>
               </div>
             </div>
           )}
         </div>
+
+        {/* Venue / referee info */}
+        {(fight.venue || fight.referee) && (
+          <div className="px-4 sm:px-6 py-2 border-t border-border/10 flex items-center gap-3 text-[10px] text-muted-foreground">
+            {fight.venue && <span>📍 {fight.venue}</span>}
+            {fight.referee && <span>🏁 {fight.referee}</span>}
+          </div>
+        )}
 
         {/* Draw info */}
         {["draw", "refund_pending", "refunds_processing", "refunds_complete"].includes(fight.status) && (
@@ -250,7 +337,12 @@ export default function FightCard({
 
   // ── Non-soccer (combat sports) card ──
   return (
-    <Card className="bg-card border-border/50 overflow-hidden relative">
+    <Card className={`bg-card overflow-hidden relative ${featuredBorder}`}>
+      {isFeatured && (
+        <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[9px] font-bold px-2.5 py-0.5 rounded-bl-lg uppercase tracking-wider z-10">
+          Featured
+        </div>
+      )}
       <div className="px-4 py-3 border-b border-border/30">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-foreground font-['Cinzel']">{fightLabel}</h3>
@@ -280,7 +372,6 @@ export default function FightCard({
       </div>
 
       <div className="p-4">
-        {/* Clear prediction question */}
         <p className="text-xs sm:text-sm font-semibold text-center text-foreground/80 mb-3 flex items-center justify-center gap-1.5">
           <HelpCircle className="w-3.5 h-3.5 text-primary/60 flex-shrink-0" />
           {buildQuestion(fight, false)}
@@ -295,6 +386,8 @@ export default function FightCard({
             canPredict={canPredict}
             onPredict={() => wallet ? onPredict(fight, "fighter_a") : onWalletRequired?.()}
             photo={fight.fighter_a_photo}
+            record={fight.fighter_a_record}
+            isPolymarket={isPolymarketPool}
           />
           <div className="flex flex-col items-center gap-0.5">
             <Swords className="w-5 h-5 text-primary/60" />
@@ -308,15 +401,30 @@ export default function FightCard({
             canPredict={canPredict}
             onPredict={() => wallet ? onPredict(fight, "fighter_b") : onWalletRequired?.()}
             photo={fight.fighter_b_photo}
+            record={fight.fighter_b_record}
+            isPolymarket={isPolymarketPool}
           />
         </div>
 
-        <div className="mt-3 pt-3 border-t border-border/30 flex items-center justify-between">
-          <span className="text-[10px] text-muted-foreground">{isPolymarketPool ? "Liquidity" : "Total Pool"}</span>
-          <span className="text-xs font-bold text-primary">
-            {isPolymarketPool ? "Polymarket" : `$${totalPool.toFixed(2)}`}
-          </span>
+        {/* Polymarket probability bar OR native pool */}
+        <div className="mt-3 pt-3 border-t border-border/30">
+          {isPolymarketPool ? (
+            <PolymarketPoolStrip fight={fight} isSoccer={false} />
+          ) : (
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-muted-foreground">Total Pool</span>
+              <span className="text-xs font-bold text-primary">${totalPool.toFixed(2)}</span>
+            </div>
+          )}
         </div>
+
+        {/* Venue / referee metadata */}
+        {(fight.venue || fight.referee) && (
+          <div className="mt-2 flex items-center gap-3 text-[10px] text-muted-foreground">
+            {fight.venue && <span>📍 {fight.venue}</span>}
+            {fight.referee && <span>🏁 {fight.referee}</span>}
+          </div>
+        )}
 
         {/* Draw info */}
         {["draw", "refund_pending", "refunds_processing", "refunds_complete"].includes(fight.status) && (
@@ -354,11 +462,12 @@ export default function FightCard({
 }
 
 function FighterColumn({
-  name, poolAmount, odds, isWinner, canPredict, onPredict, logo, isSoccer, photo,
+  name, poolAmount, odds, isWinner, canPredict, onPredict, logo, isSoccer, photo, record, isPolymarket,
 }: {
   name: string; poolAmount: number; odds: number; isWinner: boolean;
   canPredict: boolean; onPredict: () => void;
   logo?: string | null; isSoccer?: boolean; photo?: string | null;
+  record?: string | null; isPolymarket?: boolean;
 }) {
   const [imgError, setImgError] = useState(false);
   const showLogo = logo && !imgError;
@@ -379,7 +488,7 @@ function FighterColumn({
         <img
           src={photo!}
           alt={name}
-          className="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover mx-auto mb-1.5 ring-2 ring-primary/20"
+          className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover mx-auto mb-1.5 ring-2 ring-primary/30 shadow-lg"
           onError={() => setImgError(true)}
           loading="lazy"
         />
@@ -390,12 +499,17 @@ function FighterColumn({
         </div>
       )}
       <p className={`font-bold text-foreground ${isSoccer && showLogo ? 'text-base sm:text-lg' : showLogo ? 'text-[15px]' : 'text-sm'}`}>{name}</p>
-      <p className={`text-muted-foreground mt-1 ${isSoccer ? 'text-xs sm:text-sm' : 'text-xs'}`}>
-        ${poolAmount.toFixed(2)}
-      </p>
+      {record && (
+        <p className="text-[10px] text-muted-foreground font-medium mt-0.5">{record}</p>
+      )}
+      {!isPolymarket && (
+        <p className={`text-muted-foreground mt-1 ${isSoccer ? 'text-xs sm:text-sm' : 'text-xs'}`}>
+          ${poolAmount.toFixed(2)}
+        </p>
+      )}
       <p className={`text-primary font-bold ${isSoccer ? 'text-xl sm:text-2xl' : 'text-lg'}`}>{odds.toFixed(2)}x</p>
       {canPredict && (
-        <Button size="sm" className={`mt-2 w-full bg-primary text-primary-foreground hover:bg-primary/90 ${isSoccer ? 'text-sm py-2.5 font-bold' : 'text-xs'}`} onClick={onPredict}>
+        <Button size="sm" className={`mt-2 w-full bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.97] transition-all ${isSoccer ? 'text-sm py-2.5 font-bold' : 'text-xs'}`} onClick={onPredict}>
           Predict
         </Button>
       )}
@@ -438,7 +552,7 @@ function SoccerTeamColumn({
       {canPredict && (
         <Button
           size="sm"
-          className="mt-1.5 w-full bg-primary text-primary-foreground hover:bg-primary/90 text-sm py-2.5 font-bold"
+          className="mt-1.5 w-full bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.97] transition-all text-sm py-2.5 font-bold"
           onClick={onPredict}
         >
           Predict
