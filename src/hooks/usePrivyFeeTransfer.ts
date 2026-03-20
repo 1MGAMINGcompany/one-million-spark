@@ -52,11 +52,10 @@ export function usePrivyFeeTransfer() {
         );
 
         const txHash = await client.sendTransaction({
-          chain: polygon,
           to: USDC_CONTRACT,
           data,
           value: 0n,
-        });
+        } as any);
 
         if (!txHash) {
           return { success: false, error: "no_tx_hash_returned" };
