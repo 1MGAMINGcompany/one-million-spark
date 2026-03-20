@@ -1,16 +1,36 @@
-import { createClient } from "@supabase/supabase-js";
-import { createHmac } from "node:crypto";
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-function buildHeaders(apiKey: string, secret: string, passphrase: string, timestamp: string, method: string, path: string, body: string = "") {
+function base64ToUint8Array(b64: string): Uint8Array {
+  // Handle URL-safe base64
+  const std = b64.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = std + '='.repeat((4 - std.length % 4) % 4);
+  const bin = atob(padded);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
+
+function uint8ArrayToBase64(arr: Uint8Array): string {
+  let bin = "";
+  for (const b of arr) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
+
+async function buildHeaders(apiKey: string, secret: string, passphrase: string, timestamp: string, method: string, path: string, body: string = "") {
   const message = timestamp + method + path + body;
-  const hmac = createHmac("sha256", Buffer.from(secret, "base64"));
-  hmac.update(message);
-  const signature = hmac.digest("base64");
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    base64ToUint8Array(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(message));
+  const signature = uint8ArrayToBase64(new Uint8Array(sig));
 
   return {
     "POLY_API_KEY": apiKey,
@@ -56,10 +76,10 @@ Deno.serve(async (req) => {
   // 2. Test authenticated GET to CLOB API
   try {
     const timestamp = (Math.floor(Date.now() / 1000)).toString();
-    const path = "/ak/nonce";
+    const path = "/auth/api-keys";
     const method = "GET";
 
-    const authHeaders = buildHeaders(apiKey, apiSecret, passphrase, timestamp, method, path);
+    const authHeaders = await buildHeaders(apiKey, apiSecret, passphrase, timestamp, method, path);
 
     const resp = await fetch(`https://clob.polymarket.com${path}`, {
       method,
