@@ -277,7 +277,25 @@ export default function FightPredictions() {
     if (!selectedFight || !selectedPick || !isConnected || !address) return;
     setSubmitting(true);
     try {
-      // Step 1: Compute fee and execute client-side USDC fee transfer
+      // Step 1: Get Privy access token FIRST (before any money moves)
+      const privyToken = await getAccessToken();
+      if (!privyToken) {
+        throw new Error("Unable to get authentication token. Please log in again.");
+      }
+
+      // Step 2: Auth preflight — verify JWKS/JWT are working before fee transfer
+      const { data: preflightData, error: preflightError } = await supabase.functions.invoke(
+        "prediction-preflight",
+        { headers: { "x-privy-token": privyToken } },
+      );
+      if (preflightError || !preflightData?.ok) {
+        const detail = preflightData?.detail || preflightData?.error || "unknown";
+        throw new Error(
+          `Authentication check failed (${detail}). No funds were moved. Please try again in a moment.`,
+        );
+      }
+
+      // Step 3: Compute fee and execute client-side USDC fee transfer
       const feeRate = selectedFight.commission_bps != null
         ? selectedFight.commission_bps / 10_000
         : (selectedFight.source === "polymarket" ? 0.02 : 0.05);
@@ -292,10 +310,7 @@ export default function FightPredictions() {
         feeTxHash = feeResult.txHash || null;
       }
 
-      // Step 2: Get Privy access token for DID binding
-      const privyToken = await getAccessToken();
-
-      // Step 3: Submit prediction with fee proof
+      // Step 4: Submit prediction with fee proof
       const { data, error } = await supabase.functions.invoke("prediction-submit", {
         body: {
           fight_id: selectedFight.id,
@@ -305,10 +320,21 @@ export default function FightPredictions() {
           chain: "polygon",
           fee_tx_hash: feeTxHash,
         },
-        headers: privyToken ? { "x-privy-token": privyToken } : {},
+        headers: { "x-privy-token": privyToken },
       });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+
+      // If backend failed AFTER fee was paid, surface the orphaned fee clearly
+      if (error || data?.error) {
+        const backendMsg = data?.error || error?.message || "Backend error";
+        if (feeTxHash && feeTxHash !== "fee_below_threshold") {
+          console.error(`[ORPHANED FEE] tx=${feeTxHash} amount=$${feeUsdc.toFixed(2)}`);
+          throw new Error(
+            `Prediction failed after fee payment ($${feeUsdc.toFixed(2)} USDC, tx: ${feeTxHash.slice(0, 10)}…). ` +
+            `Your fee is recorded and will be reconciled. Contact support if needed. Detail: ${backendMsg}`,
+          );
+        }
+        throw new Error(backendMsg);
+      }
 
       // Capture backend result for the success screen
       setLastTradeResult({
