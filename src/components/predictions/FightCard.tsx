@@ -149,14 +149,22 @@ export default function FightCard({
   if (isSoccer) {
     return (
       <Card className="bg-card border-primary/20 overflow-hidden relative">
-        <div className="px-4 py-2 border-b border-border/20 flex items-center justify-between">
+      <div className="px-4 py-2.5 border-b border-border/20 flex items-center justify-between">
           <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Match Prediction</span>
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badge.className}`}>
             {badge.label}
           </span>
         </div>
 
-        <div className="px-4 pt-5 pb-3 sm:px-6">
+        {/* Clear prediction question */}
+        <div className="px-4 sm:px-6 pt-3 pb-1">
+          <p className="text-xs sm:text-sm font-semibold text-center text-foreground/80 flex items-center justify-center gap-1.5">
+            <HelpCircle className="w-3.5 h-3.5 text-primary/60 flex-shrink-0" />
+            {buildQuestion(fight, true)}
+          </p>
+        </div>
+
+        <div className="px-4 pt-3 pb-3 sm:px-6">
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-5" dir="ltr">
             <SoccerTeamColumn
               name={fight.fighter_a_name}
