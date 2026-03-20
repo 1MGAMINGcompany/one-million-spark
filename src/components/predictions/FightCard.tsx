@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Swords, Trophy, Loader2 } from "lucide-react";
+import { Swords, Trophy, Loader2, HelpCircle } from "lucide-react";
 
 interface Fight {
   id: string;
