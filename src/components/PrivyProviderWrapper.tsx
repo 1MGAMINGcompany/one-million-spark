@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import { PrivyProvider } from "@privy-io/react-auth";
+import { SmartWalletsProvider } from "@privy-io/react-auth/smart-wallets";
 import { polygon } from "viem/chains";
 
 const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID || "cmlq6g2dn00760cl2djbh9dfy";
@@ -35,7 +36,9 @@ export function PrivyProviderWrapper({ children }: PrivyProviderWrapperProps) {
         },
       }}
     >
-      {children}
+      <SmartWalletsProvider>
+        {children}
+      </SmartWalletsProvider>
     </PrivyProvider>
   );
 }

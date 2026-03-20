@@ -43,9 +43,15 @@ function usePrivyWalletInner(): PrivyWalletState {
   const [balanceMatic, setBalanceMatic] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Find EVM embedded wallet
+  // Find EVM smart wallet first, then fall back to embedded EOA
   const evmWallet = useMemo(() => {
-    // First check linked accounts for EVM wallet
+    // Prefer smart wallet address (ERC-4337 proxy) for prediction flows
+    const smartWallet = user?.linkedAccounts?.find(
+      (a: any) => a.type === "smart_wallet"
+    ) as any;
+    if (smartWallet?.address) return smartWallet.address as string;
+
+    // Fallback: embedded EOA wallet
     const linked = user?.linkedAccounts?.find(
       (a: any) => a.type === "wallet" && a.chainType === "ethereum"
     ) as any;
