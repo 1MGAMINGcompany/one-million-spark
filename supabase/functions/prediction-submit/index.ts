@@ -255,6 +255,20 @@ async function transferFeeViaPrivy(
       return { success: false, error: "privy_wallet_not_found" };
     }
 
+    // SECURITY GATE: Privy user-owned embedded wallets (owner_id present)
+    // require a user authorization signature header for server-side RPC.
+    // Basic auth alone is NOT sufficient per Privy docs:
+    // "Wallets with owner_id present must provide an authorization signature."
+    // We cannot produce this signature server-side without the user's key material.
+    // Fail closed until a client-side authorization flow is implemented.
+    const hasOwnerId = !!embeddedWallet.owner_id;
+    if (hasOwnerId) {
+      return {
+        success: false,
+        error: "privy_user_authorization_required",
+      };
+    }
+
     // Step 2: Encode ERC20 transfer(address,uint256) calldata
     const feeRaw = BigInt(Math.floor(feeUsdc * 10 ** USDC_DECIMALS));
     const transferSelector = "a9059cbb";
@@ -872,26 +886,32 @@ Deno.serve(async (req) => {
           fee_usdc: fee_usd,
         });
       } else {
-        // Hard fail — fee transfer required but failed
-        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_required_but_failed", null, {
+        // Distinguish privy_user_authorization_required from generic fee failures
+        const isAuthRequired = feeResult.error === "privy_user_authorization_required";
+        const auditAction = isAuthRequired ? "privy_wallet_auth_required" : "fee_required_but_failed";
+        const errorCode = isAuthRequired ? "privy_user_authorization_required" : "fee_transfer_failed";
+
+        await auditLog(supabase, tradeOrderId, normalizedWallet, auditAction, null, {
           error: feeResult.error,
           fee_usdc: fee_usd,
         });
 
         await updateTradeOrder(supabase, tradeOrderId, {
           status: "failed",
-          error_code: "fee_transfer_failed",
+          error_code: errorCode,
           error_message: feeResult.error?.substring(0, 500),
           finalized_at: new Date().toISOString(),
         });
 
         return json(
           {
-            error: "Fee transfer failed. Trade aborted.",
-            error_code: "fee_transfer_failed",
+            error: isAuthRequired
+              ? "User wallet authorization required for fee transfer. Client-side signing flow needed."
+              : "Fee transfer failed. Trade aborted.",
+            error_code: errorCode,
             trade_order_id: tradeOrderId,
           },
-          502,
+          isAuthRequired ? 501 : 502,
         );
       }
     }
