@@ -354,14 +354,15 @@ export default function FightCard({
 }
 
 function FighterColumn({
-  name, poolAmount, odds, isWinner, canPredict, onPredict, logo, isSoccer,
+  name, poolAmount, odds, isWinner, canPredict, onPredict, logo, isSoccer, photo,
 }: {
   name: string; poolAmount: number; odds: number; isWinner: boolean;
   canPredict: boolean; onPredict: () => void;
-  logo?: string | null; isSoccer?: boolean;
+  logo?: string | null; isSoccer?: boolean; photo?: string | null;
 }) {
-  const [logoError, setLogoError] = useState(false);
-  const showLogo = logo && !logoError;
+  const [imgError, setImgError] = useState(false);
+  const showLogo = logo && !imgError;
+  const showPhoto = !showLogo && photo && !imgError;
 
   return (
     <div className="text-center">
@@ -370,9 +371,23 @@ function FighterColumn({
           src={logo}
           alt=""
           className={`object-contain mx-auto ${isSoccer ? 'w-10 h-10 sm:w-12 sm:h-12 mb-2 drop-shadow-md' : 'w-7 h-7 mb-1.5'}`}
-          onError={() => setLogoError(true)}
+          onError={() => setImgError(true)}
           loading="lazy"
         />
+      )}
+      {showPhoto && (
+        <img
+          src={photo!}
+          alt={name}
+          className="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover mx-auto mb-1.5 ring-2 ring-primary/20"
+          onError={() => setImgError(true)}
+          loading="lazy"
+        />
+      )}
+      {!showLogo && !showPhoto && (
+        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-muted/40 flex items-center justify-center mx-auto mb-1.5">
+          <span className="text-lg">🥊</span>
+        </div>
       )}
       <p className={`font-bold text-foreground ${isSoccer && showLogo ? 'text-base sm:text-lg' : showLogo ? 'text-[15px]' : 'text-sm'}`}>{name}</p>
       <p className={`text-muted-foreground mt-1 ${isSoccer ? 'text-xs sm:text-sm' : 'text-xs'}`}>
