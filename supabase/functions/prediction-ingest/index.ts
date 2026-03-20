@@ -94,6 +94,32 @@ async function tsdbFetch(path: string, apiKey: string): Promise<any> {
   return res.json();
 }
 
+/** Fetch fighter photo + record from TheSportsDB by name */
+async function tsdbLookupFighter(name: string, tsdbKey: string): Promise<{ photo: string | null; record: string | null }> {
+  try {
+    const data = await tsdbFetch(`searchplayers.php?p=${encodeURIComponent(name)}`, tsdbKey);
+    const player = data?.player?.[0];
+    if (!player) return { photo: null, record: null };
+    const photo = player.strCutout || player.strThumb || null;
+    // Build record from stats if available
+    const record = player.strStatus ? null : null; // TheSportsDB doesn't have W-L directly
+    return { photo, record };
+  } catch {
+    return { photo: null, record: null };
+  }
+}
+
+/** Fetch fighter photo + record from BallDontLie by fighter object */
+function bdlFighterEnrichment(fighter: any): { photo: string | null; record: string | null } {
+  if (!fighter) return { photo: null, record: null };
+  const photo = fighter.image_url || null;
+  const w = fighter.wins ?? null;
+  const l = fighter.losses ?? null;
+  const d = fighter.draws ?? null;
+  const record = (w !== null && l !== null) ? `${w}-${l}${d != null ? `-${d}` : ''}` : null;
+  return { photo, record };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
