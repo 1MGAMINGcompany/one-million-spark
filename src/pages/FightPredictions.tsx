@@ -277,14 +277,25 @@ export default function FightPredictions() {
     if (!selectedFight || !selectedPick || !isConnected || !address) return;
     setSubmitting(true);
     try {
-      // MIGRATION: Solana transaction building has been removed.
-      // Prediction submission now goes through a server-side edge function
-      // that will handle Polygon transaction execution with gas sponsorship.
-      
-      // For now, record the prediction intent server-side
-      // Get Privy access token for DID binding in prediction_accounts
+      // Step 1: Compute fee and execute client-side USDC fee transfer
+      const feeRate = selectedFight.commission_bps != null
+        ? selectedFight.commission_bps / 10_000
+        : (selectedFight.source === "polymarket" ? 0.02 : 0.05);
+      const feeUsdc = amountUsd * feeRate;
+      let feeTxHash: string | null = null;
+
+      if (feeUsdc > 0.01) {
+        const feeResult = await transferFee(feeUsdc);
+        if (!feeResult.success) {
+          throw new Error(feeResult.error || "Fee transfer failed");
+        }
+        feeTxHash = feeResult.txHash || null;
+      }
+
+      // Step 2: Get Privy access token for DID binding
       const privyToken = await getAccessToken();
 
+      // Step 3: Submit prediction with fee proof
       const { data, error } = await supabase.functions.invoke("prediction-submit", {
         body: {
           fight_id: selectedFight.id,
@@ -292,6 +303,7 @@ export default function FightPredictions() {
           fighter_pick: selectedPick,
           amount_usd: amountUsd,
           chain: "polygon",
+          fee_tx_hash: feeTxHash,
         },
         headers: privyToken ? { "x-privy-token": privyToken } : {},
       });
