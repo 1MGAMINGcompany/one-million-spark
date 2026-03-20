@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
   // 2. Test authenticated GET to CLOB API
   try {
     const timestamp = (Math.floor(Date.now() / 1000)).toString();
-    const path = "/ak/nonce";
+    const path = "/auth/api-keys";
     const method = "GET";
 
     const authHeaders = await buildHeaders(apiKey, apiSecret, passphrase, timestamp, method, path);
