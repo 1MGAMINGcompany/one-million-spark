@@ -13,7 +13,7 @@ import EventSection, { parseSport } from "@/components/predictions/EventSection"
 import predictionsHero from "@/assets/predictions-hero.jpeg";
 import PredictionModal from "@/components/predictions/PredictionModal";
 import ComingSoonCard from "@/components/predictions/ComingSoonCard";
-import EnableTradingBanner from "@/components/predictions/EnableTradingBanner";
+
 import { WalletGateModal } from "@/components/WalletGateModal";
 import SocialShareModal from "@/components/SocialShareModal";
 import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
@@ -274,40 +274,6 @@ export default function FightPredictions() {
     return ["BOXING", "MMA", "FUTBOL"].filter(s => !existingSports.has(s));
   }, [groupedEvents]);
 
-  const handleEnableTrading = useCallback(async () => {
-    if (!isConnected || !address) {
-      if (!authenticated) login();
-      return;
-    }
-    // Find the Privy embedded wallet to sign the message
-    const privyWallet = wallets.find((w) => w.walletClientType === "privy");
-    if (!privyWallet) {
-      toast.error("No embedded wallet found. Please refresh and try again.");
-      return;
-    }
-    try {
-      const provider = await privyWallet.getEthereumProvider();
-      const signMessage = async (msg: string): Promise<string> => {
-        const result = await provider.request({
-          method: "personal_sign",
-          params: [msg, privyWallet.address],
-        });
-        return result as string;
-      };
-      const result = await pmSession.deriveCredentials(signMessage);
-      if (result.success) {
-        toast.success("Polymarket trading enabled!", {
-          description: "You can now place predictions on Polymarket markets.",
-        });
-      } else {
-        toast.error("Failed to enable trading", {
-          description: result.error || "Please try again.",
-        });
-      }
-    } catch (err: any) {
-      toast.error("Signing cancelled or failed", { description: err.message });
-    }
-  }, [isConnected, address, authenticated, login, wallets, pmSession]);
 
   // TODO [POLYMARKET]: Replace this entire function with Polygon/Polymarket
   // transaction execution. The new flow should:
@@ -318,11 +284,30 @@ export default function FightPredictions() {
     if (!selectedFight || !selectedPick || !isConnected || !address) return;
     setSubmitting(true);
     try {
-      // Step 0: Gate Polymarket-backed fights on PM credentials
+      // Step 0: Auto-derive Polymarket credentials on first attempt
       if (selectedFight.source === "polymarket" && !pmSession.canTrade) {
-        throw new Error(
-          "Please enable Polymarket trading first (see banner above the events).",
-        );
+        toast.info("Setting up Polymarket connection…", {
+          description: "Sign once to enable trading. This only happens the first time.",
+        });
+        const privyWallet = wallets.find((w) => w.walletClientType === "privy");
+        if (!privyWallet) {
+          throw new Error("No embedded wallet found. Please refresh and try again.");
+        }
+        const provider = await privyWallet.getEthereumProvider();
+        const signMessage = async (msg: string): Promise<string> => {
+          const result = await provider.request({
+            method: "personal_sign",
+            params: [msg, privyWallet.address],
+          });
+          return result as string;
+        };
+        const deriveResult = await pmSession.deriveCredentials(signMessage);
+        if (!deriveResult.success) {
+          throw new Error(
+            deriveResult.error || "Polymarket connection failed. Please try again.",
+          );
+        }
+        toast.success("Polymarket connected!");
       }
 
       // Step 1: Get Privy access token FIRST (before any money moves)
@@ -549,17 +534,6 @@ export default function FightPredictions() {
         </div>
       </div>
 
-      {/* Polymarket Trading Setup */}
-      {isConnected && (
-        <div className="max-w-4xl mx-auto px-4 mb-4">
-          <EnableTradingBanner
-            hasSession={pmSession.hasSession}
-            canTrade={pmSession.canTrade}
-            loading={pmSession.loading}
-            onEnable={handleEnableTrading}
-          />
-        </div>
-      )}
 
       {/* Content — organized by status sections */}
       <div className="max-w-4xl mx-auto px-4 pb-8 space-y-6">
