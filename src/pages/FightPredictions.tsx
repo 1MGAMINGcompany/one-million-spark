@@ -99,8 +99,10 @@ export default function FightPredictions() {
   // Use Privy EVM wallet for predictions (Polygon)
   const { walletAddress: address, isPrivyUser } = usePrivyWallet();
   const { authenticated, login, getAccessToken } = usePrivy();
+  const { wallets } = useWallets();
   const { approveFeeAllowance } = usePrivyFeeTransfer();
   const { relayer_allowance } = usePolygonUSDC();
+  const pmSession = usePolymarketSession();
   const referralCode = useMyReferralCode(address ?? null);
   const { t } = useTranslation();
   const [fights, setFights] = useState<Fight[]>([]);
@@ -272,6 +274,41 @@ export default function FightPredictions() {
     return ["BOXING", "MMA", "FUTBOL"].filter(s => !existingSports.has(s));
   }, [groupedEvents]);
 
+  const handleEnableTrading = useCallback(async () => {
+    if (!isConnected || !address) {
+      if (!authenticated) login();
+      return;
+    }
+    // Find the Privy embedded wallet to sign the message
+    const privyWallet = wallets.find((w) => w.walletClientType === "privy");
+    if (!privyWallet) {
+      toast.error("No embedded wallet found. Please refresh and try again.");
+      return;
+    }
+    try {
+      const provider = await privyWallet.getEthereumProvider();
+      const signMessage = async (msg: string): Promise<string> => {
+        const result = await provider.request({
+          method: "personal_sign",
+          params: [msg, privyWallet.address],
+        });
+        return result as string;
+      };
+      const result = await pmSession.deriveCredentials(signMessage);
+      if (result.success) {
+        toast.success("Polymarket trading enabled!", {
+          description: "You can now place predictions on Polymarket markets.",
+        });
+      } else {
+        toast.error("Failed to enable trading", {
+          description: result.error || "Please try again.",
+        });
+      }
+    } catch (err: any) {
+      toast.error("Signing cancelled or failed", { description: err.message });
+    }
+  }, [isConnected, address, authenticated, login, wallets, pmSession]);
+
   // TODO [POLYMARKET]: Replace this entire function with Polygon/Polymarket
   // transaction execution. The new flow should:
   // 1. Build an EVM transaction (or Polymarket CLOB order)
@@ -281,6 +318,13 @@ export default function FightPredictions() {
     if (!selectedFight || !selectedPick || !isConnected || !address) return;
     setSubmitting(true);
     try {
+      // Step 0: Gate Polymarket-backed fights on PM credentials
+      if (selectedFight.source === "polymarket" && !pmSession.canTrade) {
+        throw new Error(
+          "Please enable Polymarket trading first (see banner above the events).",
+        );
+      }
+
       // Step 1: Get Privy access token FIRST (before any money moves)
       const privyToken = await getAccessToken();
       if (!privyToken) {
@@ -504,6 +548,18 @@ export default function FightPredictions() {
           })}
         </div>
       </div>
+
+      {/* Polymarket Trading Setup */}
+      {isConnected && (
+        <div className="max-w-4xl mx-auto px-4 mb-4">
+          <EnableTradingBanner
+            hasSession={pmSession.hasSession}
+            canTrade={pmSession.canTrade}
+            loading={pmSession.loading}
+            onEnable={handleEnableTrading}
+          />
+        </div>
+      )}
 
       {/* Content — organized by status sections */}
       <div className="max-w-4xl mx-auto px-4 pb-8 space-y-6">
