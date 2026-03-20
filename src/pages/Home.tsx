@@ -9,8 +9,8 @@ import PyramidLogo from "@/components/PyramidLogo";
 import predictionsFighters from "@/assets/predictions-fighters.png";
 import futbolBall from "@/assets/futbol.png";
 // import { MobileAppPrompt } from "@/components/MobileAppPrompt"; // Temporarily disabled
-import { usePrivySolBalance } from "@/hooks/usePrivySolBalance";
-import { AddSolCard } from "@/components/AddSolCard";
+import { usePrivyWallet } from "@/hooks/usePrivyWallet";
+import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
 import { WelcomeIntroModal } from "@/components/WelcomeIntroModal";
 import { LiveActivityIndicator } from "@/components/LiveActivityIndicator";
 import { getActiveAIGame, dismissActiveAIGame } from "@/hooks/useActiveAIGame";
@@ -23,7 +23,9 @@ import { WalletGateModal } from "@/components/WalletGateModal";
 
 const Home = () => {
   const { t } = useTranslation();
-  const { isPrivyUser, walletAddress, balanceSol, isLowBalance } = usePrivySolBalance();
+  const { isPrivyUser, walletAddress } = usePrivyWallet();
+  const { usdc_balance } = usePolygonUSDC();
+  const isLowBalance = usdc_balance === null || usdc_balance <= 0.01;
   const { address, isConnected } = useWallet();
 
   // Session continuity — check for abandoned AI game
@@ -134,7 +136,15 @@ const Home = () => {
               {/* Zero-balance funding card for Privy users */}
               {/* Funding hint for Privy users with zero balance */}
               {showFundingCard && (
-                <AddSolCard walletAddress={walletAddress} balanceSol={balanceSol} />
+                <div className="w-full max-w-md mx-auto bg-card border border-border rounded-xl p-4 text-center space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Add USDC to start making predictions
+                  </p>
+                  <Button asChild size="lg" variant="gold" className="w-full">
+                    <Link to="/add-funds">Add Funds</Link>
+                  </Button>
+                  <p className="text-xs text-muted-foreground/60">Polygon USDC · Card, Apple Pay, Google Pay</p>
+                </div>
               )}
 
               {/* CTA Buttons — always visible */}
