@@ -103,6 +103,7 @@ export default function FightCard({
   const { poolA, poolB } = getPoolUsd(fight);
   const { oddsA, oddsB } = calcOdds(poolA, poolB, fight.price_a, fight.price_b);
   const totalPool = poolA + poolB;
+  const isPolymarketPool = fight.source === "polymarket" && totalPool === 0;
 
   const isClaimable = ["confirmed", "settled"].includes(fight.status);
   const hasWinningEntries =
