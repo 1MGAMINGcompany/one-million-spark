@@ -13,7 +13,7 @@ import EventSection, { parseSport } from "@/components/predictions/EventSection"
 import predictionsHero from "@/assets/predictions-hero.jpeg";
 import PredictionModal from "@/components/predictions/PredictionModal";
 import ComingSoonCard from "@/components/predictions/ComingSoonCard";
-import EnableTradingBanner from "@/components/predictions/EnableTradingBanner";
+
 import { WalletGateModal } from "@/components/WalletGateModal";
 import SocialShareModal from "@/components/SocialShareModal";
 import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
