@@ -462,7 +462,6 @@ Deno.serve(async (req) => {
       fighter_pick,
       amount_usd,
       slippage_bps: clientSlippage,
-      fee_tx_hash: clientFeeTxHash,
     } = body;
 
     normalizedWallet = wallet ? String(wallet).trim().toLowerCase() : null;
