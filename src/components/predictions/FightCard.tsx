@@ -280,6 +280,12 @@ export default function FightCard({
       </div>
 
       <div className="p-4">
+        {/* Clear prediction question */}
+        <p className="text-xs sm:text-sm font-semibold text-center text-foreground/80 mb-3 flex items-center justify-center gap-1.5">
+          <HelpCircle className="w-3.5 h-3.5 text-primary/60 flex-shrink-0" />
+          {buildQuestion(fight, false)}
+        </p>
+
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3" dir="ltr">
           <FighterColumn
             name={fight.fighter_a_name}
@@ -288,6 +294,7 @@ export default function FightCard({
             isWinner={fight.winner === "fighter_a" && isClaimable}
             canPredict={canPredict}
             onPredict={() => wallet ? onPredict(fight, "fighter_a") : onWalletRequired?.()}
+            photo={fight.fighter_a_photo}
           />
           <div className="flex flex-col items-center gap-0.5">
             <Swords className="w-5 h-5 text-primary/60" />
@@ -300,6 +307,7 @@ export default function FightCard({
             isWinner={fight.winner === "fighter_b" && isClaimable}
             canPredict={canPredict}
             onPredict={() => wallet ? onPredict(fight, "fighter_b") : onWalletRequired?.()}
+            photo={fight.fighter_b_photo}
           />
         </div>
 
