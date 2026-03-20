@@ -1,10 +1,20 @@
-import { createClient } from "@supabase/supabase-js";
-import { createHmac } from "node:crypto";
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+function base64ToUint8Array(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
+
+function uint8ArrayToBase64(arr: Uint8Array): string {
+  let bin = "";
+  for (const b of arr) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
 
 function buildHeaders(apiKey: string, secret: string, passphrase: string, timestamp: string, method: string, path: string, body: string = "") {
   const message = timestamp + method + path + body;
