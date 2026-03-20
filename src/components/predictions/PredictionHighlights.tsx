@@ -88,7 +88,7 @@ function HighlightCard({
 }) {
   const poolA = (fight.pool_a_usd ?? 0) > 0 ? fight.pool_a_usd! : fight.pool_a_lamports / 1_000_000_000;
   const poolB = (fight.pool_b_usd ?? 0) > 0 ? fight.pool_b_usd! : fight.pool_b_lamports / 1_000_000_000;
-  const { oddsA, oddsB } = calcOdds(poolA, poolB);
+  const { oddsA, oddsB } = calcOdds(poolA, poolB, fight.price_a, fight.price_b);
   const totalPool = poolA + poolB;
   const badge = getStatusBadge(fight.status);
   const btn = getButtonState(fight.status);
