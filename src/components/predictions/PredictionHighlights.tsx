@@ -164,9 +164,9 @@ function HighlightCard({
 
         {/* Pool */}
         <div className="mt-2 pt-1.5 border-t border-border/30 flex items-center justify-between">
-          <span className="text-[10px] text-muted-foreground">Pool</span>
+          <span className="text-[10px] text-muted-foreground">{isPolymarketPool ? "Liquidity" : "Pool"}</span>
           <span className="text-[11px] font-bold text-primary">
-            ${totalPool.toFixed(2)}
+            {isPolymarketPool ? "Polymarket" : `$${totalPool.toFixed(2)}`}
           </span>
         </div>
       </div>
