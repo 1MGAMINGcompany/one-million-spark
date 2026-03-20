@@ -884,106 +884,54 @@ Deno.serve(async (req) => {
     });
 
     // ═══════════════════════════════════════════════════
-    // 7) FEE VERIFICATION — client transfers fee, backend verifies on-chain
+    // 7) FEE COLLECTION — backend relayer executes transferFrom
     // ═══════════════════════════════════════════════════
     let feeCollected = false;
-    let feeTxHash: string | null = clientFeeTxHash || null;
+    let feeTxHash: string | null = null;
 
     if (fee_usd > 0.01) {
-      if (!feeTxHash || feeTxHash === "fee_below_threshold") {
-        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_required_but_failed", null, {
-          error: "no_fee_tx_hash_provided",
-          fee_usdc: fee_usd,
-        });
-
-        await updateTradeOrder(supabase, tradeOrderId, {
-          status: "failed",
-          error_code: "fee_not_provided",
-          error_message: "Client must provide fee_tx_hash for trades with fee > $0.01",
-          finalized_at: new Date().toISOString(),
-        });
-
-        return json(
-          {
-            error: "Fee transaction hash required. Complete fee transfer before submitting.",
-            error_code: "fee_not_provided",
-            trade_order_id: tradeOrderId,
-          },
-          400,
-        );
-      }
-
-      // ── Replay protection: reject reused fee_tx_hash ──
-      const { data: existingUsage } = await supabase
-        .from("prediction_trade_orders")
-        .select("id")
-        .eq("fee_tx_hash", feeTxHash)
-        .not("status", "eq", "failed")
-        .limit(1)
-        .maybeSingle();
-
-      if (existingUsage) {
-        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_tx_hash_reused", null, {
-          fee_tx_hash: feeTxHash,
-          existing_trade_id: existingUsage.id,
-        });
-
-        await updateTradeOrder(supabase, tradeOrderId, {
-          status: "failed",
-          error_code: "fee_tx_hash_reused",
-          error_message: "This fee transaction hash has already been used for another trade.",
-          finalized_at: new Date().toISOString(),
-        });
-
-        return json(
-          {
-            error: "Fee transaction already used. Each prediction requires a new fee transfer.",
-            error_code: "fee_tx_hash_reused",
-            trade_order_id: tradeOrderId,
-          },
-          409,
-        );
-      }
-
-      await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_verification_started", {
+      await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_collection_started", {
         fee_usdc: fee_usd,
-        fee_tx_hash: feeTxHash,
         treasury: TREASURY_WALLET,
       });
 
-      const verifyResult = await verifyFeeTxOnChain(feeTxHash, fee_usd, normalizedWallet);
+      const collectResult = await collectFeeViaRelayer(normalizedWallet!, fee_usd);
 
-      if (verifyResult.success) {
+      if (collectResult.success && collectResult.txHash) {
         feeCollected = true;
+        feeTxHash = collectResult.txHash;
 
-        // Persist fee_tx_hash on the trade record (unique constraint prevents reuse)
         await updateTradeOrder(supabase, tradeOrderId, { fee_tx_hash: feeTxHash });
 
-        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_verified_onchain", null, {
+        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_collected_via_relayer", null, {
           tx_hash: feeTxHash,
           fee_usdc: fee_usd,
         });
       } else {
-        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_required_but_failed", null, {
-          error: verifyResult.error,
+        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_collection_failed", null, {
+          error: collectResult.error,
           fee_usdc: fee_usd,
-          fee_tx_hash: feeTxHash,
         });
+
+        // If allowance is insufficient, tell client to approve
+        const isAllowanceError = collectResult.error?.includes("insufficient_allowance");
 
         await updateTradeOrder(supabase, tradeOrderId, {
           status: "failed",
-          error_code: "fee_verification_failed",
-          error_message: verifyResult.error?.substring(0, 500),
+          error_code: isAllowanceError ? "insufficient_allowance" : "fee_collection_failed",
+          error_message: collectResult.error?.substring(0, 500),
           finalized_at: new Date().toISOString(),
         });
 
         return json(
           {
-            error: "Fee transaction verification failed. Trade aborted.",
-            error_code: "fee_verification_failed",
+            error: isAllowanceError
+              ? "USDC approval needed. Please approve USDC spending and try again."
+              : "Fee collection failed. Please try again.",
+            error_code: isAllowanceError ? "insufficient_allowance" : "fee_collection_failed",
             trade_order_id: tradeOrderId,
           },
-          402,
+          isAllowanceError ? 403 : 502,
         );
       }
     }
