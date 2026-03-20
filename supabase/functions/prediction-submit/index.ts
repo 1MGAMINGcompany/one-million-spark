@@ -210,108 +210,75 @@ async function buildAndSubmitClobOrder(
 }
 
 /**
- * Transfer USDC fee from user's Privy embedded wallet to treasury.
- * Uses Privy server-side wallet API (requires PRIVY_APP_SECRET).
+ * Verify a client-submitted USDC fee transfer tx on Polygon.
+ * Checks the tx receipt to confirm it's a USDC transfer to treasury
+ * for at least the expected fee amount.
  */
-async function transferFeeViaPrivy(
-  privyDid: string,
-  feeUsdc: number,
-): Promise<{ success: boolean; txHash?: string; error?: string }> {
-  const appId = Deno.env.get("VITE_PRIVY_APP_ID");
-  const appSecret = Deno.env.get("PRIVY_APP_SECRET");
-
-  if (!appId || !appSecret) {
-    return { success: false, error: "privy_server_not_configured" };
-  }
+async function verifyFeeTxOnChain(
+  feeTxHash: string,
+  expectedFeeUsdc: number,
+): Promise<{ success: boolean; error?: string }> {
+  const POLYGON_RPC = "https://polygon-rpc.com";
 
   try {
-    const basicAuth = btoa(`${appId}:${appSecret}`);
-
-    // Step 1: Look up user's Privy wallet ID from DID
-    const userRes = await fetch(`https://api.privy.io/v1/users/${privyDid}`, {
-      headers: {
-        Authorization: `Basic ${basicAuth}`,
-        "privy-app-id": appId,
-      },
+    // Fetch transaction receipt
+    const res = await fetch(POLYGON_RPC, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "eth_getTransactionReceipt",
+        params: [feeTxHash],
+      }),
     });
 
-    if (!userRes.ok) {
-      const errBody = await userRes.text();
-      return {
-        success: false,
-        error: `privy_user_lookup_failed_${userRes.status}: ${errBody.substring(0, 200)}`,
-      };
+    const data = await res.json();
+    const receipt = data.result;
+
+    if (!receipt) {
+      return { success: false, error: "tx_receipt_not_found" };
     }
 
-    const userData = await userRes.json();
-    const embeddedWallet = userData.linked_accounts?.find(
-      (a: any) =>
-        a.type === "wallet" &&
-        a.wallet_client_type === "privy" &&
-        a.chain_type === "ethereum",
+    // Check tx succeeded (status 0x1)
+    if (receipt.status !== "0x1") {
+      return { success: false, error: "tx_reverted" };
+    }
+
+    // Verify the tx was to the USDC contract
+    if (receipt.to?.toLowerCase() !== USDC_CONTRACT.toLowerCase()) {
+      return { success: false, error: "tx_not_to_usdc_contract" };
+    }
+
+    // Parse Transfer event logs to verify recipient and amount
+    // Transfer(address,address,uint256) topic: 0xddf252ad...
+    const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+    const treasuryPadded = "0x" + TREASURY_WALLET.slice(2).toLowerCase().padStart(64, "0");
+
+    const transferLog = receipt.logs?.find(
+      (log: any) =>
+        log.topics?.[0] === TRANSFER_TOPIC &&
+        log.topics?.[2]?.toLowerCase() === treasuryPadded,
     );
 
-    if (!embeddedWallet?.id) {
-      return { success: false, error: "privy_wallet_not_found" };
+    if (!transferLog) {
+      return { success: false, error: "no_transfer_to_treasury" };
     }
 
-    // SECURITY GATE: Privy user-owned embedded wallets (owner_id present)
-    // require a user authorization signature header for server-side RPC.
-    // Basic auth alone is NOT sufficient per Privy docs:
-    // "Wallets with owner_id present must provide an authorization signature."
-    // We cannot produce this signature server-side without the user's key material.
-    // Fail closed until a client-side authorization flow is implemented.
-    const hasOwnerId = !!embeddedWallet.owner_id;
-    if (hasOwnerId) {
+    // Verify amount (log.data is the uint256 amount)
+    const transferredRaw = BigInt(transferLog.data);
+    const expectedRaw = BigInt(Math.floor(expectedFeeUsdc * 10 ** USDC_DECIMALS));
+    // Allow 1% tolerance for rounding
+    const minAcceptable = (expectedRaw * 99n) / 100n;
+
+    if (transferredRaw < minAcceptable) {
       return {
         success: false,
-        error: "privy_user_authorization_required",
+        error: `insufficient_fee_amount: got ${transferredRaw}, expected >= ${minAcceptable}`,
       };
     }
 
-    // Step 2: Encode ERC20 transfer(address,uint256) calldata
-    const feeRaw = BigInt(Math.floor(feeUsdc * 10 ** USDC_DECIMALS));
-    const transferSelector = "a9059cbb";
-    const paddedTo = TREASURY_WALLET.slice(2).toLowerCase().padStart(64, "0");
-    const paddedAmount = feeRaw.toString(16).padStart(64, "0");
-    const calldata = `0x${transferSelector}${paddedTo}${paddedAmount}`;
-
-    // Step 3: Execute USDC transfer via Privy server-side wallet API
-    const txRes = await fetch(
-      `https://api.privy.io/v1/wallets/${embeddedWallet.id}/rpc`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Basic ${basicAuth}`,
-          "privy-app-id": appId,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          method: "eth_sendTransaction",
-          caip2: "eip155:137", // Polygon mainnet
-          chain_type: "ethereum",
-          params: {
-            transaction: {
-              to: USDC_CONTRACT,
-              data: calldata,
-              value: "0x0",
-            },
-          },
-        }),
-      },
-    );
-
-    if (!txRes.ok) {
-      const errText = await txRes.text();
-      return {
-        success: false,
-        error: `privy_tx_failed_${txRes.status}: ${errText.substring(0, 200)}`,
-      };
-    }
-
-    const txData = await txRes.json();
-    const txHash = txData.data?.hash || txData.data?.transaction_hash || txData.hash || null;
-    return { success: true, txHash };
+    return { success: true };
   } catch (err) {
     return {
       success: false,
@@ -444,6 +411,7 @@ Deno.serve(async (req) => {
       fighter_pick,
       amount_usd,
       slippage_bps: clientSlippage,
+      fee_tx_hash: clientFeeTxHash,
     } = body;
 
     normalizedWallet = wallet ? String(wallet).trim().toLowerCase() : null;
@@ -865,53 +833,70 @@ Deno.serve(async (req) => {
     });
 
     // ═══════════════════════════════════════════════════
-    // 7) FEE TRANSFER — collect before execution
+    // 7) FEE VERIFICATION — client transfers fee, backend verifies on-chain
     // ═══════════════════════════════════════════════════
     let feeCollected = false;
-    let feeTxHash: string | null = null;
+    let feeTxHash: string | null = clientFeeTxHash || null;
 
     if (fee_usd > 0.01) {
-      await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_transfer_started", {
-        fee_usdc: fee_usd,
-        treasury: TREASURY_WALLET,
-      });
-
-      const feeResult = await transferFeeViaPrivy(privyDid!, fee_usd);
-
-      if (feeResult.success) {
-        feeCollected = true;
-        feeTxHash = feeResult.txHash || null;
-        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_transfer_success", null, {
-          tx_hash: feeTxHash,
-          fee_usdc: fee_usd,
-        });
-      } else {
-        // Distinguish privy_user_authorization_required from generic fee failures
-        const isAuthRequired = feeResult.error === "privy_user_authorization_required";
-        const auditAction = isAuthRequired ? "privy_wallet_auth_required" : "fee_required_but_failed";
-        const errorCode = isAuthRequired ? "privy_user_authorization_required" : "fee_transfer_failed";
-
-        await auditLog(supabase, tradeOrderId, normalizedWallet, auditAction, null, {
-          error: feeResult.error,
+      if (!feeTxHash || feeTxHash === "fee_below_threshold") {
+        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_required_but_failed", null, {
+          error: "no_fee_tx_hash_provided",
           fee_usdc: fee_usd,
         });
 
         await updateTradeOrder(supabase, tradeOrderId, {
           status: "failed",
-          error_code: errorCode,
-          error_message: feeResult.error?.substring(0, 500),
+          error_code: "fee_not_provided",
+          error_message: "Client must provide fee_tx_hash for trades with fee > $0.01",
           finalized_at: new Date().toISOString(),
         });
 
         return json(
           {
-            error: isAuthRequired
-              ? "User wallet authorization required for fee transfer. Client-side signing flow needed."
-              : "Fee transfer failed. Trade aborted.",
-            error_code: errorCode,
+            error: "Fee transaction hash required. Complete fee transfer before submitting.",
+            error_code: "fee_not_provided",
             trade_order_id: tradeOrderId,
           },
-          isAuthRequired ? 501 : 502,
+          400,
+        );
+      }
+
+      await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_verification_started", {
+        fee_usdc: fee_usd,
+        fee_tx_hash: feeTxHash,
+        treasury: TREASURY_WALLET,
+      });
+
+      const verifyResult = await verifyFeeTxOnChain(feeTxHash, fee_usd);
+
+      if (verifyResult.success) {
+        feeCollected = true;
+        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_verified_onchain", null, {
+          tx_hash: feeTxHash,
+          fee_usdc: fee_usd,
+        });
+      } else {
+        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_required_but_failed", null, {
+          error: verifyResult.error,
+          fee_usdc: fee_usd,
+          fee_tx_hash: feeTxHash,
+        });
+
+        await updateTradeOrder(supabase, tradeOrderId, {
+          status: "failed",
+          error_code: "fee_verification_failed",
+          error_message: verifyResult.error?.substring(0, 500),
+          finalized_at: new Date().toISOString(),
+        });
+
+        return json(
+          {
+            error: "Fee transaction verification failed. Trade aborted.",
+            error_code: "fee_verification_failed",
+            trade_order_id: tradeOrderId,
+          },
+          402,
         );
       }
     }

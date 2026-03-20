@@ -4,6 +4,7 @@ import { Swords, TrendingUp, ChevronDown, ChevronUp, Loader2, Radio, Clock, Trop
 import { supabase } from "@/integrations/supabase/client";
 import { usePrivy } from "@privy-io/react-auth";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
+import { usePrivyFeeTransfer } from "@/hooks/usePrivyFeeTransfer";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import EventSection, { parseSport } from "@/components/predictions/EventSection";
@@ -95,6 +96,7 @@ export default function FightPredictions() {
   // Use Privy EVM wallet for predictions (Polygon)
   const { walletAddress: address, isPrivyUser } = usePrivyWallet();
   const { authenticated, login, getAccessToken } = usePrivy();
+  const { transferFee } = usePrivyFeeTransfer();
   const referralCode = useMyReferralCode(address ?? null);
   const { t } = useTranslation();
   const [fights, setFights] = useState<Fight[]>([]);
@@ -275,14 +277,25 @@ export default function FightPredictions() {
     if (!selectedFight || !selectedPick || !isConnected || !address) return;
     setSubmitting(true);
     try {
-      // MIGRATION: Solana transaction building has been removed.
-      // Prediction submission now goes through a server-side edge function
-      // that will handle Polygon transaction execution with gas sponsorship.
-      
-      // For now, record the prediction intent server-side
-      // Get Privy access token for DID binding in prediction_accounts
+      // Step 1: Compute fee and execute client-side USDC fee transfer
+      const feeRate = selectedFight.commission_bps != null
+        ? selectedFight.commission_bps / 10_000
+        : (selectedFight.source === "polymarket" ? 0.02 : 0.05);
+      const feeUsdc = amountUsd * feeRate;
+      let feeTxHash: string | null = null;
+
+      if (feeUsdc > 0.01) {
+        const feeResult = await transferFee(feeUsdc);
+        if (!feeResult.success) {
+          throw new Error(feeResult.error || "Fee transfer failed");
+        }
+        feeTxHash = feeResult.txHash || null;
+      }
+
+      // Step 2: Get Privy access token for DID binding
       const privyToken = await getAccessToken();
 
+      // Step 3: Submit prediction with fee proof
       const { data, error } = await supabase.functions.invoke("prediction-submit", {
         body: {
           fight_id: selectedFight.id,
@@ -290,6 +303,7 @@ export default function FightPredictions() {
           fighter_pick: selectedPick,
           amount_usd: amountUsd,
           chain: "polygon",
+          fee_tx_hash: feeTxHash,
         },
         headers: privyToken ? { "x-privy-token": privyToken } : {},
       });
