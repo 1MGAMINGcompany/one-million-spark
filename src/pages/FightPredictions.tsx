@@ -98,7 +98,7 @@ export default function FightPredictions() {
   const { walletAddress: address, isPrivyUser } = usePrivyWallet();
   const { authenticated, login, getAccessToken } = usePrivy();
   const { approveFeeAllowance } = usePrivyFeeTransfer();
-  const { relayer_allowance } = usePolygonUSDC();
+  const referralCode = useMyReferralCode(address ?? null);
   const { t } = useTranslation();
   const [fights, setFights] = useState<Fight[]>([]);
   const [events, setEvents] = useState<PredictionEvent[]>([]);
