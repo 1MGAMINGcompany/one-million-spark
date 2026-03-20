@@ -207,7 +207,7 @@ export default function EventSection({
             {displayLocation && <span>📍 {displayLocation}</span>}
             <span>{fights.length} {getSportItemLabel(sport, fights.length)}</span>
             {openCount > 0 && <span className="text-green-400">{openCount} Open {getSportItemLabel(sport, openCount)}</span>}
-            <span className="text-primary font-bold">${totalPool.toFixed(2)} Pool</span>
+            <span className="text-primary font-bold">{allPolymarket ? "Polymarket Liquidity" : `$${totalPool.toFixed(2)} Pool`}</span>
           </div>
         </div>
         <div className="shrink-0 mt-1">
