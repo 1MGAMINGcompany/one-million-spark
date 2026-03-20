@@ -534,17 +534,6 @@ export default function FightPredictions() {
         </div>
       </div>
 
-      {/* Polymarket Trading Setup */}
-      {isConnected && (
-        <div className="max-w-4xl mx-auto px-4 mb-4">
-          <EnableTradingBanner
-            hasSession={pmSession.hasSession}
-            canTrade={pmSession.canTrade}
-            loading={pmSession.loading}
-            onEnable={handleEnableTrading}
-          />
-        </div>
-      )}
 
       {/* Content — organized by status sections */}
       <div className="max-w-4xl mx-auto px-4 pb-8 space-y-6">
