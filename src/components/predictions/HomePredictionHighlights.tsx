@@ -47,6 +47,7 @@ function CompactFightCard({
   const poolB = (fight.pool_b_usd ?? 0) > 0 ? fight.pool_b_usd! : fight.pool_b_lamports / 1_000_000_000;
   const { oddsA, oddsB } = calcOdds(poolA, poolB, fight.price_a, fight.price_b);
   const totalPool = poolA + poolB;
+  const isPolymarketPool = fight.source === "polymarket" && totalPool === 0;
   const isOpen = fight.status === "open";
 
   return (
@@ -99,9 +100,9 @@ function CompactFightCard({
         </div>
 
         <div className="mt-2 pt-1.5 border-t border-border/30 flex items-center justify-between">
-          <span className="text-[10px] text-muted-foreground">Pool</span>
+          <span className="text-[10px] text-muted-foreground">{isPolymarketPool ? "Liquidity" : "Pool"}</span>
           <span className="text-[11px] font-bold text-primary">
-            ${totalPool.toFixed(2)}
+            {isPolymarketPool ? "Polymarket" : `$${totalPool.toFixed(2)}`}
           </span>
         </div>
       </div>
