@@ -274,40 +274,6 @@ export default function FightPredictions() {
     return ["BOXING", "MMA", "FUTBOL"].filter(s => !existingSports.has(s));
   }, [groupedEvents]);
 
-  const handleEnableTrading = useCallback(async () => {
-    if (!isConnected || !address) {
-      if (!authenticated) login();
-      return;
-    }
-    // Find the Privy embedded wallet to sign the message
-    const privyWallet = wallets.find((w) => w.walletClientType === "privy");
-    if (!privyWallet) {
-      toast.error("No embedded wallet found. Please refresh and try again.");
-      return;
-    }
-    try {
-      const provider = await privyWallet.getEthereumProvider();
-      const signMessage = async (msg: string): Promise<string> => {
-        const result = await provider.request({
-          method: "personal_sign",
-          params: [msg, privyWallet.address],
-        });
-        return result as string;
-      };
-      const result = await pmSession.deriveCredentials(signMessage);
-      if (result.success) {
-        toast.success("Polymarket trading enabled!", {
-          description: "You can now place predictions on Polymarket markets.",
-        });
-      } else {
-        toast.error("Failed to enable trading", {
-          description: result.error || "Please try again.",
-        });
-      }
-    } catch (err: any) {
-      toast.error("Signing cancelled or failed", { description: err.message });
-    }
-  }, [isConnected, address, authenticated, login, wallets, pmSession]);
 
   // TODO [POLYMARKET]: Replace this entire function with Polygon/Polymarket
   // transaction execution. The new flow should:
