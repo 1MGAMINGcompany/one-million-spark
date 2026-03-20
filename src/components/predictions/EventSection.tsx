@@ -134,6 +134,7 @@ export default function EventSection({
 
   const totalPool = getTotalPoolUsd(fights);
   const allPolymarket = fights.every(f => f.source === "polymarket") && totalPool === 0;
+  const hasLiveOdds = allPolymarket && fights.some(f => (f.price_a ?? 0) > 0 && (f.price_b ?? 0) > 0);
   const openCount = eventHasStarted ? 0 : fights.filter(f => f.status === "open").length;
   const liveCount = fights.filter(f => f.status === "live").length;
 
