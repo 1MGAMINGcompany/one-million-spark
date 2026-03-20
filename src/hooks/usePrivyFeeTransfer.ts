@@ -9,7 +9,6 @@
  */
 import { useCallback } from "react";
 import { useSmartWallets } from "@privy-io/react-auth/smart-wallets";
-import { polygon } from "viem/chains";
 import { encodeFunctionData, parseAbi } from "viem";
 
 const USDC_CONTRACT = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359" as const;
