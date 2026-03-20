@@ -1,71 +1,50 @@
 
 
-## Diagnosis: Wallet Address Mismatch Causes Signature Verification Failure
+## Fix: Prediction Submission Failures
 
-### Root Cause
+### Two distinct issues to fix
 
-There is a **wallet address mismatch** between the SIWE message and the signing key:
+**Issue 1: JWKS fetch failure in `prediction-preflight`** (the error in the screenshot)
+The edge function fetches `https://auth.privy.io/.well-known/jwks.json` and it's returning a non-200 response. The `jose` library's `createRemoteJWKSet` throws "Expected 200 OK from the JSON Web Key Set HTTP response" when the JWKS endpoint is unreachable or returns an error.
 
-1. `usePolymarketSession` gets `walletAddress` from `usePrivyWallet()` — which **prefers the smart wallet address** (ERC-4337 proxy, a contract address)
-2. The SIWE message is built with this smart wallet address: `Wallet: 0x<smart_wallet>`
-3. The `polymarket-auth` edge function receives `wallet: 0x<smart_wallet>`
-4. In `FightPredictions.tsx`, `personal_sign` is executed by the **EOA embedded wallet** (`privyWallet.address` from `useWallets()`)
-5. On the backend, `verifyMessage({ address: smart_wallet, signature: signed_by_EOA })` **always fails** because the smart wallet is a contract — it cannot produce verifiable `personal_sign` signatures
+**Fix:** Add retry logic and a cached JWKS fallback in `prediction-preflight`. If the first fetch fails, retry once after a short delay. This handles transient Privy JWKS outages.
 
-This explains why the edge function logs show only boot/shutdown with no `[polymarket-auth] CLOB API key derived` messages — it returns `{ error: "Signature verification failed" }` with status 401, which the frontend surfaces as a generic failure toast.
+**Issue 2: React crash in `usePolymarketSession`** (runtime error in console)
+The error "Should have a queue" at `usePolymarketSession` line 25 is a React hooks violation. The hook `usePrivyWallet` has a conditional early return (`if (!PRIVY_APP_ID) return noPrivy`) BEFORE calling hooks in `usePrivyWalletInner`. When `usePolymarketSession` calls `usePrivyWallet()` and then calls `useWallets()` again separately, the hook count can differ between renders.
 
-### Evidence
-- `polymarket_user_sessions` table: **empty** (no session was ever created)
-- `usePrivyWallet.ts` lines 48-52: prefers `smart_wallet` type from `linkedAccounts`
-- `usePolymarketSession.ts` line 28: uses `walletAddress` from `usePrivyWallet` (smart wallet)
-- `usePolymarketSession.ts` line 88: embeds smart wallet address in SIWE message
-- `FightPredictions.tsx` lines 292-303: signs with EOA embedded wallet via `useWallets()`
-- `polymarket-auth/index.ts` line 109-113: verifies signature against smart wallet address → **fails**
+**Fix:** Remove the duplicate `useWallets()` call from `usePolymarketSession`. Instead, derive the EOA address from the `wallets` array already available inside the hook via a different approach — or just use a standalone wallet resolution.
 
-### Failing Path
+### Addressing user requirements
 
-```text
-FightPredictions.handleSubmit
-  → usePolymarketSession.deriveCredentials(signMessage)
-    → builds message with smart wallet address
-    → signs with EOA wallet
-  → polymarket-auth edge function (derive_credentials)
-    → verifyMessage(smart_wallet, signature_from_eoa) → false
-    → returns { error: "Signature verification failed" }, 401
-  → frontend catches → generic toast
-```
+**"Do we need to connect to Polymarket CLOB? I have all the keys"**
+If you already have a builder-level API key/secret/passphrase, those can be pre-seeded into `polymarket_user_sessions` for each user, eliminating the SIWE derive step entirely. However, the current architecture derives per-user trading keys so each user has their own CLOB identity.
 
-### Fix (Smallest Safe Change)
+**"I don't want users to sign a message every time"**
+They don't — the SIWE flow only runs once (first prediction). After that, credentials are stored. But the flow currently crashes before it gets there due to issues 1 and 2.
 
-**File: `src/hooks/usePolymarketSession.ts`**
+### Plan
 
-The `walletAddress` used for SIWE signing and session lookup must be the **EOA embedded wallet address**, not the smart wallet. The smart wallet cannot produce verifiable personal signatures.
+**File 1: `supabase/functions/prediction-preflight/index.ts`**
+- Add JWKS fetch retry (1 retry with 1s delay) to handle transient Privy endpoint failures
+- This directly fixes the screenshot error
 
-**Before** (line 28):
-```typescript
-const { walletAddress, isPrivyUser } = usePrivyWallet();
-```
+**File 2: `src/hooks/usePolymarketSession.ts`**
+- Fix the React hooks crash by not duplicating `useWallets()` — use a standalone `useMemo` with wallets from `useWallets()` that's already called once
+- The current code already calls `useWallets()` correctly after the previous fix, but the combination with `usePrivyWallet()` (which also calls hooks conditionally) causes the queue error
+- Wrap the hook safely: move `useWallets` call to be unconditional at the top level, remove dependency on `usePrivyWallet` for the wallet address (only use it for `isPrivyUser` boolean)
 
-**After**: Import `useWallets` from Privy and resolve the EOA address explicitly for SIWE purposes, while keeping `usePrivyWallet` for the `isPrivyUser` check:
+**File 3: `src/pages/FightPredictions.tsx`**
+- No structural changes needed — the auto-derive on first prediction is the correct UX (sign once, never again)
+- The SIWE signing only happens once per user lifetime, not per prediction
 
-```typescript
-const { isPrivyUser } = usePrivyWallet();
-const { wallets } = useWallets();
+### Post-fix user flow
+1. User clicks "Predict" → preflight succeeds (with retry)
+2. If first Polymarket prediction: one-time SIWE sign popup → credentials stored
+3. All subsequent predictions: no signing, no popups, frictionless
+4. Backend handles fee collection + CLOB order submission automatically
 
-// SIWE requires the EOA embedded wallet, not the smart wallet (contract can't sign)
-const walletAddress = useMemo(() => {
-  const privy = wallets.find((w) => w.walletClientType === "privy");
-  return privy?.address?.toLowerCase() ?? null;
-}, [wallets]);
-```
-
-Add imports: `useWallets` from `@privy-io/react-auth`, `useMemo` from `react`.
-
-This ensures:
-- The SIWE message contains the EOA address
-- The backend verifies the signature against the EOA address
-- The session is stored keyed to the EOA address
-- The signing wallet and verification address match
-
-No other files need changes — `FightPredictions.tsx` already signs with the EOA wallet, and `polymarket-auth` already normalizes whatever wallet it receives.
+### Technical details
+- `prediction-preflight`: wrap `jwtVerify` in a retry loop (max 2 attempts)
+- `usePolymarketSession`: ensure hooks are called unconditionally to fix React queue error
+- No changes to Solana, no refactoring, no UI redesign
 
