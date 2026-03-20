@@ -1,50 +1,53 @@
 
 
-## Fix: Prediction Submission Failures
+## Fix: Use Shared Backend CLOB Keys for Polymarket Predictions
 
-### Two distinct issues to fix
+### Root Cause Chain (confirmed from logs + DB)
 
-**Issue 1: JWKS fetch failure in `prediction-preflight`** (the error in the screenshot)
-The edge function fetches `https://auth.privy.io/.well-known/jwks.json` and it's returning a non-200 response. The `jose` library's `createRemoteJWKSet` throws "Expected 200 OK from the JSON Web Key Set HTTP response" when the JWKS endpoint is unreachable or returns an error.
+1. User signs SIWE message → `polymarket-auth` calls Polymarket CLOB `/auth/derive-api-key` → **returns 405 (Method Not Allowed)**
+2. Session stored with `status: "awaiting_credentials"`, `pm_api_key: null`
+3. Frontend receives `success: true` but `can_trade: false` → shows "Polymarket connected!" (misleading)
+4. Prediction continues to `prediction-preflight` → JWKS fetch to `auth.privy.io` fails with "Expected 200 OK" → **the error in the screenshot**
+5. Even if preflight passed, `prediction-submit` would reject because `isSessionValid` requires all 4 CLOB credentials
 
-**Fix:** Add retry logic and a cached JWKS fallback in `prediction-preflight`. If the first fetch fails, retry once after a short delay. This handles transient Privy JWKS outages.
+### Solution: Shared Backend Keys
 
-**Issue 2: React crash in `usePolymarketSession`** (runtime error in console)
-The error "Should have a queue" at `usePolymarketSession` line 25 is a React hooks violation. The hook `usePrivyWallet` has a conditional early return (`if (!PRIVY_APP_ID) return noPrivy`) BEFORE calling hooks in `usePrivyWalletInner`. When `usePolymarketSession` calls `usePrivyWallet()` and then calls `useWallets()` again separately, the hook count can differ between renders.
+Since you have existing Polymarket CLOB keys, we skip per-user credential derivation entirely. The backend uses a single set of CLOB credentials stored as secrets.
 
-**Fix:** Remove the duplicate `useWallets()` call from `usePolymarketSession`. Instead, derive the EOA address from the `wallets` array already available inside the hook via a different approach — or just use a standalone wallet resolution.
+### Changes
 
-### Addressing user requirements
+**Step 1: Add 4 secrets** (via `add_secret` tool)
+- `PM_API_KEY` — your Polymarket CLOB API key
+- `PM_API_SECRET` — your CLOB API secret
+- `PM_PASSPHRASE` — your CLOB passphrase
+- `PM_TRADING_KEY` — your CLOB trading private key (hex)
 
-**"Do we need to connect to Polymarket CLOB? I have all the keys"**
-If you already have a builder-level API key/secret/passphrase, those can be pre-seeded into `polymarket_user_sessions` for each user, eliminating the SIWE derive step entirely. However, the current architecture derives per-user trading keys so each user has their own CLOB identity.
+**Step 2: `supabase/functions/prediction-submit/index.ts`**
+- In the Polymarket order block (lines 948-1189), instead of looking up `polymarket_user_sessions`, read credentials from `Deno.env.get("PM_API_KEY")` etc.
+- Remove the `isSessionValid` check against `polymarket_user_sessions`
+- Keep all other safety gates (price freshness, limits, fee verification)
 
-**"I don't want users to sign a message every time"**
-They don't — the SIWE flow only runs once (first prediction). After that, credentials are stored. But the flow currently crashes before it gets there due to issues 1 and 2.
+**Step 3: `src/pages/FightPredictions.tsx`**
+- Remove the entire Step 0 block (lines 287-311) that triggers SIWE signing and `deriveCredentials`
+- Users go straight to preflight → allowance → submit with zero extra prompts
 
-### Plan
+**Step 4: `src/hooks/usePolymarketSession.ts`**
+- Simplify to a no-op or remove entirely — no longer needed since credentials are backend-only
+- Remove the polling that calls `polymarket-auth` every 30s
 
-**File 1: `supabase/functions/prediction-preflight/index.ts`**
-- Add JWKS fetch retry (1 retry with 1s delay) to handle transient Privy endpoint failures
-- This directly fixes the screenshot error
+**Step 5: `supabase/functions/prediction-preflight/index.ts`**  
+- Increase retry attempts from 2 to 3 and add a longer backoff to handle transient JWKS failures more reliably
 
-**File 2: `src/hooks/usePolymarketSession.ts`**
-- Fix the React hooks crash by not duplicating `useWallets()` — use a standalone `useMemo` with wallets from `useWallets()` that's already called once
-- The current code already calls `useWallets()` correctly after the previous fix, but the combination with `usePrivyWallet()` (which also calls hooks conditionally) causes the queue error
-- Wrap the hook safely: move `useWallets` call to be unconditional at the top level, remove dependency on `usePrivyWallet` for the wallet address (only use it for `isPrivyUser` boolean)
-
-**File 3: `src/pages/FightPredictions.tsx`**
-- No structural changes needed — the auto-derive on first prediction is the correct UX (sign once, never again)
-- The SIWE signing only happens once per user lifetime, not per prediction
+### What stays the same
+- Prediction preflight (Privy JWT check) — still needed for auth
+- Relayer fee model (one-time USDC allowance + `transferFrom`)
+- All safety gates in `prediction-submit` (limits, price staleness, slippage)
+- Smart wallet resolution for fee collection
 
 ### Post-fix user flow
-1. User clicks "Predict" → preflight succeeds (with retry)
-2. If first Polymarket prediction: one-time SIWE sign popup → credentials stored
-3. All subsequent predictions: no signing, no popups, frictionless
-4. Backend handles fee collection + CLOB order submission automatically
-
-### Technical details
-- `prediction-preflight`: wrap `jwtVerify` in a retry loop (max 2 attempts)
-- `usePolymarketSession`: ensure hooks are called unconditionally to fix React queue error
-- No changes to Solana, no refactoring, no UI redesign
+1. User clicks "Predict" → enters amount → clicks "Submit"
+2. Preflight checks Privy JWT (no SIWE, no extra signing)
+3. One-time USDC allowance if needed (existing flow)
+4. Backend collects fee via relayer, submits CLOB order using shared keys
+5. Done — no Polymarket connection step at all
 
