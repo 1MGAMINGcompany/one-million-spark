@@ -9,8 +9,8 @@ import PyramidLogo from "@/components/PyramidLogo";
 import predictionsFighters from "@/assets/predictions-fighters.png";
 import futbolBall from "@/assets/futbol.png";
 // import { MobileAppPrompt } from "@/components/MobileAppPrompt"; // Temporarily disabled
-import { usePrivySolBalance } from "@/hooks/usePrivySolBalance";
-import { AddSolCard } from "@/components/AddSolCard";
+import { usePrivyWallet } from "@/hooks/usePrivyWallet";
+import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
 import { WelcomeIntroModal } from "@/components/WelcomeIntroModal";
 import { LiveActivityIndicator } from "@/components/LiveActivityIndicator";
 import { getActiveAIGame, dismissActiveAIGame } from "@/hooks/useActiveAIGame";
