@@ -94,6 +94,32 @@ async function tsdbFetch(path: string, apiKey: string): Promise<any> {
   return res.json();
 }
 
+/** Fetch fighter photo + record from TheSportsDB by name */
+async function tsdbLookupFighter(name: string, tsdbKey: string): Promise<{ photo: string | null; record: string | null }> {
+  try {
+    const data = await tsdbFetch(`searchplayers.php?p=${encodeURIComponent(name)}`, tsdbKey);
+    const player = data?.player?.[0];
+    if (!player) return { photo: null, record: null };
+    const photo = player.strCutout || player.strThumb || null;
+    // Build record from stats if available
+    const record = player.strStatus ? null : null; // TheSportsDB doesn't have W-L directly
+    return { photo, record };
+  } catch {
+    return { photo: null, record: null };
+  }
+}
+
+/** Fetch fighter photo + record from BallDontLie by fighter object */
+function bdlFighterEnrichment(fighter: any): { photo: string | null; record: string | null } {
+  if (!fighter) return { photo: null, record: null };
+  const photo = fighter.image_url || null;
+  const w = fighter.wins ?? null;
+  const l = fighter.losses ?? null;
+  const d = fighter.draws ?? null;
+  const record = (w !== null && l !== null) ? `${w}-${l}${d != null ? `-${d}` : ''}` : null;
+  return { photo, record };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -376,6 +402,10 @@ Deno.serve(async (req) => {
                   const fightTitle = `${f1Name} vs ${f2Name}`;
                   const weightClass = fight.weight_class?.name || null;
 
+                  // Enrich fighter data
+                  const f1Enrich = bdlFighterEnrichment(fight.fighter1);
+                  const f2Enrich = bdlFighterEnrichment(fight.fighter2);
+
                   const { error: fightErr } = await supabase
                     .from("prediction_fights")
                     .insert({
@@ -388,6 +418,11 @@ Deno.serve(async (req) => {
                       status: "open",
                       weight_class: weightClass,
                       fight_class: fight.is_main_event ? "A" : (fight.card_segment === "main_card" ? "B" : "C"),
+                      fighter_a_photo: f1Enrich.photo,
+                      fighter_b_photo: f2Enrich.photo,
+                      fighter_a_record: f1Enrich.record,
+                      fighter_b_record: f2Enrich.record,
+                      venue: [ev.venue_name, ev.venue_city].filter(Boolean).join(", ") || null,
                     });
 
                   if (!fightErr) results.fights_created++;
@@ -558,6 +593,16 @@ Deno.serve(async (req) => {
               if (vsMatch) {
                 const f1 = normalizeName(vsMatch[1]);
                 const f2 = normalizeName(vsMatch[2]);
+
+                // Enrich fighter photos from TheSportsDB
+                const [f1Enrich, f2Enrich] = await Promise.all([
+                  tsdbLookupFighter(f1, tsdbKey),
+                  tsdbLookupFighter(f2, tsdbKey),
+                ]);
+
+                // Get event poster for banner
+                const eventBanner = ev.strPoster || ev.strThumb || null;
+
                 const { error: fightErr } = await supabase
                   .from("prediction_fights")
                   .insert({
@@ -568,10 +613,23 @@ Deno.serve(async (req) => {
                     event_id: newEvent.id,
                     source: "thesportsdb",
                     status: "open",
+                    fighter_a_photo: f1Enrich.photo,
+                    fighter_b_photo: f2Enrich.photo,
+                    fighter_a_record: f1Enrich.record,
+                    fighter_b_record: f2Enrich.record,
+                    venue: venue || null,
                   });
                 if (!fightErr) {
                   results.fights_created++;
                   detail.fight_count = 1;
+                }
+
+                // Store event banner
+                if (eventBanner) {
+                  await supabase
+                    .from("prediction_events")
+                    .update({ event_banner_url: eventBanner })
+                    .eq("id", newEvent.id);
                 }
               }
 
@@ -765,6 +823,8 @@ Deno.serve(async (req) => {
                     status: "open",
                     home_logo: fix.teams?.home?.logo || null,
                     away_logo: fix.teams?.away?.logo || null,
+                    venue: venue || null,
+                    referee: fix.fixture?.referee || null,
                   });
                 if (!fightErr) {
                   results.fights_created++;

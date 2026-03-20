@@ -1034,6 +1034,7 @@ export type Database = {
           category: string | null
           created_at: string
           enrichment_notes: string | null
+          event_banner_url: string | null
           event_date: string | null
           event_name: string
           featured: boolean
@@ -1062,6 +1063,7 @@ export type Database = {
           source_url: string | null
           status: string
           updated_at: string
+          venue: string | null
         }
         Insert: {
           admin_approved_at?: string | null
@@ -1071,6 +1073,7 @@ export type Database = {
           category?: string | null
           created_at?: string
           enrichment_notes?: string | null
+          event_banner_url?: string | null
           event_date?: string | null
           event_name: string
           featured?: boolean
@@ -1099,6 +1102,7 @@ export type Database = {
           source_url?: string | null
           status?: string
           updated_at?: string
+          venue?: string | null
         }
         Update: {
           admin_approved_at?: string | null
@@ -1108,6 +1112,7 @@ export type Database = {
           category?: string | null
           created_at?: string
           enrichment_notes?: string | null
+          event_banner_url?: string | null
           event_date?: string | null
           event_name?: string
           featured?: boolean
@@ -1136,6 +1141,7 @@ export type Database = {
           source_url?: string | null
           status?: string
           updated_at?: string
+          venue?: string | null
         }
         Relationships: [
           {
@@ -1156,6 +1162,7 @@ export type Database = {
           confirmed_at: string | null
           created_at: string
           enrichment_notes: string | null
+          event_banner_url: string | null
           event_id: string | null
           event_name: string
           explainer_card: string | null
@@ -1164,8 +1171,10 @@ export type Database = {
           fight_class: string | null
           fighter_a_name: string
           fighter_a_photo: string | null
+          fighter_a_record: string | null
           fighter_b_name: string
           fighter_b_photo: string | null
+          fighter_b_record: string | null
           home_logo: string | null
           id: string
           method: string | null
@@ -1184,6 +1193,7 @@ export type Database = {
           pool_b_usd: number
           price_a: number | null
           price_b: number | null
+          referee: string | null
           refund_status: string | null
           refunds_completed_at: string | null
           refunds_started_at: string | null
@@ -1199,6 +1209,7 @@ export type Database = {
           title: string
           trading_allowed: boolean
           updated_at: string
+          venue: string | null
           weight_class: string | null
           winner: string | null
         }
@@ -1210,6 +1221,7 @@ export type Database = {
           confirmed_at?: string | null
           created_at?: string
           enrichment_notes?: string | null
+          event_banner_url?: string | null
           event_id?: string | null
           event_name?: string
           explainer_card?: string | null
@@ -1218,8 +1230,10 @@ export type Database = {
           fight_class?: string | null
           fighter_a_name: string
           fighter_a_photo?: string | null
+          fighter_a_record?: string | null
           fighter_b_name: string
           fighter_b_photo?: string | null
+          fighter_b_record?: string | null
           home_logo?: string | null
           id?: string
           method?: string | null
@@ -1238,6 +1252,7 @@ export type Database = {
           pool_b_usd?: number
           price_a?: number | null
           price_b?: number | null
+          referee?: string | null
           refund_status?: string | null
           refunds_completed_at?: string | null
           refunds_started_at?: string | null
@@ -1253,6 +1268,7 @@ export type Database = {
           title: string
           trading_allowed?: boolean
           updated_at?: string
+          venue?: string | null
           weight_class?: string | null
           winner?: string | null
         }
@@ -1264,6 +1280,7 @@ export type Database = {
           confirmed_at?: string | null
           created_at?: string
           enrichment_notes?: string | null
+          event_banner_url?: string | null
           event_id?: string | null
           event_name?: string
           explainer_card?: string | null
@@ -1272,8 +1289,10 @@ export type Database = {
           fight_class?: string | null
           fighter_a_name?: string
           fighter_a_photo?: string | null
+          fighter_a_record?: string | null
           fighter_b_name?: string
           fighter_b_photo?: string | null
+          fighter_b_record?: string | null
           home_logo?: string | null
           id?: string
           method?: string | null
@@ -1292,6 +1311,7 @@ export type Database = {
           pool_b_usd?: number
           price_a?: number | null
           price_b?: number | null
+          referee?: string | null
           refund_status?: string | null
           refunds_completed_at?: string | null
           refunds_started_at?: string | null
@@ -1307,6 +1327,7 @@ export type Database = {
           title?: string
           trading_allowed?: boolean
           updated_at?: string
+          venue?: string | null
           weight_class?: string | null
           winner?: string | null
         }
