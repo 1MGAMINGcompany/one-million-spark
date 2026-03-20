@@ -136,7 +136,15 @@ const Home = () => {
               {/* Zero-balance funding card for Privy users */}
               {/* Funding hint for Privy users with zero balance */}
               {showFundingCard && (
-                <AddSolCard walletAddress={walletAddress} balanceSol={balanceSol} />
+                <div className="w-full max-w-md mx-auto bg-card border border-border rounded-xl p-4 text-center space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Add USDC to start making predictions
+                  </p>
+                  <Button asChild size="lg" variant="gold" className="w-full">
+                    <Link to="/add-funds">Add Funds</Link>
+                  </Button>
+                  <p className="text-xs text-muted-foreground/60">Polygon USDC · Card, Apple Pay, Google Pay</p>
+                </div>
               )}
 
               {/* CTA Buttons — always visible */}
