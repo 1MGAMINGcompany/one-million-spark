@@ -163,21 +163,25 @@ export default function FightCard({
         {/* Pool strip */}
         <div className="bg-primary/8 border-t border-primary/15 px-4 sm:px-6 py-3 flex items-center justify-between">
           <div className="flex flex-col">
-            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Prize Pool</span>
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              {isPolymarketPool ? "Liquidity" : "Prize Pool"}
+            </span>
             <span className="text-lg sm:text-xl font-bold text-primary font-['Cinzel'] leading-tight">
-              ${totalPool.toFixed(2)}
+              {isPolymarketPool ? "Polymarket" : `$${totalPool.toFixed(2)}`}
             </span>
           </div>
-          <div className="flex gap-3 text-[10px] text-muted-foreground">
-            <div className="text-center">
-              <span className="block font-bold text-foreground text-xs">${poolA.toFixed(2)}</span>
-              <span>Home</span>
+          {!isPolymarketPool && (
+            <div className="flex gap-3 text-[10px] text-muted-foreground">
+              <div className="text-center">
+                <span className="block font-bold text-foreground text-xs">${poolA.toFixed(2)}</span>
+                <span>Home</span>
+              </div>
+              <div className="text-center">
+                <span className="block font-bold text-foreground text-xs">${poolB.toFixed(2)}</span>
+                <span>Away</span>
+              </div>
             </div>
-            <div className="text-center">
-              <span className="block font-bold text-foreground text-xs">${poolB.toFixed(2)}</span>
-              <span>Away</span>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Draw info */}
