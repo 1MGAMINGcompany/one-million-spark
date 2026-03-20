@@ -904,6 +904,10 @@ Deno.serve(async (req) => {
 
       if (verifyResult.success) {
         feeCollected = true;
+
+        // Persist fee_tx_hash on the trade record (unique constraint prevents reuse)
+        await updateTradeOrder(supabase, tradeOrderId, { fee_tx_hash: feeTxHash });
+
         await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_verified_onchain", null, {
           tx_hash: feeTxHash,
           fee_usdc: fee_usd,
