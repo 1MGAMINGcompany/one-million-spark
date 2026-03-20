@@ -101,7 +101,7 @@ export default function FightCard({
   eventHasStarted?: boolean;
 }) {
   const { poolA, poolB } = getPoolUsd(fight);
-  const { oddsA, oddsB } = calcOdds(poolA, poolB);
+  const { oddsA, oddsB } = calcOdds(poolA, poolB, fight.price_a, fight.price_b);
   const totalPool = poolA + poolB;
 
   const isClaimable = ["confirmed", "settled"].includes(fight.status);
