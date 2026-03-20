@@ -8,9 +8,10 @@
  *
  * Credentials are NEVER exposed to the frontend.
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
+import { useWallets } from "@privy-io/react-auth";
 
 interface PolymarketSessionState {
   hasSession: boolean;
