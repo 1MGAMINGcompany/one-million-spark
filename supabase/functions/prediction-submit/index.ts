@@ -411,7 +411,8 @@ Deno.serve(async (req) => {
       return json({ error: "Authentication failed — no identity", error_code: "auth_no_did" }, 401);
     }
 
-    // Fetch the authenticated user's embedded wallet from Privy
+    // Fetch the authenticated user's wallet addresses from Privy
+    // Smart wallets appear as type "smart_wallet", embedded EOAs as type "wallet"
     if (appId && appSecret) {
       try {
         const basicAuth = btoa(`${appId}:${appSecret}`);
@@ -423,14 +424,24 @@ Deno.serve(async (req) => {
         });
         if (userRes.ok) {
           const userData = await userRes.json();
-          const embeddedWallet = userData.linked_accounts?.find(
-            (a: any) =>
-              a.type === "wallet" &&
-              a.wallet_client_type === "privy" &&
-              a.chain_type === "ethereum",
+
+          // Prefer smart wallet address (the actual on-chain sender for smart wallet txs)
+          const smartWallet = userData.linked_accounts?.find(
+            (a: any) => a.type === "smart_wallet",
           );
-          if (embeddedWallet?.address) {
-            privyEmbeddedWalletAddress = String(embeddedWallet.address).trim().toLowerCase();
+          if (smartWallet?.address) {
+            privyEmbeddedWalletAddress = String(smartWallet.address).trim().toLowerCase();
+          } else {
+            // Fallback: embedded EOA wallet (pre-smart-wallet migration users)
+            const embeddedWallet = userData.linked_accounts?.find(
+              (a: any) =>
+                a.type === "wallet" &&
+                a.wallet_client_type === "privy" &&
+                a.chain_type === "ethereum",
+            );
+            if (embeddedWallet?.address) {
+              privyEmbeddedWalletAddress = String(embeddedWallet.address).trim().toLowerCase();
+            }
           }
         }
       } catch (e) {

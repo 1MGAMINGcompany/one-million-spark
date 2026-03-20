@@ -1,27 +1,23 @@
 /**
- * usePrivyFeeTransfer — Client-side USDC fee transfer via Privy embedded wallet.
+ * usePrivyFeeTransfer — Client-side USDC fee transfer via Privy smart wallet.
  *
- * Privy embedded wallets sign without popups, so this is seamless.
+ * Smart wallets sign without popups when dashboard allowlist policies are set,
+ * enabling frictionless repeated predictions.
  * The resulting tx hash is passed to the backend for on-chain verification.
  *
  * USDC on Polygon: 0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359 (6 decimals)
  */
 import { useCallback } from "react";
-import { useSendTransaction } from "@privy-io/react-auth";
+import { useSmartWallets } from "@privy-io/react-auth/smart-wallets";
+import { encodeFunctionData, parseAbi } from "viem";
 
-const USDC_CONTRACT = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359";
-const TREASURY_WALLET = "0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d";
+const USDC_CONTRACT = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359" as const;
+const TREASURY_WALLET = "0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d" as const;
 const USDC_DECIMALS = 6;
 
-// ERC-20 transfer(address,uint256) selector
-const TRANSFER_SELECTOR = "0xa9059cbb";
-
-function encodeTransferCalldata(to: string, amountUsdc: number): string {
-  const rawAmount = BigInt(Math.floor(amountUsdc * 10 ** USDC_DECIMALS));
-  const paddedTo = to.slice(2).toLowerCase().padStart(64, "0");
-  const paddedAmount = rawAmount.toString(16).padStart(64, "0");
-  return `${TRANSFER_SELECTOR}${paddedTo}${paddedAmount}`;
-}
+const erc20Abi = parseAbi([
+  "function transfer(address to, uint256 amount) returns (bool)",
+]);
 
 interface FeeTransferResult {
   success: boolean;
@@ -30,7 +26,7 @@ interface FeeTransferResult {
 }
 
 export function usePrivyFeeTransfer() {
-  const { sendTransaction } = useSendTransaction();
+  const { client } = useSmartWallets();
 
   const transferFee = useCallback(
     async (feeUsdc: number): Promise<FeeTransferResult> => {
@@ -38,33 +34,28 @@ export function usePrivyFeeTransfer() {
         return { success: true, txHash: "fee_below_threshold" };
       }
 
+      if (!client) {
+        return { success: false, error: "smart_wallet_not_ready" };
+      }
+
       try {
-        const calldata = encodeTransferCalldata(TREASURY_WALLET, feeUsdc);
+        const rawAmount = BigInt(Math.floor(feeUsdc * 10 ** USDC_DECIMALS));
+
+        const data = encodeFunctionData({
+          abi: erc20Abi,
+          functionName: "transfer",
+          args: [TREASURY_WALLET, rawAmount],
+        });
 
         console.log(
-          `[usePrivyFeeTransfer] Sending $${feeUsdc} USDC fee to treasury...`
+          `[usePrivyFeeTransfer] Sending $${feeUsdc} USDC fee via smart wallet...`
         );
 
-        const receipt = await sendTransaction(
-          {
-            to: USDC_CONTRACT as `0x${string}`,
-            data: calldata as `0x${string}`,
-            value: BigInt(0),
-            chainId: 137, // Polygon mainnet
-          },
-          {
-            uiOptions: {
-              description: `$${feeUsdc.toFixed(2)} USDC platform fee`,
-            },
-          }
-        );
-
-        const txHash =
-          typeof receipt === "string"
-            ? receipt
-            : (receipt as any)?.transactionHash ??
-              (receipt as any)?.hash ??
-              null;
+        const txHash = await client.sendTransaction({
+          to: USDC_CONTRACT,
+          data,
+          value: 0n,
+        } as any);
 
         if (!txHash) {
           return { success: false, error: "no_tx_hash_returned" };
@@ -80,7 +71,7 @@ export function usePrivyFeeTransfer() {
         };
       }
     },
-    [sendTransaction]
+    [client]
   );
 
   return { transferFee };
