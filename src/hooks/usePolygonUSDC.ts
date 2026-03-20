@@ -14,7 +14,12 @@ import { usePrivyWallet } from "./usePrivyWallet";
 // Native USDC on Polygon (circle-issued, 6 decimals)
 const USDC_CONTRACT = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359";
 const USDC_DECIMALS = 6;
-const POLYGON_RPC = "https://polygon-rpc.com";
+const POLYGON_RPCS = [
+  "https://polygon-bor-rpc.publicnode.com",
+  "https://polygon.drpc.org",
+  "https://rpc.ankr.com/polygon",
+];
+
 const POLL_INTERVAL_MS = 15_000;
 
 // ERC-20 balanceOf(address) selector: 0x70a08231
