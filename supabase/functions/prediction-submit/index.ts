@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { createRemoteJWKSet, jwtVerify } from "npm:jose@5";
 import { privateKeyToAccount } from "viem/accounts";
+import { createWalletClient, http, encodeFunctionData, parseAbi } from "npm:viem@2";
+import { polygon } from "npm:viem@2/chains";
 
 /**
  * prediction-submit — Production trade execution gateway.
