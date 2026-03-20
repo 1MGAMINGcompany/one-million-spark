@@ -1009,18 +1009,20 @@ Deno.serve(async (req) => {
 
         if (orderResult.orderId) {
           polymarket_status = "submitted";
-          tradeStatus = "filled";
-          filledAmountUsdc = net_amount_usdc;
-          filledShares = shares;
-          avgFillPrice = expectedPrice;
+          // Do NOT mark as "filled" yet — order accepted ≠ order filled.
+          // Keep in "submitted" state; reconciliation below (or background worker)
+          // will upgrade to "filled" only when the CLOB confirms execution.
+          tradeStatus = "submitted";
+          filledAmountUsdc = 0;
+          filledShares = 0;
+          avgFillPrice = null;
 
           await updateTradeOrder(supabase, tradeOrderId, {
-            status: "filled",
+            status: "submitted",
             polymarket_order_id: orderResult.orderId,
-            filled_amount_usdc: filledAmountUsdc,
-            filled_shares: filledShares,
-            avg_fill_price: avgFillPrice,
-            finalized_at: new Date().toISOString(),
+            // Optimistic fill fields left at 0 — updated by reconciliation
+            expected_price: expectedPrice,
+            expected_shares: shares,
           });
 
           // ── Post-submit targeted reconciliation (best-effort, 2s timeout) ──
