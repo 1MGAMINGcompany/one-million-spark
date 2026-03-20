@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
     const path = "/ak/nonce";
     const method = "GET";
 
-    const authHeaders = buildHeaders(apiKey, apiSecret, passphrase, timestamp, method, path);
+    const authHeaders = await buildHeaders(apiKey, apiSecret, passphrase, timestamp, method, path);
 
     const resp = await fetch(`https://clob.polymarket.com${path}`, {
       method,
