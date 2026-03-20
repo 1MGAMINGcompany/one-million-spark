@@ -593,6 +593,16 @@ Deno.serve(async (req) => {
               if (vsMatch) {
                 const f1 = normalizeName(vsMatch[1]);
                 const f2 = normalizeName(vsMatch[2]);
+
+                // Enrich fighter photos from TheSportsDB
+                const [f1Enrich, f2Enrich] = await Promise.all([
+                  tsdbLookupFighter(f1, tsdbKey),
+                  tsdbLookupFighter(f2, tsdbKey),
+                ]);
+
+                // Get event poster for banner
+                const eventBanner = ev.strPoster || ev.strThumb || null;
+
                 const { error: fightErr } = await supabase
                   .from("prediction_fights")
                   .insert({
@@ -603,11 +613,25 @@ Deno.serve(async (req) => {
                     event_id: newEvent.id,
                     source: "thesportsdb",
                     status: "open",
+                    fighter_a_photo: f1Enrich.photo,
+                    fighter_b_photo: f2Enrich.photo,
+                    fighter_a_record: f1Enrich.record,
+                    fighter_b_record: f2Enrich.record,
+                    venue: venue || null,
                   });
                 if (!fightErr) {
                   results.fights_created++;
                   detail.fight_count = 1;
                 }
+
+                // Store event banner
+                if (eventBanner) {
+                  await supabase
+                    .from("prediction_events")
+                    .update({ event_banner_url: eventBanner })
+                    .eq("id", newEvent.id);
+                }
+              }
               }
 
               await supabase.from("automation_logs").insert({
