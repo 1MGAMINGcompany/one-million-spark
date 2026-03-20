@@ -16,11 +16,18 @@ function uint8ArrayToBase64(arr: Uint8Array): string {
   return btoa(bin);
 }
 
-function buildHeaders(apiKey: string, secret: string, passphrase: string, timestamp: string, method: string, path: string, body: string = "") {
+async function buildHeaders(apiKey: string, secret: string, passphrase: string, timestamp: string, method: string, path: string, body: string = "") {
   const message = timestamp + method + path + body;
-  const hmac = createHmac("sha256", Buffer.from(secret, "base64"));
-  hmac.update(message);
-  const signature = hmac.digest("base64");
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    base64ToUint8Array(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(message));
+  const signature = uint8ArrayToBase64(new Uint8Array(sig));
 
   return {
     "POLY_API_KEY": apiKey,
