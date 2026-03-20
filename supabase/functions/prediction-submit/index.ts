@@ -833,53 +833,70 @@ Deno.serve(async (req) => {
     });
 
     // ═══════════════════════════════════════════════════
-    // 7) FEE TRANSFER — collect before execution
+    // 7) FEE VERIFICATION — client transfers fee, backend verifies on-chain
     // ═══════════════════════════════════════════════════
     let feeCollected = false;
-    let feeTxHash: string | null = null;
+    let feeTxHash: string | null = clientFeeTxHash || null;
 
     if (fee_usd > 0.01) {
-      await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_transfer_started", {
-        fee_usdc: fee_usd,
-        treasury: TREASURY_WALLET,
-      });
-
-      const feeResult = await transferFeeViaPrivy(privyDid!, fee_usd);
-
-      if (feeResult.success) {
-        feeCollected = true;
-        feeTxHash = feeResult.txHash || null;
-        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_transfer_success", null, {
-          tx_hash: feeTxHash,
-          fee_usdc: fee_usd,
-        });
-      } else {
-        // Distinguish privy_user_authorization_required from generic fee failures
-        const isAuthRequired = feeResult.error === "privy_user_authorization_required";
-        const auditAction = isAuthRequired ? "privy_wallet_auth_required" : "fee_required_but_failed";
-        const errorCode = isAuthRequired ? "privy_user_authorization_required" : "fee_transfer_failed";
-
-        await auditLog(supabase, tradeOrderId, normalizedWallet, auditAction, null, {
-          error: feeResult.error,
+      if (!feeTxHash || feeTxHash === "fee_below_threshold") {
+        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_required_but_failed", null, {
+          error: "no_fee_tx_hash_provided",
           fee_usdc: fee_usd,
         });
 
         await updateTradeOrder(supabase, tradeOrderId, {
           status: "failed",
-          error_code: errorCode,
-          error_message: feeResult.error?.substring(0, 500),
+          error_code: "fee_not_provided",
+          error_message: "Client must provide fee_tx_hash for trades with fee > $0.01",
           finalized_at: new Date().toISOString(),
         });
 
         return json(
           {
-            error: isAuthRequired
-              ? "User wallet authorization required for fee transfer. Client-side signing flow needed."
-              : "Fee transfer failed. Trade aborted.",
-            error_code: errorCode,
+            error: "Fee transaction hash required. Complete fee transfer before submitting.",
+            error_code: "fee_not_provided",
             trade_order_id: tradeOrderId,
           },
-          isAuthRequired ? 501 : 502,
+          400,
+        );
+      }
+
+      await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_verification_started", {
+        fee_usdc: fee_usd,
+        fee_tx_hash: feeTxHash,
+        treasury: TREASURY_WALLET,
+      });
+
+      const verifyResult = await verifyFeeTxOnChain(feeTxHash, fee_usd);
+
+      if (verifyResult.success) {
+        feeCollected = true;
+        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_verified_onchain", null, {
+          tx_hash: feeTxHash,
+          fee_usdc: fee_usd,
+        });
+      } else {
+        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_required_but_failed", null, {
+          error: verifyResult.error,
+          fee_usdc: fee_usd,
+          fee_tx_hash: feeTxHash,
+        });
+
+        await updateTradeOrder(supabase, tradeOrderId, {
+          status: "failed",
+          error_code: "fee_verification_failed",
+          error_message: verifyResult.error?.substring(0, 500),
+          finalized_at: new Date().toISOString(),
+        });
+
+        return json(
+          {
+            error: "Fee transaction verification failed. Trade aborted.",
+            error_code: "fee_verification_failed",
+            trade_order_id: tradeOrderId,
+          },
+          402,
         );
       }
     }
