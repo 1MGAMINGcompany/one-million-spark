@@ -856,13 +856,13 @@ Deno.serve(async (req) => {
     let feeCollected = false;
     let feeTxHash: string | null = null;
 
-    if (fee_usd > 0.01 && privyDid) {
+    if (fee_usd > 0.01) {
       await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_transfer_started", {
         fee_usdc: fee_usd,
         treasury: TREASURY_WALLET,
       });
 
-      const feeResult = await transferFeeViaPrivy(privyDid, fee_usd);
+      const feeResult = await transferFeeViaPrivy(privyDid!, fee_usd);
 
       if (feeResult.success) {
         feeCollected = true;
@@ -871,18 +871,9 @@ Deno.serve(async (req) => {
           tx_hash: feeTxHash,
           fee_usdc: fee_usd,
         });
-      } else if (feeResult.error === "privy_server_not_configured") {
-        // Allow trade without fee collection when PRIVY_APP_SECRET is not yet configured
-        console.warn(
-          "[prediction-submit] PRIVY_APP_SECRET not configured — fee recorded but not collected",
-        );
-        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_transfer_skipped", null, {
-          reason: "privy_server_not_configured",
-          fee_usdc: fee_usd,
-        });
       } else {
-        // Hard fail — fee transfer attempted but failed
-        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_transfer_failed", null, {
+        // Hard fail — fee transfer required but failed
+        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_required_but_failed", null, {
           error: feeResult.error,
           fee_usdc: fee_usd,
         });
@@ -903,12 +894,6 @@ Deno.serve(async (req) => {
           502,
         );
       }
-    } else if (fee_usd > 0.01 && !privyDid) {
-      // No Privy DID available — can't transfer fee
-      await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_transfer_skipped", null, {
-        reason: "no_privy_did",
-        fee_usdc: fee_usd,
-      });
     }
 
     // ═══════════════════════════════════════════════════
