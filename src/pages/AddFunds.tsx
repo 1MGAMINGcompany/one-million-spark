@@ -147,7 +147,17 @@ const AddFunds = () => {
                     <span className="text-muted-foreground">Loading...</span>
                   </div>
                 ) : usdcError ? (
-                  <p className="text-lg text-muted-foreground">Unable to load balance</p>
+                  <div className="text-center py-2">
+                    <p className="text-sm text-muted-foreground mb-1">Unable to load balance</p>
+                    <p className="text-xs text-destructive/70 mb-2 break-all">{usdcError}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.location.reload()}
+                    >
+                      Retry
+                    </Button>
+                  </div>
                 ) : (
                   <p className="text-4xl font-bold text-foreground tracking-tight">
                     ${usdc_balance_formatted ?? "0.00"}
