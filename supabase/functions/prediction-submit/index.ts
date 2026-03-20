@@ -217,8 +217,11 @@ async function buildAndSubmitClobOrder(
 async function verifyFeeTxOnChain(
   feeTxHash: string,
   expectedFeeUsdc: number,
+  expectedSenderWallet: string,
 ): Promise<{ success: boolean; error?: string }> {
   const POLYGON_RPC = "https://polygon-rpc.com";
+  /** Max age of the fee tx block — 10 minutes */
+  const MAX_FEE_TX_AGE_S = 600;
 
   try {
     // Fetch transaction receipt
@@ -250,19 +253,21 @@ async function verifyFeeTxOnChain(
       return { success: false, error: "tx_not_to_usdc_contract" };
     }
 
-    // Parse Transfer event logs to verify recipient and amount
+    // Parse Transfer event logs to verify sender, recipient, and amount
     // Transfer(address,address,uint256) topic: 0xddf252ad...
     const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+    const senderPadded = "0x" + expectedSenderWallet.slice(2).toLowerCase().padStart(64, "0");
     const treasuryPadded = "0x" + TREASURY_WALLET.slice(2).toLowerCase().padStart(64, "0");
 
     const transferLog = receipt.logs?.find(
       (log: any) =>
         log.topics?.[0] === TRANSFER_TOPIC &&
+        log.topics?.[1]?.toLowerCase() === senderPadded &&
         log.topics?.[2]?.toLowerCase() === treasuryPadded,
     );
 
     if (!transferLog) {
-      return { success: false, error: "no_transfer_to_treasury" };
+      return { success: false, error: "no_matching_transfer_from_sender_to_treasury" };
     }
 
     // Verify amount (log.data is the uint256 amount)
@@ -276,6 +281,36 @@ async function verifyFeeTxOnChain(
         success: false,
         error: `insufficient_fee_amount: got ${transferredRaw}, expected >= ${minAcceptable}`,
       };
+    }
+
+    // ── Recency check: fee tx must be in a recent block ──
+    const blockHex = receipt.blockNumber;
+    if (blockHex) {
+      try {
+        const blockRes = await fetch(POLYGON_RPC, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 2,
+            method: "eth_getBlockByNumber",
+            params: [blockHex, false],
+          }),
+        });
+        const blockData = await blockRes.json();
+        const blockTimestamp = blockData.result?.timestamp
+          ? Number(BigInt(blockData.result.timestamp))
+          : 0;
+        const nowS = Math.floor(Date.now() / 1000);
+        if (blockTimestamp > 0 && nowS - blockTimestamp > MAX_FEE_TX_AGE_S) {
+          return {
+            success: false,
+            error: `fee_tx_too_old: block_age=${nowS - blockTimestamp}s, max=${MAX_FEE_TX_AGE_S}s`,
+          };
+        }
+      } catch {
+        // If block fetch fails, allow tx through — receipt was already verified
+      }
     }
 
     return { success: true };
@@ -900,7 +935,7 @@ Deno.serve(async (req) => {
         treasury: TREASURY_WALLET,
       });
 
-      const verifyResult = await verifyFeeTxOnChain(feeTxHash, fee_usd);
+      const verifyResult = await verifyFeeTxOnChain(feeTxHash, fee_usd, normalizedWallet);
 
       if (verifyResult.success) {
         feeCollected = true;
