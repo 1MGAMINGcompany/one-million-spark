@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
     );
 
     const body = await req.json();
-    const { wallet, leagues, dry_run, provider, single_source_event_id } = body;
+    const { wallet, leagues, dry_run, provider, single_source_event_id, action } = body;
 
     // If importing a single event, force non-dry-run
     const effectiveDryRun = single_source_event_id ? false : !!dry_run;
@@ -157,6 +157,74 @@ Deno.serve(async (req) => {
 
     if (settings && !settings.automation_enabled) {
       return json({ error: "Automation is disabled by admin kill switch" }, 403);
+    }
+
+    // ══════════════════════════════════════════
+    // RE-ENRICH ACTION: Update NULL enrichment columns on existing fights
+    // ══════════════════════════════════════════
+    if (action === "re-enrich") {
+      const bdlKey = Deno.env.get("BALLDONTLIE_API_KEY");
+      const tsdbKey = Deno.env.get("THESPORTSDB_API_KEY") || "3";
+
+      const { data: unenriched } = await supabase
+        .from("prediction_fights")
+        .select("id, fighter_a_name, fighter_b_name, source, fighter_a_photo, fighter_b_photo, fighter_a_record, fighter_b_record")
+        .in("status", ["open", "locked", "live"])
+        .is("fighter_a_photo", null);
+
+      if (!unenriched || unenriched.length === 0) {
+        return json({ success: true, action: "re-enrich", enriched: 0, message: "No fights need enrichment" });
+      }
+
+      let enriched = 0;
+      const enrichErrors: string[] = [];
+
+      for (const f of unenriched) {
+        try {
+          const updates: Record<string, any> = {};
+
+          if (f.source === "balldontlie" && bdlKey) {
+            for (const [side, name] of [["a", f.fighter_a_name], ["b", f.fighter_b_name]] as const) {
+              const photoKey = `fighter_${side}_photo` as const;
+              const recordKey = `fighter_${side}_record` as const;
+              if ((f as any)[photoKey]) continue;
+              try {
+                const searchData = await bdlFetch("/fighters", bdlKey, { "search": name });
+                const fighter = searchData?.data?.[0];
+                if (fighter) {
+                  const enrich = bdlFighterEnrichment(fighter);
+                  if (enrich.photo) updates[photoKey] = enrich.photo;
+                  if (enrich.record) updates[recordKey] = enrich.record;
+                }
+              } catch { /* skip */ }
+            }
+          } else if (f.source === "thesportsdb") {
+            for (const [side, name] of [["a", f.fighter_a_name], ["b", f.fighter_b_name]] as const) {
+              const photoKey = `fighter_${side}_photo` as const;
+              if ((f as any)[photoKey]) continue;
+              const enrich = await tsdbLookupFighter(name, tsdbKey);
+              if (enrich.photo) updates[`fighter_${side}_photo`] = enrich.photo;
+              if (enrich.record) updates[`fighter_${side}_record`] = enrich.record;
+            }
+          }
+
+          if (Object.keys(updates).length > 0) {
+            await supabase.from("prediction_fights").update(updates).eq("id", f.id);
+            enriched++;
+          }
+        } catch (err: any) {
+          enrichErrors.push(`${f.id}: ${err.message}`);
+        }
+      }
+
+      await supabase.from("automation_logs").insert({
+        action: "re_enrich_completed",
+        source: "prediction-ingest",
+        details: { total: unenriched.length, enriched, errors: enrichErrors },
+        admin_wallet: wallet,
+      });
+
+      return json({ success: true, action: "re-enrich", total: unenriched.length, enriched, errors: enrichErrors });
     }
 
     const now = new Date();
@@ -849,6 +917,7 @@ Deno.serve(async (req) => {
         }
       }
     }
+
 
     // ── Log summary ──
     await supabase.from("automation_logs").insert({

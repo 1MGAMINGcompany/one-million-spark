@@ -1153,6 +1153,41 @@ export type Database = {
           },
         ]
       }
+      prediction_fight_updates: {
+        Row: {
+          content: string
+          created_at: string | null
+          fight_id: string
+          id: string
+          impact: string | null
+          source: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          fight_id: string
+          id?: string
+          impact?: string | null
+          source?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          fight_id?: string
+          id?: string
+          impact?: string | null
+          source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prediction_fight_updates_fight_id_fkey"
+            columns: ["fight_id"]
+            isOneToOne: false
+            referencedRelation: "prediction_fights"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       prediction_fights: {
         Row: {
           auto_resolve: boolean

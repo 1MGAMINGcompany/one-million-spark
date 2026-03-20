@@ -48,6 +48,7 @@ import HelpCenter from "./pages/HelpCenter";
 import HelpArticle from "./pages/HelpArticle";
 import FightPredictions from "./pages/FightPredictions";
 import FightPredictionAdmin from "./pages/FightPredictionAdmin";
+import MatchCenter from "./pages/MatchCenter";
 import ReferralAdmin from "./pages/ReferralAdmin";
 import DebugHUD from "./components/DebugHUD";
 import AIAgentHelperOverlay from "./components/AIAgentHelperOverlay";
@@ -147,6 +148,7 @@ const AppContent = () => {
           <Route path="/player/:wallet" element={<PlayerProfile />} />
           <Route path="/leaderboard/:game" element={<Leaderboard />} />
           <Route path="/predictions" element={<FightPredictions />} />
+          <Route path="/predictions/:fightId" element={<MatchCenter />} />
           <Route path="/predictions/admin" element={<FightPredictionAdmin />} />
           <Route path="/referrals/admin" element={<ReferralAdmin />} />
           <Route path="/debug/join" element={isDebugEnabled() ? <DebugJoinRoom /> : <Navigate to="/" replace />} />
