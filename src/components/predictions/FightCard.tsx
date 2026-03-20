@@ -1,9 +1,10 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Swords, Trophy, Loader2, HelpCircle } from "lucide-react";
+import { Swords, Trophy, Loader2, HelpCircle, ChevronRight, Newspaper } from "lucide-react";
 
-interface Fight {
+export interface Fight {
   id: string;
   title: string;
   fighter_a_name: string;
@@ -39,6 +40,7 @@ interface Fight {
   fighter_b_record?: string | null;
   venue?: string | null;
   referee?: string | null;
+  has_updates?: boolean;
 }
 
 function buildQuestion(fight: Fight, isSoccer: boolean): string {
@@ -106,7 +108,7 @@ function getProbabilities(fight: Fight): { probA: number; probB: number } | null
 }
 
 /** Probability split bar component */
-function ProbabilityBar({ probA, probB, nameA, nameB }: { probA: number; probB: number; nameA: string; nameB: string }) {
+function ProbabilityBar({ probA, probB }: { probA: number; probB: number }) {
   return (
     <div className="w-full">
       <div className="flex justify-between text-[10px] font-bold mb-1">
@@ -141,29 +143,49 @@ function PolymarketBadge() {
   );
 }
 
-/** Pool strip for Polymarket events — shows live odds instead of $0 */
-function PolymarketPoolStrip({ fight, isSoccer }: { fight: Fight; isSoccer: boolean }) {
+/** USDC per-side display for Polymarket events */
+function PolymarketPoolStrip({ fight }: { fight: Fight }) {
   const probs = getProbabilities(fight);
-  if (!probs) {
-    return (
-      <div className="flex flex-col items-center gap-1">
-        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Liquidity</span>
-        <PolymarketBadge />
-      </div>
-    );
-  }
+  const { poolA, poolB } = getPoolUsd(fight);
+  const hasPool = poolA > 0 || poolB > 0;
+
   return (
     <div className="w-full space-y-2">
-      <ProbabilityBar
-        probA={probs.probA}
-        probB={probs.probB}
-        nameA={fight.fighter_a_name}
-        nameB={fight.fighter_b_name}
-      />
-      <div className="flex items-center justify-center">
+      {probs && (
+        <ProbabilityBar probA={probs.probA} probB={probs.probB} />
+      )}
+      {/* Always show USDC per side */}
+      <div className="flex items-center justify-between text-[10px]">
+        <div className="text-center">
+          <span className="block font-bold text-foreground text-xs">
+            {hasPool ? `$${poolA.toFixed(2)}` : "Market"}
+          </span>
+          <span className="text-muted-foreground">{fight.fighter_a_name.split(" ").pop()}</span>
+        </div>
         <PolymarketBadge />
+        <div className="text-center">
+          <span className="block font-bold text-foreground text-xs">
+            {hasPool ? `$${poolB.toFixed(2)}` : "Market"}
+          </span>
+          <span className="text-muted-foreground">{fight.fighter_b_name.split(" ").pop()}</span>
+        </div>
       </div>
     </div>
+  );
+}
+
+/** View Details link */
+function ViewDetailsLink({ fightId, hasUpdates }: { fightId: string; hasUpdates?: boolean }) {
+  const navigate = useNavigate();
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); navigate(`/predictions/${fightId}`); }}
+      className="flex items-center gap-1 text-[10px] text-primary/70 hover:text-primary font-semibold transition-colors group"
+    >
+      {hasUpdates && <Newspaper className="w-3 h-3 text-primary animate-pulse" />}
+      View Details
+      <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+    </button>
   );
 }
 
@@ -193,7 +215,7 @@ export default function FightCard({
   const { poolA, poolB } = getPoolUsd(fight);
   const { oddsA, oddsB } = calcOdds(poolA, poolB, fight.price_a, fight.price_b);
   const totalPool = poolA + poolB;
-  const isPolymarketPool = fight.source === "polymarket" && totalPool === 0;
+  const isPolymarket = fight.source === "polymarket";
   const isFeatured = fight.featured === true;
 
   const isClaimable = ["confirmed", "settled"].includes(fight.status);
@@ -246,6 +268,7 @@ export default function FightCard({
             <SoccerTeamColumn
               name={fight.fighter_a_name}
               odds={oddsA}
+              poolAmount={poolA}
               canPredict={canPredict}
               onPredict={() => wallet ? onPredict(fight, "fighter_a") : onWalletRequired?.()}
               logo={hasLogos ? fight.home_logo : undefined}
@@ -257,6 +280,7 @@ export default function FightCard({
             <SoccerTeamColumn
               name={fight.fighter_b_name}
               odds={oddsB}
+              poolAmount={poolB}
               canPredict={canPredict}
               onPredict={() => wallet ? onPredict(fight, "fighter_b") : onWalletRequired?.()}
               logo={hasLogos ? fight.away_logo : undefined}
@@ -265,10 +289,10 @@ export default function FightCard({
           </div>
         </div>
 
-        {/* Pool strip / Polymarket odds */}
+        {/* Pool strip */}
         <div className="bg-primary/8 border-t border-primary/15 px-4 sm:px-6 py-3">
-          {isPolymarketPool ? (
-            <PolymarketPoolStrip fight={fight} isSoccer={true} />
+          {isPolymarket ? (
+            <PolymarketPoolStrip fight={fight} />
           ) : (
             <div className="flex items-center justify-between">
               <div className="flex flex-col">
@@ -291,13 +315,14 @@ export default function FightCard({
           )}
         </div>
 
-        {/* Venue / referee info */}
-        {(fight.venue || fight.referee) && (
-          <div className="px-4 sm:px-6 py-2 border-t border-border/10 flex items-center gap-3 text-[10px] text-muted-foreground">
+        {/* Venue / referee info + View Details */}
+        <div className="px-4 sm:px-6 py-2 border-t border-border/10 flex items-center justify-between">
+          <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
             {fight.venue && <span>📍 {fight.venue}</span>}
             {fight.referee && <span>🏁 {fight.referee}</span>}
           </div>
-        )}
+          <ViewDetailsLink fightId={fight.id} hasUpdates={fight.has_updates} />
+        </div>
 
         {/* Draw info */}
         {["draw", "refund_pending", "refunds_processing", "refunds_complete"].includes(fight.status) && (
@@ -387,7 +412,6 @@ export default function FightCard({
             onPredict={() => wallet ? onPredict(fight, "fighter_a") : onWalletRequired?.()}
             photo={fight.fighter_a_photo}
             record={fight.fighter_a_record}
-            isPolymarket={isPolymarketPool}
           />
           <div className="flex flex-col items-center gap-0.5">
             <Swords className="w-5 h-5 text-primary/60" />
@@ -402,14 +426,13 @@ export default function FightCard({
             onPredict={() => wallet ? onPredict(fight, "fighter_b") : onWalletRequired?.()}
             photo={fight.fighter_b_photo}
             record={fight.fighter_b_record}
-            isPolymarket={isPolymarketPool}
           />
         </div>
 
-        {/* Polymarket probability bar OR native pool */}
+        {/* Pool / odds strip */}
         <div className="mt-3 pt-3 border-t border-border/30">
-          {isPolymarketPool ? (
-            <PolymarketPoolStrip fight={fight} isSoccer={false} />
+          {isPolymarket ? (
+            <PolymarketPoolStrip fight={fight} />
           ) : (
             <div className="flex items-center justify-between">
               <span className="text-[10px] text-muted-foreground">Total Pool</span>
@@ -418,13 +441,14 @@ export default function FightCard({
           )}
         </div>
 
-        {/* Venue / referee metadata */}
-        {(fight.venue || fight.referee) && (
-          <div className="mt-2 flex items-center gap-3 text-[10px] text-muted-foreground">
+        {/* Venue / referee + View Details */}
+        <div className="mt-2 flex items-center justify-between">
+          <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
             {fight.venue && <span>📍 {fight.venue}</span>}
             {fight.referee && <span>🏁 {fight.referee}</span>}
           </div>
-        )}
+          <ViewDetailsLink fightId={fight.id} hasUpdates={fight.has_updates} />
+        </div>
 
         {/* Draw info */}
         {["draw", "refund_pending", "refunds_processing", "refunds_complete"].includes(fight.status) && (
@@ -462,12 +486,12 @@ export default function FightCard({
 }
 
 function FighterColumn({
-  name, poolAmount, odds, isWinner, canPredict, onPredict, logo, isSoccer, photo, record, isPolymarket,
+  name, poolAmount, odds, isWinner, canPredict, onPredict, logo, isSoccer, photo, record,
 }: {
   name: string; poolAmount: number; odds: number; isWinner: boolean;
   canPredict: boolean; onPredict: () => void;
   logo?: string | null; isSoccer?: boolean; photo?: string | null;
-  record?: string | null; isPolymarket?: boolean;
+  record?: string | null;
 }) {
   const [imgError, setImgError] = useState(false);
   const showLogo = logo && !imgError;
@@ -502,11 +526,9 @@ function FighterColumn({
       {record && (
         <p className="text-[10px] text-muted-foreground font-medium mt-0.5">{record}</p>
       )}
-      {!isPolymarket && (
-        <p className={`text-muted-foreground mt-1 ${isSoccer ? 'text-xs sm:text-sm' : 'text-xs'}`}>
-          ${poolAmount.toFixed(2)}
-        </p>
-      )}
+      <p className={`text-muted-foreground mt-1 ${isSoccer ? 'text-xs sm:text-sm' : 'text-xs'}`}>
+        ${poolAmount.toFixed(2)} USDC
+      </p>
       <p className={`text-primary font-bold ${isSoccer ? 'text-xl sm:text-2xl' : 'text-lg'}`}>{odds.toFixed(2)}x</p>
       {canPredict && (
         <Button size="sm" className={`mt-2 w-full bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.97] transition-all ${isSoccer ? 'text-sm py-2.5 font-bold' : 'text-xs'}`} onClick={onPredict}>
@@ -524,9 +546,9 @@ function FighterColumn({
 }
 
 function SoccerTeamColumn({
-  name, odds, canPredict, onPredict, logo, isWinner,
+  name, odds, poolAmount, canPredict, onPredict, logo, isWinner,
 }: {
-  name: string; odds: number; canPredict: boolean; onPredict: () => void;
+  name: string; odds: number; poolAmount: number; canPredict: boolean; onPredict: () => void;
   logo?: string | null; isWinner: boolean;
 }) {
   const [logoError, setLogoError] = useState(false);
@@ -548,6 +570,7 @@ function SoccerTeamColumn({
         </div>
       )}
       <p className="font-bold text-foreground text-sm sm:text-base leading-tight mt-0.5">{name}</p>
+      <p className="text-[10px] text-muted-foreground">${poolAmount.toFixed(2)} USDC</p>
       <p className="text-xl sm:text-2xl font-bold text-primary leading-none">{odds.toFixed(2)}x</p>
       {canPredict && (
         <Button
@@ -567,5 +590,3 @@ function SoccerTeamColumn({
     </div>
   );
 }
-
-export type { Fight };
