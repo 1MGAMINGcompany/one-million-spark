@@ -53,10 +53,11 @@ export function usePrivyFeeTransfer() {
             chainId: 137, // Polygon mainnet
           },
           {
-            // Privy UI config — embedded wallets won't show popup
-            header: "Platform Fee",
-            description: `$${feeUsdc.toFixed(2)} USDC platform fee`,
-            buttonText: "Confirm Fee",
+            uiOptions: {
+              header: "Platform Fee",
+              description: `$${feeUsdc.toFixed(2)} USDC platform fee`,
+              buttonText: "Confirm Fee",
+            },
           }
         );
 
