@@ -1431,6 +1431,7 @@ export type Database = {
           expected_price: number | null
           expected_shares: number | null
           fee_bps: number
+          fee_tx_hash: string | null
           fee_usdc: number
           fight_id: string
           filled_amount_usdc: number
@@ -1460,6 +1461,7 @@ export type Database = {
           expected_price?: number | null
           expected_shares?: number | null
           fee_bps?: number
+          fee_tx_hash?: string | null
           fee_usdc?: number
           fight_id: string
           filled_amount_usdc?: number
@@ -1489,6 +1491,7 @@ export type Database = {
           expected_price?: number | null
           expected_shares?: number | null
           fee_bps?: number
+          fee_tx_hash?: string | null
           fee_usdc?: number
           fight_id?: string
           filled_amount_usdc?: number
