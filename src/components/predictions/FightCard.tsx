@@ -38,6 +38,26 @@ interface Fight {
   featured?: boolean;
 }
 
+/** Build a clear human-readable prediction question from the fight data */
+function buildQuestion(fight: Fight, isSoccer: boolean): string {
+  // Polymarket titles are already questions (e.g. "Will Villarreal CF win?")
+  if (fight.source === "polymarket" && fight.title && fight.title.includes("?")) {
+    return fight.title;
+  }
+  if (isSoccer) {
+    return `Who will win: ${fight.fighter_a_name} or ${fight.fighter_b_name}?`;
+  }
+  return `Who wins: ${fight.fighter_a_name} vs ${fight.fighter_b_name}?`;
+}
+
+/** Sport-specific fallback icon */
+function SportFallbackIcon({ isSoccer, className }: { isSoccer: boolean; className?: string }) {
+  if (isSoccer) {
+    return <span className={className || "text-2xl"}>⚽</span>;
+  }
+  return <span className={className || "text-2xl"}>🥊</span>;
+}
+
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {
   open: { label: "OPEN", className: "bg-green-500/20 text-green-400" },
   locked: { label: "LOCKED", className: "bg-yellow-500/20 text-yellow-400" },
