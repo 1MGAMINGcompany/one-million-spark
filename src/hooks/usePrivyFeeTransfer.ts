@@ -54,9 +54,7 @@ export function usePrivyFeeTransfer() {
           },
           {
             uiOptions: {
-              header: "Platform Fee",
               description: `$${feeUsdc.toFixed(2)} USDC platform fee`,
-              buttonText: "Confirm Fee",
             },
           }
         );
