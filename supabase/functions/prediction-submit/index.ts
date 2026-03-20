@@ -273,13 +273,14 @@ async function verifyFeeTxOnChain(
     // Verify amount (log.data is the uint256 amount)
     const transferredRaw = BigInt(transferLog.data);
     const expectedRaw = BigInt(Math.floor(expectedFeeUsdc * 10 ** USDC_DECIMALS));
-    // Allow 1% tolerance for rounding
-    const minAcceptable = (expectedRaw * 99n) / 100n;
+    // Strict USDC match: allow at most 1 base unit (0.000001 USDC) tolerance
+    // to absorb floating-point → integer truncation on the client side.
+    const minAcceptable = expectedRaw > 0n ? expectedRaw - 1n : 0n;
 
     if (transferredRaw < minAcceptable) {
       return {
         success: false,
-        error: `insufficient_fee_amount: got ${transferredRaw}, expected >= ${minAcceptable}`,
+        error: `insufficient_fee_amount: got ${transferredRaw}, expected >= ${minAcceptable} (exact - 1 base unit)`,
       };
     }
 
