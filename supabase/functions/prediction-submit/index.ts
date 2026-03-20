@@ -1,14 +1,15 @@
 import { createClient } from "@supabase/supabase-js";
 import { createRemoteJWKSet, jwtVerify } from "npm:jose@5";
+import { privateKeyToAccount } from "viem/accounts";
 
 /**
  * prediction-submit — Production trade execution gateway.
  *
- * Polymarket-backed events: Orders routed through user's CLOB credentials
+ * Polymarket-backed events: EIP-712 signed orders via user's CLOB credentials
  * Native 1MGAMING events: Local pool accounting only
  *
  * Lifecycle: requested → submitted → filled/partial_fill/failed
- * Explicit fee model (Pattern 2): fee shown separately, never hidden in spread.
+ * Explicit fee model: fee collected via Privy server-side USDC transfer to treasury.
  * Builder wallet is NEVER used as the user's trading identity.
  */
 
@@ -34,6 +35,39 @@ const FALLBACK_MAX_PRICE_AGE_MS = 60 * 1000; // 60 seconds
 /** Max order size (USDC) allowed when falling back to cached price */
 const FALLBACK_MAX_ORDER_USDC = 25;
 
+// ── Polymarket CTF Exchange (Polygon mainnet) ──────────────
+const CTF_EXCHANGE = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E";
+const POLYGON_CHAIN_ID = 137;
+const TREASURY_WALLET = "0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d";
+const USDC_CONTRACT = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359";
+const USDC_DECIMALS = 6;
+
+/** EIP-712 domain for Polymarket CTF Exchange orders */
+const EIP712_DOMAIN = {
+  name: "Polymarket CTF Exchange",
+  version: "1",
+  chainId: POLYGON_CHAIN_ID,
+  verifyingContract: CTF_EXCHANGE as `0x${string}`,
+} as const;
+
+/** EIP-712 typed data structure for Polymarket orders */
+const ORDER_TYPES = {
+  Order: [
+    { name: "salt", type: "uint256" },
+    { name: "maker", type: "address" },
+    { name: "signer", type: "address" },
+    { name: "taker", type: "address" },
+    { name: "tokenId", type: "uint256" },
+    { name: "makerAmount", type: "uint256" },
+    { name: "takerAmount", type: "uint256" },
+    { name: "expiration", type: "uint256" },
+    { name: "nonce", type: "uint256" },
+    { name: "feeRateBps", type: "uint256" },
+    { name: "side", type: "uint8" },
+    { name: "signatureType", type: "uint8" },
+  ],
+} as const;
+
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
@@ -42,6 +76,7 @@ const json = (data: unknown, status = 200) =>
 
 // ── Helpers ──────────────────────────────────────────────
 
+/** HMAC signature for Polymarket L2 API authentication headers */
 async function generateClobHmac(
   apiSecret: string,
   timestamp: string,
@@ -62,50 +97,213 @@ async function generateClobHmac(
   return btoa(String.fromCharCode(...new Uint8Array(sig)));
 }
 
-async function submitClobOrder(
-  session: { pm_api_key: string; pm_api_secret: string; pm_passphrase: string },
+/**
+ * Build an EIP-712 signed Polymarket CLOB order and submit it.
+ * Uses the user's derived trading key for order signing and L2 HMAC for API auth.
+ */
+async function buildAndSubmitClobOrder(
+  session: {
+    pm_api_key: string;
+    pm_api_secret: string;
+    pm_passphrase: string;
+    pm_trading_key: string;
+  },
   tokenId: string,
   price: number,
-  size: number,
+  netAmountUsdc: number,
 ): Promise<{ orderId: string | null; status: string; error?: string }> {
-  const orderBody = JSON.stringify({
-    tokenID: tokenId,
-    price: price.toFixed(2),
-    size: size.toFixed(2),
-    side: "BUY",
-    feeRateBps: 0,
-    nonce: Date.now().toString(),
-    expiration: "0",
-    taker: "0x0000000000000000000000000000000000000000",
-  });
+  try {
+    const account = privateKeyToAccount(session.pm_trading_key as `0x${string}`);
 
-  const timestamp = Math.floor(Date.now() / 1000).toString();
-  const path = "/order";
-  const hmac = await generateClobHmac(session.pm_api_secret, timestamp, "POST", path, orderBody);
+    // Calculate raw amounts (6 decimal precision, matching Polymarket's USDC.e / CT)
+    const makerAmountRaw = BigInt(Math.floor(netAmountUsdc * 10 ** USDC_DECIMALS));
+    const shares = netAmountUsdc / price;
+    const takerAmountRaw = BigInt(Math.floor(shares * 10 ** USDC_DECIMALS));
 
-  const res = await fetch(`${CLOB_BASE}${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "POLY_API_KEY": session.pm_api_key,
-      "POLY_SIGNATURE": hmac,
-      "POLY_PASSPHRASE": session.pm_passphrase,
-      "POLY_TIMESTAMP": timestamp,
-    },
-    body: orderBody,
-  });
+    // Generate cryptographic salt for order uniqueness
+    const saltBytes = new Uint8Array(16);
+    crypto.getRandomValues(saltBytes);
+    const salt = BigInt(
+      "0x" + Array.from(saltBytes).map((b) => b.toString(16).padStart(2, "0")).join(""),
+    );
 
-  if (!res.ok) {
-    const errText = await res.text();
-    console.error(`[prediction-submit] CLOB order failed (${res.status}): ${errText}`);
-    return { orderId: null, status: "clob_error", error: errText };
+    const orderMessage = {
+      salt,
+      maker: account.address as `0x${string}`,
+      signer: account.address as `0x${string}`,
+      taker: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+      tokenId: BigInt(tokenId),
+      makerAmount: makerAmountRaw,
+      takerAmount: takerAmountRaw,
+      expiration: 0n,
+      nonce: 0n,
+      feeRateBps: 0n,
+      side: 0, // BUY
+      signatureType: 0, // EOA
+    };
+
+    // EIP-712 sign the order with the derived trading key
+    const signature = await account.signTypedData({
+      domain: EIP712_DOMAIN,
+      types: ORDER_TYPES,
+      primaryType: "Order",
+      message: orderMessage,
+    });
+
+    // Build POST /order body matching Polymarket CLOB format
+    const orderBody = JSON.stringify({
+      order: {
+        salt: salt.toString(),
+        maker: account.address,
+        signer: account.address,
+        taker: "0x0000000000000000000000000000000000000000",
+        tokenID: tokenId,
+        makerAmount: makerAmountRaw.toString(),
+        takerAmount: takerAmountRaw.toString(),
+        expiration: "0",
+        nonce: "0",
+        feeRateBps: "0",
+        side: "BUY",
+        signatureType: 0,
+        signature,
+      },
+      owner: account.address,
+      orderType: "GTC",
+    });
+
+    // L2 HMAC authentication headers
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const path = "/order";
+    const hmac = await generateClobHmac(session.pm_api_secret, timestamp, "POST", path, orderBody);
+
+    const res = await fetch(`${CLOB_BASE}${path}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        POLY_API_KEY: session.pm_api_key,
+        POLY_SIGNATURE: hmac,
+        POLY_PASSPHRASE: session.pm_passphrase,
+        POLY_TIMESTAMP: timestamp,
+      },
+      body: orderBody,
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error(`[prediction-submit] CLOB order failed (${res.status}): ${errText}`);
+      return { orderId: null, status: "clob_error", error: errText };
+    }
+
+    const data = await res.json();
+    return {
+      orderId: data.orderID || data.id || null,
+      status: data.orderID ? "submitted" : "accepted",
+    };
+  } catch (err) {
+    console.error("[prediction-submit] EIP-712 order signing/submission failed:", err);
+    return {
+      orderId: null,
+      status: "signing_error",
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+/**
+ * Transfer USDC fee from user's Privy embedded wallet to treasury.
+ * Uses Privy server-side wallet API (requires PRIVY_APP_SECRET).
+ */
+async function transferFeeViaPrivy(
+  privyDid: string,
+  feeUsdc: number,
+): Promise<{ success: boolean; txHash?: string; error?: string }> {
+  const appId = Deno.env.get("VITE_PRIVY_APP_ID");
+  const appSecret = Deno.env.get("PRIVY_APP_SECRET");
+
+  if (!appId || !appSecret) {
+    return { success: false, error: "privy_server_not_configured" };
   }
 
-  const data = await res.json();
-  return {
-    orderId: data.orderID || data.id || null,
-    status: data.orderID ? "submitted" : "accepted",
-  };
+  try {
+    const basicAuth = btoa(`${appId}:${appSecret}`);
+
+    // Step 1: Look up user's Privy wallet ID from DID
+    const userRes = await fetch(`https://api.privy.io/v1/users/${privyDid}`, {
+      headers: {
+        Authorization: `Basic ${basicAuth}`,
+        "privy-app-id": appId,
+      },
+    });
+
+    if (!userRes.ok) {
+      const errBody = await userRes.text();
+      return {
+        success: false,
+        error: `privy_user_lookup_failed_${userRes.status}: ${errBody.substring(0, 200)}`,
+      };
+    }
+
+    const userData = await userRes.json();
+    const embeddedWallet = userData.linked_accounts?.find(
+      (a: any) =>
+        a.type === "wallet" &&
+        a.wallet_client_type === "privy" &&
+        a.chain_type === "ethereum",
+    );
+
+    if (!embeddedWallet?.id) {
+      return { success: false, error: "privy_wallet_not_found" };
+    }
+
+    // Step 2: Encode ERC20 transfer(address,uint256) calldata
+    const feeRaw = BigInt(Math.floor(feeUsdc * 10 ** USDC_DECIMALS));
+    const transferSelector = "a9059cbb";
+    const paddedTo = TREASURY_WALLET.slice(2).toLowerCase().padStart(64, "0");
+    const paddedAmount = feeRaw.toString(16).padStart(64, "0");
+    const calldata = `0x${transferSelector}${paddedTo}${paddedAmount}`;
+
+    // Step 3: Execute USDC transfer via Privy server-side wallet API
+    const txRes = await fetch(
+      `https://api.privy.io/v1/wallets/${embeddedWallet.id}/rpc`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${basicAuth}`,
+          "privy-app-id": appId,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          method: "eth_sendTransaction",
+          caip2: "eip155:137", // Polygon mainnet
+          chain_type: "ethereum",
+          params: {
+            transaction: {
+              to: USDC_CONTRACT,
+              data: calldata,
+              value: "0x0",
+            },
+          },
+        }),
+      },
+    );
+
+    if (!txRes.ok) {
+      const errText = await txRes.text();
+      return {
+        success: false,
+        error: `privy_tx_failed_${txRes.status}: ${errText.substring(0, 200)}`,
+      };
+    }
+
+    const txData = await txRes.json();
+    const txHash = txData.data?.hash || txData.data?.transaction_hash || txData.hash || null;
+    return { success: true, txHash };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
 }
 
 /** Compact audit log writer — never includes secrets */
@@ -158,31 +356,38 @@ Deno.serve(async (req) => {
   let normalizedWallet: string | null = null;
 
   // ── Optional Privy JWT extraction for identity binding ──
-  // If present, we extract the trusted DID to bind to prediction_accounts.
-  // Not required for trade submission (wallet is still the primary key),
-  // but enables server-side ownership resolution in other endpoints.
   let privyDid: string | null = null;
   {
     const privyToken = req.headers.get("x-privy-token");
     const appId = Deno.env.get("VITE_PRIVY_APP_ID");
     if (privyToken && privyToken.length >= 20 && appId) {
       try {
-        const jwks = createRemoteJWKSet(new URL("https://auth.privy.io/.well-known/jwks.json"));
+        const jwks = createRemoteJWKSet(
+          new URL("https://auth.privy.io/.well-known/jwks.json"),
+        );
         const { payload } = await jwtVerify(privyToken, jwks, {
           issuer: "privy.io",
           audience: appId,
         });
         privyDid = (payload.sub as string) || null;
       } catch (e) {
-        // Non-fatal: DID binding is best-effort during submission
-        console.warn("[prediction-submit] Privy JWT extraction failed (non-fatal):", (e as Error).message);
+        console.warn(
+          "[prediction-submit] Privy JWT extraction failed (non-fatal):",
+          (e as Error).message,
+        );
       }
     }
   }
 
   try {
     const body = await req.json();
-    const { fight_id, wallet, fighter_pick, amount_usd, slippage_bps: clientSlippage } = body;
+    const {
+      fight_id,
+      wallet,
+      fighter_pick,
+      amount_usd,
+      slippage_bps: clientSlippage,
+    } = body;
 
     normalizedWallet = wallet ? String(wallet).trim().toLowerCase() : null;
 
@@ -258,7 +463,6 @@ Deno.serve(async (req) => {
     // ═══════════════════════════════════════════════════
     let accountId: string | null = null;
     {
-      // Prefer lookup by privy_did if available (trusted identity)
       let existing: { id: string } | null = null;
       if (privyDid) {
         const { data } = await supabase
@@ -268,7 +472,6 @@ Deno.serve(async (req) => {
           .maybeSingle();
         existing = data;
       }
-      // Fallback: lookup by wallet_evm (backward compat for pre-DID accounts)
       if (!existing) {
         const { data } = await supabase
           .from("prediction_accounts")
@@ -280,7 +483,6 @@ Deno.serve(async (req) => {
 
       if (existing) {
         accountId = existing.id;
-        // Update: bind privy_did if newly available, refresh last_active_at
         const updatePayload: Record<string, unknown> = {
           last_active_at: new Date().toISOString(),
           wallet_evm: normalizedWallet,
@@ -319,7 +521,8 @@ Deno.serve(async (req) => {
         .not("status", "in", '("failed","cancelled")');
 
       const dailyTotal = (recentOrders || []).reduce(
-        (sum: number, o: { requested_amount_usdc: number }) => sum + Number(o.requested_amount_usdc),
+        (sum: number, o: { requested_amount_usdc: number }) =>
+          sum + Number(o.requested_amount_usdc),
         0,
       );
 
@@ -342,15 +545,21 @@ Deno.serve(async (req) => {
       await auditLog(supabase, null, normalizedWallet, "trade_failed", { fight_id }, { reason: "fight_not_found" });
       return json({ error: "Fight not found" }, 404);
     }
+
     // ═══════════════════════════════════════════════════
     // VALIDATE FIGHT STATUS (tradability gate)
     // ═══════════════════════════════════════════════════
     if (!TRADABLE_STATUSES.has(fight.status)) {
-      const errorCode = fight.status === "locked" ? "market_locked"
-        : fight.status === "live" ? "market_locked"
-        : fight.status === "settled" || fight.status === "confirmed" ? "market_settled"
-        : fight.status === "cancelled" ? "market_cancelled"
-        : "market_not_tradable";
+      const errorCode =
+        fight.status === "locked"
+          ? "market_locked"
+          : fight.status === "live"
+            ? "market_locked"
+            : fight.status === "settled" || fight.status === "confirmed"
+              ? "market_settled"
+              : fight.status === "cancelled"
+                ? "market_cancelled"
+                : "market_not_tradable";
 
       await auditLog(supabase, null, normalizedWallet, "tradability_check_failed", { fight_id, fight_status: fight.status }, { error_code: errorCode });
       return json({ error: "This market is no longer open for predictions", error_code: errorCode, fight_status: fight.status }, 400);
@@ -372,19 +581,22 @@ Deno.serve(async (req) => {
     }
 
     // ═══════════════════════════════════════════════════
-    // SOURCE-AWARE ROUTING PREP (moved up for validation)
+    // SOURCE-AWARE ROUTING PREP
     // ═══════════════════════════════════════════════════
-    const isPolymarketBacked = !!(fight.polymarket_market_id && fight.polymarket_outcome_a_token);
+    const isPolymarketBacked = !!(
+      fight.polymarket_market_id && fight.polymarket_outcome_a_token
+    );
 
     const tokenId = isPolymarketBacked
-      ? (fighter_pick === "fighter_a" ? fight.polymarket_outcome_a_token : fight.polymarket_outcome_b_token)
+      ? fighter_pick === "fighter_a"
+        ? fight.polymarket_outcome_a_token
+        : fight.polymarket_outcome_b_token
       : null;
 
     // ═══════════════════════════════════════════════════
     // POLYMARKET-SPECIFIC VALIDATIONS
     // ═══════════════════════════════════════════════════
     if (isPolymarketBacked) {
-      // 1) Required market mapping
       if (!fight.polymarket_market_id) {
         await auditLog(supabase, null, normalizedWallet, "tradability_check_failed", { fight_id }, { error_code: "missing_market_mapping", field: "polymarket_market_id" });
         return json({ error: "Market configuration incomplete", error_code: "missing_market_mapping" }, 400);
@@ -394,24 +606,28 @@ Deno.serve(async (req) => {
         return json({ error: "Market token configuration incomplete for this outcome", error_code: "missing_market_mapping" }, 400);
       }
 
-      // 2) Polymarket active flag (source of truth: prediction_fights.polymarket_active)
       if (fight.polymarket_active === false) {
         await auditLog(supabase, null, normalizedWallet, "tradability_check_failed", { fight_id }, { error_code: "market_inactive" });
         return json({ error: "This Polymarket market is no longer active", error_code: "market_inactive" }, 400);
       }
 
-      // 3) Polymarket end date check
-      if (fight.polymarket_end_date && new Date(fight.polymarket_end_date) <= new Date()) {
+      if (
+        fight.polymarket_end_date &&
+        new Date(fight.polymarket_end_date) <= new Date()
+      ) {
         await auditLog(supabase, null, normalizedWallet, "tradability_check_failed", { fight_id }, { error_code: "market_expired", end_date: fight.polymarket_end_date });
         return json({ error: "This market has expired", error_code: "market_expired" }, 400);
       }
 
-      // 4) Quote freshness check (reject if cached price older than threshold)
-      const lastSynced = fight.polymarket_last_synced_at ? new Date(fight.polymarket_last_synced_at).getTime() : 0;
+      const lastSynced = fight.polymarket_last_synced_at
+        ? new Date(fight.polymarket_last_synced_at).getTime()
+        : 0;
       const priceAge = Date.now() - lastSynced;
       if (lastSynced === 0 || priceAge > MAX_PRICE_STALENESS_MS) {
         await auditLog(supabase, null, normalizedWallet, "stale_quote_rejected", { fight_id }, {
-          error_code: "stale_quote", price_age_ms: priceAge, threshold_ms: MAX_PRICE_STALENESS_MS,
+          error_code: "stale_quote",
+          price_age_ms: priceAge,
+          threshold_ms: MAX_PRICE_STALENESS_MS,
           last_synced: fight.polymarket_last_synced_at || "never",
         });
         return json({ error: "Market price data is stale. Please try again shortly.", error_code: "stale_quote" }, 400);
@@ -421,57 +637,82 @@ Deno.serve(async (req) => {
     // ═══════════════════════════════════════════════════
     // 6) EXPLICIT FEE MODEL
     // ═══════════════════════════════════════════════════
-    const systemFeeBps = controls ? Number(controls.default_fee_bps) : LEGACY_DEFAULT_FEE_BPS;
-    const effectiveFeeBps = fight.commission_bps != null ? Number(fight.commission_bps) : systemFeeBps;
-    const fee_usd = Number((parsedAmount * effectiveFeeBps / 10_000).toFixed(6));
+    const systemFeeBps = controls
+      ? Number(controls.default_fee_bps)
+      : LEGACY_DEFAULT_FEE_BPS;
+    const effectiveFeeBps =
+      fight.commission_bps != null
+        ? Number(fight.commission_bps)
+        : systemFeeBps;
+    const fee_usd = Number(
+      ((parsedAmount * effectiveFeeBps) / 10_000).toFixed(6),
+    );
     const net_amount_usdc = Number((parsedAmount - fee_usd).toFixed(6));
     const shares = Math.floor(net_amount_usdc * 100);
 
     // Slippage: use client value capped by system max
-    const systemMaxSlippage = controls ? Number(controls.max_slippage_bps) : 300;
-    const effectiveSlippage = clientSlippage != null
-      ? Math.min(Number(clientSlippage), systemMaxSlippage)
-      : systemMaxSlippage;
+    const systemMaxSlippage = controls
+      ? Number(controls.max_slippage_bps)
+      : 300;
+    const effectiveSlippage =
+      clientSlippage != null
+        ? Math.min(Number(clientSlippage), systemMaxSlippage)
+        : systemMaxSlippage;
 
     // Expected price from cached data
     const expectedPrice = isPolymarketBacked
-      ? Number(fighter_pick === "fighter_a" ? (fight.price_a || 0.5) : (fight.price_b || 0.5))
+      ? Number(
+          fighter_pick === "fighter_a"
+            ? fight.price_a || 0.5
+            : fight.price_b || 0.5,
+        )
       : null;
 
     // ═══════════════════════════════════════════════════
     // SLIPPAGE CHECK — fetch live price and compare
     // ═══════════════════════════════════════════════════
-    if (isPolymarketBacked && tokenId && expectedPrice != null && expectedPrice > 0) {
+    if (
+      isPolymarketBacked &&
+      tokenId &&
+      expectedPrice != null &&
+      expectedPrice > 0
+    ) {
       try {
-        const priceRes = await fetch(`${CLOB_BASE}/price?token_id=${tokenId}&side=BUY`);
+        const priceRes = await fetch(
+          `${CLOB_BASE}/price?token_id=${tokenId}&side=BUY`,
+        );
         if (priceRes.ok) {
           const priceData = await priceRes.json();
           const livePrice = parseFloat(priceData?.price || "0");
 
           if (livePrice > 0) {
-            const slippageBps = Math.abs(livePrice - expectedPrice) / expectedPrice * 10_000;
+            const slippageBps =
+              (Math.abs(livePrice - expectedPrice) / expectedPrice) * 10_000;
             if (slippageBps > effectiveSlippage) {
               await auditLog(supabase, null, normalizedWallet, "slippage_rejected", { fight_id, token_id: tokenId }, {
                 error_code: "slippage_exceeded",
-                expected_price: expectedPrice, live_price: livePrice,
-                slippage_bps: Math.round(slippageBps), max_slippage_bps: effectiveSlippage,
-              });
-              return json({
-                error: "Price has moved beyond acceptable range. Please retry.",
-                error_code: "slippage_exceeded",
                 expected_price: expectedPrice,
                 live_price: livePrice,
-              }, 400);
+                slippage_bps: Math.round(slippageBps),
+                max_slippage_bps: effectiveSlippage,
+              });
+              return json(
+                {
+                  error: "Price has moved beyond acceptable range. Please retry.",
+                  error_code: "slippage_exceeded",
+                  expected_price: expectedPrice,
+                  live_price: livePrice,
+                },
+                400,
+              );
             }
           } else {
-            // Live price returned 0/invalid — treat as fetch failure
             throw new Error("live_price_zero");
           }
         } else {
           throw new Error(`clob_http_${priceRes.status}`);
         }
       } catch (slipErr) {
-        // ── LIVE PRICE UNAVAILABLE — strict fallback gate ──
         console.warn("[prediction-submit] Live price check failed:", slipErr);
         await auditLog(supabase, null, normalizedWallet, "live_price_fetch_failed", { fight_id, token_id: tokenId }, {
           error: String(slipErr),
@@ -499,10 +740,13 @@ Deno.serve(async (req) => {
             polymarket_active: fight.polymarket_active,
             has_token: !!tokenId,
           });
-          return json({
-            error: "Live pricing unavailable. Please try again in a moment.",
-            error_code: "live_price_unavailable",
-          }, 503);
+          return json(
+            {
+              error: "Live pricing unavailable. Please try again in a moment.",
+              error_code: "live_price_unavailable",
+            },
+            503,
+          );
         }
 
         await auditLog(supabase, null, normalizedWallet, "cached_price_fallback_allowed", { fight_id }, {
@@ -513,7 +757,10 @@ Deno.serve(async (req) => {
     }
 
     await auditLog(supabase, null, normalizedWallet, "controls_passed", {
-      fight_id, fee_bps: effectiveFeeBps, slippage_bps: effectiveSlippage, is_polymarket: isPolymarketBacked,
+      fight_id,
+      fee_bps: effectiveFeeBps,
+      slippage_bps: effectiveSlippage,
+      is_polymarket: isPolymarketBacked,
     });
 
     // ═══════════════════════════════════════════════════
@@ -545,8 +792,71 @@ Deno.serve(async (req) => {
     tradeOrderId = tradeOrder.id;
 
     await auditLog(supabase, tradeOrderId, normalizedWallet, "trade_record_created", {
-      requested_amount_usdc: parsedAmount, fee_usdc: fee_usd, net_amount_usdc: net_amount_usdc,
+      requested_amount_usdc: parsedAmount,
+      fee_usdc: fee_usd,
+      net_amount_usdc: net_amount_usdc,
     });
+
+    // ═══════════════════════════════════════════════════
+    // 7) FEE TRANSFER — collect before execution
+    // ═══════════════════════════════════════════════════
+    let feeCollected = false;
+    let feeTxHash: string | null = null;
+
+    if (fee_usd > 0.01 && privyDid) {
+      await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_transfer_started", {
+        fee_usdc: fee_usd,
+        treasury: TREASURY_WALLET,
+      });
+
+      const feeResult = await transferFeeViaPrivy(privyDid, fee_usd);
+
+      if (feeResult.success) {
+        feeCollected = true;
+        feeTxHash = feeResult.txHash || null;
+        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_transfer_success", null, {
+          tx_hash: feeTxHash,
+          fee_usdc: fee_usd,
+        });
+      } else if (feeResult.error === "privy_server_not_configured") {
+        // Allow trade without fee collection when PRIVY_APP_SECRET is not yet configured
+        console.warn(
+          "[prediction-submit] PRIVY_APP_SECRET not configured — fee recorded but not collected",
+        );
+        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_transfer_skipped", null, {
+          reason: "privy_server_not_configured",
+          fee_usdc: fee_usd,
+        });
+      } else {
+        // Hard fail — fee transfer attempted but failed
+        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_transfer_failed", null, {
+          error: feeResult.error,
+          fee_usdc: fee_usd,
+        });
+
+        await updateTradeOrder(supabase, tradeOrderId, {
+          status: "failed",
+          error_code: "fee_transfer_failed",
+          error_message: feeResult.error?.substring(0, 500),
+          finalized_at: new Date().toISOString(),
+        });
+
+        return json(
+          {
+            error: "Fee transfer failed. Trade aborted.",
+            error_code: "fee_transfer_failed",
+            trade_order_id: tradeOrderId,
+          },
+          502,
+        );
+      }
+    } else if (fee_usd > 0.01 && !privyDid) {
+      // No Privy DID available — can't transfer fee
+      await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_transfer_skipped", null, {
+        reason: "no_privy_did",
+        fee_usdc: fee_usd,
+      });
+    }
 
     // ═══════════════════════════════════════════════════
     // 8) EXECUTION PATH
@@ -563,15 +873,20 @@ Deno.serve(async (req) => {
 
       const { data: pmSession } = await supabase
         .from("polymarket_user_sessions")
-        .select("id, status, pm_api_key, pm_api_secret, pm_passphrase, pm_derived_address, expires_at")
+        .select(
+          "id, status, pm_api_key, pm_api_secret, pm_passphrase, pm_trading_key, pm_derived_address, expires_at",
+        )
         .eq("wallet", walletLower)
         .maybeSingle();
 
-      const isSessionValid = pmSession?.status === "active"
-        && pmSession.pm_api_key
-        && pmSession.pm_api_secret
-        && pmSession.pm_passphrase
-        && (!pmSession.expires_at || new Date(pmSession.expires_at) > new Date());
+      const isSessionValid =
+        pmSession?.status === "active" &&
+        pmSession.pm_api_key &&
+        pmSession.pm_api_secret &&
+        pmSession.pm_passphrase &&
+        pmSession.pm_trading_key &&
+        (!pmSession.expires_at ||
+          new Date(pmSession.expires_at) > new Date());
 
       if (isSessionValid && tokenId) {
         // Mark as submitted
@@ -582,14 +897,20 @@ Deno.serve(async (req) => {
         tradeStatus = "submitted";
 
         await auditLog(supabase, tradeOrderId, normalizedWallet, "order_submit_started", {
-          token_id: tokenId, price: expectedPrice, size: net_amount_usdc,
+          token_id: tokenId,
+          price: expectedPrice,
+          size: net_amount_usdc,
+          fee_collected: feeCollected,
+          fee_tx_hash: feeTxHash,
         });
 
-        const orderResult = await submitClobOrder(
+        // ── EIP-712 signed CLOB order submission ──
+        const orderResult = await buildAndSubmitClobOrder(
           {
             pm_api_key: pmSession!.pm_api_key!,
             pm_api_secret: pmSession!.pm_api_secret!,
             pm_passphrase: pmSession!.pm_passphrase!,
+            pm_trading_key: pmSession!.pm_trading_key!,
           },
           tokenId!,
           expectedPrice!,
@@ -598,16 +919,16 @@ Deno.serve(async (req) => {
 
         polymarket_order_id = orderResult.orderId;
 
-        // Audit the result (no secrets)
         await auditLog(supabase, tradeOrderId, normalizedWallet, "order_submit_result", null, {
           order_id: orderResult.orderId,
           clob_status: orderResult.status,
           has_error: !!orderResult.error,
-          error_snippet: orderResult.error ? orderResult.error.substring(0, 200) : null,
+          error_snippet: orderResult.error
+            ? orderResult.error.substring(0, 200)
+            : null,
         });
 
         if (orderResult.orderId) {
-          // Treat CLOB acceptance as filled for now (CLOB may partially fill async)
           polymarket_status = "submitted";
           tradeStatus = "filled";
           filledAmountUsdc = net_amount_usdc;
@@ -629,10 +950,18 @@ Deno.serve(async (req) => {
 
             const reconPath = `/order/${orderResult.orderId}`;
             const reconTs = Math.floor(Date.now() / 1000).toString();
-            const reconHmac = await generateClobHmac(pmSession!.pm_api_secret!, reconTs, "GET", reconPath);
+            const reconHmac = await generateClobHmac(
+              pmSession!.pm_api_secret!,
+              reconTs,
+              "GET",
+              reconPath,
+            );
 
             const reconController = new AbortController();
-            const reconTimeout = setTimeout(() => reconController.abort(), 2000);
+            const reconTimeout = setTimeout(
+              () => reconController.abort(),
+              2000,
+            );
 
             const reconRes = await fetch(`${CLOB_BASE}${reconPath}`, {
               headers: {
@@ -650,19 +979,29 @@ Deno.serve(async (req) => {
               const clobOrder = await reconRes.json();
               const clobStatus = (clobOrder.status || "").toUpperCase();
 
-              const reconUpdates: Record<string, unknown> = { reconciled_at: new Date().toISOString() };
+              const reconUpdates: Record<string, unknown> = {
+                reconciled_at: new Date().toISOString(),
+              };
               let reconStatusChanged = false;
 
               if (clobStatus === "MATCHED" || clobStatus === "FILLED") {
-                const matchedSize = Number(clobOrder.size_matched ?? clobOrder.original_size ?? 0);
+                const matchedSize = Number(
+                  clobOrder.size_matched ?? clobOrder.original_size ?? 0,
+                );
                 const originalSize = Number(clobOrder.original_size ?? 0);
-                const isPartial = originalSize > 0 && matchedSize < originalSize;
-                const reconPrice = Number(clobOrder.price ?? clobOrder.average_price ?? 0);
+                const isPartial =
+                  originalSize > 0 && matchedSize < originalSize;
+                const reconPrice = Number(
+                  clobOrder.price ?? clobOrder.average_price ?? 0,
+                );
 
                 const newStatus = isPartial ? "partial_fill" : "filled";
                 if (matchedSize > 0) {
                   reconUpdates.filled_shares = matchedSize;
-                  reconUpdates.filled_amount_usdc = reconPrice > 0 ? matchedSize * reconPrice : filledAmountUsdc;
+                  reconUpdates.filled_amount_usdc =
+                    reconPrice > 0
+                      ? matchedSize * reconPrice
+                      : filledAmountUsdc;
                   if (reconPrice > 0) reconUpdates.avg_fill_price = reconPrice;
                   filledShares = matchedSize;
                   filledAmountUsdc = Number(reconUpdates.filled_amount_usdc);
@@ -673,7 +1012,10 @@ Deno.serve(async (req) => {
                   tradeStatus = newStatus;
                   reconStatusChanged = true;
                 }
-              } else if (clobStatus === "CANCELED" || clobStatus === "CANCELLED") {
+              } else if (
+                clobStatus === "CANCELED" ||
+                clobStatus === "CANCELLED"
+              ) {
                 reconUpdates.status = "cancelled";
                 reconUpdates.error_code = "clob_cancelled";
                 reconUpdates.finalized_at = new Date().toISOString();
@@ -687,17 +1029,23 @@ Deno.serve(async (req) => {
 
               await updateTradeOrder(supabase, tradeOrderId!, reconUpdates);
               await auditLog(supabase, tradeOrderId, normalizedWallet, "post_submit_reconcile_result", null, {
-                clob_status: clobStatus, status_changed: reconStatusChanged, new_status: tradeStatus, filled_shares: filledShares,
+                clob_status: clobStatus,
+                status_changed: reconStatusChanged,
+                new_status: tradeStatus,
+                filled_shares: filledShares,
               });
             } else {
               await auditLog(supabase, tradeOrderId, normalizedWallet, "post_submit_reconcile_failed", null, {
-                reason: "clob_http_error", http_status: reconRes.status,
+                reason: "clob_http_error",
+                http_status: reconRes.status,
               });
             }
           } catch (reconErr: any) {
             const isTimeout = reconErr?.name === "AbortError";
             await auditLog(supabase, tradeOrderId, normalizedWallet, "post_submit_reconcile_failed", null, {
-              reason: isTimeout ? "timeout" : "exception", message: reconErr?.message?.substring(0, 200) ?? "unknown",
+              reason: isTimeout ? "timeout" : "exception",
+              message:
+                reconErr?.message?.substring(0, 200) ?? "unknown",
             });
           }
         } else {
@@ -708,33 +1056,53 @@ Deno.serve(async (req) => {
           await updateTradeOrder(supabase, tradeOrderId, {
             status: "failed",
             error_code: "clob_rejected",
-            error_message: orderResult.error ? orderResult.error.substring(0, 500) : "CLOB order rejected",
+            error_message: orderResult.error
+              ? orderResult.error.substring(0, 500)
+              : "CLOB order rejected",
             finalized_at: new Date().toISOString(),
           });
 
           await auditLog(supabase, tradeOrderId, normalizedWallet, "trade_failed", null, {
-            reason: "clob_rejected", clob_status: orderResult.status,
+            reason: "clob_rejected",
+            clob_status: orderResult.status,
           });
 
-          return json({
-            error: "Order was rejected by the exchange",
-            trade_order_id: tradeOrderId,
-            trade_status: "failed",
-          }, 502);
+          return json(
+            {
+              error: "Order was rejected by the exchange",
+              trade_order_id: tradeOrderId,
+              trade_status: "failed",
+            },
+            502,
+          );
         }
 
-        console.log(`[prediction-submit] Polymarket order: user=${walletLower}, token=${tokenId}, amount=$${net_amount_usdc}, price=${expectedPrice}, status=${polymarket_status}`);
+        console.log(
+          `[prediction-submit] Polymarket order: user=${walletLower}, token=${tokenId}, amount=$${net_amount_usdc}, price=${expectedPrice}, status=${polymarket_status}, fee_collected=${feeCollected}`,
+        );
       } else {
-        // Deferred: user needs PM auth
+        // Deferred: user needs PM auth or trading key
         polymarket_status = "awaiting_user_auth";
         tradeStatus = "requested";
+
+        const missingField = !pmSession
+          ? "no_session"
+          : !pmSession.pm_trading_key
+            ? "no_trading_key"
+            : "session_invalid";
 
         await updateTradeOrder(supabase, tradeOrderId, {
           status: "requested",
           error_code: "awaiting_user_auth",
         });
 
-        console.log(`[prediction-submit] Polymarket deferred: user=${walletLower} needs PM auth`);
+        await auditLog(supabase, tradeOrderId, normalizedWallet, "deferred_awaiting_auth", null, {
+          missing: missingField,
+        });
+
+        console.log(
+          `[prediction-submit] Polymarket deferred: user=${walletLower} needs PM auth (${missingField})`,
+        );
       }
     } else {
       // Native 1MGAMING event — mark as filled immediately (local pool)
@@ -775,18 +1143,28 @@ Deno.serve(async (req) => {
     if (insertErr) throw insertErr;
 
     // ── Update fight pool totals (legacy compat) ──
-    const { error: updateErr } = await supabase.rpc("prediction_update_pool_usd", {
-      p_fight_id: fight_id,
-      p_pool_usd: net_amount_usdc,
-      p_shares: shares,
-      p_side: fighter_pick,
-    });
+    const { error: updateErr } = await supabase.rpc(
+      "prediction_update_pool_usd",
+      {
+        p_fight_id: fight_id,
+        p_pool_usd: net_amount_usdc,
+        p_shares: shares,
+        p_side: fighter_pick,
+      },
+    );
 
     if (updateErr) {
-      const poolCol = fighter_pick === "fighter_a" ? "pool_a_usd" : "pool_b_usd";
-      const sharesCol = fighter_pick === "fighter_a" ? "shares_a" : "shares_b";
-      const newPoolVal = (fighter_pick === "fighter_a" ? fight.pool_a_usd : fight.pool_b_usd) + net_amount_usdc;
-      const newSharesVal = (fighter_pick === "fighter_a" ? fight.shares_a : fight.shares_b) + shares;
+      const poolCol =
+        fighter_pick === "fighter_a" ? "pool_a_usd" : "pool_b_usd";
+      const sharesCol =
+        fighter_pick === "fighter_a" ? "shares_a" : "shares_b";
+      const newPoolVal =
+        (fighter_pick === "fighter_a"
+          ? fight.pool_a_usd
+          : fight.pool_b_usd) + net_amount_usdc;
+      const newSharesVal =
+        (fighter_pick === "fighter_a" ? fight.shares_a : fight.shares_b) +
+        shares;
 
       await supabase
         .from("prediction_fights")
@@ -798,7 +1176,10 @@ Deno.serve(async (req) => {
     // FINAL AUDIT + RESPONSE
     // ═══════════════════════════════════════════════════
     await auditLog(supabase, tradeOrderId, normalizedWallet, "trade_finalized", null, {
-      trade_status: tradeStatus, entry_id: entry?.id,
+      trade_status: tradeStatus,
+      entry_id: entry?.id,
+      fee_collected: feeCollected,
+      fee_tx_hash: feeTxHash,
     });
 
     return json({
@@ -823,7 +1204,6 @@ Deno.serve(async (req) => {
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
 
-    // Best-effort: update trade order and audit on unexpected error
     if (tradeOrderId) {
       await updateTradeOrder(supabase, tradeOrderId, {
         status: "failed",
@@ -833,7 +1213,8 @@ Deno.serve(async (req) => {
       });
     }
     await auditLog(supabase, tradeOrderId, normalizedWallet, "trade_failed", null, {
-      reason: "internal_error", message: errorMsg.substring(0, 300),
+      reason: "internal_error",
+      message: errorMsg.substring(0, 300),
     });
 
     return json({ error: errorMsg, trade_order_id: tradeOrderId }, 500);

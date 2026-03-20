@@ -872,6 +872,7 @@ export type Database = {
           pm_api_secret: string | null
           pm_derived_address: string | null
           pm_passphrase: string | null
+          pm_trading_key: string | null
           status: string
           updated_at: string
           wallet: string
@@ -886,6 +887,7 @@ export type Database = {
           pm_api_secret?: string | null
           pm_derived_address?: string | null
           pm_passphrase?: string | null
+          pm_trading_key?: string | null
           status?: string
           updated_at?: string
           wallet: string
@@ -900,6 +902,7 @@ export type Database = {
           pm_api_secret?: string | null
           pm_derived_address?: string | null
           pm_passphrase?: string | null
+          pm_trading_key?: string | null
           status?: string
           updated_at?: string
           wallet?: string

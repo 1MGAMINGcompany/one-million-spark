@@ -1,0 +1,1 @@
+ALTER TABLE public.polymarket_user_sessions ADD COLUMN IF NOT EXISTS pm_trading_key text;
