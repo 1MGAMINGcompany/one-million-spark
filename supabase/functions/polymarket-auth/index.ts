@@ -180,6 +180,7 @@ Deno.serve(async (req) => {
         pm_api_secret: pmApiSecret,
         pm_passphrase: pmPassphrase,
         pm_derived_address: derivedAddress,
+        pm_trading_key: tradingKeyHex,
         authenticated_at: new Date().toISOString(),
         expires_at: expiresAt.toISOString(),
         updated_at: new Date().toISOString(),
