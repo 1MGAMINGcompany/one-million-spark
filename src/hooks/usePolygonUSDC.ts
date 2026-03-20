@@ -1,5 +1,5 @@
 /**
- * usePolygonUSDC — Reads ERC-20 USDC balance on Polygon for prediction users.
+ * usePolygonUSDC — Reads ERC-20 USDC balance AND relayer allowance on Polygon.
  *
  * Uses the Privy embedded EVM wallet address and a public Polygon RPC.
  * Does NOT affect Solana skill-game balances.
@@ -22,8 +22,12 @@ const POLYGON_RPCS = [
 
 const POLL_INTERVAL_MS = 15_000;
 
-// ERC-20 balanceOf(address) selector: 0x70a08231
+// ERC-20 selectors
 const BALANCE_OF_SELECTOR = "0x70a08231";
+const ALLOWANCE_SELECTOR = "0xdd62ed3e"; // allowance(owner, spender)
+
+/** Fee relayer address — must match the backend FEE_RELAYER wallet */
+export const FEE_RELAYER_ADDRESS = "0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d";
 
 export interface PolygonUSDCBalance {
   /** User's EVM wallet address */
@@ -34,6 +38,8 @@ export interface PolygonUSDCBalance {
   usdc_balance_formatted: string | null;
   /** Numeric balance for calculations */
   usdc_balance: number | null;
+  /** Relayer allowance in USDC (numeric) */
+  relayer_allowance: number | null;
   chain: "polygon";
   symbol: "USDC";
   is_loading: boolean;
@@ -41,80 +47,73 @@ export interface PolygonUSDCBalance {
 }
 
 function padAddress(address: string): string {
-  // Remove 0x prefix, left-pad to 64 hex chars
   return address.slice(2).toLowerCase().padStart(64, "0");
+}
+
+async function rpcCall(callData: string, to: string): Promise<string | null> {
+  const body = JSON.stringify({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "eth_call",
+    params: [{ to, data: callData }, "latest"],
+  });
+
+  for (const rpc of POLYGON_RPCS) {
+    try {
+      const res = await fetch(rpc, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+      if (!res.ok) continue;
+      const json = await res.json();
+      if (json.error) continue;
+      if (json.result) return json.result;
+    } catch {
+      continue;
+    }
+  }
+  return null;
 }
 
 export function usePolygonUSDC(): PolygonUSDCBalance {
   const { walletAddress, isPrivyUser } = usePrivyWallet();
   const [balanceRaw, setBalanceRaw] = useState<string | null>(null);
+  const [allowanceRaw, setAllowanceRaw] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchBalance = useCallback(async () => {
-    if (!walletAddress) {
-      console.warn("[usePolygonUSDC] No wallet address, skipping fetch");
-      return;
-    }
+  const fetchData = useCallback(async () => {
+    if (!walletAddress) return;
 
     try {
       setIsLoading(true);
       setError(null);
 
-      const callData = BALANCE_OF_SELECTOR + padAddress(walletAddress);
-      const body = JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "eth_call",
-        params: [{ to: USDC_CONTRACT, data: callData }, "latest"],
-      });
+      // Batch: balance + allowance in parallel
+      const balanceData = BALANCE_OF_SELECTOR + padAddress(walletAddress);
+      const allowanceData =
+        ALLOWANCE_SELECTOR +
+        padAddress(walletAddress) +
+        padAddress(FEE_RELAYER_ADDRESS);
 
-      let lastErr: string = "All RPCs failed";
+      const [balResult, allowResult] = await Promise.all([
+        rpcCall(balanceData, USDC_CONTRACT),
+        rpcCall(allowanceData, USDC_CONTRACT),
+      ]);
 
-      for (const rpc of POLYGON_RPCS) {
-        try {
-          console.log("[usePolygonUSDC] Trying RPC", { rpc, wallet: walletAddress, contract: USDC_CONTRACT });
-
-          const res = await fetch(rpc, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body,
-          });
-
-          if (!res.ok) {
-            console.warn(`[usePolygonUSDC] RPC ${rpc} HTTP ${res.status}`);
-            lastErr = `RPC HTTP ${res.status}: ${res.statusText}`;
-            continue;
-          }
-
-          const json = await res.json();
-
-          if (json.error) {
-            console.warn(`[usePolygonUSDC] RPC ${rpc} error:`, json.error);
-            lastErr = json.error.message || `RPC error code ${json.error.code}`;
-            continue;
-          }
-
-          if (json.result) {
-            const raw = BigInt(json.result).toString();
-            console.log("[usePolygonUSDC] Balance:", { rpc, raw, formatted: (Number(raw) / 10 ** USDC_DECIMALS).toFixed(2) });
-            setBalanceRaw(raw);
-            return; // success — stop trying
-          }
-
-          console.warn(`[usePolygonUSDC] RPC ${rpc} empty result:`, json);
-          lastErr = "RPC returned empty result";
-        } catch (rpcErr: any) {
-          console.warn(`[usePolygonUSDC] RPC ${rpc} fetch error:`, rpcErr?.message);
-          lastErr = rpcErr?.message || `Fetch failed for ${rpc}`;
-        }
+      if (balResult) {
+        setBalanceRaw(BigInt(balResult).toString());
       }
-
-      // All RPCs failed
-      throw new Error(lastErr);
+      if (allowResult) {
+        setAllowanceRaw(BigInt(allowResult).toString());
+      }
+      if (!balResult && !allowResult) {
+        throw new Error("All RPCs failed");
+      }
     } catch (e: any) {
-      const msg = e?.message || "Failed to fetch USDC balance";
-      console.error("[usePolygonUSDC] Error:", msg, e);
+      const msg = e?.message || "Failed to fetch USDC data";
+      console.error("[usePolygonUSDC] Error:", msg);
       setError(msg);
     } finally {
       setIsLoading(false);
@@ -124,22 +123,27 @@ export function usePolygonUSDC(): PolygonUSDCBalance {
   useEffect(() => {
     if (!isPrivyUser || !walletAddress) {
       setBalanceRaw(null);
+      setAllowanceRaw(null);
       setError(null);
       return;
     }
 
-    fetchBalance();
-    const id = setInterval(fetchBalance, POLL_INTERVAL_MS);
+    fetchData();
+    const id = setInterval(fetchData, POLL_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [isPrivyUser, walletAddress, fetchBalance]);
+  }, [isPrivyUser, walletAddress, fetchData]);
 
   // Derive formatted values
   let usdc_balance: number | null = null;
   let usdc_balance_formatted: string | null = null;
+  let relayer_allowance: number | null = null;
 
   if (balanceRaw !== null) {
     usdc_balance = Number(balanceRaw) / 10 ** USDC_DECIMALS;
     usdc_balance_formatted = usdc_balance.toFixed(2);
+  }
+  if (allowanceRaw !== null) {
+    relayer_allowance = Number(allowanceRaw) / 10 ** USDC_DECIMALS;
   }
 
   return {
@@ -147,6 +151,7 @@ export function usePolygonUSDC(): PolygonUSDCBalance {
     usdc_balance_raw: balanceRaw,
     usdc_balance_formatted,
     usdc_balance,
+    relayer_allowance,
     chain: "polygon",
     symbol: "USDC",
     is_loading: isLoading,
