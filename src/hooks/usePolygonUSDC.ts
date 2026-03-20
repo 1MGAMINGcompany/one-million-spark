@@ -14,7 +14,12 @@ import { usePrivyWallet } from "./usePrivyWallet";
 // Native USDC on Polygon (circle-issued, 6 decimals)
 const USDC_CONTRACT = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359";
 const USDC_DECIMALS = 6;
-const POLYGON_RPC = "https://polygon-rpc.com";
+const POLYGON_RPCS = [
+  "https://polygon-bor-rpc.publicnode.com",
+  "https://polygon.drpc.org",
+  "https://rpc.ankr.com/polygon",
+];
+
 const POLL_INTERVAL_MS = 15_000;
 
 // ERC-20 balanceOf(address) selector: 0x70a08231
@@ -56,47 +61,57 @@ export function usePolygonUSDC(): PolygonUSDCBalance {
       setIsLoading(true);
       setError(null);
 
-      const data = BALANCE_OF_SELECTOR + padAddress(walletAddress);
-
-      console.log("[usePolygonUSDC] Fetching balance", {
-        wallet: walletAddress,
-        contract: USDC_CONTRACT,
-        rpc: POLYGON_RPC,
+      const callData = BALANCE_OF_SELECTOR + padAddress(walletAddress);
+      const body = JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "eth_call",
+        params: [{ to: USDC_CONTRACT, data: callData }, "latest"],
       });
 
-      const res = await fetch(POLYGON_RPC, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: 1,
-          method: "eth_call",
-          params: [
-            { to: USDC_CONTRACT, data },
-            "latest",
-          ],
-        }),
-      });
+      let lastErr: string = "All RPCs failed";
 
-      if (!res.ok) {
-        throw new Error(`RPC HTTP ${res.status}: ${res.statusText}`);
+      for (const rpc of POLYGON_RPCS) {
+        try {
+          console.log("[usePolygonUSDC] Trying RPC", { rpc, wallet: walletAddress, contract: USDC_CONTRACT });
+
+          const res = await fetch(rpc, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body,
+          });
+
+          if (!res.ok) {
+            console.warn(`[usePolygonUSDC] RPC ${rpc} HTTP ${res.status}`);
+            lastErr = `RPC HTTP ${res.status}: ${res.statusText}`;
+            continue;
+          }
+
+          const json = await res.json();
+
+          if (json.error) {
+            console.warn(`[usePolygonUSDC] RPC ${rpc} error:`, json.error);
+            lastErr = json.error.message || `RPC error code ${json.error.code}`;
+            continue;
+          }
+
+          if (json.result) {
+            const raw = BigInt(json.result).toString();
+            console.log("[usePolygonUSDC] Balance:", { rpc, raw, formatted: (Number(raw) / 10 ** USDC_DECIMALS).toFixed(2) });
+            setBalanceRaw(raw);
+            return; // success — stop trying
+          }
+
+          console.warn(`[usePolygonUSDC] RPC ${rpc} empty result:`, json);
+          lastErr = "RPC returned empty result";
+        } catch (rpcErr: any) {
+          console.warn(`[usePolygonUSDC] RPC ${rpc} fetch error:`, rpcErr?.message);
+          lastErr = rpcErr?.message || `Fetch failed for ${rpc}`;
+        }
       }
 
-      const json = await res.json();
-
-      if (json.error) {
-        console.error("[usePolygonUSDC] RPC error:", json.error);
-        throw new Error(json.error.message || `RPC error code ${json.error.code}`);
-      }
-
-      if (json.result) {
-        const raw = BigInt(json.result).toString();
-        console.log("[usePolygonUSDC] Balance:", { raw, formatted: (Number(raw) / 10 ** USDC_DECIMALS).toFixed(2) });
-        setBalanceRaw(raw);
-      } else {
-        console.warn("[usePolygonUSDC] Empty result:", json);
-        throw new Error("RPC returned empty result");
-      }
+      // All RPCs failed
+      throw new Error(lastErr);
     } catch (e: any) {
       const msg = e?.message || "Failed to fetch USDC balance";
       console.error("[usePolygonUSDC] Error:", msg, e);
