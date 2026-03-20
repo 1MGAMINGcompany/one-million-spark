@@ -402,6 +402,10 @@ Deno.serve(async (req) => {
                   const fightTitle = `${f1Name} vs ${f2Name}`;
                   const weightClass = fight.weight_class?.name || null;
 
+                  // Enrich fighter data
+                  const f1Enrich = bdlFighterEnrichment(fight.fighter1);
+                  const f2Enrich = bdlFighterEnrichment(fight.fighter2);
+
                   const { error: fightErr } = await supabase
                     .from("prediction_fights")
                     .insert({
@@ -414,6 +418,11 @@ Deno.serve(async (req) => {
                       status: "open",
                       weight_class: weightClass,
                       fight_class: fight.is_main_event ? "A" : (fight.card_segment === "main_card" ? "B" : "C"),
+                      fighter_a_photo: f1Enrich.photo,
+                      fighter_b_photo: f2Enrich.photo,
+                      fighter_a_record: f1Enrich.record,
+                      fighter_b_record: f2Enrich.record,
+                      venue: [ev.venue_name, ev.venue_city].filter(Boolean).join(", ") || null,
                     });
 
                   if (!fightErr) results.fights_created++;
