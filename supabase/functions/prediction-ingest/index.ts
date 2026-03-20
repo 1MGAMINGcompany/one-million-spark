@@ -824,6 +824,8 @@ Deno.serve(async (req) => {
                     status: "open",
                     home_logo: fix.teams?.home?.logo || null,
                     away_logo: fix.teams?.away?.logo || null,
+                    venue: venue || null,
+                    referee: fix.fixture?.referee || null,
                   });
                 if (!fightErr) {
                   results.fights_created++;
