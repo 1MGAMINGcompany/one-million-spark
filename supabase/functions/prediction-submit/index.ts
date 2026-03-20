@@ -935,7 +935,7 @@ Deno.serve(async (req) => {
         treasury: TREASURY_WALLET,
       });
 
-      const verifyResult = await verifyFeeTxOnChain(feeTxHash, fee_usd);
+      const verifyResult = await verifyFeeTxOnChain(feeTxHash, fee_usd, normalizedWallet);
 
       if (verifyResult.success) {
         feeCollected = true;
