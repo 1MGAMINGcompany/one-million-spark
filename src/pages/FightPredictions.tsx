@@ -296,22 +296,29 @@ export default function FightPredictions() {
         );
       }
 
-      // Step 3: Compute fee and execute client-side USDC fee transfer
+      // Step 3: Check relayer allowance — prompt one-time approve if needed
       const feeRate = selectedFight.commission_bps != null
         ? selectedFight.commission_bps / 10_000
         : (selectedFight.source === "polymarket" ? 0.02 : 0.05);
       const feeUsdc = amountUsd * feeRate;
-      let feeTxHash: string | null = null;
 
       if (feeUsdc > 0.01) {
-        const feeResult = await transferFee(feeUsdc);
-        if (!feeResult.success) {
-          throw new Error(feeResult.error || "Fee transfer failed");
+        const currentAllowance = relayer_allowance ?? 0;
+        if (currentAllowance < feeUsdc) {
+          // One-time approval — this is the ONLY wallet modal the user ever sees
+          toast.info("One-time USDC approval needed", {
+            description: "Approve once to enable frictionless predictions.",
+          });
+          const approveResult = await approveFeeAllowance();
+          if (!approveResult.success) {
+            throw new Error(approveResult.error || "USDC approval failed");
+          }
+          // Wait briefly for allowance to propagate
+          await new Promise((r) => setTimeout(r, 3000));
         }
-        feeTxHash = feeResult.txHash || null;
       }
 
-      // Step 4: Submit prediction with fee proof
+      // Step 4: Submit prediction — backend handles fee collection via relayer
       const { data, error } = await supabase.functions.invoke("prediction-submit", {
         body: {
           fight_id: selectedFight.id,
@@ -319,21 +326,12 @@ export default function FightPredictions() {
           fighter_pick: selectedPick,
           amount_usd: amountUsd,
           chain: "polygon",
-          fee_tx_hash: feeTxHash,
         },
         headers: { "x-privy-token": privyToken },
       });
 
-      // If backend failed AFTER fee was paid, surface the orphaned fee clearly
       if (error || data?.error) {
         const backendMsg = data?.error || error?.message || "Backend error";
-        if (feeTxHash && feeTxHash !== "fee_below_threshold") {
-          console.error(`[ORPHANED FEE] tx=${feeTxHash} amount=$${feeUsdc.toFixed(2)}`);
-          throw new Error(
-            `Prediction failed after fee payment ($${feeUsdc.toFixed(2)} USDC, tx: ${feeTxHash.slice(0, 10)}…). ` +
-            `Your fee is recorded and will be reconciled. Contact support if needed. Detail: ${backendMsg}`,
-          );
-        }
         throw new Error(backendMsg);
       }
 
