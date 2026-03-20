@@ -23,6 +23,41 @@ function json(body: Record<string, unknown>, status = 200) {
   });
 }
 
+const JWKS_URL = new URL("https://auth.privy.io/.well-known/jwks.json");
+
+/** Create JWKS key set with retry on transient failures */
+async function verifyWithRetry(
+  privyToken: string,
+  appId: string,
+  maxAttempts = 2,
+) {
+  let lastError: Error | undefined;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const jwks = createRemoteJWKSet(JWKS_URL);
+      const { payload } = await jwtVerify(privyToken, jwks, {
+        issuer: "privy.io",
+        audience: appId,
+      });
+      return payload;
+    } catch (e) {
+      lastError = e as Error;
+      const msg = lastError.message ?? "";
+      // Only retry on network/fetch failures, not on actual JWT validation errors
+      const isTransient =
+        msg.includes("Expected 200 OK") ||
+        msg.includes("fetch") ||
+        msg.includes("network") ||
+        msg.includes("ECONNREFUSED");
+      if (!isTransient || attempt === maxAttempts - 1) throw lastError;
+      // Wait 1s before retry
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
+  throw lastError;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -36,13 +71,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const jwks = createRemoteJWKSet(
-      new URL("https://auth.privy.io/.well-known/jwks.json"),
-    );
-    const { payload } = await jwtVerify(privyToken, jwks, {
-      issuer: "privy.io",
-      audience: appId,
-    });
+    const payload = await verifyWithRetry(privyToken, appId);
 
     const did = payload.sub as string | undefined;
     if (!did) {

@@ -10,8 +10,7 @@
  */
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { usePrivyWallet } from "@/hooks/usePrivyWallet";
-import { useWallets } from "@privy-io/react-auth";
+import { usePrivy, useWallets } from "@privy-io/react-auth";
 
 interface PolymarketSessionState {
   hasSession: boolean;
@@ -26,14 +25,18 @@ interface PolymarketSessionState {
 const POLL_INTERVAL_MS = 30_000; // 30s for session checks
 
 export function usePolymarketSession() {
-  const { isPrivyUser } = usePrivyWallet();
+  const { ready, authenticated } = usePrivy();
   const { wallets } = useWallets();
+
+  // Derive isPrivyUser and EOA wallet address unconditionally
+  const isPrivyUser = ready && authenticated;
 
   // SIWE requires the EOA embedded wallet, not the smart wallet (contract can't sign)
   const walletAddress = useMemo(() => {
     const privy = wallets.find((w) => w.walletClientType === "privy");
     return privy?.address?.toLowerCase() ?? null;
   }, [wallets]);
+
   const [state, setState] = useState<PolymarketSessionState>({
     hasSession: false,
     status: "none",
