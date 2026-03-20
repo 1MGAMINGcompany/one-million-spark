@@ -24,7 +24,10 @@ const SPORT_IMG: Record<string, string> = {
   FUTBOL: futbolImg,
 };
 
-function calcOdds(poolA: number, poolB: number) {
+function calcOdds(poolA: number, poolB: number, priceA?: number | null, priceB?: number | null) {
+  if (priceA && priceA > 0 && priceB && priceB > 0) {
+    return { oddsA: +(1 / priceA).toFixed(2), oddsB: +(1 / priceB).toFixed(2) };
+  }
   const total = poolA + poolB;
   if (total === 0) return { oddsA: 2.0, oddsB: 2.0 };
   return {
@@ -42,7 +45,7 @@ function CompactFightCard({
 }) {
   const poolA = (fight.pool_a_usd ?? 0) > 0 ? fight.pool_a_usd! : fight.pool_a_lamports / 1_000_000_000;
   const poolB = (fight.pool_b_usd ?? 0) > 0 ? fight.pool_b_usd! : fight.pool_b_lamports / 1_000_000_000;
-  const { oddsA, oddsB } = calcOdds(poolA, poolB);
+  const { oddsA, oddsB } = calcOdds(poolA, poolB, fight.price_a, fight.price_b);
   const totalPool = poolA + poolB;
   const isOpen = fight.status === "open";
 
