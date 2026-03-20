@@ -291,9 +291,20 @@ export default function FightPredictions() {
         { headers: { "x-privy-token": privyToken } },
       );
       if (preflightError || !preflightData?.ok) {
-        const detail = preflightData?.detail || preflightData?.error || "unknown";
+        // supabase.functions.invoke puts non-2xx response body in `error`, not `data`
+        let detail = preflightData?.detail || preflightData?.error;
+        if (!detail && preflightError) {
+          try {
+            const errBody = typeof preflightError === "object" && preflightError.context
+              ? await (preflightError as any).context.json()
+              : null;
+            detail = errBody?.detail || errBody?.error || preflightError.message;
+          } catch {
+            detail = preflightError.message;
+          }
+        }
         throw new Error(
-          `Authentication check failed (${detail}). No funds were moved. Please try again in a moment.`,
+          `Authentication check failed (${detail || "unknown"}). No funds were moved. Please try again in a moment.`,
         );
       }
 
