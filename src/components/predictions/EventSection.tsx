@@ -51,7 +51,7 @@ function formatCountdown(eventDate: string | null): string | null {
 }
 
 const SOCCER_KEYWORDS = [
-  "MLS", "SOCCER", "FUTBOL", "PREMIER LEAGUE", "LA LIGA", "CHAMPIONS LEAGUE",
+  "MLS", "SOCCER", "FUTBOL", "FÚTBOL", "PREMIER LEAGUE", "LA LIGA", "CHAMPIONS LEAGUE",
   "SERIE A", "BUNDESLIGA", "LIGUE 1", "EREDIVISIE", "LIGA MX", "EPL",
   "COPA", "EURO", "FIFA", "WORLD CUP",
 ];
