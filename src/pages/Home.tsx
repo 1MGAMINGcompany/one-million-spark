@@ -23,7 +23,9 @@ import { WalletGateModal } from "@/components/WalletGateModal";
 
 const Home = () => {
   const { t } = useTranslation();
-  const { isPrivyUser, walletAddress, balanceSol, isLowBalance } = usePrivySolBalance();
+  const { isPrivyUser, walletAddress } = usePrivyWallet();
+  const { usdc_balance } = usePolygonUSDC();
+  const isLowBalance = usdc_balance === null || usdc_balance <= 0.01;
   const { address, isConnected } = useWallet();
 
   // Session continuity — check for abandoned AI game
