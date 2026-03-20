@@ -8,9 +8,10 @@
  *
  * Credentials are NEVER exposed to the frontend.
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
+import { useWallets } from "@privy-io/react-auth";
 
 interface PolymarketSessionState {
   hasSession: boolean;
@@ -25,7 +26,14 @@ interface PolymarketSessionState {
 const POLL_INTERVAL_MS = 30_000; // 30s for session checks
 
 export function usePolymarketSession() {
-  const { walletAddress, isPrivyUser } = usePrivyWallet();
+  const { isPrivyUser } = usePrivyWallet();
+  const { wallets } = useWallets();
+
+  // SIWE requires the EOA embedded wallet, not the smart wallet (contract can't sign)
+  const walletAddress = useMemo(() => {
+    const privy = wallets.find((w) => w.walletClientType === "privy");
+    return privy?.address?.toLowerCase() ?? null;
+  }, [wallets]);
   const [state, setState] = useState<PolymarketSessionState>({
     hasSession: false,
     status: "none",
