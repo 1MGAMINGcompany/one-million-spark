@@ -52,7 +52,14 @@ const STATUS_BADGE: Record<string, { label: string; className: string }> = {
   cancelled: { label: "CANCELLED", className: "bg-muted text-muted-foreground" },
 };
 
-function calcOdds(poolA: number, poolB: number) {
+function calcOdds(poolA: number, poolB: number, priceA?: number | null, priceB?: number | null) {
+  // Prefer Polymarket prices when available (0–1 range → odds = 1/price)
+  if (priceA && priceA > 0 && priceB && priceB > 0) {
+    return {
+      oddsA: +(1 / priceA).toFixed(2),
+      oddsB: +(1 / priceB).toFixed(2),
+    };
+  }
   const total = poolA + poolB;
   if (total === 0) return { oddsA: 2.0, oddsB: 2.0 };
   return {
