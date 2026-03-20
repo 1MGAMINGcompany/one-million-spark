@@ -276,9 +276,9 @@ export default function FightCard({
         </div>
 
         <div className="mt-3 pt-3 border-t border-border/30 flex items-center justify-between">
-          <span className="text-[10px] text-muted-foreground">Total Pool</span>
+          <span className="text-[10px] text-muted-foreground">{isPolymarketPool ? "Liquidity" : "Total Pool"}</span>
           <span className="text-xs font-bold text-primary">
-            ${totalPool.toFixed(2)}
+            {isPolymarketPool ? "Polymarket" : `$${totalPool.toFixed(2)}`}
           </span>
         </div>
 
