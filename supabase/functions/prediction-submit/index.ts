@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { createRemoteJWKSet, jwtVerify } from "npm:jose@5";
-import { privateKeyToAccount } from "viem/accounts";
+import { privateKeyToAccount } from "npm:viem@2/accounts";
+import { createWalletClient, http, encodeFunctionData, parseAbi } from "npm:viem@2";
+import { polygon } from "npm:viem@2/chains";
 
 /**
  * prediction-submit — Production trade execution gateway.
@@ -210,112 +212,114 @@ async function buildAndSubmitClobOrder(
 }
 
 /**
- * Verify a client-submitted USDC fee transfer tx on Polygon.
- * Checks the tx receipt to confirm it's a USDC transfer to treasury
- * for at least the expected fee amount.
+ * Execute fee collection via relayer wallet using ERC-20 transferFrom.
+ * The user must have previously approved the relayer as spender on USDC.
+ * Returns the tx hash of the transferFrom call.
  */
-async function verifyFeeTxOnChain(
-  feeTxHash: string,
-  expectedFeeUsdc: number,
-  expectedSenderWallet: string,
-): Promise<{ success: boolean; error?: string }> {
+const erc20TransferFromAbi = parseAbi([
+  "function transferFrom(address from, address to, uint256 amount) returns (bool)",
+  "function allowance(address owner, address spender) view returns (uint256)",
+]);
+
+async function collectFeeViaRelayer(
+  userWallet: string,
+  feeUsdc: number,
+): Promise<{ success: boolean; txHash?: string; error?: string }> {
+  const relayerKey = Deno.env.get("FEE_RELAYER_PRIVATE_KEY");
+  if (!relayerKey) {
+    return { success: false, error: "relayer_not_configured" };
+  }
+
   const POLYGON_RPC = "https://polygon-rpc.com";
-  /** Max age of the fee tx block — 10 minutes */
-  const MAX_FEE_TX_AGE_S = 600;
 
   try {
-    // Fetch transaction receipt
-    const res = await fetch(POLYGON_RPC, {
+    const account = privateKeyToAccount(relayerKey as `0x${string}`);
+    const feeRaw = BigInt(Math.floor(feeUsdc * 10 ** USDC_DECIMALS));
+
+    // Step 1: Check allowance first
+    const allowanceData = encodeFunctionData({
+      abi: erc20TransferFromAbi,
+      functionName: "allowance",
+      args: [userWallet as `0x${string}`, account.address],
+    });
+
+    const allowanceRes = await fetch(POLYGON_RPC, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "eth_getTransactionReceipt",
-        params: [feeTxHash],
+        jsonrpc: "2.0", id: 1,
+        method: "eth_call",
+        params: [{ to: USDC_CONTRACT, data: allowanceData }, "latest"],
       }),
     });
-
-    const data = await res.json();
-    const receipt = data.result;
-
-    if (!receipt) {
-      return { success: false, error: "tx_receipt_not_found" };
-    }
-
-    // Check tx succeeded (status 0x1)
-    if (receipt.status !== "0x1") {
-      return { success: false, error: "tx_reverted" };
-    }
-
-    // Verify the tx was to the USDC contract
-    if (receipt.to?.toLowerCase() !== USDC_CONTRACT.toLowerCase()) {
-      return { success: false, error: "tx_not_to_usdc_contract" };
-    }
-
-    // Parse Transfer event logs to verify sender, recipient, and amount
-    // Transfer(address,address,uint256) topic: 0xddf252ad...
-    const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
-    const senderPadded = "0x" + expectedSenderWallet.slice(2).toLowerCase().padStart(64, "0");
-    const treasuryPadded = "0x" + TREASURY_WALLET.slice(2).toLowerCase().padStart(64, "0");
-
-    const transferLog = receipt.logs?.find(
-      (log: any) =>
-        log.topics?.[0] === TRANSFER_TOPIC &&
-        log.topics?.[1]?.toLowerCase() === senderPadded &&
-        log.topics?.[2]?.toLowerCase() === treasuryPadded,
-    );
-
-    if (!transferLog) {
-      return { success: false, error: "no_matching_transfer_from_sender_to_treasury" };
-    }
-
-    // Verify amount (log.data is the uint256 amount)
-    const transferredRaw = BigInt(transferLog.data);
-    const expectedRaw = BigInt(Math.floor(expectedFeeUsdc * 10 ** USDC_DECIMALS));
-    // Strict USDC match: allow at most 1 base unit (0.000001 USDC) tolerance
-    // to absorb floating-point → integer truncation on the client side.
-    const minAcceptable = expectedRaw > 0n ? expectedRaw - 1n : 0n;
-
-    if (transferredRaw < minAcceptable) {
-      return {
-        success: false,
-        error: `insufficient_fee_amount: got ${transferredRaw}, expected >= ${minAcceptable} (exact - 1 base unit)`,
-      };
-    }
-
-    // ── Recency check: fee tx must be in a recent block ──
-    const blockHex = receipt.blockNumber;
-    if (blockHex) {
-      try {
-        const blockRes = await fetch(POLYGON_RPC, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            jsonrpc: "2.0",
-            id: 2,
-            method: "eth_getBlockByNumber",
-            params: [blockHex, false],
-          }),
-        });
-        const blockData = await blockRes.json();
-        const blockTimestamp = blockData.result?.timestamp
-          ? Number(BigInt(blockData.result.timestamp))
-          : 0;
-        const nowS = Math.floor(Date.now() / 1000);
-        if (blockTimestamp > 0 && nowS - blockTimestamp > MAX_FEE_TX_AGE_S) {
-          return {
-            success: false,
-            error: `fee_tx_too_old: block_age=${nowS - blockTimestamp}s, max=${MAX_FEE_TX_AGE_S}s`,
-          };
-        }
-      } catch {
-        // If block fetch fails, allow tx through — receipt was already verified
+    const allowanceJson = await allowanceRes.json();
+    if (allowanceJson.result) {
+      const currentAllowance = BigInt(allowanceJson.result);
+      if (currentAllowance < feeRaw) {
+        return {
+          success: false,
+          error: `insufficient_allowance: have ${currentAllowance}, need ${feeRaw}`,
+        };
       }
     }
 
-    return { success: true };
+    // Step 2: Execute transferFrom via raw RPC
+    const txData = encodeFunctionData({
+      abi: erc20TransferFromAbi,
+      functionName: "transferFrom",
+      args: [
+        userWallet as `0x${string}`,
+        TREASURY_WALLET as `0x${string}`,
+        feeRaw,
+      ],
+    });
+
+    // Get nonce
+    const nonceRes = await fetch(POLYGON_RPC, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0", id: 2,
+        method: "eth_getTransactionCount",
+        params: [account.address, "latest"],
+      }),
+    });
+    const nonceJson = await nonceRes.json();
+    const nonce = Number(BigInt(nonceJson.result));
+
+    // Get gas price
+    const gasPriceRes = await fetch(POLYGON_RPC, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0", id: 3,
+        method: "eth_gasPrice",
+        params: [],
+      }),
+    });
+    const gasPriceJson = await gasPriceRes.json();
+    const gasPrice = BigInt(gasPriceJson.result);
+
+    // Sign tx using viem
+    const walletClient = createWalletClient({
+      account,
+      chain: polygon,
+      transport: http(POLYGON_RPC),
+    });
+
+    const txHash = await walletClient.sendTransaction({
+      to: USDC_CONTRACT as `0x${string}`,
+      data: txData,
+      gas: 100_000n,
+      gasPrice: gasPrice * 12n / 10n, // 20% buffer
+      nonce,
+      value: 0n,
+    });
+
+    console.log(`[prediction-submit] Fee collected via relayer: ${txHash}, fee=$${feeUsdc}`);
+    return { success: true, txHash };
   } catch (err) {
+    console.error("[prediction-submit] Relayer transferFrom failed:", err);
     return {
       success: false,
       error: err instanceof Error ? err.message : String(err),
@@ -458,7 +462,6 @@ Deno.serve(async (req) => {
       fighter_pick,
       amount_usd,
       slippage_bps: clientSlippage,
-      fee_tx_hash: clientFeeTxHash,
     } = body;
 
     normalizedWallet = wallet ? String(wallet).trim().toLowerCase() : null;
@@ -880,106 +883,54 @@ Deno.serve(async (req) => {
     });
 
     // ═══════════════════════════════════════════════════
-    // 7) FEE VERIFICATION — client transfers fee, backend verifies on-chain
+    // 7) FEE COLLECTION — backend relayer executes transferFrom
     // ═══════════════════════════════════════════════════
     let feeCollected = false;
-    let feeTxHash: string | null = clientFeeTxHash || null;
+    let feeTxHash: string | null = null;
 
     if (fee_usd > 0.01) {
-      if (!feeTxHash || feeTxHash === "fee_below_threshold") {
-        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_required_but_failed", null, {
-          error: "no_fee_tx_hash_provided",
-          fee_usdc: fee_usd,
-        });
-
-        await updateTradeOrder(supabase, tradeOrderId, {
-          status: "failed",
-          error_code: "fee_not_provided",
-          error_message: "Client must provide fee_tx_hash for trades with fee > $0.01",
-          finalized_at: new Date().toISOString(),
-        });
-
-        return json(
-          {
-            error: "Fee transaction hash required. Complete fee transfer before submitting.",
-            error_code: "fee_not_provided",
-            trade_order_id: tradeOrderId,
-          },
-          400,
-        );
-      }
-
-      // ── Replay protection: reject reused fee_tx_hash ──
-      const { data: existingUsage } = await supabase
-        .from("prediction_trade_orders")
-        .select("id")
-        .eq("fee_tx_hash", feeTxHash)
-        .not("status", "eq", "failed")
-        .limit(1)
-        .maybeSingle();
-
-      if (existingUsage) {
-        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_tx_hash_reused", null, {
-          fee_tx_hash: feeTxHash,
-          existing_trade_id: existingUsage.id,
-        });
-
-        await updateTradeOrder(supabase, tradeOrderId, {
-          status: "failed",
-          error_code: "fee_tx_hash_reused",
-          error_message: "This fee transaction hash has already been used for another trade.",
-          finalized_at: new Date().toISOString(),
-        });
-
-        return json(
-          {
-            error: "Fee transaction already used. Each prediction requires a new fee transfer.",
-            error_code: "fee_tx_hash_reused",
-            trade_order_id: tradeOrderId,
-          },
-          409,
-        );
-      }
-
-      await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_verification_started", {
+      await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_collection_started", {
         fee_usdc: fee_usd,
-        fee_tx_hash: feeTxHash,
         treasury: TREASURY_WALLET,
       });
 
-      const verifyResult = await verifyFeeTxOnChain(feeTxHash, fee_usd, normalizedWallet);
+      const collectResult = await collectFeeViaRelayer(normalizedWallet!, fee_usd);
 
-      if (verifyResult.success) {
+      if (collectResult.success && collectResult.txHash) {
         feeCollected = true;
+        feeTxHash = collectResult.txHash;
 
-        // Persist fee_tx_hash on the trade record (unique constraint prevents reuse)
         await updateTradeOrder(supabase, tradeOrderId, { fee_tx_hash: feeTxHash });
 
-        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_verified_onchain", null, {
+        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_collected_via_relayer", null, {
           tx_hash: feeTxHash,
           fee_usdc: fee_usd,
         });
       } else {
-        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_required_but_failed", null, {
-          error: verifyResult.error,
+        await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_collection_failed", null, {
+          error: collectResult.error,
           fee_usdc: fee_usd,
-          fee_tx_hash: feeTxHash,
         });
+
+        // If allowance is insufficient, tell client to approve
+        const isAllowanceError = collectResult.error?.includes("insufficient_allowance");
 
         await updateTradeOrder(supabase, tradeOrderId, {
           status: "failed",
-          error_code: "fee_verification_failed",
-          error_message: verifyResult.error?.substring(0, 500),
+          error_code: isAllowanceError ? "insufficient_allowance" : "fee_collection_failed",
+          error_message: collectResult.error?.substring(0, 500),
           finalized_at: new Date().toISOString(),
         });
 
         return json(
           {
-            error: "Fee transaction verification failed. Trade aborted.",
-            error_code: "fee_verification_failed",
+            error: isAllowanceError
+              ? "USDC approval needed. Please approve USDC spending and try again."
+              : "Fee collection failed. Please try again.",
+            error_code: isAllowanceError ? "insufficient_allowance" : "fee_collection_failed",
             trade_order_id: tradeOrderId,
           },
-          402,
+          isAllowanceError ? 403 : 502,
         );
       }
     }
