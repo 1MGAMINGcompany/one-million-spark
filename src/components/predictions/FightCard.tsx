@@ -450,6 +450,7 @@ export default function FightCard({
             onPredict={() => wallet ? onPredict(fight, "fighter_b") : onWalletRequired?.()}
             photo={fight.fighter_b_photo}
             record={fight.fighter_b_record}
+            sport={sport}
           />
         </div>
 
