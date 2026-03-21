@@ -114,19 +114,22 @@ Deno.serve(async (req) => {
 
       const results = await Promise.allSettled(
         batch.map(async (fight) => {
-          // ── 1. Fetch CLOB prices ──
-          const [resA, resB] = await Promise.all([
-            fetch(`${CLOB_BASE}/price?token_id=${fight.polymarket_outcome_a_token}&side=BUY`),
-            fetch(`${CLOB_BASE}/price?token_id=${fight.polymarket_outcome_b_token}&side=BUY`),
-          ]);
-
-          if (!resA.ok || !resB.ok) {
-            throw new Error(`HTTP ${resA.status}/${resB.status} for fight ${fight.id}`);
+          // ── 1. Fetch CLOB prices (non-fatal if fails) ──
+          let priceA = 0;
+          let priceB = 0;
+          try {
+            const [resA, resB] = await Promise.all([
+              fetch(`${CLOB_BASE}/price?token_id=${fight.polymarket_outcome_a_token}&side=BUY`),
+              fetch(`${CLOB_BASE}/price?token_id=${fight.polymarket_outcome_b_token}&side=BUY`),
+            ]);
+            if (resA.ok && resB.ok) {
+              const [dataA, dataB] = await Promise.all([resA.json(), resB.json()]);
+              priceA = parseFloat(dataA?.price || "0");
+              priceB = parseFloat(dataB?.price || "0");
+            }
+          } catch (e) {
+            console.warn(`[polymarket-prices] CLOB price fetch failed for ${fight.id}:`, e);
           }
-
-          const [dataA, dataB] = await Promise.all([resA.json(), resB.json()]);
-          const priceA = parseFloat(dataA?.price || "0");
-          const priceB = parseFloat(dataB?.price || "0");
 
           // ── 2. Fetch Gamma market data (volume, outcomes, description, image) ──
           let totalVolume = 0;
