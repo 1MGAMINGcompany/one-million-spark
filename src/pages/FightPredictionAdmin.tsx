@@ -1161,7 +1161,72 @@ function AdminFightCard({
         </div>
       </div>
 
-      {/* Countdown timer for confirmed fights */}
+      {/* ── Edit Fight Panel ── */}
+      {editMode ? (
+        <div className="mb-3 bg-muted/20 border border-border/40 rounded-lg p-3 space-y-3">
+          <p className="text-xs font-bold text-foreground uppercase tracking-wider">✏️ Edit Fight</p>
+          <Input placeholder="Title" value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} />
+          <div className="grid grid-cols-2 gap-3">
+            <Input placeholder="Fighter A name" value={editForm.fighter_a_name} onChange={e => setEditForm(f => ({ ...f, fighter_a_name: e.target.value }))} />
+            <Input placeholder="Fighter B name" value={editForm.fighter_b_name} onChange={e => setEditForm(f => ({ ...f, fighter_b_name: e.target.value }))} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Input placeholder="Fighter A photo URL" value={editForm.fighter_a_photo} onChange={e => setEditForm(f => ({ ...f, fighter_a_photo: e.target.value }))} />
+            <Input placeholder="Fighter B photo URL" value={editForm.fighter_b_photo} onChange={e => setEditForm(f => ({ ...f, fighter_b_photo: e.target.value }))} />
+          </div>
+          {/* Photo previews */}
+          <div className="grid grid-cols-2 gap-3">
+            {editForm.fighter_a_photo && (
+              <img src={editForm.fighter_a_photo} alt="A" className="w-12 h-12 rounded-full object-cover border border-border" onError={e => (e.currentTarget.style.display = 'none')} />
+            )}
+            {editForm.fighter_b_photo && (
+              <img src={editForm.fighter_b_photo} alt="B" className="w-12 h-12 rounded-full object-cover border border-border" onError={e => (e.currentTarget.style.display = 'none')} />
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Input placeholder="Fighter A record (e.g. 15-3)" value={editForm.fighter_a_record} onChange={e => setEditForm(f => ({ ...f, fighter_a_record: e.target.value }))} />
+            <Input placeholder="Fighter B record (e.g. 12-1)" value={editForm.fighter_b_record} onChange={e => setEditForm(f => ({ ...f, fighter_b_record: e.target.value }))} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Input placeholder="Weight class (e.g. 155 lbs)" value={editForm.weight_class} onChange={e => setEditForm(f => ({ ...f, weight_class: e.target.value }))} />
+            <Input placeholder="Fight class (A/B/C)" value={editForm.fight_class} onChange={e => setEditForm(f => ({ ...f, fight_class: e.target.value }))} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Input placeholder="Venue" value={editForm.venue} onChange={e => setEditForm(f => ({ ...f, venue: e.target.value }))} />
+            <Input placeholder="Referee" value={editForm.referee} onChange={e => setEditForm(f => ({ ...f, referee: e.target.value }))} />
+          </div>
+          <Input placeholder="Enrichment notes" value={editForm.enrichment_notes} onChange={e => setEditForm(f => ({ ...f, enrichment_notes: e.target.value }))} />
+          <div>
+            <Label className="text-xs text-muted-foreground mb-1 block">Commission (bps)</Label>
+            <Input type="number" value={editForm.commission_bps} onChange={e => setEditForm(f => ({ ...f, commission_bps: parseInt(e.target.value) || 0 }))} />
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={handleSaveFight} disabled={editSaving}>
+              {editSaving ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1" />} Save
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setEditMode(false)}>Cancel</Button>
+            {entryCount === 0 && (
+              <Button size="sm" variant="outline" className="border-destructive/50 text-destructive hover:bg-destructive/10 ml-auto"
+                onClick={() => onConfirm("Delete Fight", `Permanently delete "${fight.title}"?`, handleDeleteFight)}>
+                <Trash2 className="w-3 h-3 mr-1" /> Delete
+              </Button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="flex gap-2 mb-3">
+          <Button size="sm" variant="outline" onClick={() => setEditMode(true)} className="border-border text-foreground text-xs">
+            ✏️ Edit
+          </Button>
+          {entryCount === 0 && (
+            <Button size="sm" variant="outline" className="border-destructive/50 text-destructive hover:bg-destructive/10 text-xs"
+              onClick={() => onConfirm("Delete Fight", `Permanently delete "${fight.title}"?`, handleDeleteFight)}>
+              <Trash2 className="w-3 h-3 mr-1" /> Delete
+            </Button>
+          )}
+        </div>
+      )}
+
       {s === "confirmed" && countdownText && (
         <div className="mb-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-center">
           <p className="text-sm text-yellow-400 font-bold">⏱ Claims open in {countdownText}</p>
