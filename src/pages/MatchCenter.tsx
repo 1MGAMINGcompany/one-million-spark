@@ -204,79 +204,7 @@ export default function MatchCenter() {
         </div>
       </Card>
 
-      {/* Pool / Volume breakdown */}
-      <Card className="p-4">
-        <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-primary" />
-          {hasPool ? "Estimated Liquidity Per Side" : "Live Market Odds"}
-        </h2>
-        {hasPool ? (
-          <div className="grid grid-cols-2 gap-4">
-            <div className="text-center bg-blue-500/5 border border-blue-500/20 rounded-lg p-3">
-              <p className="text-xs text-muted-foreground">{nameA}</p>
-              <p className="text-2xl font-bold text-foreground">${poolA.toFixed(2)}</p>
-            </div>
-            <div className="text-center bg-red-500/5 border border-red-500/20 rounded-lg p-3">
-              <p className="text-xs text-muted-foreground">{nameB}</p>
-              <p className="text-2xl font-bold text-foreground">${poolB.toFixed(2)}</p>
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-4">
-            <div className="text-center bg-blue-500/5 border border-blue-500/20 rounded-lg p-3">
-              <p className="text-xs text-muted-foreground">{nameA}</p>
-              <p className="text-2xl font-bold text-foreground">
-                {probA ? `${probA}¢` : "—"}
-              </p>
-              {probA && <p className="text-xs text-primary font-bold">{(1 / (fight.price_a || 1)).toFixed(2)}x</p>}
-            </div>
-            <div className="text-center bg-red-500/5 border border-red-500/20 rounded-lg p-3">
-              <p className="text-xs text-muted-foreground">{nameB}</p>
-              <p className="text-2xl font-bold text-foreground">
-                {probB ? `${probB}¢` : "—"}
-              </p>
-              {probB && <p className="text-xs text-primary font-bold">{(1 / (fight.price_b || 1)).toFixed(2)}x</p>}
-            </div>
-          </div>
-        )}
-        {volume > 0 && (
-          <p className="text-center text-sm font-semibold text-primary/80 mt-3">
-            {formatVol(volume)} Market Volume
-          </p>
-        )}
-      </Card>
 
-      {/* Match info */}
-      {(fight.venue || fight.referee || fight.weight_class) && (
-        <Card className="p-4">
-          <h2 className="text-sm font-bold text-foreground mb-3">Match Info</h2>
-          <div className="space-y-2 text-xs text-muted-foreground">
-            {fight.venue && (
-              <div className="flex items-center gap-2">
-                <MapPin className="w-3.5 h-3.5" /> {fight.venue}
-              </div>
-            )}
-            {fight.referee && (
-              <div className="flex items-center gap-2">
-                <User className="w-3.5 h-3.5" /> Referee: {fight.referee}
-              </div>
-            )}
-            {fight.weight_class && (
-              <div className="flex items-center gap-2">
-                <span>⚖️</span> {fight.weight_class}
-              </div>
-            )}
-          </div>
-        </Card>
-      )}
-
-      {/* Explainer */}
-      {fight.explainer_card && (
-        <Card className="p-4">
-          <h2 className="text-sm font-bold text-foreground mb-2">Analysis</h2>
-          <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">{fight.explainer_card}</p>
-        </Card>
-      )}
 
       {/* About / Rules / Market Info */}
       <Card className="p-4">
