@@ -6,6 +6,7 @@ import muayThaiImg from "@/assets/muay-thai.png";
 import boxingGloveImg from "@/assets/boxing-glove.png";
 import mmaGlovesImg from "@/assets/mma-gloves.png";
 import futbolImg from "@/assets/futbol.png";
+import bareKnuckleImg from "@/assets/bare-knuckle.png";
 import { getSportItemLabel } from "@/lib/sportLabels";
 import { formatEventDateTime, formatEventTime } from "@/lib/formatEventLocalDateTime";
 
@@ -22,6 +23,7 @@ const SPORT_CONFIG: Record<string, SportConfig> = {
   "BOXING": { image: boxingGloveImg, color: "text-blue-400", bgColor: "bg-blue-500/10", borderColor: "border-blue-500/30" },
   "MMA": { image: mmaGlovesImg, color: "text-green-400", bgColor: "bg-green-500/10", borderColor: "border-green-500/30" },
   "FUTBOL": { image: futbolImg, color: "text-yellow-400", bgColor: "bg-yellow-500/10", borderColor: "border-yellow-500/30" },
+  "BARE KNUCKLE": { image: bareKnuckleImg, color: "text-orange-400", bgColor: "bg-orange-500/10", borderColor: "border-orange-500/30" },
 };
 
 interface PredictionEvent {
