@@ -299,10 +299,12 @@ export default function FightPredictionAdmin() {
       await callAdmin("createEvent", {
         event_name: eventName, organization: eventOrg || null,
         event_date: eventDate || null, location: eventLocation || null,
-        is_test: eventIsTest,
+        is_test: eventIsTest, category: eventCategory || null,
+        venue: eventVenue || null,
       });
       toast.success("Event created!");
       setEventName(""); setEventOrg(""); setEventDate(""); setEventLocation(""); setEventIsTest(false);
+      setEventCategory(""); setEventVenue("");
       loadData();
     } catch (err: any) { toast.error(err.message); }
   };
