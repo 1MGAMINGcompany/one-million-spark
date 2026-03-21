@@ -1183,9 +1183,9 @@ Deno.serve(async (req) => {
         polymarket_status = "awaiting_user_auth";
         tradeStatus = "requested";
 
-        const missingField = !pmSession
-          ? "no_session"
-          : !pmSession.pm_trading_key
+        const missingField = !pmApiKey
+          ? "no_api_key"
+          : !pmTradingKey
             ? "no_trading_key"
             : "session_invalid";
 
