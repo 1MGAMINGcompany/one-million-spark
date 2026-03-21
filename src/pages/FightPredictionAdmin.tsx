@@ -98,9 +98,17 @@ interface Fight {
   // Enrichment
   fighter_a_photo: string | null;
   fighter_b_photo: string | null;
+  fighter_a_record: string | null;
+  fighter_b_record: string | null;
+  weight_class: string | null;
+  fight_class: string | null;
+  venue: string | null;
+  referee: string | null;
   enrichment_notes: string | null;
   explainer_card: string | null;
 }
+
+const SPORT_CATEGORIES = ["MMA", "BOXING", "MUAY THAI", "BARE KNUCKLE", "FUTBOL", "BASKETBALL", "OTHER"];
 
 /** Return total pool in USD. Falls back to legacy lamports→SOL conversion for old data. */
 function getFightPoolUsd(fight: Fight): number {
