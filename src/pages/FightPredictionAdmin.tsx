@@ -1487,7 +1487,7 @@ function AutomationStatusPanel({
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
         <div className="text-muted-foreground">Event Start</div>
         <div className="text-foreground font-medium">
-          {eventAt ? eventAt.toLocaleString() : "—"}
+          {eventAt ? formatEventDateTime(eventAt.toISOString()) : "—"}
         </div>
 
         <div className="text-muted-foreground">Lock Time</div>
