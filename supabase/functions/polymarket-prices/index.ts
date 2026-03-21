@@ -19,6 +19,7 @@ const corsHeaders = {
 const CLOB_BASE = "https://clob.polymarket.com";
 const GAMMA_BASE = "https://gamma-api.polymarket.com";
 const TSDB_BASE = "https://www.thesportsdb.com/api/v1/json/3";
+const BDL_MMA_BASE = "https://api.balldontlie.io/mma/v1";
 
 const SOCCER_KEYWORDS = [
   "MLS", "SOCCER", "FUTBOL", "FÚTBOL", "PREMIER LEAGUE", "LA LIGA",
@@ -32,32 +33,73 @@ function isSoccerEvent(eventName: string, source?: string): boolean {
   return SOCCER_KEYWORDS.some((k) => upper.includes(k));
 }
 
+/** Strip common suffixes for better TheSportsDB matching */
+function cleanTeamName(name: string): string {
+  return name
+    .replace(/\s+de\s+Fútbol$/i, "")
+    .replace(/\s+de\s+Futbol$/i, "")
+    .replace(/\s+CF$/i, "")
+    .replace(/\s+FC$/i, "")
+    .replace(/\s+SC$/i, "")
+    .replace(/\s+AC$/i, "")
+    .replace(/\s+FK$/i, "")
+    .replace(/\s+B$/i, "") // reserve teams like "Real Sociedad B"
+    .trim();
+}
+
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-/** Fetch team badge from TheSportsDB */
+/** Fetch team badge from TheSportsDB — tries original name then cleaned */
 async function fetchTeamBadge(teamName: string): Promise<string | null> {
+  const names = [teamName, cleanTeamName(teamName)];
+  // Deduplicate
+  const unique = [...new Set(names.filter(Boolean))];
+  for (const name of unique) {
+    try {
+      const res = await fetch(`${TSDB_BASE}/searchteams.php?t=${encodeURIComponent(name)}`);
+      if (!res.ok) continue;
+      const data = await res.json();
+      const team = data?.teams?.[0];
+      const badge = team?.strBadge || team?.strLogo || null;
+      if (badge) return badge;
+    } catch { /* continue */ }
+  }
+  return null;
+}
+
+/** Fetch fighter photo from BallDontLie MMA API */
+async function fetchFighterPhotoBDL(fighterName: string): Promise<string | null> {
+  const apiKey = Deno.env.get("BALLDONTLIE_API_KEY");
+  if (!apiKey) return null;
   try {
-    const res = await fetch(`${TSDB_BASE}/searchteams.php?t=${encodeURIComponent(teamName)}`);
+    const res = await fetch(
+      `${BDL_MMA_BASE}/fighters?search=${encodeURIComponent(fighterName)}`,
+      { headers: { Authorization: apiKey } },
+    );
     if (!res.ok) return null;
     const data = await res.json();
-    const team = data?.teams?.[0];
-    return team?.strBadge || team?.strLogo || null;
+    const fighters = data?.data || [];
+    // Find best match by full name
+    const nameUpper = fighterName.toUpperCase();
+    const match = fighters.find((f: any) =>
+      `${f.first_name} ${f.last_name}`.toUpperCase() === nameUpper
+    ) || fighters[0];
+    return match?.image_url || null;
   } catch {
     return null;
   }
 }
 
-/** Fetch fighter cutout photo from TheSportsDB */
-async function fetchFighterPhoto(fighterName: string): Promise<string | null> {
+/** Fetch fighter cutout photo from TheSportsDB (fallback) */
+async function fetchFighterPhotoTSDB(fighterName: string): Promise<string | null> {
   try {
     const res = await fetch(`${TSDB_BASE}/searchplayers.php?p=${encodeURIComponent(fighterName)}`);
     if (!res.ok) return null;
     const data = await res.json();
-    // Filter for combat sport athletes only
     const players = data?.player || [];
     const fighter = players.find((p: any) =>
       ["Fighting", "MMA", "Boxing", "Muay Thai"].includes(p.strSport)
@@ -66,6 +108,14 @@ async function fetchFighterPhoto(fighterName: string): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/** Try multiple sources for fighter photo */
+async function fetchFighterPhoto(fighterName: string): Promise<string | null> {
+  // Try BallDontLie first (better MMA coverage), then TheSportsDB
+  const bdl = await fetchFighterPhotoBDL(fighterName);
+  if (bdl) return bdl;
+  return fetchFighterPhotoTSDB(fighterName);
 }
 
 /** Parse real outcome names from Gamma outcomes JSON string */
