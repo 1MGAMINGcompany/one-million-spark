@@ -62,9 +62,15 @@ function buildQuestion(fight: Fight, isSoccer: boolean): string {
   return `Who wins: ${fight.fighter_a_name} vs ${fight.fighter_b_name}?`;
 }
 
-function SportFallbackIcon({ isSoccer, className }: { isSoccer: boolean; className?: string }) {
-  if (isSoccer) {
+function SportFallbackIcon({ sport, className, fighterName }: { sport?: SportType; className?: string; fighterName?: string }) {
+  if (sport === "soccer") {
     return <span className={className || "text-2xl"}>⚽</span>;
+  }
+  if (sport === "over_under") {
+    if (isOverSide(fighterName || "")) {
+      return <ArrowUp className={`${className || "w-6 h-6"} text-green-400`} />;
+    }
+    return <ArrowDown className={`${className || "w-6 h-6"} text-red-400`} />;
   }
   return <span className={className || "text-2xl"}>🥊</span>;
 }
