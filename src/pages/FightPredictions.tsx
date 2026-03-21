@@ -20,6 +20,7 @@ import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
 import { useMyReferralCode } from "@/hooks/useMyReferralCode";
 import type { Fight } from "@/components/predictions/FightCard";
 import type { TradeResult } from "@/components/predictions/tradeResultTypes";
+import { usePolymarketPrices } from "@/hooks/usePolymarketPrices";
 
 const FEE_RATE = 0.05;
 
@@ -102,6 +103,7 @@ export default function FightPredictions() {
   const { approveFeeAllowance } = usePrivyFeeTransfer();
   const { relayer_allowance } = usePolygonUSDC();
   usePolymarketSession(); // kept for hook stability
+  usePolymarketPrices(); // live price + volume refresh (45s cycle)
   const referralCode = useMyReferralCode(address ?? null);
   const { t } = useTranslation();
   const [fights, setFights] = useState<Fight[]>([]);

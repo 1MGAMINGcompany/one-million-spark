@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Swords, Trophy, Loader2, HelpCircle, ChevronRight, Newspaper, ArrowUp, ArrowDown } from "lucide-react";
 import { detectSport, isOverSide, type SportType } from "@/lib/detectSport";
+import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
 
 export interface Fight {
   id: string;
@@ -56,10 +57,12 @@ function buildQuestion(fight: Fight, isSoccer: boolean): string {
   if (fight.source === "polymarket" && fight.title && fight.title.includes("?")) {
     return fight.title;
   }
+  const nameA = resolveOutcomeName(fight.fighter_a_name, "a", fight);
+  const nameB = resolveOutcomeName(fight.fighter_b_name, "b", fight);
   if (isSoccer) {
-    return `Who will win: ${fight.fighter_a_name} or ${fight.fighter_b_name}?`;
+    return `Who will win: ${nameA} or ${nameB}?`;
   }
-  return `Who wins: ${fight.fighter_a_name} vs ${fight.fighter_b_name}?`;
+  return `Who wins: ${nameA} vs ${nameB}?`;
 }
 
 function SportFallbackIcon({ sport, className, fighterName }: { sport?: SportType; className?: string; fighterName?: string }) {
@@ -166,12 +169,9 @@ function formatVolume(v: number): string {
   return `$${v.toFixed(0)}`;
 }
 
-/** Get display name — replace "Yes"/"No" with title for Polymarket binary markets */
-function displayName(name: string, fight: Fight): string {
-  if ((name === "Yes" || name === "No") && fight.title) {
-    return fight.title.replace(/^Will\s+/i, "").replace(/\s+win\??$/i, "").trim() || name;
-  }
-  return name;
+/** Get display name — replace "Yes"/"No" with meaningful name */
+function displayName(name: string, fight: Fight, side: "a" | "b"): string {
+  return resolveOutcomeName(name, side, fight);
 }
 
 /** USDC per-side display for Polymarket events */
@@ -181,8 +181,8 @@ function PolymarketPoolStrip({ fight }: { fight: Fight }) {
   const hasPool = poolA > 0 || poolB > 0;
   const volume = fight.polymarket_volume_usd ?? 0;
 
-  const nameA = displayName(fight.fighter_a_name, fight);
-  const nameB = displayName(fight.fighter_b_name, fight);
+  const nameA = displayName(fight.fighter_a_name, fight, "a");
+  const nameB = displayName(fight.fighter_b_name, fight, "b");
 
   return (
     <div className="w-full space-y-2">
@@ -308,7 +308,7 @@ export default function FightCard({
         <div className="px-4 pt-3 pb-3 sm:px-6">
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-5" dir="ltr">
             <SoccerTeamColumn
-              name={fight.fighter_a_name}
+              name={resolveOutcomeName(fight.fighter_a_name, "a", fight)}
               odds={oddsA}
               poolAmount={poolA}
               canPredict={canPredict}
@@ -320,7 +320,7 @@ export default function FightCard({
               <span className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">vs</span>
             </div>
             <SoccerTeamColumn
-              name={fight.fighter_b_name}
+              name={resolveOutcomeName(fight.fighter_b_name, "b", fight)}
               odds={oddsB}
               poolAmount={poolB}
               canPredict={canPredict}

@@ -5,7 +5,8 @@ import { createClient } from "@supabase/supabase-js";
  *
  * Called by frontend polling or pg_cron to keep displayed prices fresh.
  * Fetches best BUY prices from CLOB API and volume from Gamma API (both public, no auth).
- * 
+ * Also enriches soccer rows with team names/images from Gamma.
+ *
  * POST body: {} (no params needed — refreshes all active Polymarket fights)
  */
 
@@ -17,6 +18,17 @@ const corsHeaders = {
 
 const CLOB_BASE = "https://clob.polymarket.com";
 const GAMMA_BASE = "https://gamma-api.polymarket.com";
+
+const SOCCER_KEYWORDS = [
+  "MLS", "SOCCER", "FUTBOL", "FÚTBOL", "PREMIER LEAGUE", "LA LIGA",
+  "CHAMPIONS LEAGUE", "SERIE A", "BUNDESLIGA", "LIGUE 1", "EREDIVISIE",
+  "LIGA MX", "EPL", "COPA", "EURO", "FIFA", "WORLD CUP",
+];
+
+function isSoccerEvent(eventName: string): boolean {
+  const upper = (eventName || "").toUpperCase();
+  return SOCCER_KEYWORDS.some((k) => upper.includes(k));
+}
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -38,7 +50,7 @@ Deno.serve(async (req) => {
     // Get all active Polymarket-backed fights
     const { data: fights, error } = await supabase
       .from("prediction_fights")
-      .select("id, polymarket_outcome_a_token, polymarket_outcome_b_token, polymarket_condition_id, polymarket_market_id, fighter_a_photo, fighter_b_photo, home_logo, away_logo")
+      .select("id, polymarket_outcome_a_token, polymarket_outcome_b_token, polymarket_condition_id, polymarket_market_id, fighter_a_photo, fighter_b_photo, home_logo, away_logo, fighter_a_name, fighter_b_name, event_name, title")
       .eq("polymarket_active", true)
       .not("polymarket_outcome_a_token", "is", null)
       .in("status", ["open", "locked", "live"]);
@@ -78,6 +90,7 @@ Deno.serve(async (req) => {
           let poolAUsd = 0;
           let poolBUsd = 0;
           let gammaImage: string | null = null;
+          let gammaGroupTitle: string | null = null;
 
           if (fight.polymarket_market_id) {
             try {
@@ -93,8 +106,9 @@ Deno.serve(async (req) => {
                     poolAUsd = Math.round(totalVolume * priceA * 100) / 100;
                     poolBUsd = Math.round(totalVolume * priceB * 100) / 100;
                   }
-                  // Grab image for enrichment if available
+                  // Grab image and groupItemTitle for enrichment
                   gammaImage = market.image || market.icon || null;
+                  gammaGroupTitle = market.groupItemTitle || null;
                 }
               }
             } catch (e) {
@@ -115,9 +129,14 @@ Deno.serve(async (req) => {
             updatePayload.pool_b_usd = poolBUsd;
           }
 
-          // Set image from Gamma if we have no photos/logos at all
-          if (gammaImage && !fight.fighter_a_photo && !fight.home_logo) {
-            updatePayload.fighter_a_photo = gammaImage;
+          // Enrich image: for soccer events, set home_logo; for others, set fighter_a_photo
+          if (gammaImage) {
+            const eventIsSoccer = isSoccerEvent(fight.event_name || "");
+            if (eventIsSoccer && !fight.home_logo) {
+              updatePayload.home_logo = gammaImage;
+            } else if (!eventIsSoccer && !fight.fighter_a_photo) {
+              updatePayload.fighter_a_photo = gammaImage;
+            }
           }
 
           await supabase
