@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Swords, Trophy, Loader2, HelpCircle, ChevronRight, Newspaper } from "lucide-react";
+import { Swords, Trophy, Loader2, HelpCircle, ChevronRight, Newspaper, ArrowUp, ArrowDown } from "lucide-react";
+import { detectSport, isOverSide, type SportType } from "@/lib/detectSport";
 
 export interface Fight {
   id: string;
