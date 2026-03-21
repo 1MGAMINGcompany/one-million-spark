@@ -52,6 +52,8 @@ interface PredictionEvent {
   scheduled_lock_at: string | null;
   scheduled_live_at: string | null;
   last_automation_check_at: string | null;
+  category: string | null;
+  venue: string | null;
   // Polymarket mapping
   polymarket_event_id: string | null;
   polymarket_slug: string | null;
@@ -96,9 +98,17 @@ interface Fight {
   // Enrichment
   fighter_a_photo: string | null;
   fighter_b_photo: string | null;
+  fighter_a_record: string | null;
+  fighter_b_record: string | null;
+  weight_class: string | null;
+  fight_class: string | null;
+  venue: string | null;
+  referee: string | null;
   enrichment_notes: string | null;
   explainer_card: string | null;
 }
+
+const SPORT_CATEGORIES = ["MMA", "BOXING", "MUAY THAI", "BARE KNUCKLE", "FUTBOL", "BASKETBALL", "OTHER"];
 
 /** Return total pool in USD. Falls back to legacy lamports→SOL conversion for old data. */
 function getFightPoolUsd(fight: Fight): number {
@@ -150,8 +160,8 @@ export default function FightPredictionAdmin() {
   const [eventDate, setEventDate] = useState("");
   const [eventLocation, setEventLocation] = useState("");
   const [eventIsTest, setEventIsTest] = useState(false);
-
-  // Create fight form
+  const [eventCategory, setEventCategory] = useState("");
+  const [eventVenue, setEventVenue] = useState("");
   const [fightTitle, setFightTitle] = useState("");
   const [fighterA, setFighterA] = useState("");
   const [fighterB, setFighterB] = useState("");
@@ -289,10 +299,12 @@ export default function FightPredictionAdmin() {
       await callAdmin("createEvent", {
         event_name: eventName, organization: eventOrg || null,
         event_date: eventDate || null, location: eventLocation || null,
-        is_test: eventIsTest,
+        is_test: eventIsTest, category: eventCategory || null,
+        venue: eventVenue || null,
       });
       toast.success("Event created!");
       setEventName(""); setEventOrg(""); setEventDate(""); setEventLocation(""); setEventIsTest(false);
+      setEventCategory(""); setEventVenue("");
       loadData();
     } catch (err: any) { toast.error(err.message); }
   };
@@ -481,7 +493,26 @@ export default function FightPredictionAdmin() {
               <Input placeholder="Organization" value={eventOrg} onChange={e => setEventOrg(e.target.value)} />
               <Input placeholder="Location" value={eventLocation} onChange={e => setEventLocation(e.target.value)} />
             </div>
-            <Input type="date" placeholder="Event date" value={eventDate} onChange={e => setEventDate(e.target.value)} />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1 block">Event Date & Time</Label>
+                <Input type="datetime-local" value={eventDate} onChange={e => setEventDate(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1 block">Sport / Category</Label>
+                <Select value={eventCategory} onValueChange={setEventCategory}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SPORT_CATEGORIES.map(c => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <Input placeholder="Venue (e.g. Madison Square Garden)" value={eventVenue} onChange={e => setEventVenue(e.target.value)} />
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <input type="checkbox" checked={eventIsTest} onChange={e => setEventIsTest(e.target.checked)} />
               Test Event
@@ -697,6 +728,36 @@ function AdminEventCard({
 }) {
   const hasActiveFights = fights.some(f => ["open", "locked", "live", "result_selected", "confirmed"].includes(f.status));
   const [expanded, setExpanded] = useState(hasActiveFights);
+  const [editMode, setEditMode] = useState(false);
+  const [editForm, setEditForm] = useState({
+    event_name: event.event_name,
+    event_date: event.event_date ? event.event_date.slice(0, 16) : "",
+    organization: event.organization || "",
+    location: event.location || "",
+    venue: event.venue || "",
+    category: event.category || "",
+  });
+  const [editSaving, setEditSaving] = useState(false);
+
+  const handleSaveEvent = async () => {
+    setEditSaving(true);
+    try {
+      await callAdmin("updateEvent", {
+        event_id: event.id,
+        event_name: editForm.event_name || undefined,
+        event_date: editForm.event_date || null,
+        organization: editForm.organization || null,
+        location: editForm.location || null,
+        venue: editForm.venue || null,
+        category: editForm.category || null,
+      });
+      toast.success("Event updated");
+      setEditMode(false);
+      loadData();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setEditSaving(false); }
+  };
+
   const totalPool = fights.reduce((sum, f) => sum + getFightPoolUsd(f), 0);
   const totalPredictions = fights.reduce((sum, f) => sum + (entryCounts[f.id] || 0), 0);
   const liveCount = fights.filter(f => f.status === "live").length;
@@ -771,6 +832,44 @@ function AdminEventCard({
       {/* Expanded Content */}
       {expanded && (
         <div className="px-4 pb-4 space-y-3">
+          {/* ── Edit Event Panel ── */}
+          {editMode ? (
+            <div className="bg-muted/20 border border-border/40 rounded-lg p-3 space-y-3">
+              <p className="text-xs font-bold text-foreground uppercase tracking-wider">✏️ Edit Event</p>
+              <Input placeholder="Event name" value={editForm.event_name} onChange={e => setEditForm(f => ({ ...f, event_name: e.target.value }))} />
+              <div className="grid grid-cols-2 gap-3">
+                <Input placeholder="Organization" value={editForm.organization} onChange={e => setEditForm(f => ({ ...f, organization: e.target.value }))} />
+                <Input placeholder="Location" value={editForm.location} onChange={e => setEditForm(f => ({ ...f, location: e.target.value }))} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-1 block">Event Date & Time</Label>
+                  <Input type="datetime-local" value={editForm.event_date} onChange={e => setEditForm(f => ({ ...f, event_date: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-1 block">Category</Label>
+                  <Select value={editForm.category} onValueChange={v => setEditForm(f => ({ ...f, category: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                    <SelectContent>
+                      {SPORT_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <Input placeholder="Venue" value={editForm.venue} onChange={e => setEditForm(f => ({ ...f, venue: e.target.value }))} />
+              <div className="flex gap-2">
+                <Button size="sm" onClick={handleSaveEvent} disabled={editSaving}>
+                  {editSaving ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1" />} Save
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setEditMode(false)}>Cancel</Button>
+              </div>
+            </div>
+          ) : (
+            <Button size="sm" variant="outline" onClick={() => setEditMode(true)} className="border-border text-foreground">
+              ✏️ Edit Event
+            </Button>
+          )}
+
           {/* ── Automation Status Panel (approved events with fights) ── */}
           {event.status === "approved" && fights.length > 0 && (
             <AutomationStatusPanel event={event} fights={fights} busy={busy} callAdmin={callAdmin} loadData={loadData} />
@@ -813,7 +912,8 @@ function AdminEventCard({
                 ▶ Resume Auto
               </Button>
             )}
-            {["approved", "rejected"].includes(event.status) && eventIsFullySettled && (
+            {/* Archive — show for any non-archived event */}
+            {!["archived"].includes(event.status) && (
               <Button size="sm" variant="outline" onClick={() => onConfirm(
                 "Archive Event",
                 `Archive "${event.event_name}"?`,
@@ -825,61 +925,15 @@ function AdminEventCard({
               </Button>
             )}
 
-            {event.status === "approved" && fights.every(f => ["settled", "refunds_complete", "cancelled"].includes(f.status) || fights.length === 0) && (
-              <Button size="sm" variant="outline" onClick={() => onConfirm(
-                "Archive Event",
-                `Archive "${event.event_name}"?`,
-                () => onArchive(event.id, event.event_name),
-                false
-              )} disabled={busy}
-                className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10">
-                <Archive className="w-3 h-3 mr-1" /> Archive
-              </Button>
-            )}
-
-            {!eventHasPredictions && !["archived"].includes(event.status) && (
+            {/* Delete — show for any event with 0 predictions */}
+            {!eventHasPredictions && (
               <Button size="sm" variant="outline" onClick={() => onConfirm(
                 "Delete Event",
-                `Permanently delete "${event.event_name}" and its fights?`,
+                `Permanently delete "${event.event_name}" and all its fights?`,
                 () => onDelete(event.id, event.event_name)
               )} disabled={busy}
                 className="border-destructive/50 text-destructive hover:bg-destructive/10">
                 <Trash2 className="w-3 h-3 mr-1" /> Delete
-              </Button>
-            )}
-
-            {["archived", "dismissed"].includes(event.status) && !eventHasPredictions && (
-              <Button size="sm" variant="outline" onClick={() => onConfirm(
-                "Delete Event",
-                `Permanently delete "${event.event_name}"?`,
-                () => onDelete(event.id, event.event_name)
-              )} disabled={busy}
-                className="border-destructive/50 text-destructive hover:bg-destructive/10">
-                <Trash2 className="w-3 h-3 mr-1" /> Delete
-              </Button>
-            )}
-
-            {["dismissed"].includes(event.status) && eventHasPredictions && (
-              <Button size="sm" variant="outline" onClick={() => onConfirm(
-                "Archive Event",
-                `Cannot delete — has predictions. Archive instead?`,
-                () => onArchive(event.id, event.event_name),
-                false
-              )} disabled={busy}
-                className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10">
-                <Archive className="w-3 h-3 mr-1" /> Archive Instead
-              </Button>
-            )}
-
-            {event.is_test && !["archived", "dismissed"].includes(event.status) && (
-              <Button size="sm" variant="outline" disabled={busy}
-                className="border-destructive/50 text-destructive hover:bg-destructive/10"
-                onClick={() => onConfirm(
-                  "Delete Test Event",
-                  `Delete "${event.event_name}" and all its fights?`,
-                  async () => { try { await callAdmin("deleteTestEvent", { event_id: event.id }); toast.success("Deleted"); loadData(); } catch(e:any){toast.error(e.message);} }
-                )}>
-                <Trash2 className="w-3 h-3 mr-1" /> Delete Test
               </Button>
             )}
           </div>
@@ -928,6 +982,53 @@ function AdminFightCard({
   const [methodOpen, setMethodOpen] = useState(false);
   const [autoSettled, setAutoSettled] = useState(false);
   const autoSettleRef = useRef(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editForm, setEditForm] = useState({
+    title: fight.title,
+    fighter_a_name: fight.fighter_a_name,
+    fighter_b_name: fight.fighter_b_name,
+    fighter_a_photo: fight.fighter_a_photo || "",
+    fighter_b_photo: fight.fighter_b_photo || "",
+    fighter_a_record: fight.fighter_a_record || "",
+    fighter_b_record: fight.fighter_b_record || "",
+    weight_class: fight.weight_class || "",
+    fight_class: fight.fight_class || "",
+    venue: fight.venue || "",
+    referee: fight.referee || "",
+    enrichment_notes: fight.enrichment_notes || "",
+    commission_bps: fight.commission_bps,
+  });
+
+  const handleSaveFight = async () => {
+    setEditSaving(true);
+    try {
+      await onAction("updateFight", {
+        fight_id: fight.id,
+        ...editForm,
+        fighter_a_photo: editForm.fighter_a_photo || null,
+        fighter_b_photo: editForm.fighter_b_photo || null,
+        fighter_a_record: editForm.fighter_a_record || null,
+        fighter_b_record: editForm.fighter_b_record || null,
+        weight_class: editForm.weight_class || null,
+        fight_class: editForm.fight_class || null,
+        venue: editForm.venue || null,
+        referee: editForm.referee || null,
+        enrichment_notes: editForm.enrichment_notes || null,
+      });
+      toast.success("Fight updated");
+      setEditMode(false);
+    } catch (e: any) { toast.error(e.message); }
+    finally { setEditSaving(false); }
+  };
+
+  const handleDeleteFight = async () => {
+    try {
+      await onAction("deleteFight", { fight_id: fight.id });
+      toast.success("Fight deleted");
+    } catch (e: any) { toast.error(e.message); }
+  };
+
   const s = fight.status;
   const { text: countdownText, expired: timerExpired } = useCountdown(s === "confirmed" ? fight.claims_open_at : null);
   const claimsOpen = fight.claims_open_at && new Date() >= new Date(fight.claims_open_at);
@@ -1060,7 +1161,72 @@ function AdminFightCard({
         </div>
       </div>
 
-      {/* Countdown timer for confirmed fights */}
+      {/* ── Edit Fight Panel ── */}
+      {editMode ? (
+        <div className="mb-3 bg-muted/20 border border-border/40 rounded-lg p-3 space-y-3">
+          <p className="text-xs font-bold text-foreground uppercase tracking-wider">✏️ Edit Fight</p>
+          <Input placeholder="Title" value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} />
+          <div className="grid grid-cols-2 gap-3">
+            <Input placeholder="Fighter A name" value={editForm.fighter_a_name} onChange={e => setEditForm(f => ({ ...f, fighter_a_name: e.target.value }))} />
+            <Input placeholder="Fighter B name" value={editForm.fighter_b_name} onChange={e => setEditForm(f => ({ ...f, fighter_b_name: e.target.value }))} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Input placeholder="Fighter A photo URL" value={editForm.fighter_a_photo} onChange={e => setEditForm(f => ({ ...f, fighter_a_photo: e.target.value }))} />
+            <Input placeholder="Fighter B photo URL" value={editForm.fighter_b_photo} onChange={e => setEditForm(f => ({ ...f, fighter_b_photo: e.target.value }))} />
+          </div>
+          {/* Photo previews */}
+          <div className="grid grid-cols-2 gap-3">
+            {editForm.fighter_a_photo && (
+              <img src={editForm.fighter_a_photo} alt="A" className="w-12 h-12 rounded-full object-cover border border-border" onError={e => (e.currentTarget.style.display = 'none')} />
+            )}
+            {editForm.fighter_b_photo && (
+              <img src={editForm.fighter_b_photo} alt="B" className="w-12 h-12 rounded-full object-cover border border-border" onError={e => (e.currentTarget.style.display = 'none')} />
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Input placeholder="Fighter A record (e.g. 15-3)" value={editForm.fighter_a_record} onChange={e => setEditForm(f => ({ ...f, fighter_a_record: e.target.value }))} />
+            <Input placeholder="Fighter B record (e.g. 12-1)" value={editForm.fighter_b_record} onChange={e => setEditForm(f => ({ ...f, fighter_b_record: e.target.value }))} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Input placeholder="Weight class (e.g. 155 lbs)" value={editForm.weight_class} onChange={e => setEditForm(f => ({ ...f, weight_class: e.target.value }))} />
+            <Input placeholder="Fight class (A/B/C)" value={editForm.fight_class} onChange={e => setEditForm(f => ({ ...f, fight_class: e.target.value }))} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Input placeholder="Venue" value={editForm.venue} onChange={e => setEditForm(f => ({ ...f, venue: e.target.value }))} />
+            <Input placeholder="Referee" value={editForm.referee} onChange={e => setEditForm(f => ({ ...f, referee: e.target.value }))} />
+          </div>
+          <Input placeholder="Enrichment notes" value={editForm.enrichment_notes} onChange={e => setEditForm(f => ({ ...f, enrichment_notes: e.target.value }))} />
+          <div>
+            <Label className="text-xs text-muted-foreground mb-1 block">Commission (bps)</Label>
+            <Input type="number" value={editForm.commission_bps} onChange={e => setEditForm(f => ({ ...f, commission_bps: parseInt(e.target.value) || 0 }))} />
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={handleSaveFight} disabled={editSaving}>
+              {editSaving ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1" />} Save
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setEditMode(false)}>Cancel</Button>
+            {entryCount === 0 && (
+              <Button size="sm" variant="outline" className="border-destructive/50 text-destructive hover:bg-destructive/10 ml-auto"
+                onClick={() => onConfirm("Delete Fight", `Permanently delete "${fight.title}"?`, handleDeleteFight)}>
+                <Trash2 className="w-3 h-3 mr-1" /> Delete
+              </Button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="flex gap-2 mb-3">
+          <Button size="sm" variant="outline" onClick={() => setEditMode(true)} className="border-border text-foreground text-xs">
+            ✏️ Edit
+          </Button>
+          {entryCount === 0 && (
+            <Button size="sm" variant="outline" className="border-destructive/50 text-destructive hover:bg-destructive/10 text-xs"
+              onClick={() => onConfirm("Delete Fight", `Permanently delete "${fight.title}"?`, handleDeleteFight)}>
+              <Trash2 className="w-3 h-3 mr-1" /> Delete
+            </Button>
+          )}
+        </div>
+      )}
+
       {s === "confirmed" && countdownText && (
         <div className="mb-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-center">
           <p className="text-sm text-yellow-400 font-bold">⏱ Claims open in {countdownText}</p>

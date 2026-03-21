@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
     // ── Event Management ──
 
     if (action === "createEvent") {
-      const { event_name, organization, event_date, location, auto_resolve, is_test } = body;
+      const { event_name, organization, event_date, location, auto_resolve, is_test, category, venue } = body;
       if (!event_name) return json({ error: "Missing event_name" }, 400);
 
       const { data, error } = await supabase
@@ -62,6 +62,8 @@ Deno.serve(async (req) => {
           location: location || null,
           auto_resolve: auto_resolve ?? false,
           is_test: is_test ?? false,
+          category: category || null,
+          venue: venue || null,
           status: "draft",
         })
         .select()
@@ -69,6 +71,111 @@ Deno.serve(async (req) => {
 
       if (error) throw error;
       return json({ event: data });
+    }
+
+    if (action === "updateEvent") {
+      const { event_id } = body;
+      if (!event_id) return json({ error: "Missing event_id" }, 400);
+
+      const allowedFields = ["event_name", "event_date", "organization", "location", "venue", "category", "is_test"];
+      const updates: Record<string, any> = { updated_at: new Date().toISOString() };
+      for (const f of allowedFields) {
+        if (body[f] !== undefined) updates[f] = body[f];
+      }
+
+      const { data, error } = await supabase
+        .from("prediction_events")
+        .update(updates)
+        .eq("id", event_id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      await supabase.from("automation_logs").insert({
+        action: "update_event",
+        event_id,
+        admin_wallet: wallet,
+        source: "admin_manual",
+        details: updates,
+      });
+
+      return json({ event: data });
+    }
+
+    if (action === "updateFight") {
+      const { fight_id } = body;
+      if (!fight_id) return json({ error: "Missing fight_id" }, 400);
+
+      const allowedFields = [
+        "title", "fighter_a_name", "fighter_b_name",
+        "fighter_a_photo", "fighter_b_photo",
+        "fighter_a_record", "fighter_b_record",
+        "weight_class", "fight_class",
+        "venue", "referee", "enrichment_notes",
+        "commission_bps",
+      ];
+      const updates: Record<string, any> = { updated_at: new Date().toISOString() };
+      for (const f of allowedFields) {
+        if (body[f] !== undefined) updates[f] = body[f];
+      }
+
+      const { data, error } = await supabase
+        .from("prediction_fights")
+        .update(updates)
+        .eq("id", fight_id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      await supabase.from("automation_logs").insert({
+        action: "update_fight",
+        fight_id,
+        admin_wallet: wallet,
+        source: "admin_manual",
+        details: updates,
+      });
+
+      return json({ fight: data });
+    }
+
+    if (action === "deleteFight") {
+      const { fight_id } = body;
+      if (!fight_id) return json({ error: "Missing fight_id" }, 400);
+
+      // Check for prediction entries
+      const { count } = await supabase
+        .from("prediction_entries")
+        .select("id", { count: "exact", head: true })
+        .eq("fight_id", fight_id);
+
+      if (count && count > 0) {
+        return json({ error: "Cannot delete fight with existing predictions" }, 400);
+      }
+
+      const { data: fightData } = await supabase
+        .from("prediction_fights")
+        .select("title")
+        .eq("id", fight_id)
+        .single();
+
+      const { error } = await supabase
+        .from("prediction_fights")
+        .delete()
+        .eq("id", fight_id);
+
+      if (error) throw error;
+
+      await supabase.from("automation_logs").insert({
+        action: "delete_fight",
+        fight_id,
+        admin_wallet: wallet,
+        source: "admin_manual",
+        details: { title: fightData?.title || "unknown" },
+      });
+
+      return json({ deleted: true });
     }
 
     if (action === "approveEvent") {
