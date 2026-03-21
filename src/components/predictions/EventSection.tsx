@@ -78,17 +78,21 @@ function parseEventLabel(eventName: string): { sport: string; name: string; subE
   return { sport: "OTHER", name: eventName };
 }
 
+function getFightSortPriority(label: string): number {
+  if (label.startsWith('Main')) return 0;
+  if (label.startsWith('Co-Main') || label.startsWith('Co Main')) return 1;
+  if (label.startsWith('Featured')) return 2;
+  // Numbered fights: extract number, higher numbers first (closer to main event)
+  const num = parseInt(label.replace(/\D/g, '')) || 0;
+  if (num > 0) return 1000 - num; // Fight 11 = 989, Fight 1 = 999
+  return 500; // fallback for unknown labels
+}
+
 function sortFights(fights: Fight[]): Fight[] {
   return [...fights].sort((a, b) => {
     const labelA = a.title.split(' — ')[0];
     const labelB = b.title.split(' — ')[0];
-    if (labelA.startsWith('Main')) return -1;
-    if (labelB.startsWith('Main')) return 1;
-    if (labelA.startsWith('Semi') && !labelB.startsWith('Semi')) return 1;
-    if (labelB.startsWith('Semi') && !labelA.startsWith('Semi')) return -1;
-    const numA = parseInt(labelA.replace(/\D/g, '')) || 0;
-    const numB = parseInt(labelB.replace(/\D/g, '')) || 0;
-    return numB - numA;
+    return getFightSortPriority(labelA) - getFightSortPriority(labelB);
   });
 }
 
