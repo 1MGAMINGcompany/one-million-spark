@@ -253,7 +253,8 @@ export default function FightCard({
   const badge = STATUS_BADGE[displayStatus] || STATUS_BADGE.open;
   const canPredict = displayStatus === "open";
 
-  const isSoccer = isSoccerEvent || fight.source === "api-football";
+  const sport = detectSport(fight);
+  const isSoccer = isSoccerEvent || sport === "soccer";
   const hasLogos = isSoccer && !!(fight.home_logo && fight.away_logo);
 
   const titleParts = fight.title.split(' — ');
