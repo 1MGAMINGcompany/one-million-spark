@@ -728,6 +728,36 @@ function AdminEventCard({
 }) {
   const hasActiveFights = fights.some(f => ["open", "locked", "live", "result_selected", "confirmed"].includes(f.status));
   const [expanded, setExpanded] = useState(hasActiveFights);
+  const [editMode, setEditMode] = useState(false);
+  const [editForm, setEditForm] = useState({
+    event_name: event.event_name,
+    event_date: event.event_date ? event.event_date.slice(0, 16) : "",
+    organization: event.organization || "",
+    location: event.location || "",
+    venue: event.venue || "",
+    category: event.category || "",
+  });
+  const [editSaving, setEditSaving] = useState(false);
+
+  const handleSaveEvent = async () => {
+    setEditSaving(true);
+    try {
+      await callAdmin("updateEvent", {
+        event_id: event.id,
+        event_name: editForm.event_name || undefined,
+        event_date: editForm.event_date || null,
+        organization: editForm.organization || null,
+        location: editForm.location || null,
+        venue: editForm.venue || null,
+        category: editForm.category || null,
+      });
+      toast.success("Event updated");
+      setEditMode(false);
+      loadData();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setEditSaving(false); }
+  };
+
   const totalPool = fights.reduce((sum, f) => sum + getFightPoolUsd(f), 0);
   const totalPredictions = fights.reduce((sum, f) => sum + (entryCounts[f.id] || 0), 0);
   const liveCount = fights.filter(f => f.status === "live").length;
