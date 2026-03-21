@@ -1571,7 +1571,7 @@ function AutomationStatusPanel({
           <span className={`w-2 h-2 rounded-full ${lockPassed || statusCounts.open === 0 ? "bg-green-400" : "bg-muted-foreground/30"}`} />
           <span className="text-muted-foreground">Auto-Lock</span>
           <span className="text-foreground font-medium ml-auto">
-            {statusCounts.open === 0 ? "All locked ✓" : lockPassed ? "Lock triggered ✓" : lockAt ? `At ${lockAt.toLocaleString()}` : "No schedule"}
+            {statusCounts.open === 0 ? "All locked ✓" : lockPassed ? "Lock triggered ✓" : lockAt ? `At ${formatEventDateTime(lockAt.toISOString())}` : "No schedule"}
           </span>
         </div>
         <div className="flex items-center gap-1.5">
