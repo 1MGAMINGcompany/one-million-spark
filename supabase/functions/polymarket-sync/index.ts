@@ -9,7 +9,40 @@ const corsHeaders = {
 const GAMMA_BASE = "https://gamma-api.polymarket.com";
 
 // ── Sports-related tags on Polymarket ──
-const SPORTS_TAGS = ["sports", "nfl", "nba", "mlb", "soccer", "mma", "boxing", "tennis", "cricket", "football"];
+const SPORTS_TAGS = ["sports", "soccer", "football", "mma", "boxing", "nfl", "nba", "mlb", "tennis", "cricket"];
+
+/** When tag is "sports", fan out to all SPORTS_TAGS in parallel and dedupe. */
+async function fetchSportsEvents(limit: number): Promise<GammaEvent[]> {
+  const fetches = SPORTS_TAGS.map(async (t) => {
+    const url = `${GAMMA_BASE}/events?tag=${encodeURIComponent(t)}&active=true&closed=false&limit=${limit}`;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return [];
+      return (await res.json()) as GammaEvent[];
+    } catch {
+      return [];
+    }
+  });
+  const arrays = await Promise.all(fetches);
+  // Deduplicate by event id
+  const seen = new Set<string>();
+  const deduped: GammaEvent[] = [];
+  for (const arr of arrays) {
+    for (const ev of arr) {
+      if (!seen.has(String(ev.id))) {
+        seen.add(String(ev.id));
+        deduped.push(ev);
+      }
+    }
+  }
+  return deduped;
+}
+
+/** Return true if event endDate is in the future (or missing). */
+function isFutureEvent(ev: GammaEvent): boolean {
+  if (!ev.endDate) return true; // no end date = perpetual, keep it
+  return new Date(ev.endDate).getTime() > Date.now();
+}
 
 interface GammaMarket {
   id: string;
