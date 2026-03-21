@@ -63,6 +63,7 @@ function parseSport(eventName: string, sourceProvider?: string | null): string {
   if (upper.includes("UFC") || upper.includes("MMA") || upper.includes("PFL") || upper.includes("BELLATOR") || upper.includes("ONE CHAMPIONSHIP")) return "MMA";
   if (upper.includes("BOXING")) return "BOXING";
   if (upper.includes("MUAY THAI")) return "MUAY THAI";
+  if (upper.includes("BARE KNUCKLE") || upper.includes("BKFC")) return "BARE KNUCKLE";
   const parts = eventName.split(' — ');
   return parts[0] || "OTHER";
 }
