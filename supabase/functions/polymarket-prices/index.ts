@@ -36,16 +36,27 @@ function isSoccerEvent(eventName: string, source?: string): boolean {
 
 /** Strip common suffixes for better TheSportsDB matching */
 function cleanTeamName(name: string): string {
-  return name
-    .replace(/\s+de\s+Fútbol$/i, "")
-    .replace(/\s+de\s+Futbol$/i, "")
-    .replace(/\s+CF$/i, "")
-    .replace(/\s+FC$/i, "")
-    .replace(/\s+SC$/i, "")
-    .replace(/\s+AC$/i, "")
-    .replace(/\s+FK$/i, "")
-    .replace(/\s+B$/i, "")
-    .trim();
+  // Apply suffix stripping iteratively — "Real Sociedad de Fútbol B"
+  // needs " B" stripped first, then "de Fútbol" becomes the new suffix.
+  let cleaned = name.trim();
+  const suffixes = [
+    /\s+B$/i,           // reserve teams first (e.g. "Real Sociedad B")
+    /\s+II$/i,          // second teams
+    /\s+de\s+F[uú]tbol$/i,
+    /\s+CF$/i,
+    /\s+FC$/i,
+    /\s+SC$/i,
+    /\s+AC$/i,
+    /\s+FK$/i,
+    /\s+AF$/i,
+  ];
+  // Two passes to handle chained suffixes like "de Fútbol B"
+  for (let pass = 0; pass < 2; pass++) {
+    for (const rx of suffixes) {
+      cleaned = cleaned.replace(rx, "");
+    }
+  }
+  return cleaned.trim();
 }
 
 /** Check if a fighter name is a generic label (not a real name) */
