@@ -277,6 +277,19 @@ Deno.serve(async (req) => {
         }
       }
 
+      // ── Auto-close past events in DB ──
+      const { data: expiredRows } = await supabase
+        .from("prediction_fights")
+        .update({ polymarket_active: false, updated_at: new Date().toISOString() })
+        .lt("polymarket_end_date", new Date().toISOString())
+        .eq("status", "open")
+        .not("polymarket_end_date", "is", null)
+        .select("id");
+      const expiredCount = expiredRows?.length ?? 0;
+      if (expiredCount > 0) {
+        console.log(`[polymarket-sync] Auto-closed ${expiredCount} past fights`);
+      }
+
       // Update sync state
       await supabase
         .from("polymarket_sync_state")
@@ -297,6 +310,8 @@ Deno.serve(async (req) => {
           events_upserted: eventsUpserted,
           markets_upserted: marketsUpserted,
           skipped,
+          expired_closed: expiredCount,
+          filtered_out_past: filteredOut,
           total_events: gammaEvents.length,
         },
       });
@@ -306,6 +321,7 @@ Deno.serve(async (req) => {
         events_upserted: eventsUpserted,
         markets_upserted: marketsUpserted,
         skipped,
+        expired_closed: expiredCount,
         total_events: gammaEvents.length,
       });
     }
