@@ -120,9 +120,29 @@ async function fetchFighterPhotoTSDB(fighterName: string): Promise<string | null
   }
 }
 
-/** Try multiple sources for fighter photo */
+/** Try Polymarket's own S3 bucket for fighter/team images */
+async function fetchPolymarketS3Photo(name: string, sport: string): Promise<string | null> {
+  // Polymarket uses: team_logos/{sport}/{first_name}_{last_name}.png
+  const slug = name.trim().toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+  const folder = sport === "soccer" ? "soccer" : "mma";
+  const url = `${PM_S3_BASE}/team_logos/${folder}/${slug}.png`;
+  try {
+    const res = await fetch(url, { method: "HEAD" });
+    if (res.ok) {
+      console.log(`[PM-S3] Found image: ${url}`);
+      return url;
+    }
+    console.log(`[PM-S3] No image at ${url} (${res.status})`);
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** Try multiple sources for fighter photo — Polymarket S3 first, then BDL, then TSDB */
 async function fetchFighterPhoto(fighterName: string): Promise<string | null> {
-  // Try BallDontLie first (better MMA coverage), then TheSportsDB
+  const pm = await fetchPolymarketS3Photo(fighterName, "mma");
+  if (pm) return pm;
   const bdl = await fetchFighterPhotoBDL(fighterName);
   if (bdl) return bdl;
   return fetchFighterPhotoTSDB(fighterName);
