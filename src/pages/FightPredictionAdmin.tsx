@@ -1517,7 +1517,7 @@ function AutomationStatusPanel({
         <div className="text-muted-foreground">Last Check</div>
         <div className="text-foreground font-medium">
           {event.last_automation_check_at
-            ? new Date(event.last_automation_check_at).toLocaleString()
+            ? formatEventDateTime(event.last_automation_check_at)
             : "—"}
         </div>
       </div>
