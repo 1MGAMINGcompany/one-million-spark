@@ -1199,7 +1199,7 @@ Deno.serve(async (req) => {
         });
 
         console.log(
-          `[prediction-submit] Polymarket deferred: user=${walletLower} needs PM auth (${missingField})`,
+          `[prediction-submit] Polymarket deferred: user=${normalizedWallet} needs PM auth (${missingField})`,
         );
       }
     } else {
