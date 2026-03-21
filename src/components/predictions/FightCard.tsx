@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Swords, Trophy, Loader2, HelpCircle, ChevronRight, Newspaper } from "lucide-react";
+import { Swords, Trophy, Loader2, HelpCircle, ChevronRight, Newspaper, ArrowUp, ArrowDown } from "lucide-react";
+import { detectSport, isOverSide, type SportType } from "@/lib/detectSport";
 
 export interface Fight {
   id: string;
@@ -40,7 +41,15 @@ export interface Fight {
   fighter_b_record?: string | null;
   venue?: string | null;
   referee?: string | null;
+  polymarket_volume_usd?: number | null;
   has_updates?: boolean;
+}
+
+/** Get sport-aware fallback icon */
+function SportFallbackEmoji(sport: SportType, fighterName?: string): string {
+  if (sport === "soccer") return "⚽";
+  if (sport === "over_under") return isOverSide(fighterName || "") ? "📈" : "📉";
+  return "🥊";
 }
 
 function buildQuestion(fight: Fight, isSoccer: boolean): string {
@@ -53,9 +62,15 @@ function buildQuestion(fight: Fight, isSoccer: boolean): string {
   return `Who wins: ${fight.fighter_a_name} vs ${fight.fighter_b_name}?`;
 }
 
-function SportFallbackIcon({ isSoccer, className }: { isSoccer: boolean; className?: string }) {
-  if (isSoccer) {
+function SportFallbackIcon({ sport, className, fighterName }: { sport?: SportType; className?: string; fighterName?: string }) {
+  if (sport === "soccer") {
     return <span className={className || "text-2xl"}>⚽</span>;
+  }
+  if (sport === "over_under") {
+    if (isOverSide(fighterName || "")) {
+      return <ArrowUp className={`${className || "w-6 h-6"} text-green-400`} />;
+    }
+    return <ArrowDown className={`${className || "w-6 h-6"} text-red-400`} />;
   }
   return <span className={className || "text-2xl"}>🥊</span>;
 }
@@ -148,24 +163,31 @@ function PolymarketPoolStrip({ fight }: { fight: Fight }) {
   const probs = getProbabilities(fight);
   const { poolA, poolB } = getPoolUsd(fight);
   const hasPool = poolA > 0 || poolB > 0;
+  const volume = fight.polymarket_volume_usd ?? 0;
 
   return (
     <div className="w-full space-y-2">
       {probs && (
         <ProbabilityBar probA={probs.probA} probB={probs.probB} />
       )}
-      {/* Always show USDC per side */}
       <div className="flex items-center justify-between text-[10px]">
         <div className="text-center">
           <span className="block font-bold text-foreground text-xs">
-            {hasPool ? `$${poolA.toFixed(2)}` : "Market"}
+            {hasPool ? `$${poolA.toFixed(2)}` : probs ? `${probs.probA}%` : "—"}
           </span>
           <span className="text-muted-foreground">{fight.fighter_a_name.split(" ").pop()}</span>
         </div>
-        <PolymarketBadge />
+        <div className="flex flex-col items-center gap-0.5">
+          <PolymarketBadge />
+          {volume > 0 && (
+            <span className="text-[9px] text-muted-foreground/60">
+              Vol: ${volume >= 1000 ? `${(volume / 1000).toFixed(1)}K` : volume.toFixed(0)}
+            </span>
+          )}
+        </div>
         <div className="text-center">
           <span className="block font-bold text-foreground text-xs">
-            {hasPool ? `$${poolB.toFixed(2)}` : "Market"}
+            {hasPool ? `$${poolB.toFixed(2)}` : probs ? `${probs.probB}%` : "—"}
           </span>
           <span className="text-muted-foreground">{fight.fighter_b_name.split(" ").pop()}</span>
         </div>
@@ -231,7 +253,8 @@ export default function FightCard({
   const badge = STATUS_BADGE[displayStatus] || STATUS_BADGE.open;
   const canPredict = displayStatus === "open";
 
-  const isSoccer = isSoccerEvent || fight.source === "api-football";
+  const sport = detectSport(fight);
+  const isSoccer = isSoccerEvent || sport === "soccer";
   const hasLogos = isSoccer && !!(fight.home_logo && fight.away_logo);
 
   const titleParts = fight.title.split(' — ');
@@ -412,6 +435,7 @@ export default function FightCard({
             onPredict={() => wallet ? onPredict(fight, "fighter_a") : onWalletRequired?.()}
             photo={fight.fighter_a_photo}
             record={fight.fighter_a_record}
+            sport={sport}
           />
           <div className="flex flex-col items-center gap-0.5">
             <Swords className="w-5 h-5 text-primary/60" />
@@ -426,6 +450,7 @@ export default function FightCard({
             onPredict={() => wallet ? onPredict(fight, "fighter_b") : onWalletRequired?.()}
             photo={fight.fighter_b_photo}
             record={fight.fighter_b_record}
+            sport={sport}
           />
         </div>
 
@@ -486,16 +511,17 @@ export default function FightCard({
 }
 
 function FighterColumn({
-  name, poolAmount, odds, isWinner, canPredict, onPredict, logo, isSoccer, photo, record,
+  name, poolAmount, odds, isWinner, canPredict, onPredict, logo, isSoccer, photo, record, sport,
 }: {
   name: string; poolAmount: number; odds: number; isWinner: boolean;
   canPredict: boolean; onPredict: () => void;
   logo?: string | null; isSoccer?: boolean; photo?: string | null;
-  record?: string | null;
+  record?: string | null; sport?: SportType;
 }) {
   const [imgError, setImgError] = useState(false);
   const showLogo = logo && !imgError;
   const showPhoto = !showLogo && photo && !imgError;
+  const effectiveSport = sport || "combat";
 
   return (
     <div className="text-center">
@@ -519,7 +545,11 @@ function FighterColumn({
       )}
       {!showLogo && !showPhoto && (
         <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-muted/40 flex items-center justify-center mx-auto mb-1.5">
-          <span className="text-lg">🥊</span>
+          {effectiveSport === "over_under" ? (
+            isOverSide(name) ? <ArrowUp className="w-6 h-6 text-green-400" /> : <ArrowDown className="w-6 h-6 text-red-400" />
+          ) : (
+            <span className="text-lg">{SportFallbackEmoji(effectiveSport, name)}</span>
+          )}
         </div>
       )}
       <p className={`font-bold text-foreground ${isSoccer && showLogo ? 'text-base sm:text-lg' : showLogo ? 'text-[15px]' : 'text-sm'}`}>{name}</p>
@@ -527,7 +557,7 @@ function FighterColumn({
         <p className="text-[10px] text-muted-foreground font-medium mt-0.5">{record}</p>
       )}
       <p className={`text-muted-foreground mt-1 ${isSoccer ? 'text-xs sm:text-sm' : 'text-xs'}`}>
-        ${poolAmount.toFixed(2)} USDC
+        {poolAmount > 0 ? `$${poolAmount.toFixed(2)} USDC` : "Market-backed"}
       </p>
       <p className={`text-primary font-bold ${isSoccer ? 'text-xl sm:text-2xl' : 'text-lg'}`}>{odds.toFixed(2)}x</p>
       {canPredict && (
@@ -565,12 +595,14 @@ function SoccerTeamColumn({
           loading="lazy"
         />
       ) : (
-        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-muted/40 flex items-center justify-center text-muted-foreground text-lg font-bold">
-          {name.charAt(0)}
+        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-muted/40 flex items-center justify-center text-lg">
+          ⚽
         </div>
       )}
       <p className="font-bold text-foreground text-sm sm:text-base leading-tight mt-0.5">{name}</p>
-      <p className="text-[10px] text-muted-foreground">${poolAmount.toFixed(2)} USDC</p>
+      <p className="text-[10px] text-muted-foreground">
+        {poolAmount > 0 ? `$${poolAmount.toFixed(2)} USDC` : "Market-backed"}
+      </p>
       <p className="text-xl sm:text-2xl font-bold text-primary leading-none">{odds.toFixed(2)}x</p>
       {canPredict && (
         <Button
