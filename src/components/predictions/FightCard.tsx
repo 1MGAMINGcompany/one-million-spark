@@ -56,10 +56,12 @@ function buildQuestion(fight: Fight, isSoccer: boolean): string {
   if (fight.source === "polymarket" && fight.title && fight.title.includes("?")) {
     return fight.title;
   }
+  const nameA = resolveOutcomeName(fight.fighter_a_name, "a", fight);
+  const nameB = resolveOutcomeName(fight.fighter_b_name, "b", fight);
   if (isSoccer) {
-    return `Who will win: ${fight.fighter_a_name} or ${fight.fighter_b_name}?`;
+    return `Who will win: ${nameA} or ${nameB}?`;
   }
-  return `Who wins: ${fight.fighter_a_name} vs ${fight.fighter_b_name}?`;
+  return `Who wins: ${nameA} vs ${nameB}?`;
 }
 
 function SportFallbackIcon({ sport, className, fighterName }: { sport?: SportType; className?: string; fighterName?: string }) {
