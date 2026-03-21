@@ -506,7 +506,7 @@ export default function FightPredictions() {
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
           {activeSports.map((sport) => {
             const isActive = activeSport === sport;
-            const hasEvents = sport === "ALL" || Object.entries(groupedEvents).some(([e, val]) => parseSport(e, val.event?.source_provider) === sport);
+            const hasEvents = sport === "ALL" || Object.entries(groupedEvents).some(([e, val]) => parseSport(e, val.event?.source_provider, val.event?.category) === sport);
             return (
               <button
                 key={sport}
