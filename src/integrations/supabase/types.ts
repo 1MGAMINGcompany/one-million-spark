@@ -1214,14 +1214,19 @@ export type Database = {
           id: string
           method: string | null
           polymarket_active: boolean | null
+          polymarket_competitive: number | null
           polymarket_condition_id: string | null
           polymarket_end_date: string | null
+          polymarket_fee: string | null
           polymarket_last_synced_at: string | null
+          polymarket_liquidity: number | null
           polymarket_market_id: string | null
           polymarket_outcome_a_token: string | null
           polymarket_outcome_b_token: string | null
           polymarket_question: string | null
           polymarket_slug: string | null
+          polymarket_start_date: string | null
+          polymarket_volume_24h: number | null
           polymarket_volume_usd: number | null
           pool_a_lamports: number
           pool_a_usd: number
@@ -1274,14 +1279,19 @@ export type Database = {
           id?: string
           method?: string | null
           polymarket_active?: boolean | null
+          polymarket_competitive?: number | null
           polymarket_condition_id?: string | null
           polymarket_end_date?: string | null
+          polymarket_fee?: string | null
           polymarket_last_synced_at?: string | null
+          polymarket_liquidity?: number | null
           polymarket_market_id?: string | null
           polymarket_outcome_a_token?: string | null
           polymarket_outcome_b_token?: string | null
           polymarket_question?: string | null
           polymarket_slug?: string | null
+          polymarket_start_date?: string | null
+          polymarket_volume_24h?: number | null
           polymarket_volume_usd?: number | null
           pool_a_lamports?: number
           pool_a_usd?: number
@@ -1334,14 +1344,19 @@ export type Database = {
           id?: string
           method?: string | null
           polymarket_active?: boolean | null
+          polymarket_competitive?: number | null
           polymarket_condition_id?: string | null
           polymarket_end_date?: string | null
+          polymarket_fee?: string | null
           polymarket_last_synced_at?: string | null
+          polymarket_liquidity?: number | null
           polymarket_market_id?: string | null
           polymarket_outcome_a_token?: string | null
           polymarket_outcome_b_token?: string | null
           polymarket_question?: string | null
           polymarket_slug?: string | null
+          polymarket_start_date?: string | null
+          polymarket_volume_24h?: number | null
           polymarket_volume_usd?: number | null
           pool_a_lamports?: number
           pool_a_usd?: number

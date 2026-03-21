@@ -7,10 +7,12 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   ArrowLeft, Trophy, MapPin, User, TrendingUp, Newspaper,
   ArrowUp, ArrowDown, BookOpen, Calendar, ExternalLink, Info,
-  BarChart3, Users, Swords,
+  BarChart3, Users, Swords, Droplets, Activity, Gauge,
 } from "lucide-react";
 import { detectSport, isOverSide, type SportType } from "@/lib/detectSport";
 import { resolveOutcomeName, parseTeamsFromEvent } from "@/lib/resolveOutcomeName";
+
+// ── Types ──
 
 interface FightDetail {
   id: string;
@@ -28,6 +30,11 @@ interface FightDetail {
   price_a: number | null;
   price_b: number | null;
   polymarket_volume_usd: number | null;
+  polymarket_liquidity: number | null;
+  polymarket_volume_24h: number | null;
+  polymarket_start_date: string | null;
+  polymarket_competitive: number | null;
+  polymarket_fee: string | null;
   status: string;
   winner: string | null;
   venue: string | null;
@@ -50,6 +57,7 @@ interface FightDetail {
   event_id: string | null;
   method: string | null;
   enrichment_notes: string | null;
+  event_banner_url: string | null;
 }
 
 interface SiblingMarket {
@@ -72,12 +80,28 @@ interface FightUpdate {
   created_at: string;
 }
 
+// ── Helpers ──
+
+const formatVol = (v: number) => {
+  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `$${(v / 1_000).toFixed(0)}K`;
+  return `$${v.toFixed(0)}`;
+};
+
+function marketAgeDays(startDate: string | null, createdAt: string): number {
+  const d = startDate || createdAt;
+  return Math.max(0, Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000));
+}
+
+// ── Main Component ──
+
 export default function MatchCenter() {
   const { fightId } = useParams<{ fightId: string }>();
   const navigate = useNavigate();
   const [fight, setFight] = useState<FightDetail | null>(null);
   const [updates, setUpdates] = useState<FightUpdate[]>([]);
   const [siblings, setSiblings] = useState<SiblingMarket[]>([]);
+  const [eventBanner, setEventBanner] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -98,14 +122,23 @@ export default function MatchCenter() {
           .limit(20),
       ]);
       if (fightRes.data) {
-        setFight(fightRes.data as any);
+        const f = fightRes.data as any;
+        setFight(f);
+        // Fetch event banner
+        if (f.event_id) {
+          const { data: ev } = await supabase
+            .from("prediction_events")
+            .select("event_banner_url")
+            .eq("id", f.event_id)
+            .single();
+          if (ev?.event_banner_url) setEventBanner(ev.event_banner_url);
+        }
         // Fetch sibling markets from same event
-        const eventName = (fightRes.data as any).event_name;
-        if (eventName) {
+        if (f.event_name) {
           const { data: sibs } = await supabase
             .from("prediction_fights")
             .select("id, title, price_a, price_b, polymarket_volume_usd, fighter_a_name, fighter_b_name, status, winner")
-            .eq("event_name", eventName)
+            .eq("event_name", f.event_name)
             .neq("id", fightId)
             .in("status", ["open", "locked", "live", "resolved"]);
           if (sibs) setSiblings(sibs as any);
@@ -151,20 +184,23 @@ export default function MatchCenter() {
   const volume = fight.polymarket_volume_usd ?? 0;
   const hasPool = poolA > 0 || poolB > 0;
   const stats = fight.stats_json || {};
+  const liquidity = fight.polymarket_liquidity ?? 0;
+  const vol24h = fight.polymarket_volume_24h ?? 0;
+  const competitive = fight.polymarket_competitive;
+  const ageDays = marketAgeDays(fight.polymarket_start_date, fight.created_at);
 
   const photoA = isSoccer ? (fight.home_logo || fight.fighter_a_photo) : fight.fighter_a_photo;
   const photoB = isSoccer ? (fight.away_logo || fight.fighter_b_photo) : fight.fighter_b_photo;
 
-  const formatVol = (v: number) => {
-    if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
-    if (v >= 1_000) return `$${(v / 1_000).toFixed(0)}K`;
-    return `$${v.toFixed(0)}`;
-  };
-
-  const sportLabel = isSoccer ? "Match" : isOverUnder ? "Market" : "Fight";
-
   return (
     <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
+      {/* Event Banner */}
+      {eventBanner && (
+        <div className="w-full h-32 sm:h-44 rounded-xl overflow-hidden">
+          <img src={eventBanner} alt={fight.event_name} className="w-full h-full object-cover" loading="lazy" />
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate("/predictions")}>
@@ -311,16 +347,16 @@ export default function MatchCenter() {
               </div>
             )}
             <div className="space-y-1.5 text-xs text-muted-foreground">
+              {(fight.polymarket_start_date || fight.created_at) && (
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>Market Opened: {new Date(fight.polymarket_start_date || fight.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })} ({ageDays}d ago)</span>
+                </div>
+              )}
               {fight.polymarket_end_date && (
                 <div className="flex items-center gap-2">
                   <Calendar className="w-3.5 h-3.5" />
                   <span>End Date: {new Date(fight.polymarket_end_date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}</span>
-                </div>
-              )}
-              {fight.created_at && (
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-3.5 h-3.5" />
-                  <span>Market Opened: {new Date(fight.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}</span>
                 </div>
               )}
               {fight.venue && (
@@ -378,28 +414,68 @@ export default function MatchCenter() {
             ) : (
               <p className="text-xs text-muted-foreground text-center py-4">Odds data not yet available.</p>
             )}
-            {(volume > 0 || hasPool) && (
-              <div className="border-t border-border/20 pt-3 space-y-2">
-                {volume > 0 && (
-                  <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">Market Volume</span>
-                    <span className="font-bold text-foreground">{formatVol(volume)}</span>
+
+            {/* Market Metrics */}
+            <div className="border-t border-border/20 pt-3 space-y-2">
+              {volume > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground flex items-center gap-1"><BarChart3 className="w-3 h-3" /> Total Volume</span>
+                  <span className="font-bold text-foreground">{formatVol(volume)}</span>
+                </div>
+              )}
+              {vol24h > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground flex items-center gap-1"><Activity className="w-3 h-3" /> 24h Volume</span>
+                  <span className="font-bold text-foreground">{formatVol(vol24h)}</span>
+                </div>
+              )}
+              {liquidity > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground flex items-center gap-1"><Droplets className="w-3 h-3" /> Liquidity Depth</span>
+                  <span className="font-bold text-foreground">{formatVol(liquidity)}</span>
+                </div>
+              )}
+              {competitive != null && (
+                <div className="flex justify-between text-xs items-center">
+                  <span className="text-muted-foreground flex items-center gap-1"><Gauge className="w-3 h-3" /> Competitiveness</span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-16 h-2 rounded-full bg-muted/30 overflow-hidden">
+                      <div
+                        className="h-full bg-primary rounded-full transition-all"
+                        style={{ width: `${Math.min(100, competitive * 100)}%` }}
+                      />
+                    </div>
+                    <span className="font-bold text-foreground text-[10px]">
+                      {competitive >= 0.8 ? "Very Close" : competitive >= 0.5 ? "Balanced" : "One-sided"}
+                    </span>
                   </div>
-                )}
-                {hasPool && (
-                  <>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">{nameA} Liquidity</span>
-                      <span className="font-medium text-foreground">${poolA.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">{nameB} Liquidity</span>
-                      <span className="font-medium text-foreground">${poolB.toFixed(2)}</span>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
+                </div>
+              )}
+              {fight.polymarket_fee && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Exchange Fee</span>
+                  <span className="font-medium text-foreground">{fight.polymarket_fee}</span>
+                </div>
+              )}
+              {ageDays > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Market Age</span>
+                  <span className="font-medium text-foreground">{ageDays} days</span>
+                </div>
+              )}
+              {hasPool && (
+                <>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">{nameA} Liquidity</span>
+                    <span className="font-medium text-foreground">${poolA.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">{nameB} Liquidity</span>
+                    <span className="font-medium text-foreground">${poolB.toFixed(2)}</span>
+                  </div>
+                </>
+              )}
+            </div>
           </TabsContent>
 
           {updates.length > 0 && (
@@ -457,7 +533,8 @@ export default function MatchCenter() {
   );
 }
 
-/** Profile card for fighter/team with image, record, stats preview */
+// ── Sub-components ──
+
 function ProfileCard({
   name, photo, record, prob, isWinner, sport, stats, side,
 }: {
@@ -517,7 +594,6 @@ function ProfileCard({
           <span className="text-xs font-bold">WINNER</span>
         </div>
       )}
-      {/* Quick stats preview */}
       {stats && Object.keys(stats).length > 0 && (
         <div className="mt-2 space-y-0.5">
           {Object.entries(stats).slice(0, 3).map(([key, val]) => (
