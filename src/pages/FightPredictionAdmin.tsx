@@ -2235,12 +2235,37 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
           {searchResults.length === 0 && (
             <p className="text-xs text-muted-foreground text-center py-4">No matching markets on Polymarket for &ldquo;{searchQuery}&rdquo;</p>
           )}
-          {searchResults.map((event: any) => (
-            <div key={event.id} className="bg-background/60 border border-border/30 rounded-lg p-3 text-xs">
+          {searchResults.map((event: any) => {
+            const endDate = event.endDate ? new Date(event.endDate) : null;
+            const now = new Date();
+            const isPast = endDate && endDate < now;
+            const diffMs = endDate ? endDate.getTime() - now.getTime() : null;
+            const diffHours = diffMs ? Math.round(diffMs / (1000 * 60 * 60)) : null;
+            const diffDays = diffMs ? Math.round(diffMs / (1000 * 60 * 60 * 24)) : null;
+            const timeLabel = isPast
+              ? "Ended"
+              : diffHours !== null
+                ? diffHours < 24
+                  ? `${diffHours}h`
+                  : `${diffDays}d`
+                : null;
+
+            return (
+            <div key={event.id} className={`bg-background/60 border rounded-lg p-3 text-xs ${isPast ? 'border-destructive/30 opacity-60' : 'border-border/30'}`}>
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
-                  <p className="text-foreground font-bold truncate">{event.title}</p>
-                  <p className="text-muted-foreground text-[10px]">{event.markets?.length || 0} market(s)</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-foreground font-bold truncate">{event.title}</p>
+                    {timeLabel && (
+                      <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${isPast ? 'bg-destructive/20 text-destructive' : 'bg-primary/20 text-primary'}`}>
+                        {isPast ? "Ended" : `Starts in ${timeLabel}`}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-muted-foreground text-[10px]">
+                    {event.markets?.length || 0} market(s)
+                    {endDate && <span className="ml-1.5">· {endDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span>}
+                  </p>
                   {event.markets?.map((m: any, i: number) => (
                     <div key={i} className="mt-1 text-[10px] text-muted-foreground">
                       <span>{m.question}</span>
@@ -2272,7 +2297,8 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

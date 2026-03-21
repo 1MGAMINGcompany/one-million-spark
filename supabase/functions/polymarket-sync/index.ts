@@ -9,7 +9,40 @@ const corsHeaders = {
 const GAMMA_BASE = "https://gamma-api.polymarket.com";
 
 // ── Sports-related tags on Polymarket ──
-const SPORTS_TAGS = ["sports", "nfl", "nba", "mlb", "soccer", "mma", "boxing", "tennis", "cricket", "football"];
+const SPORTS_TAGS = ["sports", "soccer", "football", "mma", "boxing", "nfl", "nba", "mlb", "tennis", "cricket"];
+
+/** When tag is "sports", fan out to all SPORTS_TAGS in parallel and dedupe. */
+async function fetchSportsEvents(limit: number): Promise<GammaEvent[]> {
+  const fetches = SPORTS_TAGS.map(async (t) => {
+    const url = `${GAMMA_BASE}/events?tag=${encodeURIComponent(t)}&active=true&closed=false&limit=${limit}`;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return [];
+      return (await res.json()) as GammaEvent[];
+    } catch {
+      return [];
+    }
+  });
+  const arrays = await Promise.all(fetches);
+  // Deduplicate by event id
+  const seen = new Set<string>();
+  const deduped: GammaEvent[] = [];
+  for (const arr of arrays) {
+    for (const ev of arr) {
+      if (!seen.has(String(ev.id))) {
+        seen.add(String(ev.id));
+        deduped.push(ev);
+      }
+    }
+  }
+  return deduped;
+}
+
+/** Return true if event endDate is in the future (or missing). */
+function isFutureEvent(ev: GammaEvent): boolean {
+  if (!ev.endDate) return true; // no end date = perpetual, keep it
+  return new Date(ev.endDate).getTime() > Date.now();
+}
 
 interface GammaMarket {
   id: string;
@@ -78,16 +111,29 @@ Deno.serve(async (req) => {
     // ══════════════════════════════════════════════════
     if (action === "sync") {
       const tagFilter = tag || "sports";
-      const gammaUrl = `${GAMMA_BASE}/events?tag=${encodeURIComponent(tagFilter)}&active=true&closed=false&limit=${limit}`;
 
-      console.log(`[polymarket-sync] Fetching: ${gammaUrl}`);
-      const gammaRes = await fetch(gammaUrl);
-      if (!gammaRes.ok) {
-        return json({ error: `Gamma API returned ${gammaRes.status}` }, 502);
+      let gammaEvents: GammaEvent[];
+
+      if (tagFilter === "sports") {
+        // Multi-tag parallel fetch for comprehensive sports coverage
+        console.log(`[polymarket-sync] Multi-tag fetch for sports (${SPORTS_TAGS.join(", ")})`);
+        gammaEvents = await fetchSportsEvents(limit);
+      } else {
+        const gammaUrl = `${GAMMA_BASE}/events?tag=${encodeURIComponent(tagFilter)}&active=true&closed=false&limit=${limit}`;
+        console.log(`[polymarket-sync] Fetching: ${gammaUrl}`);
+        const gammaRes = await fetch(gammaUrl);
+        if (!gammaRes.ok) {
+          return json({ error: `Gamma API returned ${gammaRes.status}` }, 502);
+        }
+        gammaEvents = await gammaRes.json();
       }
 
-      const gammaEvents: GammaEvent[] = await gammaRes.json();
-      console.log(`[polymarket-sync] Received ${gammaEvents.length} events`);
+      // Filter out past events
+      const beforeFilter = gammaEvents.length;
+      gammaEvents = gammaEvents.filter(isFutureEvent);
+      const filteredOut = beforeFilter - gammaEvents.length;
+      console.log(`[polymarket-sync] ${gammaEvents.length} future events (filtered out ${filteredOut} past)`);
+
 
       let eventsUpserted = 0;
       let marketsUpserted = 0;
@@ -231,6 +277,19 @@ Deno.serve(async (req) => {
         }
       }
 
+      // ── Auto-close past events in DB ──
+      const { data: expiredRows } = await supabase
+        .from("prediction_fights")
+        .update({ polymarket_active: false, updated_at: new Date().toISOString() })
+        .lt("polymarket_end_date", new Date().toISOString())
+        .eq("status", "open")
+        .not("polymarket_end_date", "is", null)
+        .select("id");
+      const expiredCount = expiredRows?.length ?? 0;
+      if (expiredCount > 0) {
+        console.log(`[polymarket-sync] Auto-closed ${expiredCount} past fights`);
+      }
+
       // Update sync state
       await supabase
         .from("polymarket_sync_state")
@@ -251,6 +310,8 @@ Deno.serve(async (req) => {
           events_upserted: eventsUpserted,
           markets_upserted: marketsUpserted,
           skipped,
+          expired_closed: expiredCount,
+          filtered_out_past: filteredOut,
           total_events: gammaEvents.length,
         },
       });
@@ -260,6 +321,7 @@ Deno.serve(async (req) => {
         events_upserted: eventsUpserted,
         markets_upserted: marketsUpserted,
         skipped,
+        expired_closed: expiredCount,
         total_events: gammaEvents.length,
       });
     }
