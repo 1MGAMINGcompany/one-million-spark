@@ -159,11 +159,30 @@ function PolymarketBadge() {
 }
 
 /** USDC per-side display for Polymarket events */
+/** Format volume like Polymarket: $601K, $1.2M */
+function formatVolume(v: number): string {
+  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `$${(v / 1_000).toFixed(0)}K`;
+  return `$${v.toFixed(0)}`;
+}
+
+/** Get display name — replace "Yes"/"No" with title for Polymarket binary markets */
+function displayName(name: string, fight: Fight): string {
+  if ((name === "Yes" || name === "No") && fight.title) {
+    return fight.title.replace(/^Will\s+/i, "").replace(/\s+win\??$/i, "").trim() || name;
+  }
+  return name;
+}
+
+/** USDC per-side display for Polymarket events */
 function PolymarketPoolStrip({ fight }: { fight: Fight }) {
   const probs = getProbabilities(fight);
   const { poolA, poolB } = getPoolUsd(fight);
   const hasPool = poolA > 0 || poolB > 0;
   const volume = fight.polymarket_volume_usd ?? 0;
+
+  const nameA = displayName(fight.fighter_a_name, fight);
+  const nameB = displayName(fight.fighter_b_name, fight);
 
   return (
     <div className="w-full space-y-2">
@@ -173,23 +192,23 @@ function PolymarketPoolStrip({ fight }: { fight: Fight }) {
       <div className="flex items-center justify-between text-[10px]">
         <div className="text-center">
           <span className="block font-bold text-foreground text-xs">
-            {hasPool ? `$${poolA.toFixed(2)}` : probs ? `${probs.probA}%` : "—"}
+            {hasPool ? `$${poolA.toFixed(2)}` : probs ? `${probs.probA}¢` : "—"}
           </span>
-          <span className="text-muted-foreground">{fight.fighter_a_name.split(" ").pop()}</span>
+          <span className="text-muted-foreground">{nameA.split(" ").pop()}</span>
         </div>
         <div className="flex flex-col items-center gap-0.5">
           <PolymarketBadge />
           {volume > 0 && (
-            <span className="text-[9px] text-muted-foreground/60">
-              Vol: ${volume >= 1000 ? `${(volume / 1000).toFixed(1)}K` : volume.toFixed(0)}
+            <span className="text-[10px] font-semibold text-primary/70">
+              {formatVolume(volume)} Vol.
             </span>
           )}
         </div>
         <div className="text-center">
           <span className="block font-bold text-foreground text-xs">
-            {hasPool ? `$${poolB.toFixed(2)}` : probs ? `${probs.probB}%` : "—"}
+            {hasPool ? `$${poolB.toFixed(2)}` : probs ? `${probs.probB}¢` : "—"}
           </span>
-          <span className="text-muted-foreground">{fight.fighter_b_name.split(" ").pop()}</span>
+          <span className="text-muted-foreground">{nameB.split(" ").pop()}</span>
         </div>
       </div>
     </div>

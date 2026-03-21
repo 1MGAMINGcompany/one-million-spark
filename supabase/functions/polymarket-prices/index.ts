@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
     // Get all active Polymarket-backed fights
     const { data: fights, error } = await supabase
       .from("prediction_fights")
-      .select("id, polymarket_outcome_a_token, polymarket_outcome_b_token, polymarket_condition_id")
+      .select("id, polymarket_outcome_a_token, polymarket_outcome_b_token, polymarket_condition_id, polymarket_market_id, fighter_a_photo, fighter_b_photo, home_logo, away_logo")
       .eq("polymarket_active", true)
       .not("polymarket_outcome_a_token", "is", null)
       .in("status", ["open", "locked", "live"]);
@@ -73,20 +73,19 @@ Deno.serve(async (req) => {
           const priceA = parseFloat(dataA?.price || "0");
           const priceB = parseFloat(dataB?.price || "0");
 
-          // Fetch volume from Gamma API if we have a condition_id
+          // Fetch volume from Gamma API using polymarket_market_id (numeric ID)
           let totalVolume = 0;
           let poolAUsd = 0;
           let poolBUsd = 0;
+          let gammaImage: string | null = null;
 
-          if (fight.polymarket_condition_id) {
+          if (fight.polymarket_market_id) {
             try {
               const gammaRes = await fetch(
-                `${GAMMA_BASE}/markets?condition_id=${fight.polymarket_condition_id}`
+                `${GAMMA_BASE}/markets/${fight.polymarket_market_id}`
               );
               if (gammaRes.ok) {
-                const gammaData = await gammaRes.json();
-                // Gamma returns an array of markets
-                const market = Array.isArray(gammaData) ? gammaData[0] : gammaData;
+                const market = await gammaRes.json();
                 if (market) {
                   totalVolume = parseFloat(market.volumeNum || market.volume || "0");
                   // Estimate per-side volume from total volume * probability
@@ -94,6 +93,8 @@ Deno.serve(async (req) => {
                     poolAUsd = Math.round(totalVolume * priceA * 100) / 100;
                     poolBUsd = Math.round(totalVolume * priceB * 100) / 100;
                   }
+                  // Grab image for enrichment if available
+                  gammaImage = market.image || market.icon || null;
                 }
               }
             } catch (e) {
@@ -112,6 +113,11 @@ Deno.serve(async (req) => {
             updatePayload.polymarket_volume_usd = totalVolume;
             updatePayload.pool_a_usd = poolAUsd;
             updatePayload.pool_b_usd = poolBUsd;
+          }
+
+          // Set image from Gamma if we have no photos/logos at all
+          if (gammaImage && !fight.fighter_a_photo && !fight.home_logo) {
+            updatePayload.fighter_a_photo = gammaImage;
           }
 
           await supabase

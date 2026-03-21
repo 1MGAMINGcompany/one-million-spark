@@ -108,6 +108,22 @@ export default function MatchCenter() {
 
   const statsTitle = isSoccer ? "Team Stats" : isOverUnder ? "Market Stats" : "Fighter Stats";
 
+  /** Replace "Yes"/"No" with meaningful name from title */
+  const resolveName = (n: string) => {
+    if ((n === "Yes" || n === "No") && fight.title) {
+      return fight.title.replace(/^Will\s+/i, "").replace(/\s+win\??$/i, "").trim() || n;
+    }
+    return n;
+  };
+  const nameA = resolveName(fight.fighter_a_name);
+  const nameB = resolveName(fight.fighter_b_name);
+
+  const formatVol = (v: number) => {
+    if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+    if (v >= 1_000) return `$${(v / 1_000).toFixed(0)}K`;
+    return `$${v.toFixed(0)}`;
+  };
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
       {/* Header */}
