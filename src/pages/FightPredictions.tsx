@@ -407,7 +407,8 @@ export default function FightPredictions() {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       const amountWon = data.reward_usd || data.reward_sol || 0;
-      toast.success("Reward claimed!", { description: `$${amountWon.toFixed(2)} sent to your wallet` });
+      const txInfo = data.payout_tx ? ` (tx: ${String(data.payout_tx).slice(0, 10)}…)` : "";
+      toast.success("Reward claimed!", { description: `$${amountWon.toFixed(2)} sent to your wallet${txInfo}` });
       await loadUserEntries();
       if (SOCIAL_SHARE_ENABLED) {
         const pickedName = userPick
