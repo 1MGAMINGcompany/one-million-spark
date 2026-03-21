@@ -1492,7 +1492,7 @@ function AutomationStatusPanel({
 
         <div className="text-muted-foreground">Lock Time</div>
         <div className={`font-medium ${lockPassed ? "text-yellow-400" : "text-foreground"}`}>
-          {lockAt ? lockAt.toLocaleString() : "—"}
+          {lockAt ? formatEventDateTime(lockAt.toISOString()) : "—"}
           {lockPassed && " ✓"}
         </div>
 
