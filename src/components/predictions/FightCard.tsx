@@ -195,11 +195,6 @@ function PolymarketPoolStrip({ fight }: { fight: Fight }) {
     </div>
   );
 }
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /** View Details link */
 function ViewDetailsLink({ fightId, hasUpdates }: { fightId: string; hasUpdates?: boolean }) {
