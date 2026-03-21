@@ -3,7 +3,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Trophy, MapPin, User, TrendingUp, Newspaper } from "lucide-react";
+import { ArrowLeft, Trophy, MapPin, User, TrendingUp, Newspaper, ArrowUp, ArrowDown } from "lucide-react";
+import { detectSport, isOverSide, type SportType } from "@/lib/detectSport";
 
 interface FightDetail {
   id: string;
@@ -20,6 +21,7 @@ interface FightDetail {
   pool_b_lamports: number;
   price_a: number | null;
   price_b: number | null;
+  polymarket_volume_usd: number | null;
   status: string;
   winner: string | null;
   venue: string | null;
@@ -92,12 +94,19 @@ export default function MatchCenter() {
     );
   }
 
+  const sport = detectSport(fight);
+  const isSoccer = sport === "soccer";
+  const isOverUnder = sport === "over_under";
+
   const poolA = (fight.pool_a_usd ?? 0) > 0 ? fight.pool_a_usd : fight.pool_a_lamports / 1e9;
   const poolB = (fight.pool_b_usd ?? 0) > 0 ? fight.pool_b_usd : fight.pool_b_lamports / 1e9;
   const probA = fight.price_a && fight.price_a > 0 ? Math.round(fight.price_a * 100) : null;
   const probB = fight.price_b && fight.price_b > 0 ? Math.round(fight.price_b * 100) : null;
-  const isSoccer = fight.source === "api-football";
+  const volume = fight.polymarket_volume_usd ?? 0;
+  const hasPool = poolA > 0 || poolB > 0;
   const stats = fight.stats_json || {};
+
+  const statsTitle = isSoccer ? "Team Stats" : isOverUnder ? "Market Stats" : "Fighter Stats";
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
@@ -106,10 +115,17 @@ export default function MatchCenter() {
         <Button variant="ghost" size="icon" onClick={() => navigate("/predictions")}>
           <ArrowLeft className="w-5 h-5" />
         </Button>
-        <div>
+        <div className="flex-1">
           <h1 className="text-xl font-bold text-foreground font-['Cinzel']">{fight.title}</h1>
           <p className="text-xs text-muted-foreground">{fight.event_name}</p>
         </div>
+        <Button
+          size="sm"
+          className="bg-primary text-primary-foreground"
+          onClick={() => navigate("/predictions")}
+        >
+          Predict
+        </Button>
       </div>
 
       {/* Fighter matchup */}
@@ -123,7 +139,7 @@ export default function MatchCenter() {
             prob={probA}
             isWinner={fight.winner === "fighter_a"}
             stats={stats.fighter_a}
-            isSoccer={isSoccer}
+            sport={sport}
           />
           <div className="flex flex-col items-center gap-2">
             <span className="text-sm font-bold text-muted-foreground">VS</span>
@@ -148,26 +164,51 @@ export default function MatchCenter() {
             prob={probB}
             isWinner={fight.winner === "fighter_b"}
             stats={stats.fighter_b}
-            isSoccer={isSoccer}
+            sport={sport}
           />
         </div>
       </Card>
 
-      {/* Pool breakdown */}
+      {/* Pool / Volume breakdown */}
       <Card className="p-4">
         <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-primary" /> USDC Per Side
+          <TrendingUp className="w-4 h-4 text-primary" />
+          {hasPool ? "USDC Per Side" : "Live Market Odds"}
         </h2>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="text-center bg-blue-500/5 border border-blue-500/20 rounded-lg p-3">
-            <p className="text-xs text-muted-foreground">{fight.fighter_a_name}</p>
-            <p className="text-2xl font-bold text-foreground">${poolA.toFixed(2)}</p>
+        {hasPool ? (
+          <div className="grid grid-cols-2 gap-4">
+            <div className="text-center bg-blue-500/5 border border-blue-500/20 rounded-lg p-3">
+              <p className="text-xs text-muted-foreground">{fight.fighter_a_name}</p>
+              <p className="text-2xl font-bold text-foreground">${poolA.toFixed(2)}</p>
+            </div>
+            <div className="text-center bg-red-500/5 border border-red-500/20 rounded-lg p-3">
+              <p className="text-xs text-muted-foreground">{fight.fighter_b_name}</p>
+              <p className="text-2xl font-bold text-foreground">${poolB.toFixed(2)}</p>
+            </div>
           </div>
-          <div className="text-center bg-red-500/5 border border-red-500/20 rounded-lg p-3">
-            <p className="text-xs text-muted-foreground">{fight.fighter_b_name}</p>
-            <p className="text-2xl font-bold text-foreground">${poolB.toFixed(2)}</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-4">
+            <div className="text-center bg-blue-500/5 border border-blue-500/20 rounded-lg p-3">
+              <p className="text-xs text-muted-foreground">{fight.fighter_a_name}</p>
+              <p className="text-2xl font-bold text-foreground">
+                {probA ? `${probA}%` : "—"}
+              </p>
+              {probA && <p className="text-xs text-primary font-bold">{(1 / (fight.price_a || 1)).toFixed(2)}x</p>}
+            </div>
+            <div className="text-center bg-red-500/5 border border-red-500/20 rounded-lg p-3">
+              <p className="text-xs text-muted-foreground">{fight.fighter_b_name}</p>
+              <p className="text-2xl font-bold text-foreground">
+                {probB ? `${probB}%` : "—"}
+              </p>
+              {probB && <p className="text-xs text-primary font-bold">{(1 / (fight.price_b || 1)).toFixed(2)}x</p>}
+            </div>
           </div>
-        </div>
+        )}
+        {volume > 0 && (
+          <p className="text-center text-[11px] text-muted-foreground mt-3">
+            Total Volume: ${volume >= 1000 ? `${(volume / 1000).toFixed(1)}K` : volume.toFixed(2)}
+          </p>
+        )}
       </Card>
 
       {/* Match info */}
@@ -228,10 +269,10 @@ export default function MatchCenter() {
         </Card>
       )}
 
-      {/* Fighter stats from stats_json */}
+      {/* Stats from stats_json */}
       {Object.keys(stats).length > 0 && (
         <Card className="p-4">
-          <h2 className="text-sm font-bold text-foreground mb-3">Fighter Stats</h2>
+          <h2 className="text-sm font-bold text-foreground mb-3">{statsTitle}</h2>
           <div className="grid grid-cols-2 gap-4 text-xs">
             {stats.fighter_a && <StatBlock name={fight.fighter_a_name} data={stats.fighter_a} />}
             {stats.fighter_b && <StatBlock name={fight.fighter_b_name} data={stats.fighter_b} />}
@@ -243,14 +284,16 @@ export default function MatchCenter() {
 }
 
 function FighterProfile({
-  name, photo, record, pool, prob, isWinner, stats, isSoccer,
+  name, photo, record, pool, prob, isWinner, stats, sport,
 }: {
   name: string; photo: string | null; record: string | null;
   pool: number; prob: number | null; isWinner: boolean;
-  stats?: any; isSoccer?: boolean;
+  stats?: any; sport: SportType;
 }) {
   const [imgError, setImgError] = useState(false);
   const showImg = photo && !imgError;
+  const isSoccer = sport === "soccer";
+  const isOU = sport === "over_under";
 
   return (
     <div className="text-center">
@@ -264,12 +307,16 @@ function FighterProfile({
         />
       ) : (
         <div className="w-16 h-16 rounded-full bg-muted/40 flex items-center justify-center mx-auto mb-2 text-2xl">
-          {isSoccer ? "⚽" : "🥊"}
+          {isSoccer ? "⚽" : isOU ? (
+            isOverSide(name) ? <ArrowUp className="w-8 h-8 text-green-400" /> : <ArrowDown className="w-8 h-8 text-red-400" />
+          ) : "🥊"}
         </div>
       )}
       <p className="font-bold text-foreground text-base">{name}</p>
       {record && <p className="text-[11px] text-muted-foreground">{record}</p>}
-      <p className="text-xs text-muted-foreground mt-1">${pool.toFixed(2)} USDC</p>
+      <p className="text-xs text-muted-foreground mt-1">
+        {pool > 0 ? `$${pool.toFixed(2)} USDC` : prob ? `${prob}%` : "Market-backed"}
+      </p>
       {isWinner && (
         <div className="mt-1 flex items-center justify-center gap-1 text-primary">
           <Trophy className="w-4 h-4" />
