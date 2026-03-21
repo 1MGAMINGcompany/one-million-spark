@@ -1,30 +1,25 @@
 
 
-## Fix: Missing Soccer Events & Filter Out Past Events
+## Fix: Past Events Showing in "Today" Section
 
-### Problems Identified
+### Problem
+Events like "Jake Paul vs Gervonta" (Nov 15) and "Floyd Mayweather" (Jun 5) appear in the "Today" section with a "Started" label. This happens because:
 
-1. **Missing soccer events**: The "Sync sports" button calls Gamma API with `?tag=sports`, which doesn't return all soccer markets. The Gamma API `tag` parameter is coarse — many soccer events are tagged differently (e.g., `soccer`, `football`, or just `sports`). The search shows them because it uses the `/public-search` endpoint which does full-text matching.
-
-2. **Old/past events imported**: The sync has NO date filtering. It fetches all `active=true&closed=false` events from Gamma, which includes events whose `endDate` has already passed but whose markets haven't been formally closed by Polymarket yet. These stale events clutter the admin panel.
+1. Their fights still have `status: "open"` in the database — the auto-close logic only targets fights with `polymarket_end_date` set, which these older events lack.
+2. The categorization logic (line 247 of `FightPredictions.tsx`) routes any event with open fights into "today", regardless of how old the event is.
 
 ### Plan
 
-#### 1. Multi-tag sync for sports (edge function)
-In `polymarket-sync/index.ts`, when the tag is `"sports"`, run multiple parallel fetches for granular sub-tags: `["sports", "soccer", "football", "mma", "boxing", "nfl", "nba", "mlb", "tennis", "cricket"]`. Deduplicate results by event ID before processing. This ensures all soccer events are captured.
+#### 1. Fix categorization to exclude old events from "today"
+In `src/pages/FightPredictions.tsx`, add a check: if the event date is more than 24 hours in the past AND is not on today's calendar day, route it to `past` regardless of whether it has open fights. This prevents months-old events from appearing in "today".
 
-#### 2. Future-only date filter (edge function)
-After fetching from Gamma, filter out events where `endDate` is in the past (before `now()`). Events with no `endDate` pass through (they may be perpetual markets). This prevents importing stale events.
+#### 2. Broader auto-close in polymarket-sync
+In the sync cleanup step, also close fights where the parent event's `event_date` is more than 48 hours in the past and status is still `open`. This catches events that lack `polymarket_end_date`.
 
-#### 3. Auto-close past events in DB
-Add a cleanup step at the end of the sync action: update any `prediction_fights` where `polymarket_end_date < NOW()` and status is still `open` to set `polymarket_active = false`. This auto-expires old events that were previously imported.
-
-#### 4. Show date info in search results (admin UI)
-In the admin search results, display the event `endDate` next to each result so the admin can see at a glance whether it's upcoming or past. Add a small "Starts in Xh" or "Ended" badge.
+#### 3. One-time DB cleanup
+Run a SQL update to set `status = 'cancelled'` on fights whose `event_date` is more than 48 hours in the past and are still `open`. This immediately removes the stale events.
 
 ### Files to modify
-- `supabase/functions/polymarket-sync/index.ts` — Multi-tag fetch, date filter, auto-close past
-- `src/pages/FightPredictionAdmin.tsx` — Show event dates in search results
-
-### No migration needed — only logic changes.
+- `src/pages/FightPredictions.tsx` — Add past-date guard to categorization logic
+- `supabase/functions/polymarket-sync/index.ts` — Broaden auto-close to use `event_date` fallback
 
