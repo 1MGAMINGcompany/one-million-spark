@@ -143,7 +143,7 @@ export default function EventSection({
   const [leagueLogoError, setLeagueLogoError] = useState(false);
 
   const parsed = parseEventLabel(eventName);
-  const sport = parseSport(eventName, event?.source_provider, (event as any)?.category);
+  const sport = parseSport(eventName, event?.source_provider, event?.category);
   const config = SPORT_CONFIG[sport] || SPORT_CONFIG["MUAY THAI"];
 
   const totalPool = getTotalPoolUsd(fights);
