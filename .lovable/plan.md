@@ -1,85 +1,101 @@
 
 
-# Premium Predictions: USDC Display, Fighter Images & Stats Hub
+# Fix Predictions: Live Liquidity, Sport Icons, Match Center Stats
 
-## Current Issues
-
-1. **No USDC amounts shown per side** — Polymarket fights have `pool_a_usd = 0` and `pool_b_usd = 0` because liquidity lives on-chain. The `isPolymarket` flag hides the `$0.00` but also hides any USDC amounts entirely. For Polymarket events, we should show the **implied USDC volume** derived from Polymarket API data, or at minimum show the per-side probability with clear labels. For native events, USDC per side should always be visible.
-
-2. **No fighter images/records** — The enrichment columns exist in the DB (`fighter_a_photo`, `fighter_a_record`, `venue`, etc.) but are all NULL. The ingest function was not updated with the enrichment fetch logic. Existing events need re-enrichment, NOT cancellation.
-
-3. **No stats/detail view** — There is no "Match Center" or fighter profile page where users can see stats, injury news, or reasons for odds movement.
+## Problems from Screenshots
+1. "$0.00 USDC" on Polymarket events — no real liquidity data being fetched
+2. No fighter/team images (enrichment not running)
+3. Boxing gloves (🥊) shown for soccer and Over/Under markets
+4. Match Center shows 🥊 for soccer events
+5. Over/Under markets need arrow icons instead of fighter names
+6. Match Center lacks team/fighter stats and context
 
 ---
 
-## Plan
+## Step 1: Fetch Polymarket Volume During Price Polling
 
-### Step 1: Always Show USDC Per Side on Cards
-**File:** `src/components/predictions/FightCard.tsx`
+**File:** `supabase/functions/polymarket-prices/index.ts`
 
-- For Polymarket events: derive implied USDC per side from the probability bar. Show `pool_a_usd` / `pool_b_usd` labels even when zero, labeled as "USDC on Yes" / "USDC on No" (or fighter names).  
-- For native events: already works, just ensure it's always visible (remove the `!isPolymarket` guard on FighterColumn pool display).
-- In `PolymarketPoolStrip`: add per-side dollar labels below the probability bar showing actual pool values when > 0, or "Market-backed" when 0.
+The CLOB API at `https://clob.polymarket.com/market/{condition_id}` returns market volume data. During the existing 45s price poll, also fetch volume per outcome and store it in `pool_a_usd` / `pool_b_usd`.
 
-### Step 2: Add Enrichment Logic to Ingest Function
-**File:** `supabase/functions/prediction-ingest/index.ts`
+- Add `polymarket_condition_id` to the select query
+- For each fight, fetch `GET https://clob.polymarket.com/market/{condition_id}` (public, no auth)
+- The response includes `tokens[].winner` and volume data
+- Alternative: use Gamma API `https://gamma-api.polymarket.com/markets?condition_id={id}` which returns `volume`, `volumeNum`, and per-outcome token data
+- Store derived per-side volume in `pool_a_usd` / `pool_b_usd`
 
-Add a post-upsert enrichment step that runs for each fight:
-- **BallDontLie (MMA)**: For each fighter name, call `/fighters?search={name}` to get photo URL and record (wins/losses/draws). Store in `fighter_a_photo`, `fighter_a_record`.
-- **TheSportsDB (Boxing/Muay Thai)**: Call `searchplayers.php?p={name}` to get `strThumb` (photo) and record. Store similarly.
-- **API-Football (Soccer)**: Already fetches `home_logo`/`away_logo` from fixture data — ensure these are mapped into the upsert. Add venue from fixture response.
-- Only update enrichment columns if currently NULL (don't overwrite manual editorial).
-
-### Step 3: Re-Enrich Existing Events
-Add an `?action=re-enrich` mode to the ingest function that:
-- Reads all open fights with NULL `fighter_a_photo`
-- Attempts to fetch photos/records from the APIs
-- Updates only enrichment columns
-- This avoids cancelling and re-creating events
-
-### Step 4: Create Match Center / Fight Detail Page
-**New file:** `src/pages/MatchCenter.tsx`
-**Route:** `/predictions/:fightId`
-
-A dedicated page for each fight/match showing:
-- Large fighter photos side by side with records
-- Live odds chart (probability over time from `price_a`/`price_b` history)
-- Explainer card content (admin-editable `explainer_card` field)
-- Stats from `stats_json` (reach, height, stance, recent form)
-- News/updates section (initially from `explainer_card`, later from AI-generated content)
-- "Why odds moved" section — shows timestamped notes (e.g., "Fighter A injury reported") from a new `fight_updates` table or from `explainer_card` JSON
-
-### Step 5: Add News/Updates Table for Odds Movement Context
-**Database migration:** Create `prediction_fight_updates` table:
+**Database migration:** Add `polymarket_volume_usd` column to `prediction_fights` for total market volume.
 
 ```sql
-CREATE TABLE prediction_fight_updates (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  fight_id uuid NOT NULL,
-  content text NOT NULL,
-  source text DEFAULT 'admin',
-  impact text, -- 'positive_a', 'positive_b', 'neutral'
-  created_at timestamptz DEFAULT now()
-);
-ALTER TABLE prediction_fight_updates ENABLE ROW LEVEL SECURITY;
--- public read, deny client writes (admin-only via edge function)
+ALTER TABLE prediction_fights ADD COLUMN IF NOT EXISTS polymarket_volume_usd numeric DEFAULT 0;
 ```
 
-This lets admins post updates like "Fighter A broke his wrist — odds shifted from 1.5x to 2.8x" that appear on the Match Center and optionally as a ticker on the card.
+## Step 2: Fix Sport Detection & Fallback Icons
 
-### Step 6: Link Cards to Match Center
 **File:** `src/components/predictions/FightCard.tsx`
 
-- Add a subtle "View Details →" link on each card that navigates to `/predictions/{fightId}`
-- Show a small news indicator badge if `fight_updates` exist
+Add a `detectSport(fight)` helper that returns `'soccer' | 'over_under' | 'combat'`:
+- `source === "api-football"` → soccer
+- `event_name` contains soccer keywords (MLS, Premier League, La Liga, FUTBOL, SOCCER, EPL) → soccer
+- `fighter_a_name.toLowerCase() === "over"` or title contains "O/U" → over_under
+- Default → combat
+
+Update `FighterColumn` fallback (line 520-523):
+- Soccer: show ⚽ instead of 🥊
+- Over/Under: show `ArrowUp` (green) for "Over", `ArrowDown` (red) for "Under"
+- Combat: keep 🥊
+
+Pass sport type through to `FighterColumn` and `SoccerTeamColumn`.
+
+## Step 3: Fix "$0.00 USDC" Display
+
+**File:** `src/components/predictions/FightCard.tsx`
+
+In `FighterColumn` and `SoccerTeamColumn` (lines 529-531, 573):
+- When `poolAmount === 0` and fight is Polymarket-backed: show probability percentage (e.g., "52%") instead of "$0.00 USDC"
+- When `poolAmount > 0`: show actual USDC amount as today
+
+In `PolymarketPoolStrip`: when pools are zero, show "Volume: $X" from the new `polymarket_volume_usd` field, or just the live probability bar without dollar amounts.
+
+## Step 4: Fix Match Center Sport Detection
+
+**File:** `src/pages/MatchCenter.tsx`
+
+- Add `isSoccer` detection using event_name keywords (same as FightCard), not just `source === "api-football"`
+- Add Over/Under detection from title/fighter names
+- Use correct fallback icon per sport in `FighterProfile` component
+- When pools are $0 for Polymarket events, show "Live Market Odds" with probabilities instead of empty dollar breakdown
+- Add sport-specific section titles ("Team Stats" vs "Fighter Stats")
+
+## Step 5: Enrich Existing Events (Re-enrich Action)
+
+**File:** `supabase/functions/prediction-ingest/index.ts`
+
+The re-enrich logic already exists but needs to be triggered. Verify the `action: "re-enrich"` path works correctly:
+- For MMA fights: fetch from BallDontLie `/fighters?search={name}`
+- For Boxing: fetch from TheSportsDB `searchplayers.php?p={name}`
+- For Soccer (Polymarket-imported): detect sport from event_name, fetch team logos from TheSportsDB `searchteams.php?t={team_name}`
+
+Add soccer team enrichment path for Polymarket-imported soccer events (currently only API-Football soccer gets logos).
+
+## Step 6: Match Center Stats Enhancement
+
+**File:** `src/pages/MatchCenter.tsx`
+
+- Add a "Predict" button that links back to the prediction modal
+- Show Polymarket volume when available
+- For soccer: show league table position, recent form from `stats_json`
+- For combat: show reach, height, stance from `stats_json`
+- Add live odds display with multipliers (e.g., "2.02x")
 
 ---
 
 ## Technical Details
 
-- No need to cancel existing events — re-enrichment updates NULL columns in-place
-- Fighter photos come from external CDNs (BallDontLie, TheSportsDB) — no storage needed
-- The Match Center page uses existing `stats_json` and new `fight_updates` for content
-- Odds history could be stored by adding a `price_history` JSONB column or a separate `prediction_price_snapshots` table (populated by the existing polymarket-prices polling)
-- All 3 API keys are already configured as secrets
+- Polymarket CLOB `/market/{condition_id}` is public (no auth needed) — same as `/price`
+- Gamma API `gamma-api.polymarket.com/markets?condition_id=X` returns `volumeNum` (total volume in USD)
+- Per-side volume can be estimated as `volumeNum * price_a` and `volumeNum * price_b`
+- The price polling edge function already runs every 45s — adding volume fetch is minimal overhead
+- Sport detection reuses the same keyword logic from `parseSport` in `EventSection.tsx`
+- No new API keys needed
 
