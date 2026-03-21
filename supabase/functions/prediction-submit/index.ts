@@ -1176,16 +1176,16 @@ Deno.serve(async (req) => {
         }
 
         console.log(
-          `[prediction-submit] Polymarket order: user=${walletLower}, token=${tokenId}, amount=$${net_amount_usdc}, price=${expectedPrice}, status=${polymarket_status}, fee_collected=${feeCollected}`,
+          `[prediction-submit] Polymarket order: user=${normalizedWallet}, token=${tokenId}, amount=$${net_amount_usdc}, price=${expectedPrice}, status=${polymarket_status}, fee_collected=${feeCollected}`,
         );
       } else {
         // Deferred: user needs PM auth or trading key
         polymarket_status = "awaiting_user_auth";
         tradeStatus = "requested";
 
-        const missingField = !pmSession
-          ? "no_session"
-          : !pmSession.pm_trading_key
+        const missingField = !pmApiKey
+          ? "no_api_key"
+          : !pmTradingKey
             ? "no_trading_key"
             : "session_invalid";
 
@@ -1199,7 +1199,7 @@ Deno.serve(async (req) => {
         });
 
         console.log(
-          `[prediction-submit] Polymarket deferred: user=${walletLower} needs PM auth (${missingField})`,
+          `[prediction-submit] Polymarket deferred: user=${normalizedWallet} needs PM auth (${missingField})`,
         );
       }
     } else {
