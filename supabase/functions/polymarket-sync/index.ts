@@ -111,16 +111,29 @@ Deno.serve(async (req) => {
     // ══════════════════════════════════════════════════
     if (action === "sync") {
       const tagFilter = tag || "sports";
-      const gammaUrl = `${GAMMA_BASE}/events?tag=${encodeURIComponent(tagFilter)}&active=true&closed=false&limit=${limit}`;
 
-      console.log(`[polymarket-sync] Fetching: ${gammaUrl}`);
-      const gammaRes = await fetch(gammaUrl);
-      if (!gammaRes.ok) {
-        return json({ error: `Gamma API returned ${gammaRes.status}` }, 502);
+      let gammaEvents: GammaEvent[];
+
+      if (tagFilter === "sports") {
+        // Multi-tag parallel fetch for comprehensive sports coverage
+        console.log(`[polymarket-sync] Multi-tag fetch for sports (${SPORTS_TAGS.join(", ")})`);
+        gammaEvents = await fetchSportsEvents(limit);
+      } else {
+        const gammaUrl = `${GAMMA_BASE}/events?tag=${encodeURIComponent(tagFilter)}&active=true&closed=false&limit=${limit}`;
+        console.log(`[polymarket-sync] Fetching: ${gammaUrl}`);
+        const gammaRes = await fetch(gammaUrl);
+        if (!gammaRes.ok) {
+          return json({ error: `Gamma API returned ${gammaRes.status}` }, 502);
+        }
+        gammaEvents = await gammaRes.json();
       }
 
-      const gammaEvents: GammaEvent[] = await gammaRes.json();
-      console.log(`[polymarket-sync] Received ${gammaEvents.length} events`);
+      // Filter out past events
+      const beforeFilter = gammaEvents.length;
+      gammaEvents = gammaEvents.filter(isFutureEvent);
+      const filteredOut = beforeFilter - gammaEvents.length;
+      console.log(`[polymarket-sync] ${gammaEvents.length} future events (filtered out ${filteredOut} past)`);
+
 
       let eventsUpserted = 0;
       let marketsUpserted = 0;
