@@ -509,16 +509,17 @@ export default function FightCard({
 }
 
 function FighterColumn({
-  name, poolAmount, odds, isWinner, canPredict, onPredict, logo, isSoccer, photo, record,
+  name, poolAmount, odds, isWinner, canPredict, onPredict, logo, isSoccer, photo, record, sport,
 }: {
   name: string; poolAmount: number; odds: number; isWinner: boolean;
   canPredict: boolean; onPredict: () => void;
   logo?: string | null; isSoccer?: boolean; photo?: string | null;
-  record?: string | null;
+  record?: string | null; sport?: SportType;
 }) {
   const [imgError, setImgError] = useState(false);
   const showLogo = logo && !imgError;
   const showPhoto = !showLogo && photo && !imgError;
+  const effectiveSport = sport || "combat";
 
   return (
     <div className="text-center">
@@ -542,7 +543,11 @@ function FighterColumn({
       )}
       {!showLogo && !showPhoto && (
         <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-muted/40 flex items-center justify-center mx-auto mb-1.5">
-          <span className="text-lg">🥊</span>
+          {effectiveSport === "over_under" ? (
+            isOverSide(name) ? <ArrowUp className="w-6 h-6 text-green-400" /> : <ArrowDown className="w-6 h-6 text-red-400" />
+          ) : (
+            <span className="text-lg">{SportFallbackEmoji(effectiveSport, name)}</span>
+          )}
         </div>
       )}
       <p className={`font-bold text-foreground ${isSoccer && showLogo ? 'text-base sm:text-lg' : showLogo ? 'text-[15px]' : 'text-sm'}`}>{name}</p>
@@ -550,7 +555,7 @@ function FighterColumn({
         <p className="text-[10px] text-muted-foreground font-medium mt-0.5">{record}</p>
       )}
       <p className={`text-muted-foreground mt-1 ${isSoccer ? 'text-xs sm:text-sm' : 'text-xs'}`}>
-        ${poolAmount.toFixed(2)} USDC
+        {poolAmount > 0 ? `$${poolAmount.toFixed(2)} USDC` : "Market-backed"}
       </p>
       <p className={`text-primary font-bold ${isSoccer ? 'text-xl sm:text-2xl' : 'text-lg'}`}>{odds.toFixed(2)}x</p>
       {canPredict && (
@@ -588,12 +593,14 @@ function SoccerTeamColumn({
           loading="lazy"
         />
       ) : (
-        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-muted/40 flex items-center justify-center text-muted-foreground text-lg font-bold">
-          {name.charAt(0)}
+        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-muted/40 flex items-center justify-center text-lg">
+          ⚽
         </div>
       )}
       <p className="font-bold text-foreground text-sm sm:text-base leading-tight mt-0.5">{name}</p>
-      <p className="text-[10px] text-muted-foreground">${poolAmount.toFixed(2)} USDC</p>
+      <p className="text-[10px] text-muted-foreground">
+        {poolAmount > 0 ? `$${poolAmount.toFixed(2)} USDC` : "Market-backed"}
+      </p>
       <p className="text-xl sm:text-2xl font-bold text-primary leading-none">{odds.toFixed(2)}x</p>
       {canPredict && (
         <Button
