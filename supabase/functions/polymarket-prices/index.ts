@@ -384,6 +384,37 @@ Deno.serve(async (req) => {
                 updatePayload.away_logo = parentImages.away_logo;
               }
             }
+
+            // Fallback: if still missing logos on a soccer event, fetch from event_name
+            if (soccer && (!fight.home_logo && !updatePayload.home_logo || !fight.away_logo && !updatePayload.away_logo)) {
+              const vsMatch = (fight.event_name || "").match(/^(.+?)\s+vs\.?\s+(.+?)$/i);
+              if (vsMatch) {
+                const [, homeTeam, awayTeam] = vsMatch;
+                if (!fight.home_logo && !updatePayload.home_logo) {
+                  const pmBadge = await fetchPolymarketS3Photo(homeTeam.trim(), "soccer");
+                  const badge = pmBadge || await fetchTeamBadge(homeTeam.trim());
+                  if (badge) {
+                    updatePayload.home_logo = badge;
+                    enriched.push(`${fight.id}: home_logo_fallback`);
+                  }
+                }
+                if (!fight.away_logo && !updatePayload.away_logo) {
+                  const pmBadge = await fetchPolymarketS3Photo(awayTeam.trim(), "soccer");
+                  const badge = pmBadge || await fetchTeamBadge(awayTeam.trim());
+                  if (badge) {
+                    updatePayload.away_logo = badge;
+                    enriched.push(`${fight.id}: away_logo_fallback`);
+                  }
+                }
+                // Also set fighter photos from logos for prop markets
+                if (!fight.fighter_a_photo && (updatePayload.home_logo || fight.home_logo)) {
+                  updatePayload.fighter_a_photo = updatePayload.home_logo || fight.home_logo;
+                }
+                if (!fight.fighter_b_photo && (updatePayload.away_logo || fight.away_logo)) {
+                  updatePayload.fighter_b_photo = updatePayload.away_logo || fight.away_logo;
+                }
+              }
+            }
           } else if (soccer) {
             // Parse team names from event_name: "Team A vs. Team B"
             const vsMatch = (fight.event_name || "").match(/^(.+?)\s+vs\.?\s+(.+?)$/i);
