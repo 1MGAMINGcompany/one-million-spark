@@ -2202,7 +2202,7 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
                             {countdown === "Started" ? "⏱ Started" : `⏳ ${countdown}`}
                           </span>
                         )}
-                        {d.event_date && <p>📅 {new Date(d.event_date).toLocaleString()}</p>}
+                        {d.event_date && <p>📅 {formatEventDateTime(d.event_date)}</p>}
                         {d.location && <p>📍 {d.location}</p>}
                         <p>ID: {d.source_event_id}</p>
                         <p>{(() => {
