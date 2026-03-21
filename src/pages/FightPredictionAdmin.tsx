@@ -52,6 +52,8 @@ interface PredictionEvent {
   scheduled_lock_at: string | null;
   scheduled_live_at: string | null;
   last_automation_check_at: string | null;
+  category: string | null;
+  venue: string | null;
   // Polymarket mapping
   polymarket_event_id: string | null;
   polymarket_slug: string | null;
