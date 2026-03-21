@@ -557,7 +557,7 @@ function FighterColumn({
         <img
           src={photo!}
           alt={name}
-          className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover mx-auto mb-1.5 ring-2 ring-primary/30 shadow-lg"
+          className="w-[4.5rem] h-[4.5rem] sm:w-20 sm:h-20 rounded-full object-cover object-top mx-auto mb-1.5 ring-2 ring-primary/30 shadow-lg"
           onError={() => setImgError(true)}
           loading="lazy"
         />
