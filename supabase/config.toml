@@ -117,3 +117,6 @@ verify_jwt = false
 
 [functions.pm-verify-credentials]
 verify_jwt = false
+
+[functions.prediction-preflight]
+verify_jwt = false
