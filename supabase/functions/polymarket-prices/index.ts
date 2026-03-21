@@ -273,26 +273,28 @@ Deno.serve(async (req) => {
               updatePayload.fighter_b_photo = updatePayload.away_logo;
             }
           } else {
-            // Combat sports: try to get fighter photos from TheSportsDB
-            // Use the resolved name (from Gamma outcomes or existing)
+            // Combat sports: try to get fighter photos
             const resolvedNameA = updatePayload.fighter_a_name || fight.fighter_a_name;
             const resolvedNameB = updatePayload.fighter_b_name || fight.fighter_b_name;
 
             if (!fight.fighter_a_photo && resolvedNameA && resolvedNameA !== "Yes" && resolvedNameA !== "Over") {
+              console.log(`[enrichment] Looking up fighter_a photo: "${resolvedNameA}"`);
               const photo = await fetchFighterPhoto(resolvedNameA);
               if (photo) {
                 updatePayload.fighter_a_photo = photo;
-                enriched.push(`${fight.id}: fighter_a_photo from TSDB`);
-              } else if (gammaImage && gammaImage !== fight.fighter_a_photo) {
-                // Fallback to Gamma league icon
-                updatePayload.fighter_a_photo = gammaImage;
+                enriched.push(`${fight.id}: fighter_a_photo`);
+              } else {
+                console.log(`[enrichment] No photo found for "${resolvedNameA}"`);
               }
             }
             if (!fight.fighter_b_photo && resolvedNameB && resolvedNameB !== "No" && resolvedNameB !== "Under") {
+              console.log(`[enrichment] Looking up fighter_b photo: "${resolvedNameB}"`);
               const photo = await fetchFighterPhoto(resolvedNameB);
               if (photo) {
                 updatePayload.fighter_b_photo = photo;
-                enriched.push(`${fight.id}: fighter_b_photo from TSDB`);
+                enriched.push(`${fight.id}: fighter_b_photo`);
+              } else {
+                console.log(`[enrichment] No photo found for "${resolvedNameB}"`);
               }
             }
           }
