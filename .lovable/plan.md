@@ -1,47 +1,54 @@
 
 
-## Add BKFC Fight Night Mohegan Sun Event with All 11 Fights
+# Add Fighter Info to Match Center (View Details & Odds)
 
-I scraped all the data from the BKFC website. Here is the complete event with 11 fights I will insert directly into the database.
+## What We Have
+- The `stats_json` column on `prediction_fights` exists but is **null** for all 11 BKFC fights
+- The MatchCenter page already renders `stats_json` data in a "Fighter Stats" card at the bottom
+- BKFC event page provides: height, fist size, weight, record per fighter
+- Individual BKFC fighter pages provide additional data: reach, age, nationality, nickname, division, bio
 
-### Event Details
-- **Name:** BKFC Fight Night Mohegan Sun: Porter vs Wilson
-- **Date:** March 28, 2026 6:00 PM EDT (2026-03-28T22:00:00Z)
-- **Venue:** The Mohegan Sun - Uncasville, CT
-- **Category:** BARE KNUCKLE
-- **Organization:** BKFC
-- **Status:** draft (ready for admin approval)
+## Plan
 
-### All 11 Fights to Insert
+### Step 1 — Scrape fighter data from BKFC
+Fetch each of the 22 individual fighter profile pages on bkfc.com to collect:
+- Height, reach, age, nationality, nickname, division, bio summary
 
-| # | Fight | Weight Class | Fighter A Record | Fighter B Record |
-|---|-------|-------------|-----------------|-----------------|
-| 1 | Parker Porter vs Haze Wilson | Heavyweight | 3-0-0 | 4-1-0 |
-| 2 | Pat Casey vs Zeb Vincent | Middleweight | 3-2-0 | 3-3-0 |
-| 3 | Rico DiSciullo vs Elijah Harris | Lightweight | 3-0-0 | 2-1-0 |
-| 4 | Harry Gigliotti vs Timmy Mason | Featherweight | 0-0-0 | 3-3-0 |
-| 5 | Gary Balletto III vs Adam De Freitas | Middleweight | 2-0-0 | 1-2-0 |
-| 6 | Alexandra Ballou vs Taylor Dagner | Women Flyweight | 0-0-0 | 0-0-0 |
-| 7 | Guilherme Viana vs Joseph White | Heavyweight | 2-0-0 | 2-2-0 |
-| 8 | Joseph Peters vs Maurice Horne | Light Heavyweight | 2-0-0 | 1-1-0 |
-| 9 | Isaiah Williams vs Joshua Whiteside | Welterweight | 0-0-0 | 0-0-0 |
-| 10 | David Burke vs Terryl Johnson | Light Heavyweight | 0-1-0 | 0-1-0 |
-| 11 | Sophia Hayes vs Nadia Moreno | Women Bantamweight | 0-0-0 | 0-0-0 |
+Combined with the event page data already scraped (fist size, weight).
 
-### Fighter Photos (from BKFC CDN)
-All 22 fighter photos will be stored using the official BKFC CDN URLs (400x533 avatar images).
+### Step 2 — Populate `stats_json` for all 11 fights
+Use the database insert tool to UPDATE each fight's `stats_json` with structured data like:
+```json
+{
+  "fighter_a": {
+    "height": "6'0\"",
+    "reach": "73in / 185cm",
+    "fist_size": "33cm",
+    "weight": "245 lbs",
+    "age": 40,
+    "nationality": "USA",
+    "nickname": "",
+    "division": "Heavyweight"
+  },
+  "fighter_b": { ... }
+}
+```
 
-### Implementation
-1. **Insert event** into `prediction_events` via database insert tool
-2. **Insert all 11 fights** into `prediction_fights` with:
-   - Fighter names, photos (CDN URLs), records, weight class
-   - Fight class labels (Main Event, Co-Main, Featured Fight, etc.)
-   - Commission at 2% (200 bps)
-   - Status: open
-3. All data comes from the scraped BKFC page -- no code changes needed, just database inserts
+### Step 3 — Add a dedicated "Fighters" tab to MatchCenter
+Currently the tabs are: About | Odds | News. Add a **Fighters** tab (between About and Odds) that shows a side-by-side comparison card:
+- Photos (already displayed in hero, but repeated smaller here)
+- Record (already in `fighter_a_record` / `fighter_b_record`)
+- Height, Reach, Fist Size, Weight, Age, Nationality — as a comparison table with fighter A on left, stat label center, fighter B on right
+- Bio snippet (if available, stored in `stats_json.fighter_a.bio`)
+
+This is more visually engaging than the current generic key-value `StatBlock` renderer.
+
+### Step 4 — Enhance the ProfileCard in the hero section
+Show 2-3 key stats (height, reach, age) directly under each fighter's name/record in the hero matchup card, so users see headline stats without needing to open the tab.
 
 ### Technical Details
-- Uses the database insert tool (service-role access) since RLS blocks client writes
-- Event date stored as `2026-03-28T22:00:00Z` (6:00 PM EDT = 10:00 PM UTC)
-- Each fight references the event via `event_id`
+- **Database**: 11 UPDATE statements via insert tool to populate `stats_json`
+- **UI**: Modify `src/pages/MatchCenter.tsx` to add a "Fighters" tab with a comparison layout
+- **No schema changes needed** — `stats_json` (jsonb) column already exists
+- Fighter bios will be truncated to ~2 sentences for the card view
 
