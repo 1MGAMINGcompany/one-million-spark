@@ -334,6 +334,7 @@ Deno.serve(async (req) => {
           markets_upserted: marketsUpserted,
           skipped,
           expired_closed: expiredCount,
+          stale_event_fights_closed: staleFightsClosedCount,
           filtered_out_past: filteredOut,
           total_events: gammaEvents.length,
         },
