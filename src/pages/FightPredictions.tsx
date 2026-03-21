@@ -275,7 +275,7 @@ export default function FightPredictions() {
   }, [fights]);
 
   const comingSoonSports = useMemo(() => {
-    const existingSports = new Set(Object.entries(groupedEvents).map(([key, val]) => parseSport(key, val.event?.source_provider)));
+    const existingSports = new Set(Object.entries(groupedEvents).map(([key, val]) => parseSport(key, val.event?.source_provider, val.event?.category)));
     return ["MUAY THAI", "BOXING", "MMA", "BARE KNUCKLE", "FUTBOL"].filter(s => !existingSports.has(s));
   }, [groupedEvents]);
 
