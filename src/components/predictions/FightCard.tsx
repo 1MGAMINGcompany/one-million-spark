@@ -169,8 +169,6 @@ function formatVolume(v: number): string {
   return `$${v.toFixed(0)}`;
 }
 
-import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
-
 /** Get display name — replace "Yes"/"No" with meaningful name */
 function displayName(name: string, fight: Fight, side: "a" | "b"): string {
   return resolveOutcomeName(name, side, fight);
