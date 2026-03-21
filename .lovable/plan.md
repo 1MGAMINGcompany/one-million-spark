@@ -1,57 +1,41 @@
 
 
-## Overhaul Admin Event & Fight Management
+## Time Handling for Predictions: Admin Input + User Display
+
+### Current State
+- Admin creates events with `datetime-local` input — this captures the date/time **without timezone info** (browser-local)
+- `event_date` is stored as `timestamptz` in the DB, so Postgres assumes UTC if no offset is provided
+- Frontend display already uses `formatEventDateTime()` and `formatEventTime()` which call `toLocaleString()` — this **automatically converts to the user's device timezone**
+- The admin display in `FightPredictionAdmin.tsx` uses raw `toLocaleString()` in some places and raw `split('T')[0]` in others (inconsistent)
 
 ### Problem
-1. **Create Event form** is too basic — missing datetime picker (only date, no time), sport/category dropdown, and venue field
-2. **No edit capability** — once created, events and fights cannot be modified (no `updateEvent`/`updateFight` actions exist in the edge function)
-3. **No fighter enrichment UI** — fighter photos, records, weight class, venue, referee fields exist in the DB but have no admin UI to populate them
-4. **Delete/Archive buttons** don't appear for all event statuses (e.g., approved events with 0 predictions should always show Delete)
-5. **BKFC event** needs to be deleted (will do via direct DB query since no delete button is available)
+1. Admin enters `datetime-local` which has no timezone context — if admin is in EST, the time gets stored ambiguously
+2. Admin doesn't know what timezone they're saving in
+3. Users see times via `toLocaleString()` which is correct (auto-localizes), but there's no explicit timezone label in all places
 
 ### Plan
 
-#### 1. Delete the orphaned BKFC event
-- Query the database to find the BKFC event and delete it along with any associated fights (no predictions exist, so safe)
+#### 1. Admin: Add timezone indicator to event creation/edit
+- Below the `datetime-local` input, show a helper label: **"Times are saved in your local timezone (EST/EDT/etc.)"** — dynamically detect the admin's timezone using `Intl.DateTimeFormat().resolvedOptions().timeZone`
+- When sending to the edge function, convert the `datetime-local` value to a proper ISO string with timezone offset so Postgres stores the correct UTC equivalent
 
-#### 2. Enhance Create Event form
-- Add `datetime-local` input instead of `date` (so admin can set event time)
-- Add a **Sport/Category** dropdown: MMA, BOXING, MUAY THAI, BARE KNUCKLE, FUTBOL, OTHER
-- Add **Venue** input field
-- Store `category` on the event row (column already exists in `prediction_events`)
+#### 2. Optional fight-level time
+- Add an optional `scheduled_time` field to the fight edit form (not creation — fights inherit the event time by default)
+- This is display-only context, not a new DB column — fights already share the event's `event_date`
 
-#### 3. Add `updateEvent` action to edge function
-- Accept partial updates: `event_name`, `event_date`, `organization`, `location`, `venue`, `category`, `is_test`
-- Audit-log the change
+#### 3. Frontend display: already correct, minor cleanup
+- `formatEventDateTime()` and `formatEventTime()` already use `toLocaleString()` with `timeZoneName: "short"` — this shows "EST", "PST", "CET" etc. based on the user's device. **This is already working correctly.**
+- Fix the admin panel's inconsistent date display (line 814: `split('T')[0]`) to also use `formatEventDateTime()` for consistency
+- Fix line 2136/2187 which use raw `toLocaleString()` without timezone label
 
-#### 4. Add `updateFight` action to edge function
-- Accept partial updates for enrichment fields: `fighter_a_name`, `fighter_b_name`, `fighter_a_photo`, `fighter_b_photo`, `fighter_a_record`, `fighter_b_record`, `weight_class`, `fight_class`, `venue`, `referee`, `enrichment_notes`, `title`, `commission_bps`
-- Audit-log the change
-
-#### 5. Add `deleteFight` action to edge function
-- Only allow deletion if fight has 0 prediction entries
-- Remove the fight row and audit-log
-
-#### 6. Add inline Edit Event panel in AdminEventCard
-- When expanded, show an "Edit" button that reveals editable fields for: event name, date/time, organization, location, venue, category
-- Save button calls `updateEvent`
-
-#### 7. Add inline Edit Fight panel in AdminFightCard
-- Show an "Edit" toggle that reveals editable fields for: title, fighter names, fighter photos (URL inputs), fighter records, weight class, fight class, venue, referee, enrichment notes, commission
-- Save button calls `updateFight`
-- Delete button (only when 0 predictions) calls `deleteFight`
-
-#### 8. Fix Delete/Archive button visibility
-- Show Delete for any event status when there are 0 predictions across all fights
-- Show Archive for any non-archived event
+#### 4. No geolocation API needed
+- `toLocaleString()` with `timeZoneName: "short"` already uses the device's OS timezone setting — no GPS or IP geolocation required. Users worldwide will automatically see their local time + timezone abbreviation.
 
 ### Files to modify
-- `supabase/functions/prediction-admin/index.ts` — Add `updateEvent`, `updateFight`, `deleteFight` actions
-- `src/pages/FightPredictionAdmin.tsx` — Enhanced Create Event form, inline Edit panels for events and fights, fix button visibility
+- `src/pages/FightPredictionAdmin.tsx` — Add timezone indicator on create/edit forms, fix inconsistent date displays, convert `datetime-local` to ISO with offset before sending
+- `src/lib/formatEventLocalDateTime.ts` — No changes needed (already correct)
 
-### Technical details
-- The `prediction_events` table already has `category` and `venue` columns
-- The `prediction_fights` table already has `fighter_a_photo`, `fighter_b_photo`, `fighter_a_record`, `fighter_b_record`, `venue`, `referee`, `enrichment_notes` columns
-- All writes go through the edge function (service role), no RLS changes needed
-- Fight interface in admin needs to be extended to include the enrichment fields from the DB
+### Technical notes
+- `datetime-local` → ISO conversion: `new Date(inputValue).toISOString()` handles this, but we should use the more explicit approach of appending the local offset to ensure correctness
+- The key insight: **the system already handles user-side localization correctly**. The only fix needed is on the admin input side (timezone clarity) and admin display consistency.
 
