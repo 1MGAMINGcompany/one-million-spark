@@ -160,8 +160,8 @@ export default function FightPredictionAdmin() {
   const [eventDate, setEventDate] = useState("");
   const [eventLocation, setEventLocation] = useState("");
   const [eventIsTest, setEventIsTest] = useState(false);
-
-  // Create fight form
+  const [eventCategory, setEventCategory] = useState("");
+  const [eventVenue, setEventVenue] = useState("");
   const [fightTitle, setFightTitle] = useState("");
   const [fighterA, setFighterA] = useState("");
   const [fighterB, setFighterB] = useState("");
