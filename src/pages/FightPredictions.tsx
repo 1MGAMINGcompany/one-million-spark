@@ -378,7 +378,17 @@ export default function FightPredictions() {
       loadUserEntries();
     } catch (err: any) {
       console.error("Prediction failed:", err);
-      toast.error("Prediction failed", { description: err.message });
+      const msg: string = err.message || "Unknown error";
+      const isTransientAuth =
+        msg.includes("Expected 200 OK") ||
+        msg.includes("JWKS") ||
+        msg.includes("jwks") ||
+        msg.includes("jwt_verification_failed") ||
+        msg.includes("auth_failed");
+      toast.error(
+        isTransientAuth ? "Temporary auth issue" : "Prediction failed",
+        { description: isTransientAuth ? "Please try again in a few seconds." : msg },
+      );
     } finally {
       setSubmitting(false);
     }

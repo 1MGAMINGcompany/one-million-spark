@@ -392,14 +392,40 @@ Deno.serve(async (req) => {
     }
 
     try {
-      const jwks = createRemoteJWKSet(
-        new URL("https://auth.privy.io/.well-known/jwks.json"),
-      );
-      const { payload } = await jwtVerify(privyToken, jwks, {
-        issuer: "privy.io",
-        audience: appId,
-      });
-      privyDid = (payload.sub as string) || null;
+      // Retry JWKS verification up to 3 times to handle transient Privy outages
+      let lastJwksError: Error | undefined;
+      let jwtPayload: Record<string, unknown> | null = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const jwks = createRemoteJWKSet(
+            new URL("https://auth.privy.io/.well-known/jwks.json"),
+          );
+          const { payload } = await jwtVerify(privyToken, jwks, {
+            issuer: "privy.io",
+            audience: appId,
+          });
+          jwtPayload = payload as Record<string, unknown>;
+          break;
+        } catch (retryErr) {
+          lastJwksError = retryErr as Error;
+          const msg = lastJwksError.message ?? "";
+          const isTransient =
+            msg.includes("Expected 200 OK") ||
+            msg.includes("fetch") ||
+            msg.includes("network") ||
+            msg.includes("ECONNREFUSED");
+          if (!isTransient || attempt === 2) break;
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+      }
+      if (!jwtPayload) {
+        await auditLog(supabase, null, null, "auth_required_failed", null, {
+          reason: "jwt_verification_failed",
+          error: (lastJwksError as Error).message,
+        });
+        return json({ error: "Authentication failed", error_code: "auth_failed" }, 401);
+      }
+      privyDid = (jwtPayload.sub as string) || null;
     } catch (e) {
       await auditLog(supabase, null, null, "auth_required_failed", null, {
         reason: "jwt_verification_failed",
