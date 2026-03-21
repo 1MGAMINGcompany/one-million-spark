@@ -36,6 +36,13 @@ interface FightDetail {
   event_name: string;
   home_logo: string | null;
   away_logo: string | null;
+  polymarket_question: string | null;
+  polymarket_end_date: string | null;
+  polymarket_slug: string | null;
+  polymarket_condition_id: string | null;
+  created_at: string;
+  trading_allowed: boolean;
+  commission_bps: number;
 }
 
 interface FightUpdate {
