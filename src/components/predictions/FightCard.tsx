@@ -308,7 +308,7 @@ export default function FightCard({
         <div className="px-4 pt-3 pb-3 sm:px-6">
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-5" dir="ltr">
             <SoccerTeamColumn
-              name={fight.fighter_a_name}
+              name={resolveOutcomeName(fight.fighter_a_name, "a", fight)}
               odds={oddsA}
               poolAmount={poolA}
               canPredict={canPredict}
@@ -320,7 +320,7 @@ export default function FightCard({
               <span className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">vs</span>
             </div>
             <SoccerTeamColumn
-              name={fight.fighter_b_name}
+              name={resolveOutcomeName(fight.fighter_b_name, "b", fight)}
               odds={oddsB}
               poolAmount={poolB}
               canPredict={canPredict}
