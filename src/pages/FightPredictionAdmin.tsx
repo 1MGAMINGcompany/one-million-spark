@@ -762,7 +762,7 @@ function AdminEventCard({
       await callAdmin("updateEvent", {
         event_id: event.id,
         event_name: editForm.event_name || undefined,
-        event_date: editForm.event_date || null,
+        event_date: editForm.event_date ? localDatetimeToISO(editForm.event_date) : null,
         organization: editForm.organization || null,
         location: editForm.location || null,
         venue: editForm.venue || null,
