@@ -3,7 +3,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Trophy, MapPin, User, TrendingUp, Newspaper, ArrowUp, ArrowDown } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { ArrowLeft, Trophy, MapPin, User, TrendingUp, Newspaper, ArrowUp, ArrowDown, BookOpen, Calendar, ExternalLink, Info } from "lucide-react";
 import { detectSport, isOverSide, type SportType } from "@/lib/detectSport";
 import { resolveOutcomeName, parseTeamsFromEvent } from "@/lib/resolveOutcomeName";
 
