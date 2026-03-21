@@ -362,30 +362,7 @@ export default function MatchCenter() {
         </Card>
       )}
 
-      {updates.length > 0 && (
-        <Card className="p-4">
-          <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
-            <Newspaper className="w-4 h-4 text-primary" /> Why Odds Moved
-          </h2>
-          <div className="space-y-3">
-            {updates.map((u) => (
-              <div
-                key={u.id}
-                className={`border-l-2 pl-3 py-1 ${
-                  u.impact === "positive_a" ? "border-blue-500" :
-                  u.impact === "positive_b" ? "border-red-500" :
-                  "border-muted-foreground/30"
-                }`}
-              >
-                <p className="text-xs text-foreground">{u.content}</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">
-                  {new Date(u.created_at).toLocaleDateString()} · {u.source}
-                </p>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
+
 
       {/* Stats from stats_json */}
       {Object.keys(stats).length > 0 && (
