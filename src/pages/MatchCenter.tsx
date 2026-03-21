@@ -4,7 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ArrowLeft, Trophy, MapPin, User, TrendingUp, Newspaper, ArrowUp, ArrowDown, BookOpen, Calendar, ExternalLink, Info } from "lucide-react";
+import {
+  ArrowLeft, Trophy, MapPin, User, TrendingUp, Newspaper,
+  ArrowUp, ArrowDown, BookOpen, Calendar, ExternalLink, Info,
+  BarChart3, Users, Swords,
+} from "lucide-react";
 import { detectSport, isOverSide, type SportType } from "@/lib/detectSport";
 import { resolveOutcomeName, parseTeamsFromEvent } from "@/lib/resolveOutcomeName";
 
@@ -43,6 +47,21 @@ interface FightDetail {
   created_at: string;
   trading_allowed: boolean;
   commission_bps: number;
+  event_id: string | null;
+  method: string | null;
+  enrichment_notes: string | null;
+}
+
+interface SiblingMarket {
+  id: string;
+  title: string;
+  price_a: number | null;
+  price_b: number | null;
+  polymarket_volume_usd: number | null;
+  fighter_a_name: string;
+  fighter_b_name: string;
+  status: string;
+  winner: string | null;
 }
 
 interface FightUpdate {
@@ -58,6 +77,7 @@ export default function MatchCenter() {
   const navigate = useNavigate();
   const [fight, setFight] = useState<FightDetail | null>(null);
   const [updates, setUpdates] = useState<FightUpdate[]>([]);
+  const [siblings, setSiblings] = useState<SiblingMarket[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -77,7 +97,20 @@ export default function MatchCenter() {
           .order("created_at", { ascending: false })
           .limit(20),
       ]);
-      if (fightRes.data) setFight(fightRes.data as any);
+      if (fightRes.data) {
+        setFight(fightRes.data as any);
+        // Fetch sibling markets from same event
+        const eventName = (fightRes.data as any).event_name;
+        if (eventName) {
+          const { data: sibs } = await supabase
+            .from("prediction_fights")
+            .select("id, title, price_a, price_b, polymarket_volume_usd, fighter_a_name, fighter_b_name, status, winner")
+            .eq("event_name", eventName)
+            .neq("id", fightId)
+            .in("status", ["open", "locked", "live", "resolved"]);
+          if (sibs) setSiblings(sibs as any);
+        }
+      }
       if (updatesRes.data) setUpdates(updatesRes.data as any);
       setLoading(false);
     }
@@ -95,7 +128,7 @@ export default function MatchCenter() {
   if (!fight) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-12 text-center">
-        <p className="text-muted-foreground">Fight not found.</p>
+        <p className="text-muted-foreground">Event not found.</p>
         <Button variant="outline" className="mt-4" onClick={() => navigate("/predictions")}>
           Back to Predictions
         </Button>
@@ -107,11 +140,8 @@ export default function MatchCenter() {
   const isSoccer = sport === "soccer";
   const isOverUnder = sport === "over_under";
 
-  // Resolve display names
   const nameA = resolveOutcomeName(fight.fighter_a_name, "a", fight);
   const nameB = resolveOutcomeName(fight.fighter_b_name, "b", fight);
-
-  // Parse teams from event name for soccer header
   const teams = parseTeamsFromEvent(fight.event_name);
 
   const poolA = (fight.pool_a_usd ?? 0) > 0 ? fight.pool_a_usd : fight.pool_a_lamports / 1e9;
@@ -122,7 +152,8 @@ export default function MatchCenter() {
   const hasPool = poolA > 0 || poolB > 0;
   const stats = fight.stats_json || {};
 
-  const statsTitle = isSoccer ? "Team Stats" : isOverUnder ? "Market Stats" : "Fighter Stats";
+  const photoA = isSoccer ? (fight.home_logo || fight.fighter_a_photo) : fight.fighter_a_photo;
+  const photoB = isSoccer ? (fight.away_logo || fight.fighter_b_photo) : fight.fighter_b_photo;
 
   const formatVol = (v: number) => {
     if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
@@ -130,8 +161,10 @@ export default function MatchCenter() {
     return `$${v.toFixed(0)}`;
   };
 
+  const sportLabel = isSoccer ? "Match" : isOverUnder ? "Market" : "Fight";
+
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
+    <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
       {/* Header */}
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate("/predictions")}>
@@ -163,50 +196,93 @@ export default function MatchCenter() {
         </Button>
       </div>
 
-      {/* Matchup card */}
+      {/* Matchup hero card */}
       <Card className="p-6">
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-6">
-          <FighterProfile
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 sm:gap-6">
+          <ProfileCard
             name={nameA}
-            photo={isSoccer ? fight.home_logo : fight.fighter_a_photo}
+            photo={photoA}
             record={fight.fighter_a_record}
-            pool={poolA}
             prob={probA}
             isWinner={fight.winner === "fighter_a"}
-            stats={stats.fighter_a}
             sport={sport}
+            stats={stats.fighter_a}
+            side="left"
           />
           <div className="flex flex-col items-center gap-2">
             <span className="text-sm font-bold text-muted-foreground">VS</span>
-            {probA && probB && (
-              <div className="w-24">
+            {probA != null && probB != null && (
+              <div className="w-20 sm:w-28">
                 <div className="h-3 rounded-full overflow-hidden flex bg-muted/30">
-                  <div className="h-full bg-blue-500" style={{ width: `${probA}%` }} />
-                  <div className="h-full bg-red-500" style={{ width: `${probB}%` }} />
+                  <div className="h-full bg-blue-500 transition-all" style={{ width: `${probA}%` }} />
+                  <div className="h-full bg-red-500 transition-all" style={{ width: `${probB}%` }} />
                 </div>
                 <div className="flex justify-between text-[9px] font-bold mt-0.5">
-                  <span className="text-blue-400">{probA}%</span>
-                  <span className="text-red-400">{probB}%</span>
+                  <span className="text-blue-400">{probA}¢</span>
+                  <span className="text-red-400">{probB}¢</span>
                 </div>
               </div>
             )}
+            {volume > 0 && (
+              <span className="text-[10px] font-semibold text-primary/70 mt-1">
+                {formatVol(volume)} Vol.
+              </span>
+            )}
           </div>
-          <FighterProfile
+          <ProfileCard
             name={nameB}
-            photo={isSoccer ? fight.away_logo : fight.fighter_b_photo}
+            photo={photoB}
             record={fight.fighter_b_record}
-            pool={poolB}
             prob={probB}
             isWinner={fight.winner === "fighter_b"}
-            stats={stats.fighter_b}
             sport={sport}
+            stats={stats.fighter_b}
+            side="right"
           />
         </div>
       </Card>
 
+      {/* Sibling markets from same event */}
+      {siblings.length > 0 && (
+        <Card className="p-4">
+          <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 text-primary" /> Related Markets
+          </h2>
+          <div className="space-y-2">
+            {siblings.map((s) => {
+              const sNameA = resolveOutcomeName(s.fighter_a_name, "a", { ...s, event_name: fight.event_name });
+              const sNameB = resolveOutcomeName(s.fighter_b_name, "b", { ...s, event_name: fight.event_name });
+              const sPA = s.price_a && s.price_a > 0 ? Math.round(s.price_a * 100) : null;
+              const sPB = s.price_b && s.price_b > 0 ? Math.round(s.price_b * 100) : null;
+              const sVol = s.polymarket_volume_usd ?? 0;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => navigate(`/predictions/${s.id}`)}
+                  className="w-full flex items-center justify-between bg-muted/20 hover:bg-muted/40 rounded-lg p-3 transition-colors text-left"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-foreground truncate">{s.title}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {sNameA} {sPA ? `${sPA}¢` : ""} vs {sNameB} {sPB ? `${sPB}¢` : ""}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0 ml-2">
+                    {sVol > 0 && <p className="text-[10px] text-primary/70 font-semibold">{formatVol(sVol)}</p>}
+                    {s.winner && (
+                      <span className="text-[9px] text-primary font-bold flex items-center gap-0.5">
+                        <Trophy className="w-3 h-3" /> Settled
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </Card>
+      )}
 
-
-      {/* About / Rules / Market Info */}
+      {/* Tabbed info: About / Odds / News */}
       <Card className="p-4">
         <Tabs defaultValue="about">
           <TabsList className="w-full mb-3">
@@ -224,7 +300,6 @@ export default function MatchCenter() {
           </TabsList>
 
           <TabsContent value="about" className="space-y-3">
-            {/* Resolution rules */}
             {fight.polymarket_question && (
               <div>
                 <h3 className="text-xs font-bold text-foreground mb-1 flex items-center gap-1">
@@ -235,8 +310,6 @@ export default function MatchCenter() {
                 </p>
               </div>
             )}
-
-            {/* Market metadata */}
             <div className="space-y-1.5 text-xs text-muted-foreground">
               {fight.polymarket_end_date && (
                 <div className="flex items-center gap-2">
@@ -251,22 +324,22 @@ export default function MatchCenter() {
                 </div>
               )}
               {fight.venue && (
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-3.5 h-3.5" /> {fight.venue}
-                </div>
+                <div className="flex items-center gap-2"><MapPin className="w-3.5 h-3.5" /> {fight.venue}</div>
               )}
               {fight.referee && (
-                <div className="flex items-center gap-2">
-                  <User className="w-3.5 h-3.5" /> Referee: {fight.referee}
-                </div>
+                <div className="flex items-center gap-2"><User className="w-3.5 h-3.5" /> Referee: {fight.referee}</div>
               )}
               {fight.weight_class && (
-                <div className="flex items-center gap-2">
-                  <span>⚖️</span> {fight.weight_class}
-                </div>
+                <div className="flex items-center gap-2"><span>⚖️</span> {fight.weight_class}</div>
+              )}
+              {fight.fight_class && (
+                <div className="flex items-center gap-2"><Swords className="w-3.5 h-3.5" /> {fight.fight_class}</div>
+              )}
+              {fight.method && (
+                <div className="flex items-center gap-2"><span>🏆</span> Method: {fight.method}</div>
               )}
               {fight.source === "polymarket" && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[10px] bg-muted/50 px-2 py-0.5 rounded-full">Powered by Polymarket</span>
                   {fight.polymarket_slug && (
                     <a
@@ -287,8 +360,7 @@ export default function MatchCenter() {
           </TabsContent>
 
           <TabsContent value="odds" className="space-y-3">
-            {/* Odds display */}
-            {probA && probB ? (
+            {probA != null && probB != null ? (
               <div className="grid grid-cols-2 gap-3">
                 <div className="text-center bg-blue-500/5 border border-blue-500/20 rounded-lg p-3">
                   <p className="text-xs text-muted-foreground mb-1">{nameA}</p>
@@ -306,8 +378,6 @@ export default function MatchCenter() {
             ) : (
               <p className="text-xs text-muted-foreground text-center py-4">Odds data not yet available.</p>
             )}
-
-            {/* Volume + Liquidity */}
             {(volume > 0 || hasPool) && (
               <div className="border-t border-border/20 pt-3 space-y-2">
                 {volume > 0 && (
@@ -354,7 +424,7 @@ export default function MatchCenter() {
         </Tabs>
       </Card>
 
-      {/* Explainer */}
+      {/* Analysis / Explainer */}
       {fight.explainer_card && (
         <Card className="p-4">
           <h2 className="text-sm font-bold text-foreground mb-2">Analysis</h2>
@@ -362,35 +432,44 @@ export default function MatchCenter() {
         </Card>
       )}
 
-
-
-      {/* Stats from stats_json */}
+      {/* Detailed Stats */}
       {Object.keys(stats).length > 0 && (
         <Card className="p-4">
-          <h2 className="text-sm font-bold text-foreground mb-3">{statsTitle}</h2>
+          <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+            <Users className="w-4 h-4 text-primary" />
+            {isSoccer ? "Team Stats" : isOverUnder ? "Market Stats" : "Fighter Stats"}
+          </h2>
           <div className="grid grid-cols-2 gap-4 text-xs">
             {stats.fighter_a && <StatBlock name={nameA} data={stats.fighter_a} />}
             {stats.fighter_b && <StatBlock name={nameB} data={stats.fighter_b} />}
           </div>
         </Card>
       )}
+
+      {/* Enrichment notes (admin-added context) */}
+      {fight.enrichment_notes && (
+        <Card className="p-4">
+          <h2 className="text-sm font-bold text-foreground mb-2">Additional Context</h2>
+          <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">{fight.enrichment_notes}</p>
+        </Card>
+      )}
     </div>
   );
 }
 
-function FighterProfile({
-  name, photo, record, pool, prob, isWinner, stats, sport,
+/** Profile card for fighter/team with image, record, stats preview */
+function ProfileCard({
+  name, photo, record, prob, isWinner, sport, stats, side,
 }: {
   name: string; photo: string | null; record: string | null;
-  pool: number; prob: number | null; isWinner: boolean;
-  stats?: any; sport: SportType;
+  prob: number | null; isWinner: boolean;
+  sport: SportType; stats?: Record<string, any>; side: "left" | "right";
 }) {
   const [imgError, setImgError] = useState(false);
   const showImg = photo && !imgError;
   const isSoccer = sport === "soccer";
   const isOU = sport === "over_under";
 
-  // Generate initials for team fallback
   const initials = name
     .split(/\s+/)
     .map((w) => w[0])
@@ -398,34 +477,55 @@ function FighterProfile({
     .slice(0, 3)
     .toUpperCase();
 
+  const colorClass = side === "left" ? "ring-blue-500/30" : "ring-red-500/30";
+
   return (
-    <div className="text-center">
+    <div className="text-center space-y-1">
       {showImg ? (
         <img
           src={photo!}
           alt={name}
-          className={`mx-auto mb-2 ${isSoccer ? 'w-16 h-16 object-contain' : 'w-20 h-20 rounded-full object-cover ring-2 ring-primary/30'}`}
+          className={`mx-auto mb-2 ${
+            isSoccer
+              ? "w-16 h-16 sm:w-20 sm:h-20 object-contain"
+              : `w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover ring-2 ${colorClass}`
+          }`}
           onError={() => setImgError(true)}
           loading="lazy"
         />
       ) : (
-        <div className="w-16 h-16 rounded-full bg-muted/40 flex items-center justify-center mx-auto mb-2 text-2xl">
+        <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-muted/40 flex items-center justify-center mx-auto mb-2 ring-2 ${colorClass}`}>
           {isSoccer ? (
-            <span className="text-sm font-bold text-foreground">{initials || "⚽"}</span>
+            <span className="text-lg sm:text-xl font-bold text-foreground">{initials || "⚽"}</span>
           ) : isOU ? (
             isOverSide(name) ? <ArrowUp className="w-8 h-8 text-green-400" /> : <ArrowDown className="w-8 h-8 text-red-400" />
-          ) : "🥊"}
+          ) : (
+            <span className="text-2xl">🥊</span>
+          )}
         </div>
       )}
-      <p className="font-bold text-foreground text-base">{name}</p>
-      {record && <p className="text-[11px] text-muted-foreground">{record}</p>}
-      <p className="text-xs text-muted-foreground mt-1">
-        {pool > 0 ? `$${pool.toFixed(2)} USDC` : prob ? `${prob}%` : "Market-backed"}
-      </p>
+      <p className="font-bold text-foreground text-sm sm:text-base leading-tight">{name}</p>
+      {record && <p className="text-[11px] text-muted-foreground font-medium">{record}</p>}
+      {prob != null && (
+        <p className={`text-sm font-bold ${side === "left" ? "text-blue-400" : "text-red-400"}`}>
+          {prob}¢
+        </p>
+      )}
       {isWinner && (
-        <div className="mt-1 flex items-center justify-center gap-1 text-primary">
+        <div className="flex items-center justify-center gap-1 text-primary">
           <Trophy className="w-4 h-4" />
           <span className="text-xs font-bold">WINNER</span>
+        </div>
+      )}
+      {/* Quick stats preview */}
+      {stats && Object.keys(stats).length > 0 && (
+        <div className="mt-2 space-y-0.5">
+          {Object.entries(stats).slice(0, 3).map(([key, val]) => (
+            <div key={key} className="text-[10px] text-muted-foreground">
+              <span className="capitalize">{key.replace(/_/g, " ")}</span>:{" "}
+              <span className="text-foreground font-medium">{String(val)}</span>
+            </div>
+          ))}
         </div>
       )}
     </div>
