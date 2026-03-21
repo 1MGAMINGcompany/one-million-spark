@@ -513,6 +513,7 @@ export default function FightPredictionAdmin() {
               <div>
                 <Label className="text-xs text-muted-foreground mb-1 block">Event Date & Time</Label>
                 <Input type="datetime-local" value={eventDate} onChange={e => setEventDate(e.target.value)} />
+                <p className="text-[10px] text-muted-foreground mt-0.5">Your timezone: {getLocalTimezoneLabel()}</p>
               </div>
               <div>
                 <Label className="text-xs text-muted-foreground mb-1 block">Sport / Category</Label>
