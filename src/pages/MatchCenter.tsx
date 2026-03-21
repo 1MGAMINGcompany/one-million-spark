@@ -148,7 +148,7 @@ export default function MatchCenter() {
       <Card className="p-6">
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-6">
           <FighterProfile
-            name={fight.fighter_a_name}
+            name={nameA}
             photo={isSoccer ? fight.home_logo : fight.fighter_a_photo}
             record={fight.fighter_a_record}
             pool={poolA}
@@ -173,7 +173,7 @@ export default function MatchCenter() {
             )}
           </div>
           <FighterProfile
-            name={fight.fighter_b_name}
+            name={nameB}
             photo={isSoccer ? fight.away_logo : fight.fighter_b_photo}
             record={fight.fighter_b_record}
             pool={poolB}
