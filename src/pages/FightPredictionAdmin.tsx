@@ -1146,7 +1146,7 @@ function AdminFightCard({
           <div className="text-foreground font-medium uppercase">{botConfirm.provider}</div>
           <div className="text-muted-foreground">Confirmed At</div>
           <div className="text-foreground font-medium">
-            {fight.confirmed_at ? new Date(fight.confirmed_at).toLocaleString() : "—"}
+            {fight.confirmed_at ? formatEventDateTime(fight.confirmed_at) : "—"}
           </div>
           <div className="text-muted-foreground">Claims Open At</div>
           <div className="text-foreground font-medium">
