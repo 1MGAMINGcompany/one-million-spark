@@ -281,17 +281,20 @@ Deno.serve(async (req) => {
               const [, homeTeam, awayTeam] = vsMatch;
               // Fetch team badges in parallel
               if (!fight.home_logo) {
-                const badge = await fetchTeamBadge(homeTeam.trim());
+                // Try Polymarket S3 first, then TheSportsDB
+                const pmBadge = await fetchPolymarketS3Photo(homeTeam.trim(), "soccer");
+                const badge = pmBadge || await fetchTeamBadge(homeTeam.trim());
                 if (badge) {
                   updatePayload.home_logo = badge;
-                  enriched.push(`${fight.id}: home_logo from TSDB`);
+                  enriched.push(`${fight.id}: home_logo`);
                 }
               }
               if (!fight.away_logo) {
-                const badge = await fetchTeamBadge(awayTeam.trim());
+                const pmBadge = await fetchPolymarketS3Photo(awayTeam.trim(), "soccer");
+                const badge = pmBadge || await fetchTeamBadge(awayTeam.trim());
                 if (badge) {
                   updatePayload.away_logo = badge;
-                  enriched.push(`${fight.id}: away_logo from TSDB`);
+                  enriched.push(`${fight.id}: away_logo`);
                 }
               }
             }
