@@ -166,14 +166,23 @@ Deno.serve(async (req) => {
       const bdlKey = Deno.env.get("BALLDONTLIE_API_KEY");
       const tsdbKey = Deno.env.get("THESPORTSDB_API_KEY") || "3";
 
+      // Also select event_name for sport detection
       const { data: unenriched } = await supabase
         .from("prediction_fights")
-        .select("id, fighter_a_name, fighter_b_name, source, fighter_a_photo, fighter_b_photo, fighter_a_record, fighter_b_record")
+        .select("id, fighter_a_name, fighter_b_name, source, fighter_a_photo, fighter_b_photo, fighter_a_record, fighter_b_record, event_name, home_logo, away_logo")
         .in("status", ["open", "locked", "live"])
-        .is("fighter_a_photo", null);
+        .or("fighter_a_photo.is.null,home_logo.is.null");
 
       if (!unenriched || unenriched.length === 0) {
         return json({ success: true, action: "re-enrich", enriched: 0, message: "No fights need enrichment" });
+      }
+
+      // Soccer keywords for sport detection
+      const SOCCER_KW = ["MLS", "SOCCER", "FUTBOL", "FÚTBOL", "PREMIER LEAGUE", "LA LIGA", "CHAMPIONS LEAGUE", "SERIE A", "BUNDESLIGA", "LIGUE 1", "EPL", "COPA", "EURO", "FIFA", "WORLD CUP", "LIGA MX", "EREDIVISIE"];
+      function isSoccerEvent(eventName: string, source: string): boolean {
+        if (source === "api-football") return true;
+        const upper = (eventName || "").toUpperCase();
+        return SOCCER_KW.some(k => upper.includes(k));
       }
 
       let enriched = 0;
@@ -182,8 +191,25 @@ Deno.serve(async (req) => {
       for (const f of unenriched) {
         try {
           const updates: Record<string, any> = {};
+          const soccer = isSoccerEvent(f.event_name || "", f.source);
 
-          if (f.source === "balldontlie" && bdlKey) {
+          if (soccer && !f.home_logo) {
+            // Soccer enrichment: fetch team logos from TheSportsDB
+            for (const [side, name, logoKey] of [
+              ["a", f.fighter_a_name, "home_logo"],
+              ["b", f.fighter_b_name, "away_logo"],
+            ] as const) {
+              if ((f as any)[logoKey]) continue;
+              try {
+                const data = await tsdbFetch(`searchteams.php?t=${encodeURIComponent(name)}`, tsdbKey);
+                const team = data?.teams?.[0];
+                if (team) {
+                  const logo = team.strBadge || team.strLogo || null;
+                  if (logo) updates[logoKey] = logo;
+                }
+              } catch { /* skip */ }
+            }
+          } else if (f.source === "balldontlie" && bdlKey && !f.fighter_a_photo) {
             for (const [side, name] of [["a", f.fighter_a_name], ["b", f.fighter_b_name]] as const) {
               const photoKey = `fighter_${side}_photo` as const;
               const recordKey = `fighter_${side}_record` as const;
@@ -198,7 +224,7 @@ Deno.serve(async (req) => {
                 }
               } catch { /* skip */ }
             }
-          } else if (f.source === "thesportsdb") {
+          } else if ((f.source === "thesportsdb" || f.source === "polymarket") && !f.fighter_a_photo) {
             for (const [side, name] of [["a", f.fighter_a_name], ["b", f.fighter_b_name]] as const) {
               const photoKey = `fighter_${side}_photo` as const;
               if ((f as any)[photoKey]) continue;
