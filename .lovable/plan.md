@@ -1,24 +1,46 @@
 
 
-## Fix: Add JWKS Retry Logic to prediction-submit
+## Audit Results: Prediction Submission Flow
 
-### Root Cause
-The prediction failed because Privy's JWKS endpoint (`auth.privy.io/.well-known/jwks.json`) returned a non-200 response during the preflight auth check. All 3 retry attempts failed — this is a transient Privy infrastructure issue. The system correctly blocked the trade before any funds moved.
+### CRITICAL BUG — Will crash every Polymarket trade
 
-This is not a code bug — it's a transient external service failure. However, there is a hardening improvement to make:
+**File**: `supabase/functions/prediction-submit/index.ts`
 
-### Problem
-`prediction-submit` does NOT have retry logic for JWKS verification (lines 394-408), unlike `prediction-preflight` which retries 3 times with exponential backoff. If preflight passes but submit's JWKS fetch fails moments later, the user gets a confusing auth error.
+**Line 1179**: `walletLower` is referenced but **never defined** anywhere in the file. In ES module strict mode, this throws a `ReferenceError` at runtime.
 
-### Plan
+**Impact**: After a Polymarket CLOB order is successfully submitted AND the fee is already collected, the `console.log` on line 1179 throws. The outer `catch` block (line 1302) catches this error and:
+1. Marks the trade order as `status: "failed"` — even though the CLOB order was accepted
+2. Returns a 500 error to the user — even though money was taken and the trade is live on Polymarket
 
-#### 1. Add JWKS retry to prediction-submit
-Extract the same `verifyWithRetry` pattern from `prediction-preflight` into `prediction-submit/index.ts`. Replace the single `createRemoteJWKSet` + `jwtVerify` call (lines 394-401) with a retry loop (3 attempts, 1s delay).
+This means: **fee collected + order placed on exchange + user sees "failed" + database says "failed"**. The background reconciliation worker may eventually correct the status, but the user experience is broken and funds appear lost.
 
-#### 2. Improve error message clarity
-Update the frontend error message in `FightPredictions.tsx` to be more user-friendly when the error is a JWKS transient failure — suggest "Please try again" more prominently rather than showing the raw technical detail.
+**Line 1202**: Same `walletLower` bug in the else branch (when PM credentials are missing). Lower severity since PM secrets are currently configured, but still a latent crash.
+
+**Line 1186-1190**: `pmSession` is referenced but never defined. Same else branch — would crash if PM env vars were ever removed. Latent bug only.
+
+### Fix Plan
+
+#### 1. Fix undefined variable references in prediction-submit
+- **Line 1179**: Replace `walletLower` with `normalizedWallet`
+- **Line 1202**: Replace `walletLower` with `normalizedWallet`  
+- **Lines 1186-1190**: Replace `pmSession` references with checks against the already-defined env var variables (`pmApiKey`, `pmTradingKey`, etc.)
+
+#### 2. No other blocking issues found
+
+The rest of the flow audits clean:
+- All 4 PM secrets are configured (PM_API_KEY, PM_API_SECRET, PM_PASSPHRASE, PM_TRADING_KEY)
+- FEE_RELAYER_PRIVATE_KEY is configured
+- PRIVY_APP_SECRET and VITE_PRIVY_APP_ID are configured
+- JWKS retry logic is in place (3 attempts) in both preflight and submit
+- Fee collection via relayer with allowance check works correctly
+- Native (non-Polymarket) events fill immediately — no issues
+- Frontend flow (preflight → allowance → submit) is properly sequenced
+- System controls, daily limits, slippage checks, market allowlist — all functional
+- Post-submit reconciliation with 2s timeout is properly handled
 
 ### Files to modify
-- `supabase/functions/prediction-submit/index.ts` — Add retry logic for JWKS verification
-- `src/pages/FightPredictions.tsx` — Friendlier error message for transient auth failures
+- `supabase/functions/prediction-submit/index.ts` — Fix 3 undefined variable references (lines 1179, 1186-1190, 1202)
+
+### Summary
+Users **cannot** currently place Polymarket predictions successfully due to the `walletLower` crash. Native predictions would work fine. The fix is a 3-line variable rename.
 
