@@ -1498,7 +1498,7 @@ function AutomationStatusPanel({
 
         <div className="text-muted-foreground">Live Time</div>
         <div className={`font-medium ${livePassed ? "text-red-400" : "text-foreground"}`}>
-          {liveAt ? liveAt.toLocaleString() : "—"}
+          {liveAt ? formatEventDateTime(liveAt.toISOString()) : "—"}
           {livePassed && " ✓"}
         </div>
 
