@@ -74,24 +74,34 @@ async function fetchTeamBadge(teamName: string): Promise<string | null> {
 /** Fetch fighter photo from BallDontLie MMA API */
 async function fetchFighterPhotoBDL(fighterName: string): Promise<string | null> {
   const apiKey = Deno.env.get("BALLDONTLIE_API_KEY");
-  if (!apiKey) return null;
+  if (!apiKey) {
+    console.log("[BDL] No BALLDONTLIE_API_KEY configured");
+    return null;
+  }
   try {
-    const res = await fetch(
-      `${BDL_MMA_BASE}/fighters?search=${encodeURIComponent(fighterName)}`,
-      { headers: { Authorization: apiKey } },
-    );
-    if (!res.ok) return null;
+    const url = `${BDL_MMA_BASE}/fighters?search=${encodeURIComponent(fighterName)}`;
+    console.log(`[BDL] Fetching: ${url}`);
+    const res = await fetch(url, { headers: { Authorization: apiKey } });
+    if (!res.ok) {
+      console.log(`[BDL] HTTP ${res.status} for "${fighterName}"`);
+      return null;
+    }
     const data = await res.json();
     const fighters = data?.data || [];
+    console.log(`[BDL] Found ${fighters.length} results for "${fighterName}"`);
     // Find best match by full name
     const nameUpper = fighterName.toUpperCase();
     const match = fighters.find((f: any) =>
       `${f.first_name} ${f.last_name}`.toUpperCase() === nameUpper
     ) || fighters[0];
-    return match?.image_url || null;
-  } catch {
+    const imgUrl = match?.image_url || null;
+    console.log(`[BDL] Best match: ${match ? `${match.first_name} ${match.last_name}` : "none"} | img=${imgUrl}`);
+    return imgUrl;
+  } catch (e) {
+    console.warn(`[BDL] Error for "${fighterName}":`, e);
     return null;
   }
+}
 }
 
 /** Fetch fighter cutout photo from TheSportsDB (fallback) */
