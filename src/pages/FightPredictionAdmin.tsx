@@ -32,6 +32,22 @@ import { supabase } from "@/integrations/supabase/client";
 import { useWallet } from "@/hooks/useWallet";
 import { toast } from "sonner";
 import { getItemLabelFromEvent } from "@/lib/sportLabels";
+import { formatEventDateTime } from "@/lib/formatEventLocalDateTime";
+
+/** Convert a datetime-local value to a full ISO string preserving the local offset */
+function localDatetimeToISO(val: string): string {
+  if (!val) return val;
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return val;
+  return d.toISOString();
+}
+
+/** Get the admin's current IANA timezone + abbreviation */
+function getLocalTimezoneLabel(): string {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const abbr = new Date().toLocaleTimeString(undefined, { timeZoneName: "short" }).split(" ").pop();
+  return `${tz} (${abbr})`;
+}
 
 interface PredictionEvent {
   id: string;
@@ -298,7 +314,7 @@ export default function FightPredictionAdmin() {
     try {
       await callAdmin("createEvent", {
         event_name: eventName, organization: eventOrg || null,
-        event_date: eventDate || null, location: eventLocation || null,
+        event_date: eventDate ? localDatetimeToISO(eventDate) : null, location: eventLocation || null,
         is_test: eventIsTest, category: eventCategory || null,
         venue: eventVenue || null,
       });
@@ -497,6 +513,7 @@ export default function FightPredictionAdmin() {
               <div>
                 <Label className="text-xs text-muted-foreground mb-1 block">Event Date & Time</Label>
                 <Input type="datetime-local" value={eventDate} onChange={e => setEventDate(e.target.value)} />
+                <p className="text-[10px] text-muted-foreground mt-0.5">Your timezone: {getLocalTimezoneLabel()}</p>
               </div>
               <div>
                 <Label className="text-xs text-muted-foreground mb-1 block">Sport / Category</Label>
@@ -745,7 +762,7 @@ function AdminEventCard({
       await callAdmin("updateEvent", {
         event_id: event.id,
         event_name: editForm.event_name || undefined,
-        event_date: editForm.event_date || null,
+        event_date: editForm.event_date ? localDatetimeToISO(editForm.event_date) : null,
         organization: editForm.organization || null,
         location: editForm.location || null,
         venue: editForm.venue || null,
@@ -811,7 +828,7 @@ function AdminEventCard({
           </div>
           <h3 className="font-bold text-foreground text-sm mt-1">{event.event_name}</h3>
           <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
-            {event.event_date && <span>📅 {event.event_date.split('T')[0]}</span>}
+            {event.event_date && <span>📅 {formatEventDateTime(event.event_date)}</span>}
             {event.location && <span>📍 {event.location}</span>}
           </div>
           {event.source_event_id && (
@@ -845,6 +862,7 @@ function AdminEventCard({
                 <div>
                   <Label className="text-xs text-muted-foreground mb-1 block">Event Date & Time</Label>
                   <Input type="datetime-local" value={editForm.event_date} onChange={e => setEditForm(f => ({ ...f, event_date: e.target.value }))} />
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Your timezone: {getLocalTimezoneLabel()}</p>
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground mb-1 block">Category</Label>
@@ -1128,11 +1146,11 @@ function AdminFightCard({
           <div className="text-foreground font-medium uppercase">{botConfirm.provider}</div>
           <div className="text-muted-foreground">Confirmed At</div>
           <div className="text-foreground font-medium">
-            {fight.confirmed_at ? new Date(fight.confirmed_at).toLocaleString() : "—"}
+            {fight.confirmed_at ? formatEventDateTime(fight.confirmed_at) : "—"}
           </div>
           <div className="text-muted-foreground">Claims Open At</div>
           <div className="text-foreground font-medium">
-            {fight.claims_open_at ? new Date(fight.claims_open_at).toLocaleString() : "—"}
+            {fight.claims_open_at ? formatEventDateTime(fight.claims_open_at) : "—"}
           </div>
         </div>
       )}
@@ -1469,18 +1487,18 @@ function AutomationStatusPanel({
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
         <div className="text-muted-foreground">Event Start</div>
         <div className="text-foreground font-medium">
-          {eventAt ? eventAt.toLocaleString() : "—"}
+          {eventAt ? formatEventDateTime(eventAt.toISOString()) : "—"}
         </div>
 
         <div className="text-muted-foreground">Lock Time</div>
         <div className={`font-medium ${lockPassed ? "text-yellow-400" : "text-foreground"}`}>
-          {lockAt ? lockAt.toLocaleString() : "—"}
+          {lockAt ? formatEventDateTime(lockAt.toISOString()) : "—"}
           {lockPassed && " ✓"}
         </div>
 
         <div className="text-muted-foreground">Live Time</div>
         <div className={`font-medium ${livePassed ? "text-red-400" : "text-foreground"}`}>
-          {liveAt ? liveAt.toLocaleString() : "—"}
+          {liveAt ? formatEventDateTime(liveAt.toISOString()) : "—"}
           {livePassed && " ✓"}
         </div>
 
@@ -1499,7 +1517,7 @@ function AutomationStatusPanel({
         <div className="text-muted-foreground">Last Check</div>
         <div className="text-foreground font-medium">
           {event.last_automation_check_at
-            ? new Date(event.last_automation_check_at).toLocaleString()
+            ? formatEventDateTime(event.last_automation_check_at)
             : "—"}
         </div>
       </div>
@@ -1553,14 +1571,14 @@ function AutomationStatusPanel({
           <span className={`w-2 h-2 rounded-full ${lockPassed || statusCounts.open === 0 ? "bg-green-400" : "bg-muted-foreground/30"}`} />
           <span className="text-muted-foreground">Auto-Lock</span>
           <span className="text-foreground font-medium ml-auto">
-            {statusCounts.open === 0 ? "All locked ✓" : lockPassed ? "Lock triggered ✓" : lockAt ? `At ${lockAt.toLocaleString()}` : "No schedule"}
+            {statusCounts.open === 0 ? "All locked ✓" : lockPassed ? "Lock triggered ✓" : lockAt ? `At ${formatEventDateTime(lockAt.toISOString())}` : "No schedule"}
           </span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className={`w-2 h-2 rounded-full ${livePassed || statusCounts.live > 0 ? "bg-green-400" : "bg-muted-foreground/30"}`} />
           <span className="text-muted-foreground">Go Live</span>
           <span className="text-foreground font-medium ml-auto">
-            {statusCounts.live > 0 || livePassed ? "Live ✓" : liveAt ? `At ${liveAt.toLocaleString()}` : "No schedule"}
+            {statusCounts.live > 0 || livePassed ? "Live ✓" : liveAt ? `At ${formatEventDateTime(liveAt.toISOString())}` : "No schedule"}
           </span>
         </div>
         <div className="flex items-center gap-1.5">
@@ -2133,7 +2151,7 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
                               </span>
                             )}
                             {d.event_date && (
-                              <span>📅 {new Date(d.event_date).toLocaleString()}</span>
+                              <span>📅 {formatEventDateTime(d.event_date)}</span>
                             )}
                             {d.location && <span>📍 {d.location}</span>}
                           </div>
@@ -2184,7 +2202,7 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
                             {countdown === "Started" ? "⏱ Started" : `⏳ ${countdown}`}
                           </span>
                         )}
-                        {d.event_date && <p>📅 {new Date(d.event_date).toLocaleString()}</p>}
+                        {d.event_date && <p>📅 {formatEventDateTime(d.event_date)}</p>}
                         {d.location && <p>📍 {d.location}</p>}
                         <p>ID: {d.source_event_id}</p>
                         <p>{(() => {
