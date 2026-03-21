@@ -14,13 +14,15 @@ import muayThaiImg from "@/assets/muay-thai.png";
 import boxingGloveImg from "@/assets/boxing-glove.png";
 import mmaGlovesImg from "@/assets/mma-gloves.png";
 import futbolImg from "@/assets/futbol.png";
+import bareKnuckleImg from "@/assets/bare-knuckle.png";
 
-const SPORT_TABS = ["ALL", "MMA", "BOXING", "MUAY THAI", "FUTBOL"] as const;
+const SPORT_TABS = ["ALL", "MMA", "BOXING", "MUAY THAI", "BARE KNUCKLE", "FUTBOL"] as const;
 
 const SPORT_IMG: Record<string, string> = {
   MMA: mmaGlovesImg,
   BOXING: boxingGloveImg,
   "MUAY THAI": muayThaiImg,
+  "BARE KNUCKLE": bareKnuckleImg,
   FUTBOL: futbolImg,
 };
 

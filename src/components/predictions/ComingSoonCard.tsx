@@ -4,6 +4,7 @@ import boxingGlove from "@/assets/boxing-glove.png";
 import mmaGloves from "@/assets/mma-gloves.png";
 import futbolBall from "@/assets/futbol.png";
 import muayThai from "@/assets/muay-thai.png";
+import bareKnuckle from "@/assets/bare-knuckle.png";
 
 const SPORT_TEASERS: Record<string, { icon?: string; image?: string; color: string; bgColor: string; description: string }> = {
   "MUAY THAI": {
@@ -23,6 +24,12 @@ const SPORT_TEASERS: Record<string, { icon?: string; image?: string; color: stri
     color: "text-green-400",
     bgColor: "bg-green-500/10",
     description: "MMA fight predictions dropping soon.",
+  },
+  "BARE KNUCKLE": {
+    image: bareKnuckle,
+    color: "text-orange-400",
+    bgColor: "bg-orange-500/10",
+    description: "Bare knuckle fight predictions coming soon.",
   },
   FUTBOL: {
     image: futbolBall,
