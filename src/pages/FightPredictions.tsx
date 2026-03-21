@@ -194,7 +194,7 @@ export default function FightPredictions() {
 
   const activeSports = useMemo(() => {
     const sports = new Set(Object.entries(groupedEvents).map(([key, val]) => parseSport(key, val.event?.source_provider)));
-    return ALL_SPORTS.filter(s => s === "ALL" || sports.has(s) || ["BOXING", "MMA", "FUTBOL"].includes(s));
+    return ALL_SPORTS.filter(s => s === "ALL" || sports.has(s) || ["BOXING", "MMA", "BARE KNUCKLE", "FUTBOL"].includes(s));
   }, [groupedEvents]);
 
   // Filter by sport
