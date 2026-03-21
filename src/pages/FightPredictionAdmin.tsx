@@ -912,7 +912,8 @@ function AdminEventCard({
                 ▶ Resume Auto
               </Button>
             )}
-            {["approved", "rejected"].includes(event.status) && eventIsFullySettled && (
+            {/* Archive — show for any non-archived event */}
+            {!["archived"].includes(event.status) && (
               <Button size="sm" variant="outline" onClick={() => onConfirm(
                 "Archive Event",
                 `Archive "${event.event_name}"?`,
@@ -924,61 +925,15 @@ function AdminEventCard({
               </Button>
             )}
 
-            {event.status === "approved" && fights.every(f => ["settled", "refunds_complete", "cancelled"].includes(f.status) || fights.length === 0) && (
-              <Button size="sm" variant="outline" onClick={() => onConfirm(
-                "Archive Event",
-                `Archive "${event.event_name}"?`,
-                () => onArchive(event.id, event.event_name),
-                false
-              )} disabled={busy}
-                className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10">
-                <Archive className="w-3 h-3 mr-1" /> Archive
-              </Button>
-            )}
-
-            {!eventHasPredictions && !["archived"].includes(event.status) && (
+            {/* Delete — show for any event with 0 predictions */}
+            {!eventHasPredictions && (
               <Button size="sm" variant="outline" onClick={() => onConfirm(
                 "Delete Event",
-                `Permanently delete "${event.event_name}" and its fights?`,
+                `Permanently delete "${event.event_name}" and all its fights?`,
                 () => onDelete(event.id, event.event_name)
               )} disabled={busy}
                 className="border-destructive/50 text-destructive hover:bg-destructive/10">
                 <Trash2 className="w-3 h-3 mr-1" /> Delete
-              </Button>
-            )}
-
-            {["archived", "dismissed"].includes(event.status) && !eventHasPredictions && (
-              <Button size="sm" variant="outline" onClick={() => onConfirm(
-                "Delete Event",
-                `Permanently delete "${event.event_name}"?`,
-                () => onDelete(event.id, event.event_name)
-              )} disabled={busy}
-                className="border-destructive/50 text-destructive hover:bg-destructive/10">
-                <Trash2 className="w-3 h-3 mr-1" /> Delete
-              </Button>
-            )}
-
-            {["dismissed"].includes(event.status) && eventHasPredictions && (
-              <Button size="sm" variant="outline" onClick={() => onConfirm(
-                "Archive Event",
-                `Cannot delete — has predictions. Archive instead?`,
-                () => onArchive(event.id, event.event_name),
-                false
-              )} disabled={busy}
-                className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10">
-                <Archive className="w-3 h-3 mr-1" /> Archive Instead
-              </Button>
-            )}
-
-            {event.is_test && !["archived", "dismissed"].includes(event.status) && (
-              <Button size="sm" variant="outline" disabled={busy}
-                className="border-destructive/50 text-destructive hover:bg-destructive/10"
-                onClick={() => onConfirm(
-                  "Delete Test Event",
-                  `Delete "${event.event_name}" and all its fights?`,
-                  async () => { try { await callAdmin("deleteTestEvent", { event_id: event.id }); toast.success("Deleted"); loadData(); } catch(e:any){toast.error(e.message);} }
-                )}>
-                <Trash2 className="w-3 h-3 mr-1" /> Delete Test
               </Button>
             )}
           </div>
