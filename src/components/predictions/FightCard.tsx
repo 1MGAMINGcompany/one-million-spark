@@ -180,8 +180,8 @@ function PolymarketPoolStrip({ fight }: { fight: Fight }) {
   const hasPool = poolA > 0 || poolB > 0;
   const volume = fight.polymarket_volume_usd ?? 0;
 
-  const nameA = displayName(fight.fighter_a_name, fight);
-  const nameB = displayName(fight.fighter_b_name, fight);
+  const nameA = displayName(fight.fighter_a_name, fight, "a");
+  const nameB = displayName(fight.fighter_b_name, fight, "b");
 
   return (
     <div className="w-full space-y-2">
