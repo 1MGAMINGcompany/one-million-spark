@@ -6,7 +6,7 @@ import { createClient } from "@supabase/supabase-js";
  * Called by frontend polling (45s) to keep prices, volume, images, and names fresh.
  * Fetches from:
  *   - CLOB API: live BUY prices per outcome token
- *   - Gamma API: volume, outcomes (real names), description, league images
+ *   - Gamma API: volume, outcomes (real names), description, league images, liquidity, 24h vol
  *   - TheSportsDB: team badges (soccer) and fighter photos (combat)
  */
 
@@ -44,8 +44,14 @@ function cleanTeamName(name: string): string {
     .replace(/\s+SC$/i, "")
     .replace(/\s+AC$/i, "")
     .replace(/\s+FK$/i, "")
-    .replace(/\s+B$/i, "") // reserve teams like "Real Sociedad B"
+    .replace(/\s+B$/i, "")
     .trim();
+}
+
+/** Check if a fighter name is a generic label (not a real name) */
+function isGenericLabel(name: string): boolean {
+  const upper = (name || "").toUpperCase().trim();
+  return ["YES", "NO", "OVER", "UNDER"].includes(upper) || /^(OVER|UNDER)\s+\d/.test(upper);
 }
 
 const json = (data: unknown, status = 200) =>
@@ -57,7 +63,6 @@ const json = (data: unknown, status = 200) =>
 /** Fetch team badge from TheSportsDB — tries original name then cleaned */
 async function fetchTeamBadge(teamName: string): Promise<string | null> {
   const names = [teamName, cleanTeamName(teamName)];
-  // Deduplicate
   const unique = [...new Set(names.filter(Boolean))];
   for (const name of unique) {
     try {
@@ -75,31 +80,19 @@ async function fetchTeamBadge(teamName: string): Promise<string | null> {
 /** Fetch fighter photo from BallDontLie MMA API */
 async function fetchFighterPhotoBDL(fighterName: string): Promise<string | null> {
   const apiKey = Deno.env.get("BALLDONTLIE_API_KEY");
-  if (!apiKey) {
-    console.log("[BDL] No BALLDONTLIE_API_KEY configured");
-    return null;
-  }
+  if (!apiKey) return null;
   try {
     const url = `${BDL_MMA_BASE}/fighters?search=${encodeURIComponent(fighterName)}`;
-    console.log(`[BDL] Fetching: ${url}`);
     const res = await fetch(url, { headers: { Authorization: apiKey } });
-    if (!res.ok) {
-      console.log(`[BDL] HTTP ${res.status} for "${fighterName}"`);
-      return null;
-    }
+    if (!res.ok) return null;
     const data = await res.json();
     const fighters = data?.data || [];
-    console.log(`[BDL] Found ${fighters.length} results for "${fighterName}"`);
-    // Find best match by full name
     const nameUpper = fighterName.toUpperCase();
     const match = fighters.find((f: any) =>
       `${f.first_name} ${f.last_name}`.toUpperCase() === nameUpper
     ) || fighters[0];
-    const imgUrl = match?.image_url || null;
-    console.log(`[BDL] Best match: ${match ? `${match.first_name} ${match.last_name}` : "none"} | img=${imgUrl}`);
-    return imgUrl;
-  } catch (e) {
-    console.warn(`[BDL] Error for "${fighterName}":`, e);
+    return match?.image_url || null;
+  } catch {
     return null;
   }
 }
@@ -122,17 +115,12 @@ async function fetchFighterPhotoTSDB(fighterName: string): Promise<string | null
 
 /** Try Polymarket's own S3 bucket for fighter/team images */
 async function fetchPolymarketS3Photo(name: string, sport: string): Promise<string | null> {
-  // Polymarket uses: team_logos/{sport}/{first_name}_{last_name}.png
   const slug = name.trim().toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
   const folder = sport === "soccer" ? "soccer" : "mma";
   const url = `${PM_S3_BASE}/team_logos/${folder}/${slug}.png`;
   try {
     const res = await fetch(url, { method: "HEAD" });
-    if (res.ok) {
-      console.log(`[PM-S3] Found image: ${url}`);
-      return url;
-    }
-    console.log(`[PM-S3] No image at ${url} (${res.status})`);
+    if (res.ok) return url;
     return null;
   } catch {
     return null;
@@ -174,7 +162,7 @@ Deno.serve(async (req) => {
     // Get all active Polymarket-backed fights
     const { data: fights, error } = await supabase
       .from("prediction_fights")
-      .select("id, polymarket_outcome_a_token, polymarket_outcome_b_token, polymarket_condition_id, polymarket_market_id, fighter_a_photo, fighter_b_photo, home_logo, away_logo, fighter_a_name, fighter_b_name, event_name, title, source, polymarket_question")
+      .select("id, polymarket_outcome_a_token, polymarket_outcome_b_token, polymarket_condition_id, polymarket_market_id, fighter_a_photo, fighter_b_photo, home_logo, away_logo, fighter_a_name, fighter_b_name, event_name, title, source, polymarket_question, event_id")
       .eq("polymarket_active", true)
       .not("polymarket_outcome_a_token", "is", null)
       .in("status", ["open", "locked", "live"]);
@@ -187,6 +175,50 @@ Deno.serve(async (req) => {
     let updated = 0;
     const errors: string[] = [];
     const enriched: string[] = [];
+
+    // ── Pre-build sibling image map for prop market inheritance ──
+    // Group fights by event_name to find "parent" fights that have images
+    const eventImageMap = new Map<string, { fighter_a_photo: string | null; fighter_b_photo: string | null; home_logo: string | null; away_logo: string | null }>();
+    for (const f of fights) {
+      if (!f.event_name) continue;
+      const existing = eventImageMap.get(f.event_name);
+      // Prefer the fight that actually has photos (the "main" matchup)
+      if (!existing || (!existing.fighter_a_photo && f.fighter_a_photo)) {
+        if (f.fighter_a_photo || f.fighter_b_photo || f.home_logo || f.away_logo) {
+          eventImageMap.set(f.event_name, {
+            fighter_a_photo: f.fighter_a_photo,
+            fighter_b_photo: f.fighter_b_photo,
+            home_logo: f.home_logo,
+            away_logo: f.away_logo,
+          });
+        }
+      }
+    }
+
+    // Also query DB for sibling images (covers fights not in current active set)
+    const uniqueEventNames = [...new Set(fights.map(f => f.event_name).filter(Boolean))];
+    if (uniqueEventNames.length > 0) {
+      const { data: siblingImages } = await supabase
+        .from("prediction_fights")
+        .select("event_name, fighter_a_photo, fighter_b_photo, home_logo, away_logo")
+        .in("event_name", uniqueEventNames)
+        .not("fighter_a_photo", "is", null)
+        .limit(100);
+      if (siblingImages) {
+        for (const s of siblingImages) {
+          if (!eventImageMap.has(s.event_name) || !eventImageMap.get(s.event_name)?.fighter_a_photo) {
+            if (s.fighter_a_photo || s.fighter_b_photo) {
+              eventImageMap.set(s.event_name, {
+                fighter_a_photo: s.fighter_a_photo,
+                fighter_b_photo: s.fighter_b_photo,
+                home_logo: s.home_logo,
+                away_logo: s.away_logo,
+              });
+            }
+          }
+        }
+      }
+    }
 
     const BATCH_SIZE = 5;
     for (let i = 0; i < fights.length; i += BATCH_SIZE) {
@@ -211,13 +243,18 @@ Deno.serve(async (req) => {
             console.warn(`[polymarket-prices] CLOB price fetch failed for ${fight.id}:`, e);
           }
 
-          // ── 2. Fetch Gamma market data (volume, outcomes, description, image) ──
+          // ── 2. Fetch Gamma market data (volume, outcomes, description, liquidity, etc.) ──
           let totalVolume = 0;
           let poolAUsd = 0;
           let poolBUsd = 0;
           let gammaImage: string | null = null;
           let gammaOutcomes: [string, string] | null = null;
           let gammaDescription: string | null = null;
+          let gammaLiquidity = 0;
+          let gammaVolume24h = 0;
+          let gammaStartDate: string | null = null;
+          let gammaCompetitive: number | null = null;
+          let gammaFee: string | null = null;
 
           if (fight.polymarket_market_id) {
             try {
@@ -233,6 +270,13 @@ Deno.serve(async (req) => {
                   gammaImage = market.image || market.icon || null;
                   gammaOutcomes = parseOutcomeNames(market.outcomes);
                   gammaDescription = market.description || null;
+
+                  // New Gamma fields
+                  gammaLiquidity = parseFloat(market.liquidity || "0");
+                  gammaVolume24h = parseFloat(market.volume24hr || "0");
+                  gammaStartDate = market.startDate || null;
+                  gammaCompetitive = market.competitive != null ? parseFloat(market.competitive) : null;
+                  gammaFee = market.fee || null;
                 }
               }
             } catch (e) {
@@ -253,6 +297,13 @@ Deno.serve(async (req) => {
             updatePayload.pool_b_usd = poolBUsd;
           }
 
+          // Store new Gamma fields
+          if (gammaLiquidity > 0) updatePayload.polymarket_liquidity = gammaLiquidity;
+          if (gammaVolume24h > 0) updatePayload.polymarket_volume_24h = gammaVolume24h;
+          if (gammaStartDate) updatePayload.polymarket_start_date = gammaStartDate;
+          if (gammaCompetitive != null) updatePayload.polymarket_competitive = gammaCompetitive;
+          if (gammaFee) updatePayload.polymarket_fee = gammaFee;
+
           // ── 4. Backfill real outcome names (replace Yes/No) ──
           if (gammaOutcomes) {
             const [nameA, nameB] = gammaOutcomes;
@@ -271,17 +322,63 @@ Deno.serve(async (req) => {
             updatePayload.polymarket_question = gammaDescription;
           }
 
-          // ── 6. Image enrichment via TheSportsDB ──
-          const soccer = isSoccerEvent(fight.event_name || "", fight.source);
+          // ── 6. Fetch event banner from Gamma (if event_id available) ──
+          if (fight.event_id) {
+            try {
+              const { data: ev } = await supabase
+                .from("prediction_events")
+                .select("event_banner_url, polymarket_event_id")
+                .eq("id", fight.event_id)
+                .single();
+              if (ev && !ev.event_banner_url && ev.polymarket_event_id) {
+                const evRes = await fetch(`${GAMMA_BASE}/events/${ev.polymarket_event_id}`);
+                if (evRes.ok) {
+                  const evData = await evRes.json();
+                  if (evData?.image) {
+                    await supabase
+                      .from("prediction_events")
+                      .update({ event_banner_url: evData.image })
+                      .eq("id", fight.event_id);
+                    enriched.push(`event:${fight.event_id}: banner`);
+                  }
+                }
+              }
+            } catch { /* non-fatal */ }
+          }
 
-          if (soccer) {
+          // ── 7. Image enrichment ──
+          const soccer = isSoccerEvent(fight.event_name || "", fight.source);
+          const nameA = updatePayload.fighter_a_name || fight.fighter_a_name;
+          const nameB = updatePayload.fighter_b_name || fight.fighter_b_name;
+          const isGenericA = isGenericLabel(nameA);
+          const isGenericB = isGenericLabel(nameB);
+
+          // Prop market image inheritance: if this fight has generic labels,
+          // inherit images from sibling fight with same event_name
+          if ((isGenericA || isGenericB) && fight.event_name) {
+            const parentImages = eventImageMap.get(fight.event_name);
+            if (parentImages) {
+              if (!fight.fighter_a_photo && parentImages.fighter_a_photo) {
+                updatePayload.fighter_a_photo = parentImages.fighter_a_photo;
+                enriched.push(`${fight.id}: inherited_a_photo`);
+              }
+              if (!fight.fighter_b_photo && parentImages.fighter_b_photo) {
+                updatePayload.fighter_b_photo = parentImages.fighter_b_photo;
+                enriched.push(`${fight.id}: inherited_b_photo`);
+              }
+              if (!fight.home_logo && parentImages.home_logo) {
+                updatePayload.home_logo = parentImages.home_logo;
+              }
+              if (!fight.away_logo && parentImages.away_logo) {
+                updatePayload.away_logo = parentImages.away_logo;
+              }
+            }
+          } else if (soccer) {
             // Parse team names from event_name: "Team A vs. Team B"
             const vsMatch = (fight.event_name || "").match(/^(.+?)\s+vs\.?\s+(.+?)$/i);
             if (vsMatch) {
               const [, homeTeam, awayTeam] = vsMatch;
-              // Fetch team badges in parallel
               if (!fight.home_logo) {
-                // Try Polymarket S3 first, then TheSportsDB
                 const pmBadge = await fetchPolymarketS3Photo(homeTeam.trim(), "soccer");
                 const badge = pmBadge || await fetchTeamBadge(homeTeam.trim());
                 if (badge) {
@@ -298,7 +395,6 @@ Deno.serve(async (req) => {
                 }
               }
             }
-            // Also set fighter photos to home/away logos as fallback
             if (!fight.fighter_a_photo && updatePayload.home_logo) {
               updatePayload.fighter_a_photo = updatePayload.home_logo;
             }
@@ -307,27 +403,18 @@ Deno.serve(async (req) => {
             }
           } else {
             // Combat sports: try to get fighter photos
-            const resolvedNameA = updatePayload.fighter_a_name || fight.fighter_a_name;
-            const resolvedNameB = updatePayload.fighter_b_name || fight.fighter_b_name;
-
-            if (!fight.fighter_a_photo && resolvedNameA && resolvedNameA !== "Yes" && resolvedNameA !== "Over") {
-              console.log(`[enrichment] Looking up fighter_a photo: "${resolvedNameA}"`);
-              const photo = await fetchFighterPhoto(resolvedNameA);
+            if (!fight.fighter_a_photo && !isGenericA) {
+              const photo = await fetchFighterPhoto(nameA);
               if (photo) {
                 updatePayload.fighter_a_photo = photo;
                 enriched.push(`${fight.id}: fighter_a_photo`);
-              } else {
-                console.log(`[enrichment] No photo found for "${resolvedNameA}"`);
               }
             }
-            if (!fight.fighter_b_photo && resolvedNameB && resolvedNameB !== "No" && resolvedNameB !== "Under") {
-              console.log(`[enrichment] Looking up fighter_b photo: "${resolvedNameB}"`);
-              const photo = await fetchFighterPhoto(resolvedNameB);
+            if (!fight.fighter_b_photo && !isGenericB) {
+              const photo = await fetchFighterPhoto(nameB);
               if (photo) {
                 updatePayload.fighter_b_photo = photo;
                 enriched.push(`${fight.id}: fighter_b_photo`);
-              } else {
-                console.log(`[enrichment] No photo found for "${resolvedNameB}"`);
               }
             }
           }
