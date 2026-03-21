@@ -314,7 +314,7 @@ export default function FightPredictionAdmin() {
     try {
       await callAdmin("createEvent", {
         event_name: eventName, organization: eventOrg || null,
-        event_date: eventDate || null, location: eventLocation || null,
+        event_date: eventDate ? localDatetimeToISO(eventDate) : null, location: eventLocation || null,
         is_test: eventIsTest, category: eventCategory || null,
         venue: eventVenue || null,
       });
