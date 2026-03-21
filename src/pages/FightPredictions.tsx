@@ -202,7 +202,7 @@ export default function FightPredictions() {
   const filteredEvents = useMemo(() => {
     if (activeSport === "ALL") return groupedEvents;
     return Object.fromEntries(
-      Object.entries(groupedEvents).filter(([key, val]) => parseSport(key, val.event?.source_provider) === activeSport)
+      Object.entries(groupedEvents).filter(([key, val]) => parseSport(key, val.event?.source_provider, val.event?.category) === activeSport)
     );
   }, [groupedEvents, activeSport]);
 
