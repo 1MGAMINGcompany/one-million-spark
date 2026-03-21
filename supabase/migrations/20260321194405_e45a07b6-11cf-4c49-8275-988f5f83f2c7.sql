@@ -1,0 +1,1 @@
+UPDATE prediction_fights SET status = 'cancelled', polymarket_active = false, updated_at = now() WHERE status = 'open' AND event_id IN (SELECT id FROM prediction_events WHERE event_date IS NOT NULL AND event_date < now() - interval '48 hours');
