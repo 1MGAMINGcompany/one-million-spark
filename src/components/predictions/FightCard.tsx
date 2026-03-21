@@ -163,26 +163,38 @@ function PolymarketPoolStrip({ fight }: { fight: Fight }) {
   const probs = getProbabilities(fight);
   const { poolA, poolB } = getPoolUsd(fight);
   const hasPool = poolA > 0 || poolB > 0;
+  const volume = fight.polymarket_volume_usd ?? 0;
 
   return (
     <div className="w-full space-y-2">
       {probs && (
         <ProbabilityBar probA={probs.probA} probB={probs.probB} />
       )}
-      {/* Always show USDC per side */}
       <div className="flex items-center justify-between text-[10px]">
         <div className="text-center">
           <span className="block font-bold text-foreground text-xs">
-            {hasPool ? `$${poolA.toFixed(2)}` : "Market"}
+            {hasPool ? `$${poolA.toFixed(2)}` : probs ? `${probs.probA}%` : "—"}
           </span>
           <span className="text-muted-foreground">{fight.fighter_a_name.split(" ").pop()}</span>
         </div>
-        <PolymarketBadge />
+        <div className="flex flex-col items-center gap-0.5">
+          <PolymarketBadge />
+          {volume > 0 && (
+            <span className="text-[9px] text-muted-foreground/60">
+              Vol: ${volume >= 1000 ? `${(volume / 1000).toFixed(1)}K` : volume.toFixed(0)}
+            </span>
+          )}
+        </div>
         <div className="text-center">
           <span className="block font-bold text-foreground text-xs">
-            {hasPool ? `$${poolB.toFixed(2)}` : "Market"}
+            {hasPool ? `$${poolB.toFixed(2)}` : probs ? `${probs.probB}%` : "—"}
           </span>
           <span className="text-muted-foreground">{fight.fighter_b_name.split(" ").pop()}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
         </div>
       </div>
     </div>
