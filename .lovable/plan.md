@@ -1,94 +1,89 @@
 
-Goal: fix the Match Center so soccer markets show team names/logos instead of Yes/No + boxing gloves, and make live Polymarket volume/liquidity actually appear.
 
-What I found
-1. The live refresh hook exists (`usePolymarketPrices`) but is not mounted in `FightPredictions.tsx`, so the `polymarket-prices` backend function is likely never being called from the predictions page. That matches the data: the Villarreal rows still have `polymarket_volume_usd = 0`, `pool_a_usd = 0`, `pool_b_usd = 0`, and stale `polymarket_last_synced_at`.
-2. The soccer Match Center row for your screenshot still has:
-   - `fighter_a_name = "Yes"`
-   - `fighter_b_name = "No"`
-   - `home_logo = null`
-   - `away_logo = null`
-   So the UI cannot show team names/logos yet because the underlying record was never enriched.
-3. The current “Yes/No replacement” logic in `MatchCenter.tsx` is too weak for 3-way soccer markets. For Villarreal / Draw / Real Sociedad:
-   - fight title is only `Villarreal CF`
-   - replacing both Yes and No from that title is wrong
-   - the page needs names derived from event context, not just from the fight title
-4. The `polymarket-prices` function currently only backfills one generic image (`fighter_a_photo`) from Gamma. That does not populate `home_logo` / `away_logo`, so soccer detail pages still fall back visually.
-5. The boxing glove fallback in the screenshot is consistent with stale data plus incomplete name/logo enrichment. Even though `detectSport()` is correct in code, the Match Center still renders a combat-style experience when the soccer-specific display inputs are missing.
+## Image & Data Enrichment Audit + Match Center Enhancement
 
-Implementation plan
-1. Turn on live Polymarket refresh on the predictions experience
-   - Mount `usePolymarketPrices()` inside `FightPredictions.tsx`
-   - Keep it scoped to predictions only
-   - This ensures the existing 45s refresh cycle actually runs in production and updates prices, volume, and derived liquidity
+### Current State — Image Audit
 
-2. Fix the Polymarket refresh backend so it enriches soccer rows properly
-   - Update `supabase/functions/polymarket-prices/index.ts` to:
-     - keep fetching `volumeNum` from Gamma `/markets/{polymarket_market_id}`
-     - continue storing `polymarket_volume_usd`, `pool_a_usd`, `pool_b_usd`
-     - also derive better display metadata for soccer markets
-   - For soccer/futbol events:
-     - parse home/away team names from `event_name` (`Team A vs. Team B`)
-     - use those parsed names to backfill missing `home_logo` / `away_logo` via the existing enrichment provider flow
-     - avoid writing only a single generic `fighter_a_photo` for soccer
+From the database audit of all active markets:
 
-3. Add a robust outcome-label resolver for Polymarket binary + 3-way soccer
-   - Create a shared helper for Match Center / cards:
-     - if market is binary “Yes/No” and title is a team/player proposition, map:
-       - Yes → fight title
-       - No → “Not {fight title}” for generic props, or infer opponent when event context provides one
-     - if event is soccer and event name is `A vs. B`:
-       - title `A` means market = “A to win”
-       - title `B` means market = “B to win”
-       - title starting with `Draw` means market = “Draw”
-   - Use this resolver in both `FightCard.tsx` and `MatchCenter.tsx`
-   - Result: no more raw Yes/No labels on soccer detail pages
+| Market | Fighter A Photo | Fighter B Photo | Issue |
+|--------|:-:|:-:|-------|
+| Evloev vs Murphy | ✅ | ✅ | OK |
+| Mason Jones vs Axel Sola | ✅ | ✅ | OK |
+| Sutherland vs Pericic | ✅ | ❌ | Pericic missing |
+| Villarreal vs Real Sociedad | ✅ (logos) | ✅ (logos) | OK — but "Yes/No" names not resolved |
+| All prop markets (O/U, KO/TKO, Draw) | ❌ | ❌ | No images — should inherit parent fight images |
 
-4. Fix Match Center rendering to be soccer-first when the event is futbol
-   - In `MatchCenter.tsx`:
-     - use parsed team names from `event_name` as the primary matchup header for soccer
-     - if the market is a specific outcome market, show the market title clearly as the bet thesis
-     - use soccer ball/logo fallback instead of boxing gloves unconditionally for soccer events
-     - show “Live Market Volume” and “Estimated Liquidity Per Side” as separate labels so the values make sense
-   - If logos are missing, fallback should be:
-     - team initials or soccer ball
-     - never boxing gloves
+**Root causes:**
+1. Prop markets (O/U rounds, KO/TKO, Draw) share the same `event_name` as the parent fight but have no images because their fighter names are "Yes/No/Over/Under" — the enrichment logic skips these.
+2. Some fighters (Pericic) aren't found in any API.
+3. Soccer prop markets show "Yes/No" instead of team names.
 
-5. Surface volume where users expect it
-   - On Match Center:
-     - show `polymarket_volume_usd` prominently near the odds block
-     - label it exactly as market volume, not local pool
-   - On cards:
-     - keep the per-side estimated liquidity display
-     - add the total market volume line in the center badge area
-   - This matches the Polymarket screenshot expectation more closely
+### Unused Polymarket Data
 
-6. Backfill currently broken soccer rows
-   - Add a safe re-enrichment path so existing imported soccer fights get:
-     - proper team names
-     - home_logo / away_logo
-     - refreshed volume/liquidity
-   - This should target only open/live/locked Polymarket soccer fights, not unrelated systems
+The Gamma API provides fields we're currently ignoring:
 
-7. QA focus after implementation
-   - Verify `/predictions` now triggers price refresh automatically
-   - Verify the Villarreal markets update from zero volume to live volume
-   - Verify Match Center for Villarreal shows:
-     - soccer icons/logos instead of boxing gloves
-     - team names instead of Yes/No
-     - visible volume
-     - visible estimated liquidity per side
-   - Verify combat and over/under markets still keep their current behavior
+| Field | What it gives us | Currently used? |
+|-------|-----------------|:-:|
+| `liquidity` | Real-time order book depth (USDC) | ❌ |
+| `volume24hr` | 24-hour trading volume | ❌ |
+| `startDate` | When market opened for trading | ❌ |
+| `competitive` | How close odds are to 50/50 | ❌ |
+| `icon` / `image` (event-level) | Event banner/thumbnail | ❌ (only market-level) |
+| `description` (event-level) | Event context/rules | Partial |
+| `fee` | Polymarket's fee rate | ❌ |
+| `enableOrderBook` | Whether CLOB is active | ❌ |
+| `tokens[].outcome` | Canonical outcome labels | ❌ |
+| `tags` | Category labels (sports, mma, etc.) | ❌ |
 
-Technical notes
-- The DB already confirms the problematic rows exist and are still stale:
-  - `5487826c-a3a6-44b4-9f93-5eebc820d112` → title `Villarreal CF`, names `Yes/No`, no logos, zero volume
-  - related rows exist for `Real Sociedad de Fútbol` and `Draw (...)`
-- This means the issue is not just styling; it is a combination of:
-  - refresh not running
-  - incomplete enrichment
-  - weak outcome-name mapping
-- I would keep this surgical:
-  - no broad prediction refactor
-  - no changes to unrelated game systems
-  - only predictions page, Match Center, and the Polymarket refresh/enrichment path
+### Plan
+
+#### 1. Fix prop market image inheritance
+In `polymarket-prices`, when a fight has "Yes/No/Over/Under" names, look up sibling fights from the same `event_name` that DO have images, and copy `fighter_a_photo`/`fighter_b_photo` from the parent fight. This immediately fixes ~60% of missing images.
+
+#### 2. Use Gamma event image as universal fallback
+Fetch the parent event from Gamma (`/events/{polymarket_event_id}`) and use its `image` field as `event_banner_url` on the `prediction_events` table. Display this banner in the Match Center header when no fighter-specific photos exist.
+
+#### 3. Store new Gamma fields
+Add columns to `prediction_fights` via migration:
+- `polymarket_liquidity` (numeric) — real-time liquidity depth
+- `polymarket_volume_24h` (numeric) — 24-hour volume
+- `polymarket_start_date` (timestamptz) — market open date
+- `polymarket_competitive` (numeric) — competitiveness score
+- `polymarket_fee` (text) — exchange fee rate
+
+Update the price refresh loop to populate these from the Gamma `/markets/{id}` response (data already fetched, just not stored).
+
+#### 4. Enrich Match Center UI
+Add new sections to the Details & Odds view:
+
+**About tab additions:**
+- Market open date (from `polymarket_start_date`)
+- Event banner image at top of card
+- Category tags from event
+
+**Odds tab additions:**
+- "Liquidity Depth" row showing real-time USDC available
+- "24h Volume" row showing recent activity
+- "Market Competitiveness" indicator (how balanced the odds are)
+- "Exchange Fee" from Polymarket
+- Order book spread visualization (bid/ask bar)
+
+**New "Stats" tab** (replacing inline stats):
+- For MMA: pull fighter records from Gamma description parsing or BallDontLie
+- For Soccer: display team form from event context
+- Show market age (days since opened)
+- Show total unique traders count (if available from Data API)
+
+#### 5. Immediate re-enrichment
+Run a one-time SQL update to clear stale/missing photos on prop markets, triggering the new inheritance logic on next price refresh cycle.
+
+### Technical Details
+
+**Files to modify:**
+- `supabase/functions/polymarket-prices/index.ts` — Add sibling image inheritance, store new Gamma fields
+- `src/pages/MatchCenter.tsx` — Display new data fields, event banner, liquidity depth, 24h volume
+- New migration — Add `polymarket_liquidity`, `polymarket_volume_24h`, `polymarket_start_date`, `polymarket_competitive`, `polymarket_fee` columns
+
+**Performance:** No new API calls needed — the Gamma `/markets/{id}` response already contains `liquidity`, `volume24hr`, `startDate`, `competitive`, `fee`; we just need to read and store them. Image inheritance queries the local DB only.
+
