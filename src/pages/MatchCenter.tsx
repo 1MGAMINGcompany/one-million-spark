@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Trophy, MapPin, User, TrendingUp, Newspaper, ArrowUp, ArrowDown } from "lucide-react";
 import { detectSport, isOverSide, type SportType } from "@/lib/detectSport";
+import { resolveOutcomeName, parseTeamsFromEvent } from "@/lib/resolveOutcomeName";
 
 interface FightDetail {
   id: string;
@@ -98,6 +99,13 @@ export default function MatchCenter() {
   const isSoccer = sport === "soccer";
   const isOverUnder = sport === "over_under";
 
+  // Resolve display names
+  const nameA = resolveOutcomeName(fight.fighter_a_name, "a", fight);
+  const nameB = resolveOutcomeName(fight.fighter_b_name, "b", fight);
+
+  // Parse teams from event name for soccer header
+  const teams = parseTeamsFromEvent(fight.event_name);
+
   const poolA = (fight.pool_a_usd ?? 0) > 0 ? fight.pool_a_usd : fight.pool_a_lamports / 1e9;
   const poolB = (fight.pool_b_usd ?? 0) > 0 ? fight.pool_b_usd : fight.pool_b_lamports / 1e9;
   const probA = fight.price_a && fight.price_a > 0 ? Math.round(fight.price_a * 100) : null;
@@ -107,16 +115,6 @@ export default function MatchCenter() {
   const stats = fight.stats_json || {};
 
   const statsTitle = isSoccer ? "Team Stats" : isOverUnder ? "Market Stats" : "Fighter Stats";
-
-  /** Replace "Yes"/"No" with meaningful name from title */
-  const resolveName = (n: string) => {
-    if ((n === "Yes" || n === "No") && fight.title) {
-      return fight.title.replace(/^Will\s+/i, "").replace(/\s+win\??$/i, "").trim() || n;
-    }
-    return n;
-  };
-  const nameA = resolveName(fight.fighter_a_name);
-  const nameB = resolveName(fight.fighter_b_name);
 
   const formatVol = (v: number) => {
     if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
@@ -132,8 +130,21 @@ export default function MatchCenter() {
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-xl font-bold text-foreground font-['Cinzel']">{fight.title}</h1>
-          <p className="text-xs text-muted-foreground">{fight.event_name}</p>
+          {isSoccer && teams ? (
+            <>
+              <h1 className="text-xl font-bold text-foreground font-['Cinzel']">
+                {teams.home} vs {teams.away}
+              </h1>
+              <p className="text-xs text-muted-foreground">
+                Market: {fight.title} · {fight.event_name}
+              </p>
+            </>
+          ) : (
+            <>
+              <h1 className="text-xl font-bold text-foreground font-['Cinzel']">{fight.title}</h1>
+              <p className="text-xs text-muted-foreground">{fight.event_name}</p>
+            </>
+          )}
         </div>
         <Button
           size="sm"
@@ -144,7 +155,7 @@ export default function MatchCenter() {
         </Button>
       </div>
 
-      {/* Fighter matchup */}
+      {/* Matchup card */}
       <Card className="p-6">
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-6">
           <FighterProfile
@@ -189,7 +200,7 @@ export default function MatchCenter() {
       <Card className="p-4">
         <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
           <TrendingUp className="w-4 h-4 text-primary" />
-          {hasPool ? "USDC Per Side" : "Live Market Odds"}
+          {hasPool ? "Estimated Liquidity Per Side" : "Live Market Odds"}
         </h2>
         {hasPool ? (
           <div className="grid grid-cols-2 gap-4">
@@ -222,7 +233,7 @@ export default function MatchCenter() {
         )}
         {volume > 0 && (
           <p className="text-center text-sm font-semibold text-primary/80 mt-3">
-            {formatVol(volume)} Volume
+            {formatVol(volume)} Market Volume
           </p>
         )}
       </Card>
@@ -290,8 +301,8 @@ export default function MatchCenter() {
         <Card className="p-4">
           <h2 className="text-sm font-bold text-foreground mb-3">{statsTitle}</h2>
           <div className="grid grid-cols-2 gap-4 text-xs">
-            {stats.fighter_a && <StatBlock name={fight.fighter_a_name} data={stats.fighter_a} />}
-            {stats.fighter_b && <StatBlock name={fight.fighter_b_name} data={stats.fighter_b} />}
+            {stats.fighter_a && <StatBlock name={nameA} data={stats.fighter_a} />}
+            {stats.fighter_b && <StatBlock name={nameB} data={stats.fighter_b} />}
           </div>
         </Card>
       )}
@@ -311,6 +322,14 @@ function FighterProfile({
   const isSoccer = sport === "soccer";
   const isOU = sport === "over_under";
 
+  // Generate initials for team fallback
+  const initials = name
+    .split(/\s+/)
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 3)
+    .toUpperCase();
+
   return (
     <div className="text-center">
       {showImg ? (
@@ -323,7 +342,9 @@ function FighterProfile({
         />
       ) : (
         <div className="w-16 h-16 rounded-full bg-muted/40 flex items-center justify-center mx-auto mb-2 text-2xl">
-          {isSoccer ? "⚽" : isOU ? (
+          {isSoccer ? (
+            <span className="text-sm font-bold text-foreground">{initials || "⚽"}</span>
+          ) : isOU ? (
             isOverSide(name) ? <ArrowUp className="w-8 h-8 text-green-400" /> : <ArrowDown className="w-8 h-8 text-red-400" />
           ) : "🥊"}
         </div>

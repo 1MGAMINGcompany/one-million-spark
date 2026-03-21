@@ -103,6 +103,7 @@ export default function FightPredictions() {
   const { approveFeeAllowance } = usePrivyFeeTransfer();
   const { relayer_allowance } = usePolygonUSDC();
   usePolymarketSession(); // kept for hook stability
+  usePolymarketPrices(); // live price + volume refresh (45s cycle)
   const referralCode = useMyReferralCode(address ?? null);
   const { t } = useTranslation();
   const [fights, setFights] = useState<Fight[]>([]);
