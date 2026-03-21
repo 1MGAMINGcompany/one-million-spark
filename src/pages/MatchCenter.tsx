@@ -278,7 +278,162 @@ export default function MatchCenter() {
         </Card>
       )}
 
-      {/* News / Updates */}
+      {/* About / Rules / Market Info */}
+      <Card className="p-4">
+        <Tabs defaultValue="about">
+          <TabsList className="w-full mb-3">
+            <TabsTrigger value="about" className="flex-1 text-xs gap-1">
+              <Info className="w-3 h-3" /> About
+            </TabsTrigger>
+            <TabsTrigger value="odds" className="flex-1 text-xs gap-1">
+              <TrendingUp className="w-3 h-3" /> Odds
+            </TabsTrigger>
+            {updates.length > 0 && (
+              <TabsTrigger value="news" className="flex-1 text-xs gap-1">
+                <Newspaper className="w-3 h-3" /> News
+              </TabsTrigger>
+            )}
+          </TabsList>
+
+          <TabsContent value="about" className="space-y-3">
+            {/* Resolution rules */}
+            {fight.polymarket_question && (
+              <div>
+                <h3 className="text-xs font-bold text-foreground mb-1 flex items-center gap-1">
+                  <BookOpen className="w-3.5 h-3.5" /> Rules
+                </h3>
+                <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                  {fight.polymarket_question}
+                </p>
+              </div>
+            )}
+
+            {/* Market metadata */}
+            <div className="space-y-1.5 text-xs text-muted-foreground">
+              {fight.polymarket_end_date && (
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>End Date: {new Date(fight.polymarket_end_date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}</span>
+                </div>
+              )}
+              {fight.created_at && (
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>Market Opened: {new Date(fight.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}</span>
+                </div>
+              )}
+              {fight.venue && (
+                <div className="flex items-center gap-2">
+                  <MapPin className="w-3.5 h-3.5" /> {fight.venue}
+                </div>
+              )}
+              {fight.referee && (
+                <div className="flex items-center gap-2">
+                  <User className="w-3.5 h-3.5" /> Referee: {fight.referee}
+                </div>
+              )}
+              {fight.weight_class && (
+                <div className="flex items-center gap-2">
+                  <span>⚖️</span> {fight.weight_class}
+                </div>
+              )}
+              {fight.source === "polymarket" && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] bg-muted/50 px-2 py-0.5 rounded-full">Powered by Polymarket</span>
+                  {fight.polymarket_slug && (
+                    <a
+                      href={`https://polymarket.com/event/${fight.polymarket_slug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary/70 hover:text-primary flex items-center gap-0.5"
+                    >
+                      View on Polymarket <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <span>💰</span> Platform fee: {((fight.commission_bps ?? 200) / 100).toFixed(0)}%
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="odds" className="space-y-3">
+            {/* Odds display */}
+            {probA && probB ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="text-center bg-blue-500/5 border border-blue-500/20 rounded-lg p-3">
+                  <p className="text-xs text-muted-foreground mb-1">{nameA}</p>
+                  <p className="text-2xl font-bold text-foreground">{probA}¢</p>
+                  <p className="text-xs text-primary font-bold">{(1 / (fight.price_a || 1)).toFixed(2)}x payout</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">{probA}% implied</p>
+                </div>
+                <div className="text-center bg-red-500/5 border border-red-500/20 rounded-lg p-3">
+                  <p className="text-xs text-muted-foreground mb-1">{nameB}</p>
+                  <p className="text-2xl font-bold text-foreground">{probB}¢</p>
+                  <p className="text-xs text-primary font-bold">{(1 / (fight.price_b || 1)).toFixed(2)}x payout</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">{probB}% implied</p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground text-center py-4">Odds data not yet available.</p>
+            )}
+
+            {/* Volume + Liquidity */}
+            {(volume > 0 || hasPool) && (
+              <div className="border-t border-border/20 pt-3 space-y-2">
+                {volume > 0 && (
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Market Volume</span>
+                    <span className="font-bold text-foreground">{formatVol(volume)}</span>
+                  </div>
+                )}
+                {hasPool && (
+                  <>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">{nameA} Liquidity</span>
+                      <span className="font-medium text-foreground">${poolA.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">{nameB} Liquidity</span>
+                      <span className="font-medium text-foreground">${poolB.toFixed(2)}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </TabsContent>
+
+          {updates.length > 0 && (
+            <TabsContent value="news" className="space-y-3">
+              {updates.map((u) => (
+                <div
+                  key={u.id}
+                  className={`border-l-2 pl-3 py-1 ${
+                    u.impact === "positive_a" ? "border-blue-500" :
+                    u.impact === "positive_b" ? "border-red-500" :
+                    "border-muted-foreground/30"
+                  }`}
+                >
+                  <p className="text-xs text-foreground">{u.content}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    {new Date(u.created_at).toLocaleDateString()} · {u.source}
+                  </p>
+                </div>
+              ))}
+            </TabsContent>
+          )}
+        </Tabs>
+      </Card>
+
+      {/* Explainer */}
+      {fight.explainer_card && (
+        <Card className="p-4">
+          <h2 className="text-sm font-bold text-foreground mb-2">Analysis</h2>
+          <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">{fight.explainer_card}</p>
+        </Card>
+      )}
+
       {updates.length > 0 && (
         <Card className="p-4">
           <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
