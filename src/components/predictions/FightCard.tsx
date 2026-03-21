@@ -60,7 +60,7 @@ function buildQuestion(fight: Fight, isSoccer: boolean): string {
   const nameA = resolveOutcomeName(fight.fighter_a_name, "a", fight);
   const nameB = resolveOutcomeName(fight.fighter_b_name, "b", fight);
   if (isSoccer) {
-    return `Who will win: ${nameA} or ${nameB}?`;
+    return `Who wins: ${nameA} or ${nameB}?`;
   }
   return `Who wins: ${nameA} vs ${nameB}?`;
 }
