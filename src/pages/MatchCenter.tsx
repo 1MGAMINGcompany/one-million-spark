@@ -318,13 +318,18 @@ export default function MatchCenter() {
         </Card>
       )}
 
-      {/* Tabbed info: About / Odds / News */}
+      {/* Tabbed info: About / Fighters / Odds / News */}
       <Card className="p-4">
         <Tabs defaultValue="about">
           <TabsList className="w-full mb-3">
             <TabsTrigger value="about" className="flex-1 text-xs gap-1">
               <Info className="w-3 h-3" /> About
             </TabsTrigger>
+            {(stats.fighter_a || stats.fighter_b) && (
+              <TabsTrigger value="fighters" className="flex-1 text-xs gap-1">
+                <Users className="w-3 h-3" /> Fighters
+              </TabsTrigger>
+            )}
             <TabsTrigger value="odds" className="flex-1 text-xs gap-1">
               <TrendingUp className="w-3 h-3" /> Odds
             </TabsTrigger>
@@ -394,6 +399,23 @@ export default function MatchCenter() {
               </div>
             </div>
           </TabsContent>
+
+          {/* Fighters Tab — Tale of the Tape */}
+          {(stats.fighter_a || stats.fighter_b) && (
+            <TabsContent value="fighters" className="space-y-4">
+              <TaleOfTheTape
+                nameA={nameA}
+                nameB={nameB}
+                photoA={photoA}
+                photoB={photoB}
+                recordA={fight.fighter_a_record}
+                recordB={fight.fighter_b_record}
+                statsA={stats.fighter_a}
+                statsB={stats.fighter_b}
+                sport={sport}
+              />
+            </TabsContent>
+          )}
 
           <TabsContent value="odds" className="space-y-3">
             {probA != null && probB != null ? (
