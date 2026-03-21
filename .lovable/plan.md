@@ -1,41 +1,47 @@
 
 
-## Time Handling for Predictions: Admin Input + User Display
+## Add BKFC Fight Night Mohegan Sun Event with All 11 Fights
 
-### Current State
-- Admin creates events with `datetime-local` input — this captures the date/time **without timezone info** (browser-local)
-- `event_date` is stored as `timestamptz` in the DB, so Postgres assumes UTC if no offset is provided
-- Frontend display already uses `formatEventDateTime()` and `formatEventTime()` which call `toLocaleString()` — this **automatically converts to the user's device timezone**
-- The admin display in `FightPredictionAdmin.tsx` uses raw `toLocaleString()` in some places and raw `split('T')[0]` in others (inconsistent)
+I scraped all the data from the BKFC website. Here is the complete event with 11 fights I will insert directly into the database.
 
-### Problem
-1. Admin enters `datetime-local` which has no timezone context — if admin is in EST, the time gets stored ambiguously
-2. Admin doesn't know what timezone they're saving in
-3. Users see times via `toLocaleString()` which is correct (auto-localizes), but there's no explicit timezone label in all places
+### Event Details
+- **Name:** BKFC Fight Night Mohegan Sun: Porter vs Wilson
+- **Date:** March 28, 2026 6:00 PM EDT (2026-03-28T22:00:00Z)
+- **Venue:** The Mohegan Sun - Uncasville, CT
+- **Category:** BARE KNUCKLE
+- **Organization:** BKFC
+- **Status:** draft (ready for admin approval)
 
-### Plan
+### All 11 Fights to Insert
 
-#### 1. Admin: Add timezone indicator to event creation/edit
-- Below the `datetime-local` input, show a helper label: **"Times are saved in your local timezone (EST/EDT/etc.)"** — dynamically detect the admin's timezone using `Intl.DateTimeFormat().resolvedOptions().timeZone`
-- When sending to the edge function, convert the `datetime-local` value to a proper ISO string with timezone offset so Postgres stores the correct UTC equivalent
+| # | Fight | Weight Class | Fighter A Record | Fighter B Record |
+|---|-------|-------------|-----------------|-----------------|
+| 1 | Parker Porter vs Haze Wilson | Heavyweight | 3-0-0 | 4-1-0 |
+| 2 | Pat Casey vs Zeb Vincent | Middleweight | 3-2-0 | 3-3-0 |
+| 3 | Rico DiSciullo vs Elijah Harris | Lightweight | 3-0-0 | 2-1-0 |
+| 4 | Harry Gigliotti vs Timmy Mason | Featherweight | 0-0-0 | 3-3-0 |
+| 5 | Gary Balletto III vs Adam De Freitas | Middleweight | 2-0-0 | 1-2-0 |
+| 6 | Alexandra Ballou vs Taylor Dagner | Women Flyweight | 0-0-0 | 0-0-0 |
+| 7 | Guilherme Viana vs Joseph White | Heavyweight | 2-0-0 | 2-2-0 |
+| 8 | Joseph Peters vs Maurice Horne | Light Heavyweight | 2-0-0 | 1-1-0 |
+| 9 | Isaiah Williams vs Joshua Whiteside | Welterweight | 0-0-0 | 0-0-0 |
+| 10 | David Burke vs Terryl Johnson | Light Heavyweight | 0-1-0 | 0-1-0 |
+| 11 | Sophia Hayes vs Nadia Moreno | Women Bantamweight | 0-0-0 | 0-0-0 |
 
-#### 2. Optional fight-level time
-- Add an optional `scheduled_time` field to the fight edit form (not creation — fights inherit the event time by default)
-- This is display-only context, not a new DB column — fights already share the event's `event_date`
+### Fighter Photos (from BKFC CDN)
+All 22 fighter photos will be stored using the official BKFC CDN URLs (400x533 avatar images).
 
-#### 3. Frontend display: already correct, minor cleanup
-- `formatEventDateTime()` and `formatEventTime()` already use `toLocaleString()` with `timeZoneName: "short"` — this shows "EST", "PST", "CET" etc. based on the user's device. **This is already working correctly.**
-- Fix the admin panel's inconsistent date display (line 814: `split('T')[0]`) to also use `formatEventDateTime()` for consistency
-- Fix line 2136/2187 which use raw `toLocaleString()` without timezone label
+### Implementation
+1. **Insert event** into `prediction_events` via database insert tool
+2. **Insert all 11 fights** into `prediction_fights` with:
+   - Fighter names, photos (CDN URLs), records, weight class
+   - Fight class labels (Main Event, Co-Main, Featured Fight, etc.)
+   - Commission at 2% (200 bps)
+   - Status: open
+3. All data comes from the scraped BKFC page -- no code changes needed, just database inserts
 
-#### 4. No geolocation API needed
-- `toLocaleString()` with `timeZoneName: "short"` already uses the device's OS timezone setting — no GPS or IP geolocation required. Users worldwide will automatically see their local time + timezone abbreviation.
-
-### Files to modify
-- `src/pages/FightPredictionAdmin.tsx` — Add timezone indicator on create/edit forms, fix inconsistent date displays, convert `datetime-local` to ISO with offset before sending
-- `src/lib/formatEventLocalDateTime.ts` — No changes needed (already correct)
-
-### Technical notes
-- `datetime-local` → ISO conversion: `new Date(inputValue).toISOString()` handles this, but we should use the more explicit approach of appending the local offset to ensure correctness
-- The key insight: **the system already handles user-side localization correctly**. The only fix needed is on the admin input side (timezone clarity) and admin display consistency.
+### Technical Details
+- Uses the database insert tool (service-role access) since RLS blocks client writes
+- Event date stored as `2026-03-28T22:00:00Z` (6:00 PM EDT = 10:00 PM UTC)
+- Each fight references the event via `event_id`
 
