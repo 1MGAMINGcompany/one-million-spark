@@ -41,7 +41,15 @@ export interface Fight {
   fighter_b_record?: string | null;
   venue?: string | null;
   referee?: string | null;
+  polymarket_volume_usd?: number | null;
   has_updates?: boolean;
+}
+
+/** Get sport-aware fallback icon */
+function SportFallbackEmoji(sport: SportType, fighterName?: string): string {
+  if (sport === "soccer") return "⚽";
+  if (sport === "over_under") return isOverSide(fighterName || "") ? "📈" : "📉";
+  return "🥊";
 }
 
 function buildQuestion(fight: Fight, isSoccer: boolean): string {
