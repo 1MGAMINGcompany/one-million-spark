@@ -102,7 +102,6 @@ async function fetchFighterPhotoBDL(fighterName: string): Promise<string | null>
     return null;
   }
 }
-}
 
 /** Fetch fighter cutout photo from TheSportsDB (fallback) */
 async function fetchFighterPhotoTSDB(fighterName: string): Promise<string | null> {
