@@ -32,6 +32,22 @@ import { supabase } from "@/integrations/supabase/client";
 import { useWallet } from "@/hooks/useWallet";
 import { toast } from "sonner";
 import { getItemLabelFromEvent } from "@/lib/sportLabels";
+import { formatEventDateTime } from "@/lib/formatEventLocalDateTime";
+
+/** Convert a datetime-local value to a full ISO string preserving the local offset */
+function localDatetimeToISO(val: string): string {
+  if (!val) return val;
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return val;
+  return d.toISOString();
+}
+
+/** Get the admin's current IANA timezone + abbreviation */
+function getLocalTimezoneLabel(): string {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const abbr = new Date().toLocaleTimeString(undefined, { timeZoneName: "short" }).split(" ").pop();
+  return `${tz} (${abbr})`;
+}
 
 interface PredictionEvent {
   id: string;
