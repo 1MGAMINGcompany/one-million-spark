@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Swords, Trophy, Loader2, HelpCircle, ChevronRight, Newspaper, ArrowUp, ArrowDown } from "lucide-react";
 import { detectSport, isOverSide, type SportType } from "@/lib/detectSport";
+import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
 
 export interface Fight {
   id: string;
