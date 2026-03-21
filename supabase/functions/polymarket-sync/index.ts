@@ -278,6 +278,7 @@ Deno.serve(async (req) => {
       }
 
       // ── Auto-close past events in DB ──
+      // 1) Fights with polymarket_end_date in the past
       const { data: expiredRows } = await supabase
         .from("prediction_fights")
         .update({ polymarket_active: false, updated_at: new Date().toISOString() })
@@ -287,7 +288,29 @@ Deno.serve(async (req) => {
         .select("id");
       const expiredCount = expiredRows?.length ?? 0;
       if (expiredCount > 0) {
-        console.log(`[polymarket-sync] Auto-closed ${expiredCount} past fights`);
+        console.log(`[polymarket-sync] Auto-closed ${expiredCount} past fights (polymarket_end_date)`);
+      }
+
+      // 2) Fights linked to events whose event_date is >48h in the past (catches those without polymarket_end_date)
+      const cutoff48h = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      const { data: staleEvents } = await supabase
+        .from("prediction_events")
+        .select("id")
+        .lt("event_date", cutoff48h)
+        .not("event_date", "is", null);
+      const staleEventIds = (staleEvents || []).map(e => e.id);
+      let staleFightsClosedCount = 0;
+      if (staleEventIds.length > 0) {
+        const { data: staleFights } = await supabase
+          .from("prediction_fights")
+          .update({ status: "cancelled", polymarket_active: false, updated_at: new Date().toISOString() })
+          .in("event_id", staleEventIds)
+          .eq("status", "open")
+          .select("id");
+        staleFightsClosedCount = staleFights?.length ?? 0;
+        if (staleFightsClosedCount > 0) {
+          console.log(`[polymarket-sync] Auto-cancelled ${staleFightsClosedCount} fights from stale events (>48h past)`);
+        }
       }
 
       // Update sync state
