@@ -493,7 +493,26 @@ export default function FightPredictionAdmin() {
               <Input placeholder="Organization" value={eventOrg} onChange={e => setEventOrg(e.target.value)} />
               <Input placeholder="Location" value={eventLocation} onChange={e => setEventLocation(e.target.value)} />
             </div>
-            <Input type="date" placeholder="Event date" value={eventDate} onChange={e => setEventDate(e.target.value)} />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1 block">Event Date & Time</Label>
+                <Input type="datetime-local" value={eventDate} onChange={e => setEventDate(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1 block">Sport / Category</Label>
+                <Select value={eventCategory} onValueChange={setEventCategory}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SPORT_CATEGORIES.map(c => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <Input placeholder="Venue (e.g. Madison Square Garden)" value={eventVenue} onChange={e => setEventVenue(e.target.value)} />
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <input type="checkbox" checked={eventIsTest} onChange={e => setEventIsTest(e.target.checked)} />
               Test Event
