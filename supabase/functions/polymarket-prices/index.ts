@@ -19,6 +19,7 @@ const corsHeaders = {
 const CLOB_BASE = "https://clob.polymarket.com";
 const GAMMA_BASE = "https://gamma-api.polymarket.com";
 const TSDB_BASE = "https://www.thesportsdb.com/api/v1/json/3";
+const PM_S3_BASE = "https://polymarket-upload.s3.us-east-2.amazonaws.com";
 const BDL_MMA_BASE = "https://api.balldontlie.io/mma/v1";
 
 const SOCCER_KEYWORDS = [
