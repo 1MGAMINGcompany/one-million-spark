@@ -224,7 +224,7 @@ function ViewDetailsLink({ fightId, hasUpdates }: { fightId: string; hasUpdates?
       className="flex items-center gap-1 text-[10px] text-primary/70 hover:text-primary font-semibold transition-colors group"
     >
       {hasUpdates && <Newspaper className="w-3 h-3 text-primary animate-pulse" />}
-      View Details
+      View Details & Odds
       <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
     </button>
   );
