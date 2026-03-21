@@ -29,7 +29,7 @@ const FEE_RATE = 0.05;
 // const PREDICTION_FEE_WALLET = ...
 // const PREDICTION_POOL_WALLET = ...
 
-const ALL_SPORTS = ["ALL", "MMA", "FUTBOL", "BOXING", "MUAY THAI", "BARE KNUCKLE"];
+const ALL_SPORTS = ["ALL", "MUAY THAI", "BARE KNUCKLE", "MMA", "BOXING", "FUTBOL"];
 
 interface PredictionEvent {
   id: string;
@@ -41,6 +41,7 @@ interface PredictionEvent {
   is_test: boolean;
   source_provider?: string | null;
   league_logo?: string | null;
+  category?: string | null;
 }
 
 interface FeedEntry {
@@ -193,7 +194,7 @@ export default function FightPredictions() {
   }, [fights, events]);
 
   const activeSports = useMemo(() => {
-    const sports = new Set(Object.entries(groupedEvents).map(([key, val]) => parseSport(key, val.event?.source_provider)));
+    const sports = new Set(Object.entries(groupedEvents).map(([key, val]) => parseSport(key, val.event?.source_provider, val.event?.category)));
     return ALL_SPORTS.filter(s => s === "ALL" || sports.has(s) || ["MUAY THAI", "BOXING", "MMA", "BARE KNUCKLE", "FUTBOL"].includes(s));
   }, [groupedEvents]);
 
@@ -201,7 +202,7 @@ export default function FightPredictions() {
   const filteredEvents = useMemo(() => {
     if (activeSport === "ALL") return groupedEvents;
     return Object.fromEntries(
-      Object.entries(groupedEvents).filter(([key, val]) => parseSport(key, val.event?.source_provider) === activeSport)
+      Object.entries(groupedEvents).filter(([key, val]) => parseSport(key, val.event?.source_provider, val.event?.category) === activeSport)
     );
   }, [groupedEvents, activeSport]);
 
@@ -274,7 +275,7 @@ export default function FightPredictions() {
   }, [fights]);
 
   const comingSoonSports = useMemo(() => {
-    const existingSports = new Set(Object.entries(groupedEvents).map(([key, val]) => parseSport(key, val.event?.source_provider)));
+    const existingSports = new Set(Object.entries(groupedEvents).map(([key, val]) => parseSport(key, val.event?.source_provider, val.event?.category)));
     return ["MUAY THAI", "BOXING", "MMA", "BARE KNUCKLE", "FUTBOL"].filter(s => !existingSports.has(s));
   }, [groupedEvents]);
 
@@ -505,7 +506,7 @@ export default function FightPredictions() {
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
           {activeSports.map((sport) => {
             const isActive = activeSport === sport;
-            const hasEvents = sport === "ALL" || Object.entries(groupedEvents).some(([e, val]) => parseSport(e, val.event?.source_provider) === sport);
+            const hasEvents = sport === "ALL" || Object.entries(groupedEvents).some(([e, val]) => parseSport(e, val.event?.source_provider, val.event?.category) === sport);
             return (
               <button
                 key={sport}
@@ -581,7 +582,7 @@ export default function FightPredictions() {
             )}
 
             {/* Coming Soon cards */}
-            {(activeSport === "ALL" || !Object.entries(groupedEvents).some(([key, val]) => parseSport(key, val.event?.source_provider) === activeSport)) &&
+            {(activeSport === "ALL" || !Object.entries(groupedEvents).some(([key, val]) => parseSport(key, val.event?.source_provider, val.event?.category) === activeSport)) &&
               comingSoonSports.map((sport) => <ComingSoonCard key={sport} sport={sport} />)}
           </>
         )}

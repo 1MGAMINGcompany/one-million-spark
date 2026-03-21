@@ -16,7 +16,7 @@ import mmaGlovesImg from "@/assets/mma-gloves.png";
 import futbolImg from "@/assets/futbol.png";
 import bareKnuckleImg from "@/assets/bare-knuckle.png";
 
-const SPORT_TABS = ["ALL", "MMA", "BOXING", "MUAY THAI", "BARE KNUCKLE", "FUTBOL"] as const;
+const SPORT_TABS = ["ALL", "MUAY THAI", "BARE KNUCKLE", "MMA", "BOXING", "FUTBOL"] as const;
 
 const SPORT_IMG: Record<string, string> = {
   MMA: mmaGlovesImg,
@@ -153,7 +153,7 @@ export default function HomePredictionHighlights({
           ...f,
           eventLabel: ev?.event_name || f.event_name,
           eventDate: ev?.event_date || null,
-          sport: parseSport(ev?.event_name || f.event_name, ev?.source_provider),
+          sport: parseSport(ev?.event_name || f.event_name, ev?.source_provider, (ev as any)?.category),
         };
       });
   }, [fights, eventMap]);

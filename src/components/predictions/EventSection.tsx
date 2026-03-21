@@ -36,6 +36,7 @@ interface PredictionEvent {
   is_test: boolean;
   source_provider?: string | null;
   league_logo?: string | null;
+  category?: string | null;
 }
 
 function formatCountdown(eventDate: string | null): string | null {
@@ -58,12 +59,18 @@ const SOCCER_KEYWORDS = [
   "COPA", "EURO", "FIFA", "WORLD CUP",
 ];
 
-function parseSport(eventName: string, sourceProvider?: string | null): string {
+const VALID_CATEGORIES = ["MMA", "BOXING", "MUAY THAI", "BARE KNUCKLE", "FUTBOL", "BASKETBALL"];
+
+function parseSport(eventName: string, sourceProvider?: string | null, category?: string | null): string {
+  // Admin manual override takes priority
+  if (category && VALID_CATEGORIES.includes(category.toUpperCase())) {
+    return category.toUpperCase();
+  }
   if (sourceProvider === "api-football") return "FUTBOL";
   const upper = eventName.toUpperCase();
   if (SOCCER_KEYWORDS.some(k => upper.includes(k))) return "FUTBOL";
   if (upper.includes("UFC") || upper.includes("MMA") || upper.includes("PFL") || upper.includes("BELLATOR") || upper.includes("ONE CHAMPIONSHIP")) return "MMA";
-  if (upper.includes("BOXING")) return "BOXING";
+  if (upper.includes("BOXING") || upper.includes("MAYWEATHER")) return "BOXING";
   if (upper.includes("MUAY THAI")) return "MUAY THAI";
   if (upper.includes("BARE KNUCKLE") || upper.includes("BKFC")) return "BARE KNUCKLE";
   const parts = eventName.split(' — ');
@@ -136,7 +143,7 @@ export default function EventSection({
   const [leagueLogoError, setLeagueLogoError] = useState(false);
 
   const parsed = parseEventLabel(eventName);
-  const sport = parseSport(eventName, event?.source_provider);
+  const sport = parseSport(eventName, event?.source_provider, event?.category);
   const config = SPORT_CONFIG[sport] || SPORT_CONFIG["MUAY THAI"];
 
   const totalPool = getTotalPoolUsd(fights);
