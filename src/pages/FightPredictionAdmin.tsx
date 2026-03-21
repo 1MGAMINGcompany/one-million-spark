@@ -832,6 +832,44 @@ function AdminEventCard({
       {/* Expanded Content */}
       {expanded && (
         <div className="px-4 pb-4 space-y-3">
+          {/* ── Edit Event Panel ── */}
+          {editMode ? (
+            <div className="bg-muted/20 border border-border/40 rounded-lg p-3 space-y-3">
+              <p className="text-xs font-bold text-foreground uppercase tracking-wider">✏️ Edit Event</p>
+              <Input placeholder="Event name" value={editForm.event_name} onChange={e => setEditForm(f => ({ ...f, event_name: e.target.value }))} />
+              <div className="grid grid-cols-2 gap-3">
+                <Input placeholder="Organization" value={editForm.organization} onChange={e => setEditForm(f => ({ ...f, organization: e.target.value }))} />
+                <Input placeholder="Location" value={editForm.location} onChange={e => setEditForm(f => ({ ...f, location: e.target.value }))} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-1 block">Event Date & Time</Label>
+                  <Input type="datetime-local" value={editForm.event_date} onChange={e => setEditForm(f => ({ ...f, event_date: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-1 block">Category</Label>
+                  <Select value={editForm.category} onValueChange={v => setEditForm(f => ({ ...f, category: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                    <SelectContent>
+                      {SPORT_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <Input placeholder="Venue" value={editForm.venue} onChange={e => setEditForm(f => ({ ...f, venue: e.target.value }))} />
+              <div className="flex gap-2">
+                <Button size="sm" onClick={handleSaveEvent} disabled={editSaving}>
+                  {editSaving ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1" />} Save
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setEditMode(false)}>Cancel</Button>
+              </div>
+            </div>
+          ) : (
+            <Button size="sm" variant="outline" onClick={() => setEditMode(true)} className="border-border text-foreground">
+              ✏️ Edit Event
+            </Button>
+          )}
+
           {/* ── Automation Status Panel (approved events with fights) ── */}
           {event.status === "approved" && fights.length > 0 && (
             <AutomationStatusPanel event={event} fights={fights} busy={busy} callAdmin={callAdmin} loadData={loadData} />
