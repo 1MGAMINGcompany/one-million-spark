@@ -6,7 +6,7 @@ import { parseSport } from "@/components/predictions/EventSection";
  */
 export function getSportItemLabel(sport: string, count: number): string {
   const s = sport.toUpperCase();
-  if (["MMA", "BOXING", "MUAY THAI"].includes(s)) {
+  if (["MMA", "BOXING", "MUAY THAI", "BARE KNUCKLE"].includes(s)) {
     return count === 1 ? "Fight" : "Fights";
   }
   if (["FUTBOL", "SOCCER"].includes(s)) {
