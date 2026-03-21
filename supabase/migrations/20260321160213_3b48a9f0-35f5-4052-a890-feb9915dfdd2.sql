@@ -1,0 +1,1 @@
+ALTER TABLE prediction_fights ADD COLUMN IF NOT EXISTS polymarket_volume_usd numeric DEFAULT 0;

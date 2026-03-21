@@ -1222,6 +1222,7 @@ export type Database = {
           polymarket_outcome_b_token: string | null
           polymarket_question: string | null
           polymarket_slug: string | null
+          polymarket_volume_usd: number | null
           pool_a_lamports: number
           pool_a_usd: number
           pool_b_lamports: number
@@ -1281,6 +1282,7 @@ export type Database = {
           polymarket_outcome_b_token?: string | null
           polymarket_question?: string | null
           polymarket_slug?: string | null
+          polymarket_volume_usd?: number | null
           pool_a_lamports?: number
           pool_a_usd?: number
           pool_b_lamports?: number
@@ -1340,6 +1342,7 @@ export type Database = {
           polymarket_outcome_b_token?: string | null
           polymarket_question?: string | null
           polymarket_slug?: string | null
+          polymarket_volume_usd?: number | null
           pool_a_lamports?: number
           pool_a_usd?: number
           pool_b_lamports?: number
