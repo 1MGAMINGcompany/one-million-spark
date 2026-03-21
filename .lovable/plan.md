@@ -1,54 +1,43 @@
 
 
-# Add Fighter Info to Match Center (View Details & Odds)
+# Fix Sport Categorization & Menu Order
 
-## What We Have
-- The `stats_json` column on `prediction_fights` exists but is **null** for all 11 BKFC fights
-- The MatchCenter page already renders `stats_json` data in a "Fighter Stats" card at the bottom
-- BKFC event page provides: height, fist size, weight, record per fighter
-- Individual BKFC fighter pages provide additional data: reach, age, nationality, nickname, division, bio
+## Issues
+1. **Mayweather event not in BOXING** — Event name "Floyd Mayweather vs. Manny Pacquiao 2" has no keyword match in `parseSport`. The `category` column on `prediction_events` exists and the admin can set it, but the frontend ignores it.
+2. **Menu order wrong** — Currently: ALL, MMA, FUTBOL, BOXING, MUAY THAI, BARE KNUCKLE. Requested: ALL, MUAY THAI, BARE KNUCKLE, MMA, BOXING, FUTBOL.
+3. **No manual override** — When an event doesn't match any keyword, the admin-set `category` field should be respected.
 
-## Plan
+## Changes
 
-### Step 1 — Scrape fighter data from BKFC
-Fetch each of the 22 individual fighter profile pages on bkfc.com to collect:
-- Height, reach, age, nationality, nickname, division, bio summary
+### 1. Update `parseSport` to accept and prioritize `category` (EventSection.tsx)
+Add an optional `category` parameter to `parseSport`. If `category` is a valid sport string, return it immediately before keyword detection. This makes the admin-set category the highest priority override.
 
-Combined with the event page data already scraped (fist size, weight).
-
-### Step 2 — Populate `stats_json` for all 11 fights
-Use the database insert tool to UPDATE each fight's `stats_json` with structured data like:
-```json
-{
-  "fighter_a": {
-    "height": "6'0\"",
-    "reach": "73in / 185cm",
-    "fist_size": "33cm",
-    "weight": "245 lbs",
-    "age": 40,
-    "nationality": "USA",
-    "nickname": "",
-    "division": "Heavyweight"
-  },
-  "fighter_b": { ... }
+```typescript
+function parseSport(eventName: string, sourceProvider?: string | null, category?: string | null): string {
+  // Admin manual override
+  if (category && ["MMA","BOXING","MUAY THAI","BARE KNUCKLE","FUTBOL","BASKETBALL"].includes(category.toUpperCase())) {
+    return category.toUpperCase();
+  }
+  // ... existing keyword logic
 }
 ```
 
-### Step 3 — Add a dedicated "Fighters" tab to MatchCenter
-Currently the tabs are: About | Odds | News. Add a **Fighters** tab (between About and Odds) that shows a side-by-side comparison card:
-- Photos (already displayed in hero, but repeated smaller here)
-- Record (already in `fighter_a_record` / `fighter_b_record`)
-- Height, Reach, Fist Size, Weight, Age, Nationality — as a comparison table with fighter A on left, stat label center, fighter B on right
-- Bio snippet (if available, stored in `stats_json.fighter_a.bio`)
+### 2. Pass `category` through all `parseSport` call sites
+Update callers in:
+- **EventSection.tsx** — pass `event?.category`
+- **FightPredictions.tsx** — pass `val.event?.category` in all `parseSport` calls
+- **HomePredictionHighlights.tsx** — pass event category
+- **sportLabels.ts** — add optional category param
 
-This is more visually engaging than the current generic key-value `StatBlock` renderer.
+### 3. Reorder menu tabs
+- **FightPredictions.tsx**: Change `ALL_SPORTS` to `["ALL", "MUAY THAI", "BARE KNUCKLE", "MMA", "BOXING", "FUTBOL"]`
+- **HomePredictionHighlights.tsx**: Change `SPORT_TABS` to match the same order
 
-### Step 4 — Enhance the ProfileCard in the hero section
-Show 2-3 key stats (height, reach, age) directly under each fighter's name/record in the hero matchup card, so users see headline stats without needing to open the tab.
+### 4. Set Mayweather event category in database
+Update the `prediction_events` row for the Mayweather event to set `category = 'BOXING'`.
 
 ### Technical Details
-- **Database**: 11 UPDATE statements via insert tool to populate `stats_json`
-- **UI**: Modify `src/pages/MatchCenter.tsx` to add a "Fighters" tab with a comparison layout
-- **No schema changes needed** — `stats_json` (jsonb) column already exists
-- Fighter bios will be truncated to ~2 sentences for the card view
+- **Files modified**: `EventSection.tsx`, `FightPredictions.tsx`, `HomePredictionHighlights.tsx`, `sportLabels.ts`
+- **Database**: 1 UPDATE to set category on Mayweather event
+- No schema changes needed
 
