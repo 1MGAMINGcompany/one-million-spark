@@ -29,7 +29,7 @@ const FEE_RATE = 0.05;
 // const PREDICTION_FEE_WALLET = ...
 // const PREDICTION_POOL_WALLET = ...
 
-const ALL_SPORTS = ["ALL", "MMA", "FUTBOL", "BOXING", "MUAY THAI", "BARE KNUCKLE"];
+const ALL_SPORTS = ["ALL", "MUAY THAI", "BARE KNUCKLE", "MMA", "BOXING", "FUTBOL"];
 
 interface PredictionEvent {
   id: string;
