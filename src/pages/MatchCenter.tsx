@@ -318,13 +318,18 @@ export default function MatchCenter() {
         </Card>
       )}
 
-      {/* Tabbed info: About / Odds / News */}
+      {/* Tabbed info: About / Fighters / Odds / News */}
       <Card className="p-4">
         <Tabs defaultValue="about">
           <TabsList className="w-full mb-3">
             <TabsTrigger value="about" className="flex-1 text-xs gap-1">
               <Info className="w-3 h-3" /> About
             </TabsTrigger>
+            {(stats.fighter_a || stats.fighter_b) && (
+              <TabsTrigger value="fighters" className="flex-1 text-xs gap-1">
+                <Users className="w-3 h-3" /> Fighters
+              </TabsTrigger>
+            )}
             <TabsTrigger value="odds" className="flex-1 text-xs gap-1">
               <TrendingUp className="w-3 h-3" /> Odds
             </TabsTrigger>
@@ -394,6 +399,23 @@ export default function MatchCenter() {
               </div>
             </div>
           </TabsContent>
+
+          {/* Fighters Tab — Tale of the Tape */}
+          {(stats.fighter_a || stats.fighter_b) && (
+            <TabsContent value="fighters" className="space-y-4">
+              <TaleOfTheTape
+                nameA={nameA}
+                nameB={nameB}
+                photoA={photoA}
+                photoB={photoB}
+                recordA={fight.fighter_a_record}
+                recordB={fight.fighter_b_record}
+                statsA={stats.fighter_a}
+                statsB={stats.fighter_b}
+                sport={sport}
+              />
+            </TabsContent>
+          )}
 
           <TabsContent value="odds" className="space-y-3">
             {probA != null && probB != null ? (
@@ -535,6 +557,91 @@ export default function MatchCenter() {
 
 // ── Sub-components ──
 
+const TAPE_ROWS = [
+  { key: "height", label: "Height" },
+  { key: "reach", label: "Reach" },
+  { key: "age", label: "Age" },
+  { key: "nationality", label: "Nationality" },
+  { key: "nickname", label: "Nickname" },
+  { key: "division", label: "Division" },
+];
+
+function TaleOfTheTape({
+  nameA, nameB, photoA, photoB, recordA, recordB, statsA, statsB,
+}: {
+  nameA: string; nameB: string;
+  photoA: string | null; photoB: string | null;
+  recordA: string | null; recordB: string | null;
+  statsA?: Record<string, any>; statsB?: Record<string, any>;
+  sport: SportType;
+}) {
+  const a = statsA || {};
+  const b = statsB || {};
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+        <div className="text-center">
+          {photoA && (
+            <img src={photoA} alt={nameA} className="w-14 h-14 rounded-full object-cover object-top ring-2 ring-blue-500/30 mx-auto mb-1" />
+          )}
+          <p className="text-xs font-bold text-foreground">{nameA}</p>
+          {recordA && <p className="text-[10px] text-muted-foreground">{recordA}</p>}
+        </div>
+        <span className="text-xs font-bold text-muted-foreground">VS</span>
+        <div className="text-center">
+          {photoB && (
+            <img src={photoB} alt={nameB} className="w-14 h-14 rounded-full object-cover object-top ring-2 ring-red-500/30 mx-auto mb-1" />
+          )}
+          <p className="text-xs font-bold text-foreground">{nameB}</p>
+          {recordB && <p className="text-[10px] text-muted-foreground">{recordB}</p>}
+        </div>
+      </div>
+
+      <div className="border border-border/30 rounded-lg overflow-hidden">
+        {TAPE_ROWS.map((row, i) => {
+          const valA = a[row.key];
+          const valB = b[row.key];
+          if (!valA && !valB) return null;
+          const displayA = valA != null ? String(valA) : "--";
+          const displayB = valB != null ? String(valB) : "--";
+          return (
+            <div
+              key={row.key}
+              className={`grid grid-cols-[1fr_auto_1fr] items-center text-xs py-2.5 px-3 ${
+                i % 2 === 0 ? "bg-muted/10" : "bg-muted/5"
+              }`}
+            >
+              <span className="text-foreground font-medium text-center">{displayA}</span>
+              <span className="text-muted-foreground text-[10px] font-bold uppercase px-3 min-w-[70px] text-center">
+                {row.label}
+              </span>
+              <span className="text-foreground font-medium text-center">{displayB}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {(a.bio || b.bio) && (
+        <div className="grid grid-cols-2 gap-3 pt-2">
+          {a.bio && (
+            <div>
+              <p className="text-[10px] font-bold text-foreground mb-1">{nameA}</p>
+              <p className="text-[10px] text-muted-foreground leading-relaxed">{a.bio}</p>
+            </div>
+          )}
+          {b.bio && (
+            <div>
+              <p className="text-[10px] font-bold text-foreground mb-1">{nameB}</p>
+              <p className="text-[10px] text-muted-foreground leading-relaxed">{b.bio}</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProfileCard({
   name, photo, record, prob, isWinner, sport, stats, side,
 }: {
@@ -556,6 +663,12 @@ function ProfileCard({
 
   const colorClass = side === "left" ? "ring-blue-500/30" : "ring-red-500/30";
 
+  const heroStats = stats ? [
+    stats.height && stats.height !== "--" ? stats.height : null,
+    stats.reach && stats.reach !== "--" ? stats.reach : null,
+    stats.age ? `Age ${stats.age}` : null,
+  ].filter(Boolean) : [];
+
   return (
     <div className="text-center space-y-1">
       {showImg ? (
@@ -565,7 +678,7 @@ function ProfileCard({
           className={`mx-auto mb-2 ${
             isSoccer
               ? "w-16 h-16 sm:w-20 sm:h-20 object-contain"
-              : `w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover ring-2 ${colorClass}`
+              : `w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover object-top ring-2 ${colorClass}`
           }`}
           onError={() => setImgError(true)}
           loading="lazy"
@@ -582,7 +695,15 @@ function ProfileCard({
         </div>
       )}
       <p className="font-bold text-foreground text-sm sm:text-base leading-tight">{name}</p>
+      {stats?.nickname && <p className="text-[10px] text-primary/80 font-semibold italic">"{stats.nickname}"</p>}
       {record && <p className="text-[11px] text-muted-foreground font-medium">{record}</p>}
+      {heroStats.length > 0 && (
+        <div className="space-y-0.5 mt-1">
+          {heroStats.map((s, i) => (
+            <p key={i} className="text-[10px] text-muted-foreground">{s}</p>
+          ))}
+        </div>
+      )}
       {prob != null && (
         <p className={`text-sm font-bold ${side === "left" ? "text-blue-400" : "text-red-400"}`}>
           {prob}¢
@@ -592,16 +713,6 @@ function ProfileCard({
         <div className="flex items-center justify-center gap-1 text-primary">
           <Trophy className="w-4 h-4" />
           <span className="text-xs font-bold">WINNER</span>
-        </div>
-      )}
-      {stats && Object.keys(stats).length > 0 && (
-        <div className="mt-2 space-y-0.5">
-          {Object.entries(stats).slice(0, 3).map(([key, val]) => (
-            <div key={key} className="text-[10px] text-muted-foreground">
-              <span className="capitalize">{key.replace(/_/g, " ")}</span>:{" "}
-              <span className="text-foreground font-medium">{String(val)}</span>
-            </div>
-          ))}
         </div>
       )}
     </div>
