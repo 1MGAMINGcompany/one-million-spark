@@ -108,6 +108,22 @@ export default function MatchCenter() {
 
   const statsTitle = isSoccer ? "Team Stats" : isOverUnder ? "Market Stats" : "Fighter Stats";
 
+  /** Replace "Yes"/"No" with meaningful name from title */
+  const resolveName = (n: string) => {
+    if ((n === "Yes" || n === "No") && fight.title) {
+      return fight.title.replace(/^Will\s+/i, "").replace(/\s+win\??$/i, "").trim() || n;
+    }
+    return n;
+  };
+  const nameA = resolveName(fight.fighter_a_name);
+  const nameB = resolveName(fight.fighter_b_name);
+
+  const formatVol = (v: number) => {
+    if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+    if (v >= 1_000) return `$${(v / 1_000).toFixed(0)}K`;
+    return `$${v.toFixed(0)}`;
+  };
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
       {/* Header */}
@@ -132,7 +148,7 @@ export default function MatchCenter() {
       <Card className="p-6">
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-6">
           <FighterProfile
-            name={fight.fighter_a_name}
+            name={nameA}
             photo={isSoccer ? fight.home_logo : fight.fighter_a_photo}
             record={fight.fighter_a_record}
             pool={poolA}
@@ -157,7 +173,7 @@ export default function MatchCenter() {
             )}
           </div>
           <FighterProfile
-            name={fight.fighter_b_name}
+            name={nameB}
             photo={isSoccer ? fight.away_logo : fight.fighter_b_photo}
             record={fight.fighter_b_record}
             pool={poolB}
@@ -178,35 +194,35 @@ export default function MatchCenter() {
         {hasPool ? (
           <div className="grid grid-cols-2 gap-4">
             <div className="text-center bg-blue-500/5 border border-blue-500/20 rounded-lg p-3">
-              <p className="text-xs text-muted-foreground">{fight.fighter_a_name}</p>
+              <p className="text-xs text-muted-foreground">{nameA}</p>
               <p className="text-2xl font-bold text-foreground">${poolA.toFixed(2)}</p>
             </div>
             <div className="text-center bg-red-500/5 border border-red-500/20 rounded-lg p-3">
-              <p className="text-xs text-muted-foreground">{fight.fighter_b_name}</p>
+              <p className="text-xs text-muted-foreground">{nameB}</p>
               <p className="text-2xl font-bold text-foreground">${poolB.toFixed(2)}</p>
             </div>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4">
             <div className="text-center bg-blue-500/5 border border-blue-500/20 rounded-lg p-3">
-              <p className="text-xs text-muted-foreground">{fight.fighter_a_name}</p>
+              <p className="text-xs text-muted-foreground">{nameA}</p>
               <p className="text-2xl font-bold text-foreground">
-                {probA ? `${probA}%` : "—"}
+                {probA ? `${probA}¢` : "—"}
               </p>
               {probA && <p className="text-xs text-primary font-bold">{(1 / (fight.price_a || 1)).toFixed(2)}x</p>}
             </div>
             <div className="text-center bg-red-500/5 border border-red-500/20 rounded-lg p-3">
-              <p className="text-xs text-muted-foreground">{fight.fighter_b_name}</p>
+              <p className="text-xs text-muted-foreground">{nameB}</p>
               <p className="text-2xl font-bold text-foreground">
-                {probB ? `${probB}%` : "—"}
+                {probB ? `${probB}¢` : "—"}
               </p>
               {probB && <p className="text-xs text-primary font-bold">{(1 / (fight.price_b || 1)).toFixed(2)}x</p>}
             </div>
           </div>
         )}
         {volume > 0 && (
-          <p className="text-center text-[11px] text-muted-foreground mt-3">
-            Total Volume: ${volume >= 1000 ? `${(volume / 1000).toFixed(1)}K` : volume.toFixed(2)}
+          <p className="text-center text-sm font-semibold text-primary/80 mt-3">
+            {formatVol(volume)} Volume
           </p>
         )}
       </Card>
