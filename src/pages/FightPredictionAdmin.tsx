@@ -2151,7 +2151,7 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
                               </span>
                             )}
                             {d.event_date && (
-                              <span>📅 {new Date(d.event_date).toLocaleString()}</span>
+                              <span>📅 {formatEventDateTime(d.event_date)}</span>
                             )}
                             {d.location && <span>📍 {d.location}</span>}
                           </div>
