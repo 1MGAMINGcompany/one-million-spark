@@ -1176,7 +1176,7 @@ Deno.serve(async (req) => {
         }
 
         console.log(
-          `[prediction-submit] Polymarket order: user=${walletLower}, token=${tokenId}, amount=$${net_amount_usdc}, price=${expectedPrice}, status=${polymarket_status}, fee_collected=${feeCollected}`,
+          `[prediction-submit] Polymarket order: user=${normalizedWallet}, token=${tokenId}, amount=$${net_amount_usdc}, price=${expectedPrice}, status=${polymarket_status}, fee_collected=${feeCollected}`,
         );
       } else {
         // Deferred: user needs PM auth or trading key
