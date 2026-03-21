@@ -1150,7 +1150,7 @@ function AdminFightCard({
           </div>
           <div className="text-muted-foreground">Claims Open At</div>
           <div className="text-foreground font-medium">
-            {fight.claims_open_at ? new Date(fight.claims_open_at).toLocaleString() : "—"}
+            {fight.claims_open_at ? formatEventDateTime(fight.claims_open_at) : "—"}
           </div>
         </div>
       )}
