@@ -828,7 +828,7 @@ function AdminEventCard({
           </div>
           <h3 className="font-bold text-foreground text-sm mt-1">{event.event_name}</h3>
           <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
-            {event.event_date && <span>📅 {event.event_date.split('T')[0]}</span>}
+            {event.event_date && <span>📅 {formatEventDateTime(event.event_date)}</span>}
             {event.location && <span>📍 {event.location}</span>}
           </div>
           {event.source_event_id && (
