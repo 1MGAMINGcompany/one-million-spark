@@ -435,6 +435,7 @@ export default function FightCard({
             onPredict={() => wallet ? onPredict(fight, "fighter_a") : onWalletRequired?.()}
             photo={fight.fighter_a_photo}
             record={fight.fighter_a_record}
+            sport={sport}
           />
           <div className="flex flex-col items-center gap-0.5">
             <Swords className="w-5 h-5 text-primary/60" />
