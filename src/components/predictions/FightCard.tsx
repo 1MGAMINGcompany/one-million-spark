@@ -166,12 +166,11 @@ function formatVolume(v: number): string {
   return `$${v.toFixed(0)}`;
 }
 
-/** Get display name — replace "Yes"/"No" with title for Polymarket binary markets */
-function displayName(name: string, fight: Fight): string {
-  if ((name === "Yes" || name === "No") && fight.title) {
-    return fight.title.replace(/^Will\s+/i, "").replace(/\s+win\??$/i, "").trim() || name;
-  }
-  return name;
+import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
+
+/** Get display name — replace "Yes"/"No" with meaningful name */
+function displayName(name: string, fight: Fight, side: "a" | "b"): string {
+  return resolveOutcomeName(name, side, fight);
 }
 
 /** USDC per-side display for Polymarket events */
