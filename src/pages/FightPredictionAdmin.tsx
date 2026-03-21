@@ -1578,7 +1578,7 @@ function AutomationStatusPanel({
           <span className={`w-2 h-2 rounded-full ${livePassed || statusCounts.live > 0 ? "bg-green-400" : "bg-muted-foreground/30"}`} />
           <span className="text-muted-foreground">Go Live</span>
           <span className="text-foreground font-medium ml-auto">
-            {statusCounts.live > 0 || livePassed ? "Live ✓" : liveAt ? `At ${liveAt.toLocaleString()}` : "No schedule"}
+            {statusCounts.live > 0 || livePassed ? "Live ✓" : liveAt ? `At ${formatEventDateTime(liveAt.toISOString())}` : "No schedule"}
           </span>
         </div>
         <div className="flex items-center gap-1.5">
