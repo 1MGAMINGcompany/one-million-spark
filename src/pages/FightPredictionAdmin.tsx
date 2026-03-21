@@ -982,6 +982,53 @@ function AdminFightCard({
   const [methodOpen, setMethodOpen] = useState(false);
   const [autoSettled, setAutoSettled] = useState(false);
   const autoSettleRef = useRef(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editForm, setEditForm] = useState({
+    title: fight.title,
+    fighter_a_name: fight.fighter_a_name,
+    fighter_b_name: fight.fighter_b_name,
+    fighter_a_photo: fight.fighter_a_photo || "",
+    fighter_b_photo: fight.fighter_b_photo || "",
+    fighter_a_record: fight.fighter_a_record || "",
+    fighter_b_record: fight.fighter_b_record || "",
+    weight_class: fight.weight_class || "",
+    fight_class: fight.fight_class || "",
+    venue: fight.venue || "",
+    referee: fight.referee || "",
+    enrichment_notes: fight.enrichment_notes || "",
+    commission_bps: fight.commission_bps,
+  });
+
+  const handleSaveFight = async () => {
+    setEditSaving(true);
+    try {
+      await onAction("updateFight", {
+        fight_id: fight.id,
+        ...editForm,
+        fighter_a_photo: editForm.fighter_a_photo || null,
+        fighter_b_photo: editForm.fighter_b_photo || null,
+        fighter_a_record: editForm.fighter_a_record || null,
+        fighter_b_record: editForm.fighter_b_record || null,
+        weight_class: editForm.weight_class || null,
+        fight_class: editForm.fight_class || null,
+        venue: editForm.venue || null,
+        referee: editForm.referee || null,
+        enrichment_notes: editForm.enrichment_notes || null,
+      });
+      toast.success("Fight updated");
+      setEditMode(false);
+    } catch (e: any) { toast.error(e.message); }
+    finally { setEditSaving(false); }
+  };
+
+  const handleDeleteFight = async () => {
+    try {
+      await onAction("deleteFight", { fight_id: fight.id });
+      toast.success("Fight deleted");
+    } catch (e: any) { toast.error(e.message); }
+  };
+
   const s = fight.status;
   const { text: countdownText, expired: timerExpired } = useCountdown(s === "confirmed" ? fight.claims_open_at : null);
   const claimsOpen = fight.claims_open_at && new Date() >= new Date(fight.claims_open_at);
