@@ -962,7 +962,11 @@ function AdminEventCard({
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
                 {getItemLabelFromEvent(event.event_name, fights.length)} ({fights.length})
               </p>
-              {fights.map(fight => (
+              {[...fights].sort((a, b) => {
+                const numA = parseInt(a.title.replace(/\D/g, '')) || 0;
+                const numB = parseInt(b.title.replace(/\D/g, '')) || 0;
+                return numA - numB;
+              }).map(fight => (
                 <AdminFightCard
                   key={fight.id}
                   fight={fight}
