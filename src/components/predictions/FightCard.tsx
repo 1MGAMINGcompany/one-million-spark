@@ -439,6 +439,19 @@ export default function FightCard({
           </div>
         )}
 
+        {/* Winner banner for finished soccer fights */}
+        {isFinished && winnerName && !["draw", "refund_pending", "refunds_processing", "refunds_complete"].includes(fight.status) && (
+          <div className="mx-4 sm:mx-6 mb-3 bg-primary/10 border border-primary/20 rounded-lg p-3 text-center">
+            <div className="flex items-center justify-center gap-1.5">
+              <Trophy className="w-4 h-4 text-primary" />
+              <span className="text-sm font-bold text-primary">Winner: {winnerName}</span>
+            </div>
+            {fight.method && (
+              <p className="text-[10px] text-muted-foreground mt-1">via {fight.method}</p>
+            )}
+          </div>
+        )}
+
         {hasWinningEntries && claimsOpen && (
           <div className="px-4 sm:px-6 pb-4">
             <Button
