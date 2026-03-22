@@ -289,23 +289,24 @@ Deno.serve(async (req) => {
                   // ── SANITY CHECK: outcomePrices returned extreme 0/1 but market is active ──
                   // Gamma CDN sometimes returns stale settlement prices while bestBid/bestAsk remain accurate
                   const isExtreme = (priceA <= 0.01 || priceA >= 0.99) && (priceB <= 0.01 || priceB >= 0.99);
-                  if (isExtreme && marketActive) {
-                    // Use bestBid as a more reliable signal
+                  const hasReliableFallback = (bestBidA > 0.01 && bestBidA < 0.99)
+                    || (bestAskA > 0.01 && bestAskA < 0.99)
+                    || (lastTradeA > 0.01 && lastTradeA < 0.99);
+
+                  if (isExtreme && hasReliableFallback) {
+                    // Market is still active with real trading — use bestBid/bestAsk
                     const reliablePrice = bestBidA > 0.01 && bestBidA < 0.99 ? bestBidA
                       : bestAskA > 0.01 && bestAskA < 0.99 ? bestAskA
-                      : lastTradeA > 0.01 && lastTradeA < 0.99 ? lastTradeA
-                      : 0;
-                    if (reliablePrice > 0) {
-                      priceA = reliablePrice;
-                      priceB = Math.round((1 - reliablePrice) * 10000) / 10000;
-                      priceSource = "gamma";
-                      enriched.push(`${fight.id}: sanity_override bestBid=${bestBidA} bestAsk=${bestAskA} lastTrade=${lastTradeA}`);
-                    }
-                  }
-
-                  // ── AUTO-DETECT truly resolved markets ──
-                  if (isExtreme && !marketActive) {
-                    enriched.push(`${fight.id}: market_resolved active=${market.active} closed=${market.closed}`);
+                      : lastTradeA;
+                    priceA = reliablePrice;
+                    priceB = Math.round((1 - reliablePrice) * 10000) / 10000;
+                    priceSource = "gamma";
+                    enriched.push(`${fight.id}: sanity_override bestBid=${bestBidA} bestAsk=${bestAskA} lastTrade=${lastTradeA}`);
+                  } else if (isExtreme && !hasReliableFallback) {
+                    // ── AUTO-CLOSE truly resolved markets ──
+                    // Prices are extreme AND no active trading → market is settled/resolved
+                    marketResolved = true;
+                    enriched.push(`${fight.id}: market_resolved active=${market.active} closed=${market.closed} bestBid=${bestBidA}`);
                   }
 
                   // Derive pools from volume + prices
