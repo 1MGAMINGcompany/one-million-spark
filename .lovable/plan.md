@@ -1,81 +1,57 @@
 
-Audit result
 
-- I checked the current worker, the UI logic, the stored MMA fights, and live Polymarket endpoints.
-- There are two separate problems:
+## Investigation Results
 
-1. Wrong backend price source for display odds
-- The worker currently uses `https://clob.polymarket.com/price?token_id=...&side=BUY`.
-- Per Polymarket docs, that endpoint returns the best bid for `BUY`, not the market’s fair/display probability.
-- For many MMA markets this produces distorted values like `0.999 / 0` or `1 / 0`, especially when the book is one-sided.
-- The code then derives the opposite side as a complement, which turns bad inputs into fake `99.9% / 0.1%` or `100% / 0%`.
+**Confirmed bug**: The Gamma API returns real prices (`outcomePrices: ["0.325", "0.675"]`) for MMA moneyline markets, but the edge function is writing `0/1` to the database. I verified this by:
+1. Directly fetching `gamma-api.polymarket.com/markets/1510805` — returns `0.325/0.675`, `bestBid: 0.32`, `bestAsk: 0.33`, `lastTradePrice: 0.34`
+2. Running the edge function — it reports `price_source=gamma a=0 b=1` for the same market
 
-2. Over-aggressive UI rounding
-- The UI rounds probabilities with `Math.round(price * 100)`.
-- So a real Polymarket price like `0.9995 / 0.0005` becomes `100% / 0%` visually.
-- That is misleading even when the market really is just extremely skewed.
+The Gamma API is returning inconsistent `outcomePrices` values to the edge function (possibly due to CDN caching, geo-routing, or market resolution state) while `bestBid`, `bestAsk`, and `lastTradePrice` remain accurate.
 
-What I found in live Polymarket data
+**Key data from Gamma for Sutherland vs Pericic (1510805):**
+- `outcomePrices`: `["0.325", "0.675"]` (from browser) vs `["0", "1"]` (from edge function)  
+- `bestBid`: `0.32`, `bestAsk`: `0.33`, `lastTradePrice`: `0.34` — consistently correct
+- `active: true`, `closed: false`
 
-- Moneyline market `1510731` — Movsar Evloev vs Lerone Murphy
-  - Stored in app: `0.999 / 0.001`
-  - CLOB `price?side=BUY`: `0.999` and `0`
-  - Gamma market data: `outcomePrices = [0.685, 0.315]`, `bestBid=0.68`, `bestAsk=0.69`
-  - Conclusion: our app is wrong here
+The `outcomePrices` field is unreliable for MMA markets. The worker needs a sanity check.
 
-- Moneyline market `1510805` — Louie Sutherland vs Brando Pericic
-  - Stored in app: `0 / 1`
-  - Gamma market data: `outcomePrices = [0.325, 0.675]`, `bestBid=0.32`, `bestAsk=0.33`
-  - Conclusion: our app is wrong here too
+---
 
-- Prop market `1510736` — Fight won by submission?
-  - Gamma market data: `0.0005 / 0.9995`
-  - Conclusion: this one is legitimately near 0% / 100%, but the UI should not round it to hard `0% / 100%`
+## Plan
 
-- Prop market `1510741` — O/U 4.5 Rounds
-  - Gamma market data: `0.9995 / 0.0005`
-  - Conclusion: also legitimately extreme, but UI precision is too coarse
+### 1. Add bestBid/bestAsk sanity check in the worker
 
-Root cause
+**File:** `supabase/functions/polymarket-prices/index.ts`
 
-- We are using a tradable orderbook endpoint as if it were a display-odds endpoint.
-- MMA is hit hardest because those markets and props often have thinner or one-sided books.
-- Then the UI rounds tiny probabilities into impossible-looking `0%` / `100%`.
+After parsing `outcomePrices` from Gamma, check if the prices are extreme (exactly 0 or 1) while `bestBid`/`bestAsk` or `lastTradePrice` show real trading activity. If so, use those instead:
 
-Plan to fix
+```
+if outcomePrices gives [0, 1] or [1, 0]:
+  check bestBid / bestAsk / lastTradePrice from Gamma response
+  if bestBid > 0.01 and bestBid < 0.99:
+    priceA = bestBid (for side A token)
+    priceB = 1 - bestBid
+  this prevents resolved-looking but actually-active markets from showing 0/1
+```
 
-1. Replace Polymarket display pricing source in `polymarket-prices`
-- Stop using CLOB `price?side=BUY` as the primary source for display odds.
-- Use Gamma `outcomePrices` as the canonical display price for imported Polymarket fights.
-- Optionally use CLOB only for diagnostics or execution-related metadata, not public odds display.
+Also extract and store `bestBid`, `bestAsk`, `lastTradePrice` from the Gamma response as supplementary data for diagnostics.
 
-2. Add a price-source sanity check
-- If CLOB-derived values differ materially from Gamma `outcomePrices`, prefer Gamma and flag the fight in logs/notes.
-- This prevents future MMA imports from silently drifting to fake `0/100`.
+### 2. Auto-detect truly resolved markets
 
-3. Improve UI percentage formatting
-- Stop rounding to whole integers for Polymarket probability bars.
-- Show one decimal for tight extremes, or format as `<1%` / `>99%` when appropriate.
-- This keeps legitimate `99.95 / 0.05` markets from rendering as impossible `100 / 0`.
+When `outcomePrices` is extreme AND `bestBid`/`bestAsk` are also extreme (or absent/zero), AND `closed: true` or `active: false`, flag the fight for status update (e.g., from "open" to "locked" or "confirmed").
 
-4. Backfill current MMA fights
-- After the worker change, resync all active Polymarket MMA fights so stored `price_a` / `price_b` are corrected from Gamma.
-- This should fix the bad moneyline cards immediately.
+### 3. UI: handle extreme-price Polymarket fights gracefully
 
-5. Add regression protection
-- Add a guard in the worker/admin diagnostics:
-  - if a moneyline market has Gamma `outcomePrices` in a normal range but stored app prices are near `0/1`, flag it
-  - if a market is extreme but not exactly `0/100`, the UI must display precision instead of integer rounding
+**Files:** `FightCard.tsx`, `HomePredictionHighlights.tsx`, `PredictionHighlights.tsx`
 
-Files to update
+When `price_a` is exactly 0 or 1 (and `price_b` is the complement), and the source is Polymarket:
+- Show "Resolving" instead of "<1% / >99%"  
+- Hide the "Predict" button
+- Display "Market settling" in the odds area instead of "1.00X" / "—"
 
-- `supabase/functions/polymarket-prices/index.ts`
-- `src/components/predictions/FightCard.tsx`
-- `src/components/predictions/PredictionHighlights.tsx`
-- `src/components/predictions/HomePredictionHighlights.tsx`
+### Files to update
+- `supabase/functions/polymarket-prices/index.ts` — sanity check with bestBid/bestAsk
+- `src/components/predictions/FightCard.tsx` — extreme-price display handling
+- `src/components/predictions/HomePredictionHighlights.tsx` — same
+- `src/components/predictions/PredictionHighlights.tsx` — same
 
-Expected outcome
-
-- MMA moneyline odds will match the prices Polymarket actually shows.
-- Truly extreme prop markets will still look extreme, but no longer display as fake hard `0% / 100%`.
-- The system will automatically catch this class of bad sync in the future.
