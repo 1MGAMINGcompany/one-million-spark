@@ -458,7 +458,10 @@ export default function ReferralAdmin() {
                     <span className="text-muted-foreground">by {shortenWallet(l.paid_by_admin_wallet)}</span>
                     {l.tx_hash && (
                       <a
-                        href={`https://solscan.io/tx/${l.tx_hash}`}
+                        href={isPolygonWallet(l.referral_wallet)
+                          ? `https://polygonscan.com/tx/${l.tx_hash}`
+                          : `https://solscan.io/tx/${l.tx_hash}`
+                        }
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-primary underline"
