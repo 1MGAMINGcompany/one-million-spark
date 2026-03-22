@@ -2440,6 +2440,28 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
         </div>
       )}
 
+      {/* Direct URL Import */}
+      <div className="border-t border-border/30 pt-3 mt-1">
+        <p className="text-[10px] text-muted-foreground mb-1.5 font-medium">📋 Paste Polymarket Event URL</p>
+        <div className="flex gap-2">
+          <Input
+            placeholder="https://polymarket.com/event/silkeborg-if-vs-fc-fredericia"
+            value={directUrl}
+            onChange={e => setDirectUrl(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && importByUrl()}
+            className="flex-1 text-xs"
+          />
+          <Button
+            variant="outline"
+            className="border-purple-500/30 text-purple-400 hover:bg-purple-500/20"
+            onClick={importByUrl}
+            disabled={directImportBusy || !directUrl.trim()}
+          >
+            {directImportBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+          </Button>
+        </div>
+      </div>
+
       {/* Search */}
       <div className="flex gap-2">
         <Input
