@@ -2346,6 +2346,26 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
     }
   };
 
+  const importByUrl = async () => {
+    const trimmed = directUrl.trim();
+    if (!trimmed) return;
+    setDirectImportBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("polymarket-sync", {
+        body: { wallet, action: "import_by_url", url: trimmed },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`Imported "${data.event_name}" — ${data.imported} market(s)`);
+      setDirectUrl("");
+      onComplete();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setDirectImportBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-3">
       {/* Tag selector */}
