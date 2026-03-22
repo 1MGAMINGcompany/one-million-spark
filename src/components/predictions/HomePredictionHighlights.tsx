@@ -83,7 +83,7 @@ function CompactFightCard({
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2" dir="ltr">
           <div className="text-center">
             <p className="text-xs font-bold text-foreground truncate">{fight.fighter_a_name}</p>
-            <p className="text-primary font-bold text-sm">{oddsA.toFixed(2)}x</p>
+            <p className="text-primary font-bold text-sm">{oddsA > 0 ? `${oddsA.toFixed(2)}x` : '—'}</p>
             {isOpen && onPredict && (
               <Button
                 size="sm"
