@@ -9,20 +9,35 @@ const corsHeaders = {
 const GAMMA_BASE = "https://gamma-api.polymarket.com";
 
 // ── Sports-related tags on Polymarket ──
-const SPORTS_TAGS = ["sports", "soccer", "football", "mma", "boxing", "nfl", "nba", "mlb", "tennis", "cricket"];
+const SPORTS_TAGS = [
+  "sports", "soccer", "football", "mma", "boxing", "nfl", "nba", "mlb", "tennis", "cricket",
+  "mls", "epl", "la-liga", "serie-a", "bundesliga", "ligue-1", "champions-league", "liga-mx",
+];
+
+/** Fetch a single tag with offset-based pagination. */
+async function fetchTagEvents(tag: string, limit: number): Promise<GammaEvent[]> {
+  const all: GammaEvent[] = [];
+  let offset = 0;
+  const maxPages = 5; // safety cap
+  for (let page = 0; page < maxPages; page++) {
+    const url = `${GAMMA_BASE}/events?tag=${encodeURIComponent(tag)}&active=true&closed=false&limit=${limit}&offset=${offset}`;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) break;
+      const batch = (await res.json()) as GammaEvent[];
+      all.push(...batch);
+      if (batch.length < limit) break; // no more pages
+      offset += limit;
+    } catch {
+      break;
+    }
+  }
+  return all;
+}
 
 /** When tag is "sports", fan out to all SPORTS_TAGS in parallel and dedupe. */
 async function fetchSportsEvents(limit: number): Promise<GammaEvent[]> {
-  const fetches = SPORTS_TAGS.map(async (t) => {
-    const url = `${GAMMA_BASE}/events?tag=${encodeURIComponent(t)}&active=true&closed=false&limit=${limit}`;
-    try {
-      const res = await fetch(url);
-      if (!res.ok) return [];
-      return (await res.json()) as GammaEvent[];
-    } catch {
-      return [];
-    }
-  });
+  const fetches = SPORTS_TAGS.map((t) => fetchTagEvents(t, limit));
   const arrays = await Promise.all(fetches);
   // Deduplicate by event id
   const seen = new Set<string>();
