@@ -180,6 +180,23 @@ Deno.serve(async (req) => {
       const filteredOut = beforeFilter - gammaEvents.length;
       console.log(`[polymarket-sync] ${gammaEvents.length} future events (filtered out ${filteredOut} past)`);
 
+      // For soccer syncs, require actual fixture titles (contains "vs", no futures keywords)
+      const isSoccerSync = tagFilter === "soccer" || tagFilter === "sports";
+      let futuresFiltered = 0;
+      if (isSoccerSync) {
+        const beforeFixture = gammaEvents.length;
+        gammaEvents = gammaEvents.filter(ev => {
+          // Combat sports events pass through (looser filter)
+          const lower = ev.title.toLowerCase();
+          const isCombat = COMBAT_SEARCH_QUERIES.some(q => lower.includes(q.toLowerCase()));
+          if (isCombat) return true;
+          // Soccer events must be actual fixtures
+          return isActualFixture(ev.title);
+        });
+        futuresFiltered = beforeFixture - gammaEvents.length;
+        console.log(`[polymarket-sync] Fixture filter: kept ${gammaEvents.length}, rejected ${futuresFiltered} futures/props`);
+      }
+
       let eventsUpserted = 0;
       let marketsUpserted = 0;
       let skipped = 0;
