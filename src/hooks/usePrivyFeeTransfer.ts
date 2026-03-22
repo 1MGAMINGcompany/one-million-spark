@@ -17,6 +17,7 @@ import { useCallback } from "react";
 import { useSendTransaction } from "@privy-io/react-auth";
 import { encodeFunctionData, parseAbi } from "viem";
 import { FEE_RELAYER_ADDRESS } from "./usePolygonUSDC";
+import { usePrivyWallet } from "./usePrivyWallet";
 
 const USDC_CONTRACT = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359" as const;
 const USDC_DECIMALS = 6;
@@ -35,14 +36,29 @@ const POLYGON_RPCS = [
   "https://rpc.ankr.com/polygon",
 ];
 
-/** Poll Polygon RPCs for a transaction receipt until mined or timeout */
-async function waitForReceipt(
-  txHash: string,
-  maxAttempts = 8,
+const ALLOWANCE_SELECTOR = "0xdd62ed3e"; // allowance(owner, spender)
+
+function padAddress(address: string): string {
+  return address.slice(2).toLowerCase().padStart(64, "0");
+}
+
+/**
+ * Poll on-chain allowance until it's >= 1 USDC or timeout.
+ * This works regardless of whether the tx hash is a UserOp hash or real tx hash.
+ */
+async function waitForAllowance(
+  ownerAddress: string,
+  maxAttempts = 10,
   intervalMs = 2000,
-): Promise<{ status: string | null; found: boolean }> {
+): Promise<{ allowance: number; confirmed: boolean }> {
+  const callData =
+    ALLOWANCE_SELECTOR +
+    padAddress(ownerAddress) +
+    padAddress(FEE_RELAYER_ADDRESS);
+
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (attempt > 0) await new Promise((r) => setTimeout(r, intervalMs));
+
     for (const rpc of POLYGON_RPCS) {
       try {
         const res = await fetch(rpc, {
@@ -51,23 +67,27 @@ async function waitForReceipt(
           body: JSON.stringify({
             jsonrpc: "2.0",
             id: 1,
-            method: "eth_getTransactionReceipt",
-            params: [txHash],
+            method: "eth_call",
+            params: [{ to: USDC_CONTRACT, data: callData }, "latest"],
           }),
         });
         if (!res.ok) continue;
         const json = await res.json();
         if (json.result) {
-          return { status: json.result.status, found: true };
+          const raw = Number(BigInt(json.result)) / 10 ** USDC_DECIMALS;
+          console.log(`[waitForAllowance] attempt ${attempt + 1}: allowance = ${raw} USDC (owner=${ownerAddress})`);
+          if (raw >= 1) {
+            return { allowance: raw, confirmed: true };
+          }
+          // Got a response but allowance still 0 — break to next attempt
+          break;
         }
-        // result is null → not mined yet, try next attempt
-        break;
       } catch {
         continue;
       }
     }
   }
-  return { status: null, found: false };
+  return { allowance: 0, confirmed: false };
 }
 
 interface ApproveResult {
@@ -78,14 +98,19 @@ interface ApproveResult {
 
 export function usePrivyFeeTransfer() {
   const { sendTransaction } = useSendTransaction();
+  const { walletAddress } = usePrivyWallet();
 
   /**
    * Request a one-time ERC-20 approve for the fee relayer.
    * Only call this when allowance is insufficient.
-   * Waits for on-chain confirmation before returning success.
+   * Confirms by polling on-chain allowance (not tx receipt — UserOp hashes don't resolve).
    */
   const approveFeeAllowance = useCallback(
     async (): Promise<ApproveResult> => {
+      if (!walletAddress) {
+        return { success: false, error: "no_wallet_address" };
+      }
+
       try {
         const data = encodeFunctionData({
           abi: erc20Abi,
@@ -95,6 +120,7 @@ export function usePrivyFeeTransfer() {
 
         console.log(
           `[usePrivyFeeTransfer] Requesting sponsored USDC approval for $${APPROVAL_CAP_USDC} to relayer ${FEE_RELAYER_ADDRESS}`,
+          `| owner wallet: ${walletAddress}`,
         );
 
         const receipt = await sendTransaction(
@@ -116,27 +142,20 @@ export function usePrivyFeeTransfer() {
               (receipt as any)?.hash ??
               "";
 
-        if (!txHash) {
-          return { success: false, error: "no_tx_hash_returned" };
+        console.log("[usePrivyFeeTransfer] sendTransaction returned:", txHash || "(empty)", typeof receipt === "object" ? JSON.stringify(receipt).slice(0, 200) : "");
+
+        // Instead of polling for a tx receipt (which fails for UserOp hashes),
+        // poll the on-chain allowance directly.
+        console.log("[usePrivyFeeTransfer] Polling on-chain allowance for confirmation...");
+        const result = await waitForAllowance(walletAddress);
+
+        if (!result.confirmed) {
+          console.error("[usePrivyFeeTransfer] Allowance not detected after polling. May be an EOA/smart-wallet address mismatch.");
+          return { success: false, error: "allowance_not_confirmed_after_20s" };
         }
 
-        console.log("[usePrivyFeeTransfer] Got tx hash, waiting for on-chain confirmation:", txHash);
-
-        // Poll for receipt to confirm the tx was mined and succeeded
-        const onChainReceipt = await waitForReceipt(txHash);
-
-        if (!onChainReceipt.found) {
-          console.warn("[usePrivyFeeTransfer] Receipt not found after polling — tx may still be pending");
-          return { success: false, error: "tx_not_confirmed_after_16s" };
-        }
-
-        if (onChainReceipt.status !== "0x1") {
-          console.error("[usePrivyFeeTransfer] Approval tx reverted on-chain, status:", onChainReceipt.status);
-          return { success: false, error: "approval_tx_reverted" };
-        }
-
-        console.log("[usePrivyFeeTransfer] Approval confirmed on-chain ✓", txHash);
-        return { success: true, txHash };
+        console.log(`[usePrivyFeeTransfer] Approval confirmed on-chain ✓ allowance=${result.allowance} USDC`, txHash);
+        return { success: true, txHash: txHash || "userop" };
       } catch (err: any) {
         console.error("[usePrivyFeeTransfer] Approval failed:", err);
         return {
@@ -145,7 +164,7 @@ export function usePrivyFeeTransfer() {
         };
       }
     },
-    [sendTransaction],
+    [sendTransaction, walletAddress],
   );
 
   return { approveFeeAllowance, approvalCapUsdc: APPROVAL_CAP_USDC };
