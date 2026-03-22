@@ -380,6 +380,13 @@ Deno.serve(async (req) => {
             polymarket_last_synced_at: new Date().toISOString(),
           };
 
+          // ── Auto-close resolved markets ──
+          if (marketResolved) {
+            updatePayload.polymarket_active = false;
+            updatePayload.status = "locked";
+            enriched.push(`${fight.id}: auto_closed → locked`);
+          }
+
           if (priceSource !== "none") {
             enriched.push(`${fight.id}: price_source=${priceSource} a=${priceA} b=${priceB}`);
           }
