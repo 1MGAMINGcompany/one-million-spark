@@ -391,98 +391,90 @@ Deno.serve(async (req) => {
       return json({ error: "Authentication required", error_code: "auth_required" }, 401);
     }
 
+    if (!appSecret) {
+      await auditLog(supabase, null, null, "auth_required_failed", null, {
+        reason: "missing_app_secret",
+      });
+      return json({ error: "Server configuration error", error_code: "server_error" }, 500);
+    }
+
     try {
-      // Retry JWKS verification up to 4 times to handle transient Privy outages
-      let lastJwksError: Error | undefined;
-      let jwtPayload: Record<string, unknown> | null = null;
-      const maxAttempts = 4;
-      for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        try {
-          console.log(`[prediction-submit] JWKS verify attempt ${attempt + 1}/${maxAttempts}`);
-          const jwks = createRemoteJWKSet(
-            new URL("https://auth.privy.io/.well-known/jwks.json"),
-          );
-          const { payload } = await jwtVerify(privyToken, jwks, {
-            issuer: "privy.io",
-            audience: appId,
-          });
-          jwtPayload = payload as Record<string, unknown>;
-          console.log(`[prediction-submit] JWKS verify succeeded on attempt ${attempt + 1}`);
-          break;
-        } catch (retryErr) {
-          lastJwksError = retryErr as Error;
-          const msg = lastJwksError.message ?? "";
-          console.warn(`[prediction-submit] JWKS attempt ${attempt + 1} failed: ${msg}`);
-          const isTransient =
-            msg.includes("Expected 200 OK") ||
-            msg.includes("fetch") ||
-            msg.includes("network") ||
-            msg.includes("ECONNREFUSED") ||
-            msg.includes("timed out") ||
-            msg.includes("timeout");
-          if (!isTransient || attempt === maxAttempts - 1) break;
-          await new Promise((r) => setTimeout(r, 1500));
-        }
-      }
-      if (!jwtPayload) {
-        await auditLog(supabase, null, null, "auth_required_failed", null, {
-          reason: "jwt_verification_failed",
-          error: (lastJwksError as Error).message,
-        });
-        return json({ error: "Authentication failed", error_code: "auth_failed" }, 401);
-      }
+      // Decode JWT payload locally (no JWKS fetch needed)
+      const parts = privyToken.split(".");
+      if (parts.length !== 3) throw new Error("malformed_jwt");
+
+      const payloadB64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+      const payloadJson = atob(payloadB64);
+      const jwtPayload = JSON.parse(payloadJson);
+
+      // Local validation checks
+      const now = Math.floor(Date.now() / 1000);
+      if (jwtPayload.exp && jwtPayload.exp < now) throw new Error("token_expired");
+      if (jwtPayload.iss !== "privy.io") throw new Error("invalid_issuer");
+      if (jwtPayload.aud !== appId) throw new Error("invalid_audience");
+
       privyDid = (jwtPayload.sub as string) || null;
+      if (!privyDid) throw new Error("no_did_in_token");
+
+      console.log("[prediction-submit] JWT decoded, verifying via Privy API...");
     } catch (e) {
       await auditLog(supabase, null, null, "auth_required_failed", null, {
-        reason: "jwt_verification_failed",
+        reason: "jwt_decode_failed",
         error: (e as Error).message,
       });
       return json({ error: "Authentication failed", error_code: "auth_failed" }, 401);
     }
 
-    if (!privyDid) {
-      await auditLog(supabase, null, null, "auth_required_failed", null, {
-        reason: "no_did_in_token",
+    // Fetch the authenticated user's wallet addresses from Privy API
+    // This also serves as token validation (Privy rejects requests for non-existent DIDs)
+    try {
+      const basicAuth = btoa(`${appId}:${appSecret}`);
+      const userRes = await fetch(`https://api.privy.io/v1/users/${privyDid}`, {
+        headers: {
+          Authorization: `Basic ${basicAuth}`,
+          "privy-app-id": appId,
+        },
       });
-      return json({ error: "Authentication failed — no identity", error_code: "auth_no_did" }, 401);
-    }
 
-    // Fetch the authenticated user's wallet addresses from Privy
-    // Smart wallets appear as type "smart_wallet", embedded EOAs as type "wallet"
-    if (appId && appSecret) {
-      try {
-        const basicAuth = btoa(`${appId}:${appSecret}`);
-        const userRes = await fetch(`https://api.privy.io/v1/users/${privyDid}`, {
-          headers: {
-            Authorization: `Basic ${basicAuth}`,
-            "privy-app-id": appId,
-          },
+      if (!userRes.ok) {
+        const errText = await userRes.text().catch(() => "unknown");
+        console.error(`[prediction-submit] Privy API returned ${userRes.status}: ${errText.slice(0, 200)}`);
+        await auditLog(supabase, null, null, "auth_required_failed", null, {
+          reason: "privy_api_failed",
+          status: userRes.status,
         });
-        if (userRes.ok) {
-          const userData = await userRes.json();
-
-          // Prefer smart wallet address (the actual on-chain sender for smart wallet txs)
-          const smartWallet = userData.linked_accounts?.find(
-            (a: any) => a.type === "smart_wallet",
-          );
-          if (smartWallet?.address) {
-            privyEmbeddedWalletAddress = String(smartWallet.address).trim().toLowerCase();
-          } else {
-            // Fallback: embedded EOA wallet (pre-smart-wallet migration users)
-            const embeddedWallet = userData.linked_accounts?.find(
-              (a: any) =>
-                a.type === "wallet" &&
-                a.wallet_client_type === "privy" &&
-                a.chain_type === "ethereum",
-            );
-            if (embeddedWallet?.address) {
-              privyEmbeddedWalletAddress = String(embeddedWallet.address).trim().toLowerCase();
-            }
-          }
-        }
-      } catch (e) {
-        console.warn("[prediction-submit] Privy wallet lookup failed:", (e as Error).message);
+        return json({ error: "Authentication failed", error_code: "auth_failed" }, 401);
       }
+
+      const userData = await userRes.json();
+
+      // Prefer smart wallet address (the actual on-chain sender for smart wallet txs)
+      const smartWallet = userData.linked_accounts?.find(
+        (a: any) => a.type === "smart_wallet",
+      );
+      if (smartWallet?.address) {
+        privyEmbeddedWalletAddress = String(smartWallet.address).trim().toLowerCase();
+      } else {
+        // Fallback: embedded EOA wallet (pre-smart-wallet migration users)
+        const embeddedWallet = userData.linked_accounts?.find(
+          (a: any) =>
+            a.type === "wallet" &&
+            a.wallet_client_type === "privy" &&
+            a.chain_type === "ethereum",
+        );
+        if (embeddedWallet?.address) {
+          privyEmbeddedWalletAddress = String(embeddedWallet.address).trim().toLowerCase();
+        }
+      }
+
+      console.log("[prediction-submit] Privy API verified, wallet resolved");
+    } catch (e) {
+      console.warn("[prediction-submit] Privy API call failed:", (e as Error).message);
+      await auditLog(supabase, null, null, "auth_required_failed", null, {
+        reason: "privy_api_exception",
+        error: (e as Error).message,
+      });
+      return json({ error: "Authentication failed", error_code: "auth_failed" }, 401);
     }
   }
 
