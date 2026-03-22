@@ -1,67 +1,42 @@
 
-Root cause: this is not primarily a Polymarket market-connection failure. Both attempts are dying earlier in the shared fee-relayer step inside `prediction-submit`.
 
-What I found:
-- `prediction-preflight` is succeeding now.
-- `prediction-submit` logs show: `Relayer transferFrom failed: TypeError: Cannot convert undefined to a BigInt`
-- Audit trail for both failed trades shows the exact same sequence:
-  - `request_received`
-  - `controls_passed`
-  - `trade_record_created`
-  - `fee_collection_started`
-  - `fee_collection_failed`
-- So the flow never reaches a reliable Polymarket submission step for those trades.
+## Plan: Fix Relayer Address Mismatch + Bypass MATIC Funding Issue
 
-Implementation plan:
-1. Harden relayer RPC handling in `supabase/functions/prediction-submit/index.ts`
-- Replace the single hardcoded Polygon RPC call with a fallback list, similar to the frontend Polygon hook.
-- Validate every JSON-RPC response before using `BigInt(...)`.
-- Specifically guard:
-  - allowance response
-  - nonce response
-  - gas price response
-- Return explicit errors like:
-  - `rpc_nonce_unavailable`
-  - `rpc_gas_price_unavailable`
-  - `rpc_allowance_unavailable`
-  instead of crashing with `undefined`.
+### What's Actually Wrong (Two Stacked Issues)
 
-2. Make fee collection failure observable and recoverable
-- Add structured audit payloads for the raw RPC failure point and selected RPC endpoint.
-- Keep the trade order in a clear failed state with a precise `error_code`, so it’s obvious the failure happened before exchange submission.
-- Prevent ambiguous “Polymarket failed” UX when the relayer step is the real problem.
+**Issue 1 — Allowance spender mismatch (the real blocker)**
+- Frontend approves `0x72F3...88d` (TREASURY_WALLET) as the spender
+- Backend checks allowance against the address derived from `FEE_RELAYER_PRIVATE_KEY` (line 274)
+- If these are different addresses, allowance will always be 0 from the relayer's perspective
+- This is why every trade fails with `insufficient_allowance: have 0`
 
-3. Protect exchange submission sequencing
-- Ensure the function only attempts Polymarket order creation after fee collection fully succeeds.
-- Add a clear branch in logs/audit for:
-  - fee collection failed before exchange
-  - exchange submission failed after fee collection
-- This will separate relayer issues from true Polymarket/CLOB issues.
+**Issue 2 — Relayer needs MATIC for gas**
+- Even after fixing the allowance, the relayer wallet (derived from `FEE_RELAYER_PRIVATE_KEY`) needs MATIC to send the `transferFrom` transaction
+- The Polymarket wallet you showed is unrelated — it's the CLOB API trading identity, not the fee relayer
 
-4. Improve frontend error messaging in `src/pages/FightPredictions.tsx`
-- Surface a more accurate error when the backend returns relayer/RPC failure.
-- Message should say the approval may have succeeded, but the backend could not collect the fee / continue the order.
-- Avoid implying the user must reconnect or re-approve unless allowance is actually missing.
+### Solution
 
-Files to update:
-- `supabase/functions/prediction-submit/index.ts`
-- `src/pages/FightPredictions.tsx`
+**Step 1: Create `prediction-health` diagnostic endpoint**
+- Derives the actual relayer address from `FEE_RELAYER_PRIVATE_KEY` and returns it
+- Checks the relayer's MATIC balance via Polygon RPC
+- Tests Polymarket CLOB connectivity
+- Reports whether relayer address matches the hardcoded `TREASURY_WALLET`
+- This tells you exactly which address needs MATIC funding
 
-Technical details:
-```text
-Current failing path:
-UI submit
-  -> prediction-preflight OK
-  -> prediction-submit
-     -> create trade record
-     -> collectFeeViaRelayer()
-        -> eth_getTransactionCount / eth_gasPrice / allowance parse
-        -> BigInt(undefined) crash
-     -> stops before reliable Polymarket submission
-```
+**Step 2: Fix the frontend approval target**
+- Update `usePolygonUSDC.ts` and `usePrivyFeeTransfer.ts` to fetch the correct relayer address from the health endpoint (or update the hardcoded constant to match)
+- If the relayer key IS the treasury key, they already match and the issue is elsewhere
+- If they differ, the frontend must approve the relayer address, not the treasury
 
-Expected result after fix:
-- trades no longer fail on both events due to the same backend RPC parsing issue
-- if Polygon RPC is flaky, backend retries another RPC instead of crashing
-- logs will clearly show whether a future failure is relayer-side or truly Polymarket-side
-- users get an accurate message instead of a misleading final failure
+**Step 3: Fund the correct wallet**
+- Once you know the relayer's derived address, send MATIC there (not to the Polymarket API wallet)
+- Only ~0.1 MATIC is needed for hundreds of `transferFrom` calls (~30k gas each at ~30 gwei)
+
+### Files
+- **Create**: `supabase/functions/prediction-health/index.ts` — diagnostic endpoint
+- **Edit**: `src/hooks/usePolygonUSDC.ts` — align `FEE_RELAYER_ADDRESS` with actual relayer
+- **Edit**: `src/hooks/usePrivyFeeTransfer.ts` — same alignment
+
+### Why This Unblocks Everything
+Once the frontend approves the correct spender AND that spender has MATIC, the existing `collectFeeViaRelayer` code will work as-is — and the flow will finally reach Polymarket CLOB submission.
+
