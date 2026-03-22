@@ -319,6 +319,8 @@ export default function FightCard({
   const isFeatured = fight.featured === true;
 
   const isClaimable = ["confirmed", "settled"].includes(fight.status);
+  const isFinished = ["locked", "confirmed", "settled", "result_selected"].includes(fight.status);
+  const winnerName = fight.winner === "fighter_a" ? fight.fighter_a_name : fight.winner === "fighter_b" ? fight.fighter_b_name : null;
   const hasWinningEntries =
     isClaimable &&
     fight.winner &&
