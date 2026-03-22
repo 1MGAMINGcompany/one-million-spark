@@ -230,7 +230,7 @@ export default function FightPredictions() {
       const hasLiveFights = group.fights.some(f => f.status === "live");
       const hasOpenFights = group.fights.some(f => f.status === "open");
       const allSettledOrPast = group.fights.every(f =>
-        ["settled", "confirmed", "result_selected", "draw", "refund_pending", "refunds_processing", "refunds_complete", "cancelled"].includes(f.status)
+        ["settled", "confirmed", "result_selected", "draw", "refund_pending", "refunds_processing", "refunds_complete", "cancelled", "locked"].includes(f.status)
       );
 
       // Stale-live: started >6h ago OR on a previous calendar day
