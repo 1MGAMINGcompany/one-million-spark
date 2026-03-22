@@ -1,43 +1,52 @@
 
 
-# Fix Sport Categorization & Menu Order
+# ONE Friday Fights — Muay Thai Section Hub
 
-## Issues
-1. **Mayweather event not in BOXING** — Event name "Floyd Mayweather vs. Manny Pacquiao 2" has no keyword match in `parseSport`. The `category` column on `prediction_events` exists and the admin can set it, but the frontend ignores it.
-2. **Menu order wrong** — Currently: ALL, MMA, FUTBOL, BOXING, MUAY THAI, BARE KNUCKLE. Requested: ALL, MUAY THAI, BARE KNUCKLE, MMA, BOXING, FUTBOL.
-3. **No manual override** — When an event doesn't match any keyword, the admin-set `category` field should be respected.
+## What Changes
 
-## Changes
+When the user selects the **MUAY THAI** sport filter, a branded hub component renders at the top of the content area (before the status sections). No other sport filters are affected.
 
-### 1. Update `parseSport` to accept and prioritize `category` (EventSection.tsx)
-Add an optional `category` parameter to `parseSport`. If `category` is a valid sport string, return it immediately before keyword detection. This makes the admin-set category the highest priority override.
+## New Component: `ONEFridayFightsHub.tsx`
 
-```typescript
-function parseSport(eventName: string, sourceProvider?: string | null, category?: string | null): string {
-  // Admin manual override
-  if (category && ["MMA","BOXING","MUAY THAI","BARE KNUCKLE","FUTBOL","BASKETBALL"].includes(category.toUpperCase())) {
-    return category.toUpperCase();
-  }
-  // ... existing keyword logic
-}
-```
+A self-contained component placed in `src/components/predictions/` with:
 
-### 2. Pass `category` through all `parseSport` call sites
-Update callers in:
-- **EventSection.tsx** — pass `event?.category`
-- **FightPredictions.tsx** — pass `val.event?.category` in all `parseSport` calls
-- **HomePredictionHighlights.tsx** — pass event category
-- **sportLabels.ts** — add optional category param
+### Section Header
+- Title: "ONE Friday Fights" (Cinzel font, matching site style)
+- Subtitle: "Live Every Friday Night from Bangkok"
+- "Weekly Event" badge (styled like existing badges — small rounded pill)
 
-### 3. Reorder menu tabs
-- **FightPredictions.tsx**: Change `ALL_SPORTS` to `["ALL", "MUAY THAI", "BARE KNUCKLE", "MMA", "BOXING", "FUTBOL"]`
-- **HomePredictionHighlights.tsx**: Change `SPORT_TABS` to match the same order
+### Countdown Timer
+- Targets every Friday at 7:30 AM ET (11:30 UTC)
+- Auto-resets weekly to next Friday
+- Displays: Days / Hours / Minutes / Seconds in styled boxes (dark card bg, primary accent numbers)
+- Tagline underneath: "Fast fights. Big moments. Every Friday."
 
-### 4. Set Mayweather event category in database
-Update the `prediction_events` row for the Mayweather event to set `category = 'BOXING'`.
+### Live State
+- If current time is between event time and event time + 4 hours:
+  - Replace countdown with "LIVE NOW" banner
+  - Pulsing red dot + red glow effect (matching existing live badge style)
 
-### Technical Details
-- **Files modified**: `EventSection.tsx`, `FightPredictions.tsx`, `HomePredictionHighlights.tsx`, `sportLabels.ts`
-- **Database**: 1 UPDATE to set category on Mayweather event
-- No schema changes needed
+### Info Card
+- Card with fire emoji and educational text about weekly Muay Thai action, how prediction markets open when fight cards are confirmed
+
+### Fight Card States (handled by existing system)
+- When no Muay Thai events exist in the data → show 3-5 skeleton placeholder cards with "Fight card coming soon..." message
+- When events exist → existing `EventSection` components render as normal
+- Live state lockout already handled by existing `eventHasStarted` logic
+
+## Changes to `FightPredictions.tsx`
+
+- Import `ONEFridayFightsHub`
+- Render it inside the content area, right before the status sections, **only when `activeSport === "MUAY THAI"`**
+- When Muay Thai is selected and no events exist, show the hub with skeleton cards instead of the generic "No events" message
+
+## Technical Details
+
+- **Files created**: `src/components/predictions/ONEFridayFightsHub.tsx`
+- **Files modified**: `src/pages/FightPredictions.tsx` (add conditional render)
+- Countdown uses `useState` + `setInterval` (1s tick), computes next Friday 11:30 UTC
+- Skeleton cards use existing `Skeleton` component from `src/components/ui/skeleton.tsx`
+- All styling uses existing Tailwind classes and design tokens (bg-card, border-border, text-primary, font-['Cinzel'], etc.)
+- No new dependencies
+- No changes to other sport sections, wallet logic, or prediction system
 
