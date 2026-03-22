@@ -373,7 +373,7 @@ export default function FightCard({
               odds={oddsA}
               poolAmount={poolA}
               canPredict={canPredict}
-              onPredict={() => wallet ? onPredict(fight, "fighter_a") : onWalletRequired?.()}
+              onPredict={() => onPredict(fight, "fighter_a")}
               logo={hasLogos ? fight.home_logo : undefined}
               isWinner={fight.winner === "fighter_a" && isClaimable}
             />
