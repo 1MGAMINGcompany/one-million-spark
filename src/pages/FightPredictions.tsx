@@ -404,7 +404,7 @@ export default function FightPredictions() {
       }
       console.log("[Predict] Step 2 complete — preflight OK");
 
-      // Step 3: Check relayer allowance — prompt one-time approve if needed
+      console.log("[Predict] Step 3: Checking allowance...", { feeUsdc: amountUsd * (selectedFight.commission_bps != null ? selectedFight.commission_bps / 10_000 : 0.05), allowance: relayer_allowance });
       const feeRate = selectedFight.commission_bps != null
         ? selectedFight.commission_bps / 10_000
         : (selectedFight.source === "polymarket" ? 0.02 : 0.05);
