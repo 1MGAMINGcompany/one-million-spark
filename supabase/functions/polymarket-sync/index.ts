@@ -60,6 +60,30 @@ async function fetchSportsEvents(limit: number): Promise<GammaEvent[]> {
   return deduped;
 }
 
+/** Search-based discovery via /public-search endpoint. Used for combat sports. */
+async function fetchSearchEvents(queries: string[]): Promise<GammaEvent[]> {
+  const seen = new Set<string>();
+  const deduped: GammaEvent[] = [];
+  for (const q of queries) {
+    try {
+      const url = `${GAMMA_BASE}/public-search?q=${encodeURIComponent(q)}&limit=100`;
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const data = await res.json();
+      const events: GammaEvent[] = data.events || [];
+      for (const ev of events) {
+        if (!seen.has(String(ev.id))) {
+          seen.add(String(ev.id));
+          deduped.push(ev);
+        }
+      }
+    } catch {
+      continue;
+    }
+  }
+  return deduped;
+}
+
 /** Return true if event endDate is in the future (or missing). */
 function isFutureEvent(ev: GammaEvent): boolean {
   if (!ev.endDate) return true; // no end date = perpetual, keep it
