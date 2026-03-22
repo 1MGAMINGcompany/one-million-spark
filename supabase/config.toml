@@ -120,3 +120,6 @@ verify_jwt = false
 
 [functions.prediction-preflight]
 verify_jwt = false
+
+[functions.prediction-health]
+verify_jwt = false
