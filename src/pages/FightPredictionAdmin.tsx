@@ -2270,7 +2270,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
   const [importingId, setImportingId] = useState<string | null>(null);
   const [syncLimit, setSyncLimit] = useState(200);
 
-  const TAGS = ["sports", "soccer", "mma", "boxing", "politics", "crypto", "entertainment", "science"];
+  const TAGS = ["sports", "soccer", "mma", "boxing"];
 
   const runSync = async () => {
     setSyncBusy(true);
