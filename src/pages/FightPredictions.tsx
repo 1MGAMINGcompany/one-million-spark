@@ -436,15 +436,17 @@ export default function FightPredictions() {
         const currentAllowance = relayer_allowance ?? 0;
         if (currentAllowance < feeUsdc) {
           // One-time approval — this is the ONLY wallet modal the user ever sees
-          toast.info("One-time USDC approval needed", {
-            description: "Approve once to enable frictionless predictions.",
+          toast.info("One-time USDC approval", {
+            description: "You're approving a spending limit — you won't be charged now. Future predictions skip this step.",
+            duration: 6000,
           });
           const approveResult = await approveFeeAllowance();
           if (!approveResult.success) {
             throw new Error(approveResult.error || "USDC approval failed");
           }
-          // Wait briefly for allowance to propagate
-          await new Promise((r) => setTimeout(r, 3000));
+          console.log("[Predict] Approval succeeded, waiting for on-chain propagation...");
+          // Wait for allowance to propagate on-chain
+          await new Promise((r) => setTimeout(r, 4000));
         }
       }
 
