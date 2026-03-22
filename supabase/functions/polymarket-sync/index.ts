@@ -7,19 +7,9 @@ const corsHeaders = {
 };
 
 const GAMMA_BASE = "https://gamma-api.polymarket.com";
+const DATA_API_BASE = "https://data-api.polymarket.com";
 
-// ── Search-based discovery (tags are unreliable on Gamma API) ──
-// Fixture-focused queries bias toward actual "Team A vs Team B" matches
-const SOCCER_SEARCH_QUERIES = [
-  "soccer vs", "football vs",
-  "Premier League vs", "La Liga vs", "Serie A vs", "Bundesliga vs",
-  "Ligue 1 vs", "MLS vs", "Liga MX vs",
-  "Champions League vs", "Europa League vs",
-  "Denmark Superliga vs", "Norway Eliteserien vs",
-  "Eredivisie vs", "Indian Super League vs",
-  "Scottish Premiership vs", "Championship vs",
-];
-
+// ── Combat search queries (search-based, unchanged) ──
 const COMBAT_SEARCH_QUERIES = [
   "UFC", "boxing", "ONE Championship", "PFL", "Bellator", "bare knuckle", "MMA",
 ];
@@ -35,9 +25,7 @@ const FUTURES_KEYWORDS = [
 /** Returns true if event title looks like an actual fixture (contains "vs") */
 function isActualFixture(title: string): boolean {
   const lower = title.toLowerCase();
-  // Must contain "vs" or "vs."
   if (!lower.includes("vs")) return false;
-  // Reject if it contains futures keywords
   for (const kw of FUTURES_KEYWORDS) {
     if (lower.includes(kw)) return false;
   }
@@ -53,7 +41,58 @@ function isFuturesMarket(title: string): boolean {
   return false;
 }
 
-/** Search-based discovery via /public-search endpoint. */
+// ── Sports Series Discovery (replaces search-based soccer queries) ──
+
+/** Known soccer sport codes from Gamma /sports endpoint */
+const SOCCER_SPORT_CODES = [
+  "epl", "lal", "bun", "ser", "lig", "mls", "lgm", "ucl", "uel",
+  "den", "nor", "ere", "isl", "scp", "cha", "ale", "jle", "kle",
+  "spl", "bsa", "arg", "acn", "wc", "eur", "cpa",
+];
+
+/** Known combat sport codes */
+const COMBAT_SPORT_CODES = ["ufc", "box", "onc", "pfl", "bkf", "mma"];
+
+interface SportSeries {
+  sport: string;
+  series: string;
+  label?: string;
+}
+
+/** Fetch all available sports + series IDs from Gamma /sports */
+async function fetchSportsSeries(): Promise<SportSeries[]> {
+  try {
+    const res = await fetch(`${GAMMA_BASE}/sports`);
+    if (!res.ok) {
+      console.warn(`[polymarket-sync] /sports returned ${res.status}`);
+      return [];
+    }
+    const data = await res.json();
+    // data is an array of { sport: string, series: string, ... }
+    if (Array.isArray(data)) return data;
+    // Sometimes wrapped in an object
+    if (data?.sports && Array.isArray(data.sports)) return data.sports;
+    return [];
+  } catch (e) {
+    console.warn(`[polymarket-sync] /sports fetch error:`, e);
+    return [];
+  }
+}
+
+/** Fetch events for a specific series ID */
+async function fetchSeriesEvents(seriesId: string, limit = 50): Promise<GammaEvent[]> {
+  try {
+    const url = `${GAMMA_BASE}/events?series_id=${seriesId}&active=true&closed=false&limit=${limit}`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Search-based discovery via /public-search endpoint (fallback + combat). */
 async function fetchSearchEvents(queries: string[]): Promise<GammaEvent[]> {
   const seen = new Set<string>();
   const deduped: GammaEvent[] = [];
@@ -79,13 +118,26 @@ async function fetchSearchEvents(queries: string[]): Promise<GammaEvent[]> {
 
 /** Return true if event has at least one date >24h in the future. */
 function isFutureEvent(ev: GammaEvent): boolean {
-  const cutoff = Date.now() + 24 * 60 * 60 * 1000; // 24h from now
+  const cutoff = Date.now() + 24 * 60 * 60 * 1000;
   const startMs = ev.startDate ? new Date(ev.startDate).getTime() : null;
   const endMs = ev.endDate ? new Date(ev.endDate).getTime() : null;
-  // If no dates at all, let it through (rare)
   if (!startMs && !endMs) return true;
-  // At least one date must be >24h in the future
   return (startMs !== null && startMs > cutoff) || (endMs !== null && endMs > cutoff);
+}
+
+/** Fetch trade volume from Data API for enrichment */
+async function fetchMarketVolume(marketId: string): Promise<{ volume: number; tradeCount: number } | null> {
+  try {
+    const res = await fetch(`${DATA_API_BASE}/activity?market=${marketId}&limit=1`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      volume: parseFloat(data?.volume || "0"),
+      tradeCount: parseInt(data?.tradeCount || "0", 10),
+    };
+  } catch {
+    return null;
+  }
 }
 
 interface GammaMarket {
@@ -151,28 +203,106 @@ Deno.serve(async (req) => {
     }
 
     // ══════════════════════════════════════════════════
+    // ACTION: browse_sports — List available sports/series from Gamma
+    // ══════════════════════════════════════════════════
+    if (action === "browse_sports") {
+      const allSeries = await fetchSportsSeries();
+      return json({
+        sports: allSeries.map(s => ({
+          sport: s.sport,
+          series: s.series,
+          label: s.label || s.sport,
+        })),
+        total: allSeries.length,
+      });
+    }
+
+    // ══════════════════════════════════════════════════
     // ACTION: sync — Fetch & upsert Polymarket markets
+    // Uses series-based discovery for soccer, search for combat
     // ══════════════════════════════════════════════════
     if (action === "sync") {
       const tagFilter = tag || "sports";
+      // Optional: sync a specific series ID directly
+      const specificSeriesId = body.series_id;
 
-      let gammaEvents: GammaEvent[];
-      let searchQueries: string[];
+      let gammaEvents: GammaEvent[] = [];
+      let seriesSynced: string[] = [];
+      let searchQueries: string[] = [];
+      let seriesStats: Record<string, number> = {};
 
-      if (tagFilter === "mma") {
+      // ── Series-based discovery (soccer + sports) ──
+      if (specificSeriesId) {
+        // Sync a single specific series
+        console.log(`[polymarket-sync] Fetching specific series: ${specificSeriesId}`);
+        const events = await fetchSeriesEvents(specificSeriesId, limit);
+        gammaEvents.push(...events);
+        seriesSynced.push(specificSeriesId);
+        seriesStats[specificSeriesId] = events.length;
+      } else if (tagFilter === "mma") {
+        // Combat: use search-based discovery
         searchQueries = COMBAT_SEARCH_QUERIES;
+        console.log(`[polymarket-sync] Search-based fetch for MMA: ${searchQueries.join(", ")}`);
+        gammaEvents = await fetchSearchEvents(searchQueries);
       } else if (tagFilter === "boxing") {
         searchQueries = ["boxing", "bare knuckle"];
-      } else if (tagFilter === "soccer") {
-        searchQueries = SOCCER_SEARCH_QUERIES;
+        console.log(`[polymarket-sync] Search-based fetch for Boxing`);
+        gammaEvents = await fetchSearchEvents(searchQueries);
       } else {
-        // "sports" or "All" — fetch everything
-        searchQueries = [...SOCCER_SEARCH_QUERIES, ...COMBAT_SEARCH_QUERIES];
+        // "soccer" or "sports" — use series-based discovery
+        const allSeries = await fetchSportsSeries();
+        console.log(`[polymarket-sync] Found ${allSeries.length} sport series from /sports`);
+
+        // Determine which series to fetch
+        let targetCodes: string[];
+        if (tagFilter === "soccer") {
+          targetCodes = SOCCER_SPORT_CODES;
+        } else {
+          // "sports" = all sports
+          targetCodes = [...SOCCER_SPORT_CODES, ...COMBAT_SPORT_CODES];
+        }
+
+        // Match available series against target codes
+        const matchedSeries = allSeries.filter(s =>
+          targetCodes.some(code => s.sport.toLowerCase().includes(code.toLowerCase()))
+        );
+
+        // If no series matched our codes, use ALL available series
+        const seriesToFetch = matchedSeries.length > 0 ? matchedSeries : allSeries;
+        console.log(`[polymarket-sync] Fetching ${seriesToFetch.length} series for "${tagFilter}"`);
+
+        const seen = new Set<string>();
+        for (const s of seriesToFetch) {
+          const events = await fetchSeriesEvents(s.series, 50);
+          let added = 0;
+          for (const ev of events) {
+            if (!seen.has(String(ev.id))) {
+              seen.add(String(ev.id));
+              gammaEvents.push(ev);
+              added++;
+            }
+          }
+          seriesSynced.push(s.sport);
+          seriesStats[s.sport] = added;
+        }
+
+        // Also add combat search results for "sports" (all) tag
+        if (tagFilter === "sports") {
+          searchQueries = COMBAT_SEARCH_QUERIES;
+          const combatEvents = await fetchSearchEvents(searchQueries);
+          let combatAdded = 0;
+          for (const ev of combatEvents) {
+            if (!seen.has(String(ev.id))) {
+              seen.add(String(ev.id));
+              gammaEvents.push(ev);
+              combatAdded++;
+            }
+          }
+          seriesStats["combat_search"] = combatAdded;
+        }
       }
 
-      console.log(`[polymarket-sync] Search-based fetch for "${tagFilter}": ${searchQueries.join(", ")}`);
-      gammaEvents = await fetchSearchEvents(searchQueries);
-      console.log(`[polymarket-sync] Raw search results: ${gammaEvents.length} events`);
+      console.log(`[polymarket-sync] Raw discovery: ${gammaEvents.length} events`);
 
       // Filter out past events
       const beforeFilter = gammaEvents.length;
@@ -186,11 +316,9 @@ Deno.serve(async (req) => {
       if (isSoccerSync) {
         const beforeFixture = gammaEvents.length;
         gammaEvents = gammaEvents.filter(ev => {
-          // Combat sports events pass through (looser filter)
           const lower = ev.title.toLowerCase();
           const isCombat = COMBAT_SEARCH_QUERIES.some(q => lower.includes(q.toLowerCase()));
           if (isCombat) return true;
-          // Soccer events must be actual fixtures
           return isActualFixture(ev.title);
         });
         futuresFiltered = beforeFixture - gammaEvents.length;
@@ -300,6 +428,15 @@ Deno.serve(async (req) => {
               })
               .eq("id", existing.id);
           } else {
+            // Try Data API enrichment for volume
+            let volumeUsd = parseFloat(market.volume || "0");
+            try {
+              const dataApiVol = await fetchMarketVolume(market.id);
+              if (dataApiVol && dataApiVol.volume > volumeUsd) {
+                volumeUsd = dataApiVol.volume;
+              }
+            } catch { /* non-fatal */ }
+
             const { error: fightErr } = await supabase
               .from("prediction_fights")
               .insert({
@@ -319,6 +456,7 @@ Deno.serve(async (req) => {
                 polymarket_end_date: market.endDate || null,
                 polymarket_question: market.question,
                 polymarket_last_synced_at: new Date().toISOString(),
+                polymarket_volume_usd: volumeUsd > 0 ? volumeUsd : null,
                 price_a: priceA,
                 price_b: priceB,
                 status: "open",
@@ -370,7 +508,6 @@ Deno.serve(async (req) => {
       }
 
       // ── Clean up existing futures junk in DB ──
-      // Cancel any open fights that look like futures markets (no "vs" in title)
       const { data: futuresJunk } = await supabase
         .from("prediction_fights")
         .select("id, title")
@@ -411,6 +548,9 @@ Deno.serve(async (req) => {
         admin_wallet: wallet || null,
         details: {
           tag: tagFilter,
+          discovery_method: specificSeriesId ? "specific_series" : (searchQueries.length > 0 && seriesSynced.length === 0) ? "search" : "series",
+          series_synced: seriesSynced,
+          series_stats: seriesStats,
           events_upserted: eventsUpserted,
           markets_upserted: marketsUpserted,
           skipped,
@@ -420,12 +560,15 @@ Deno.serve(async (req) => {
           futures_filtered: futuresFiltered,
           filtered_out_past: filteredOut,
           total_events: gammaEvents.length,
-          search_queries: searchQueries,
+          search_queries: searchQueries.length > 0 ? searchQueries : undefined,
         },
       });
 
       return json({
         success: true,
+        discovery_method: specificSeriesId ? "specific_series" : (searchQueries.length > 0 && seriesSynced.length === 0) ? "search" : "series",
+        series_synced: seriesSynced,
+        series_stats: seriesStats,
         events_upserted: eventsUpserted,
         markets_upserted: marketsUpserted,
         skipped,
@@ -493,7 +636,6 @@ Deno.serve(async (req) => {
 
       const searchData = await gammaRes.json();
       const rawResults: GammaEvent[] = searchData.events || [];
-      // Filter out past events so admin never sees stale results
       const results = rawResults.filter(isFutureEvent);
       console.log(`[polymarket-sync] Search returned ${results.length} future events (${rawResults.length - results.length} past filtered) for "${query}"`);
       return json({
@@ -532,7 +674,6 @@ Deno.serve(async (req) => {
 
       let outcomes: string[], tokenIds: string[], outcomePrices: string[];
 
-      // Upsert event
       const { data: existingEvt } = await supabase
         .from("prediction_events")
         .select("id")
@@ -627,19 +768,12 @@ Deno.serve(async (req) => {
       const { url } = body;
       if (!url || typeof url !== "string") return json({ error: "Missing url" }, 400);
 
-      // Extract event slug from various URL formats:
-      // https://polymarket.com/event/silkeborg-if-vs-fc-fredericia
-      // https://polymarket.com/event/silkeborg-if-vs-fc-fredericia?tid=...
-      // Or just the slug: silkeborg-if-vs-fc-fredericia
       let slug = url.trim();
-      // Strip query params
       slug = slug.split("?")[0].split("#")[0];
-      // Extract slug from URL path
       const eventMatch = slug.match(/polymarket\.com\/event\/([^/]+)/);
       if (eventMatch) {
         slug = eventMatch[1];
       } else {
-        // Remove any leading/trailing slashes
         slug = slug.replace(/^\/+|\/+$/g, "");
       }
 
@@ -647,12 +781,10 @@ Deno.serve(async (req) => {
 
       console.log(`[polymarket-sync] import_by_url: resolved slug="${slug}"`);
 
-      // Try fetching by slug
       const gammaRes = await fetch(`${GAMMA_BASE}/events?slug=${encodeURIComponent(slug)}`);
       if (!gammaRes.ok) return json({ error: `Event not found (${gammaRes.status})` }, 404);
 
       const gammaData = await gammaRes.json();
-      // The events endpoint returns an array
       const events: GammaEvent[] = Array.isArray(gammaData) ? gammaData : [gammaData];
       const gEvent = events[0];
 
@@ -660,7 +792,6 @@ Deno.serve(async (req) => {
 
       let outcomes: string[], tokenIds: string[], outcomePrices: string[];
 
-      // Upsert event
       const { data: existingEvt } = await supabase
         .from("prediction_events")
         .select("id")
