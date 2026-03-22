@@ -83,10 +83,15 @@ async function fetchSearchEvents(queries: string[]): Promise<GammaEvent[]> {
   return deduped;
 }
 
-/** Return true if event endDate is in the future (or missing). */
+/** Return true if event has at least one date >24h in the future. Events with no dates pass through. */
 function isFutureEvent(ev: GammaEvent): boolean {
-  if (!ev.endDate) return true; // no end date = perpetual, keep it
-  return new Date(ev.endDate).getTime() > Date.now();
+  const cutoff = Date.now() + 24 * 60 * 60 * 1000; // 24h from now
+  const startMs = ev.startDate ? new Date(ev.startDate).getTime() : null;
+  const endMs = ev.endDate ? new Date(ev.endDate).getTime() : null;
+  // If no dates at all, let it through (rare)
+  if (!startMs && !endMs) return true;
+  // At least one date must be >24h in the future
+  return (startMs !== null && startMs > cutoff) || (endMs !== null && endMs > cutoff);
 }
 
 interface GammaMarket {
