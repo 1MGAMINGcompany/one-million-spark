@@ -435,6 +435,7 @@ export default function FightPredictions() {
 
       if (feeUsdc > 0.01) {
         const currentAllowance = relayer_allowance ?? 0;
+        console.log("[Predict] Allowance check:", { currentAllowance, feeUsdc, walletAddress: address });
         if (currentAllowance < feeUsdc) {
           // One-time approval — this is the ONLY wallet modal the user ever sees
           toast.info("One-time USDC approval", {
@@ -445,33 +446,8 @@ export default function FightPredictions() {
           if (!approveResult.success) {
             throw new Error(approveResult.error || "USDC approval failed");
           }
-          console.log("[Predict] Approval confirmed on-chain, waiting for state propagation...");
-          // Extra wait for RPC state propagation after confirmed receipt
-          await new Promise((r) => setTimeout(r, 6000));
-
-          // Verify allowance is actually live via direct RPC call
-          const ALLOWANCE_SELECTOR = "0xdd62ed3e";
-          const padAddr = (a: string) => a.slice(2).toLowerCase().padStart(64, "0");
-          const callData = ALLOWANCE_SELECTOR + padAddr(address!) + padAddr("0x3b3bf64329CCf08a727e4fEd41821E8534685fAD");
-          let freshAllowance = 0;
-          for (const rpc of ["https://polygon-bor-rpc.publicnode.com", "https://polygon.drpc.org", "https://rpc.ankr.com/polygon"]) {
-            try {
-              const res = await fetch(rpc, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", data: callData }, "latest"] }),
-              });
-              const json = await res.json();
-              if (json.result) {
-                freshAllowance = Number(BigInt(json.result)) / 1e6;
-                break;
-              }
-            } catch { continue; }
-          }
-          console.log("[Predict] Fresh on-chain allowance after approval:", freshAllowance);
-          if (freshAllowance < feeUsdc) {
-            throw new Error("Approval confirmed but allowance not yet visible on-chain. Please try again in a few seconds.");
-          }
+          // The hook already confirmed allowance on-chain via polling — no extra wait needed
+          console.log("[Predict] Approval confirmed on-chain ✓");
         }
       }
 
