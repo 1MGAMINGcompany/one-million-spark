@@ -488,16 +488,25 @@ export default function FightPredictions() {
     } catch (err: any) {
       console.error("Prediction failed:", err);
       const msg: string = err.message || "Unknown error";
-      const isTransientAuth =
-        msg.includes("Expected 200 OK") ||
-        msg.includes("JWKS") ||
-        msg.includes("jwks") ||
-        msg.includes("jwt_verification_failed") ||
-        msg.includes("auth_failed");
-      toast.error(
-        isTransientAuth ? "Temporary auth issue" : "Prediction failed",
-        { description: isTransientAuth ? "Please try again in a few seconds." : msg },
-      );
+      const isAuthError =
+        msg.includes("token_expired") ||
+        msg.includes("auth_failed") ||
+        msg.includes("auth_required") ||
+        msg.includes("privy_api");
+      const isApprovalError = msg.includes("approval") || msg.includes("allowance");
+
+      if (isAuthError) {
+        toast.error("Session expired", {
+          description: "Please log in again to place predictions.",
+          action: { label: "Log in", onClick: () => login() },
+        });
+      } else if (isApprovalError) {
+        toast.error("USDC approval failed", {
+          description: "The approval transaction was not completed. Please try again.",
+        });
+      } else {
+        toast.error("Prediction failed", { description: msg });
+      }
     } finally {
       setSubmitting(false);
     }

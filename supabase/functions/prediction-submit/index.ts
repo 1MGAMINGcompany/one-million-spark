@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { createRemoteJWKSet, jwtVerify } from "npm:jose@5";
+// Auth is now done via Privy REST API (no JWKS dependency)
 import { privateKeyToAccount } from "npm:viem@2/accounts";
 import { createWalletClient, http, encodeFunctionData, parseAbi } from "npm:viem@2";
 import { polygon } from "npm:viem@2/chains";
