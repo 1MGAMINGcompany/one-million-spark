@@ -400,7 +400,8 @@ export default function FightPredictions() {
 
         const isTransient = typeof detail === "string" && (
           detail.includes("JWKS") || detail.includes("Expected 200 OK") ||
-          detail.includes("jwt_verification_failed") || detail.includes("fetch")
+          detail.includes("jwt_verification_failed") || detail.includes("fetch") ||
+          detail.includes("privy_api_")
         );
 
         if (!isTransient) {
