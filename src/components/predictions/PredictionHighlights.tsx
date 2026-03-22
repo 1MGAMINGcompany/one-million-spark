@@ -135,37 +135,49 @@ function HighlightCard({
 
       {/* Odds + Buttons */}
       <div className="p-3">
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2" dir="ltr">
-          <div className="text-center">
-            <p className="text-xs font-bold text-foreground truncate">{fight.fighter_a_name}</p>
-            <p className="text-primary font-bold text-sm">{oddsA > 0 ? `${oddsA.toFixed(2)}x` : '—'}</p>
-            {!btn.disabled && onPredict && (
-              <Button
-                size="sm"
-                className="mt-1 w-full text-[10px] h-7 bg-primary text-primary-foreground hover:bg-primary/90"
-                onClick={() => onPredict(fight, "fighter_a")}
-              >
-                Predict
-              </Button>
-            )}
+        {resolving ? (
+          <div className="text-center py-2">
+            <p className="text-xs font-bold text-foreground truncate mb-1">
+              {fight.fighter_a_name} vs {fight.fighter_b_name}
+            </p>
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-yellow-400 bg-yellow-500/10 px-3 py-1 rounded-full">
+              <Lock className="w-3 h-3" />
+              Market Settling
+            </span>
           </div>
-          <div className="flex flex-col items-center">
-            <Swords className="w-4 h-4 text-primary/60" />
+        ) : (
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2" dir="ltr">
+            <div className="text-center">
+              <p className="text-xs font-bold text-foreground truncate">{fight.fighter_a_name}</p>
+              <p className="text-primary font-bold text-sm">{oddsA > 0 ? `${oddsA.toFixed(2)}x` : '—'}</p>
+              {!btn.disabled && onPredict && (
+                <Button
+                  size="sm"
+                  className="mt-1 w-full text-[10px] h-7 bg-primary text-primary-foreground hover:bg-primary/90"
+                  onClick={() => onPredict(fight, "fighter_a")}
+                >
+                  Predict
+                </Button>
+              )}
+            </div>
+            <div className="flex flex-col items-center">
+              <Swords className="w-4 h-4 text-primary/60" />
+            </div>
+            <div className="text-center">
+              <p className="text-xs font-bold text-foreground truncate">{fight.fighter_b_name}</p>
+              <p className="text-primary font-bold text-sm">{oddsB > 0 ? `${oddsB.toFixed(2)}x` : '—'}</p>
+              {!btn.disabled && onPredict && (
+                <Button
+                  size="sm"
+                  className="mt-1 w-full text-[10px] h-7 bg-primary text-primary-foreground hover:bg-primary/90"
+                  onClick={() => onPredict(fight, "fighter_b")}
+                >
+                  Predict
+                </Button>
+              )}
+            </div>
           </div>
-          <div className="text-center">
-            <p className="text-xs font-bold text-foreground truncate">{fight.fighter_b_name}</p>
-            <p className="text-primary font-bold text-sm">{oddsB > 0 ? `${oddsB.toFixed(2)}x` : '—'}</p>
-            {!btn.disabled && onPredict && (
-              <Button
-                size="sm"
-                className="mt-1 w-full text-[10px] h-7 bg-primary text-primary-foreground hover:bg-primary/90"
-                onClick={() => onPredict(fight, "fighter_b")}
-              >
-                Predict
-              </Button>
-            )}
-          </div>
-        </div>
+        )}
 
         {/* Disabled state message */}
         {btn.disabled && (

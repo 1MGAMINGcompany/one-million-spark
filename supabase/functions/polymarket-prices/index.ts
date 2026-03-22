@@ -261,6 +261,12 @@ Deno.serve(async (req) => {
                 if (market) {
                   totalVolume = parseFloat(market.volumeNum || market.volume || "0");
 
+                  // Extract bestBid/bestAsk/lastTradePrice for sanity checks
+                  const bestBidA = parseFloat(market.bestBid || "0");
+                  const bestAskA = parseFloat(market.bestAsk || "0");
+                  const lastTradeA = parseFloat(market.lastTradePrice || "0");
+                  const marketActive = market.active !== false && market.closed !== true;
+
                   // Use Gamma outcomePrices as primary display price
                   if (market.outcomePrices) {
                     try {
@@ -278,6 +284,28 @@ Deno.serve(async (req) => {
                         }
                       }
                     } catch { /* ignore parse errors */ }
+                  }
+
+                  // ── SANITY CHECK: outcomePrices returned extreme 0/1 but market is active ──
+                  // Gamma CDN sometimes returns stale settlement prices while bestBid/bestAsk remain accurate
+                  const isExtreme = (priceA <= 0.01 || priceA >= 0.99) && (priceB <= 0.01 || priceB >= 0.99);
+                  if (isExtreme && marketActive) {
+                    // Use bestBid as a more reliable signal
+                    const reliablePrice = bestBidA > 0.01 && bestBidA < 0.99 ? bestBidA
+                      : bestAskA > 0.01 && bestAskA < 0.99 ? bestAskA
+                      : lastTradeA > 0.01 && lastTradeA < 0.99 ? lastTradeA
+                      : 0;
+                    if (reliablePrice > 0) {
+                      priceA = reliablePrice;
+                      priceB = Math.round((1 - reliablePrice) * 10000) / 10000;
+                      priceSource = "gamma";
+                      enriched.push(`${fight.id}: sanity_override bestBid=${bestBidA} bestAsk=${bestAskA} lastTrade=${lastTradeA}`);
+                    }
+                  }
+
+                  // ── AUTO-DETECT truly resolved markets ──
+                  if (isExtreme && !marketActive) {
+                    enriched.push(`${fight.id}: market_resolved active=${market.active} closed=${market.closed}`);
                   }
 
                   // Derive pools from volume + prices
