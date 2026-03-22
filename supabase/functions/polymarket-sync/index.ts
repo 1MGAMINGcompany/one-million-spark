@@ -9,14 +9,49 @@ const corsHeaders = {
 const GAMMA_BASE = "https://gamma-api.polymarket.com";
 
 // ── Search-based discovery (tags are unreliable on Gamma API) ──
+// Fixture-focused queries bias toward actual "Team A vs Team B" matches
 const SOCCER_SEARCH_QUERIES = [
-  "MLS", "EPL", "La Liga", "Serie A", "Bundesliga",
-  "Ligue 1", "Champions League", "Liga MX", "soccer",
+  "soccer vs", "football vs",
+  "Premier League vs", "La Liga vs", "Serie A vs", "Bundesliga vs",
+  "Ligue 1 vs", "MLS vs", "Liga MX vs",
+  "Champions League vs", "Europa League vs",
+  "Denmark Superliga vs", "Norway Eliteserien vs",
+  "Eredivisie vs", "Indian Super League vs",
+  "Scottish Premiership vs", "Championship vs",
 ];
 
 const COMBAT_SEARCH_QUERIES = [
   "UFC", "boxing", "ONE Championship", "PFL", "Bellator", "bare knuckle", "MMA",
 ];
+
+/** Futures / non-fixture keywords to reject for soccer events */
+const FUTURES_KEYWORDS = [
+  "winner", "to win", "cup winner", "league winner",
+  "top scorer", "relegated", "promoted", "qualify",
+  "champion", "most goals", "golden boot", "ballon d'or",
+  "mvp", "best player", "transfer",
+];
+
+/** Returns true if event title looks like an actual fixture (contains "vs") */
+function isActualFixture(title: string): boolean {
+  const lower = title.toLowerCase();
+  // Must contain "vs" or "vs."
+  if (!lower.includes("vs")) return false;
+  // Reject if it contains futures keywords
+  for (const kw of FUTURES_KEYWORDS) {
+    if (lower.includes(kw)) return false;
+  }
+  return true;
+}
+
+/** Returns true if title is clearly a futures/props market (not a fixture) */
+function isFuturesMarket(title: string): boolean {
+  const lower = title.toLowerCase();
+  for (const kw of FUTURES_KEYWORDS) {
+    if (lower.includes(kw)) return true;
+  }
+  return false;
+}
 
 /** Search-based discovery via /public-search endpoint. */
 async function fetchSearchEvents(queries: string[]): Promise<GammaEvent[]> {
