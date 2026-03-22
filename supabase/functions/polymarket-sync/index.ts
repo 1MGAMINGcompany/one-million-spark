@@ -159,11 +159,32 @@ Deno.serve(async (req) => {
       const tagFilter = tag || "sports";
 
       let gammaEvents: GammaEvent[];
+      let searchEventsCount = 0;
 
-      if (tagFilter === "sports") {
+      if (tagFilter === "mma" || tagFilter === "boxing") {
+        // Combat sports: use search-based discovery (tags return wrong results)
+        console.log(`[polymarket-sync] Search-based fetch for combat sports: ${COMBAT_SEARCH_QUERIES.join(", ")}`);
+        gammaEvents = await fetchSearchEvents(
+          tagFilter === "boxing" ? ["boxing", "bare knuckle"] : COMBAT_SEARCH_QUERIES
+        );
+        searchEventsCount = gammaEvents.length;
+      } else if (tagFilter === "sports") {
         // Multi-tag parallel fetch for comprehensive sports coverage
         console.log(`[polymarket-sync] Multi-tag fetch for sports (${SPORTS_TAGS.join(", ")})`);
         gammaEvents = await fetchSportsEvents(limit);
+
+        // Also fetch combat sports via search and merge
+        console.log(`[polymarket-sync] Adding combat sports via search: ${COMBAT_SEARCH_QUERIES.join(", ")}`);
+        const combatEvents = await fetchSearchEvents(COMBAT_SEARCH_QUERIES);
+        searchEventsCount = combatEvents.length;
+        const seen = new Set(gammaEvents.map(e => String(e.id)));
+        for (const ev of combatEvents) {
+          if (!seen.has(String(ev.id))) {
+            seen.add(String(ev.id));
+            gammaEvents.push(ev);
+          }
+        }
+        console.log(`[polymarket-sync] After combat merge: ${gammaEvents.length} total (${searchEventsCount} from search)`);
       } else {
         console.log(`[polymarket-sync] Fetching tag="${tagFilter}" with pagination, limit=${limit}`);
         gammaEvents = await fetchTagEvents(tagFilter, limit);
