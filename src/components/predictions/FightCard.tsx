@@ -164,6 +164,8 @@ function formatProb(p: number): string {
 
 /** Derive probability percentages from Polymarket prices (handles one-sided) */
 function getProbabilities(fight: Fight): { probA: number; probB: number } | null {
+  // Don't show probability bar for resolving markets
+  if (isResolvingPrice(fight.price_a, fight.price_b, fight.source)) return null;
   const pA = fight.price_a ?? 0;
   const pB = fight.price_b ?? 0;
   if (pA > 0 && pB > 0) {
