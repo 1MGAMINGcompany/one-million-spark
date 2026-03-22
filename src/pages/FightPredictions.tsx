@@ -15,6 +15,7 @@ import PredictionModal from "@/components/predictions/PredictionModal";
 import ComingSoonCard from "@/components/predictions/ComingSoonCard";
 
 import { WalletGateModal } from "@/components/WalletGateModal";
+import ONEFridayFightsHub from "@/components/predictions/ONEFridayFightsHub";
 import SocialShareModal from "@/components/SocialShareModal";
 import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
 import { useMyReferralCode } from "@/hooks/useMyReferralCode";
