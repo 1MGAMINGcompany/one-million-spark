@@ -1,42 +1,40 @@
 
 
-## Plan: Fix Relayer Address Mismatch + Bypass MATIC Funding Issue
+## Plan: Fix Approval Verification + Add Tx Receipt Confirmation
 
-### What's Actually Wrong (Two Stacked Issues)
+### Root Cause
+The approval flow returns `success: true` as soon as it gets a transaction hash, WITHOUT confirming the transaction was actually mined and succeeded on-chain. On Polygon with Privy smart wallets (ERC-4337 UserOps), a hash can be returned before the underlying transaction is confirmed — or the UserOp could fail entirely while still returning a hash.
 
-**Issue 1 — Allowance spender mismatch (the real blocker)**
-- Frontend approves `0x72F3...88d` (TREASURY_WALLET) as the spender
-- Backend checks allowance against the address derived from `FEE_RELAYER_PRIVATE_KEY` (line 274)
-- If these are different addresses, allowance will always be 0 from the relayer's perspective
-- This is why every trade fails with `insufficient_allowance: have 0`
+### Evidence
+- Audit log at 18:36:21 shows `insufficient_allowance: have 0, need 20000`
+- This is AFTER the frontend presumably ran the approval step
+- The 4-second wait after approval may not be sufficient, or the approval TX reverted
 
-**Issue 2 — Relayer needs MATIC for gas**
-- Even after fixing the allowance, the relayer wallet (derived from `FEE_RELAYER_PRIVATE_KEY`) needs MATIC to send the `transferFrom` transaction
-- The Polymarket wallet you showed is unrelated — it's the CLOB API trading identity, not the fee relayer
+### Fix (2 changes)
 
-### Solution
+**1. Add on-chain receipt verification to `usePrivyFeeTransfer.ts`**
 
-**Step 1: Create `prediction-health` diagnostic endpoint**
-- Derives the actual relayer address from `FEE_RELAYER_PRIVATE_KEY` and returns it
-- Checks the relayer's MATIC balance via Polygon RPC
-- Tests Polymarket CLOB connectivity
-- Reports whether relayer address matches the hardcoded `TREASURY_WALLET`
-- This tells you exactly which address needs MATIC funding
+After getting the tx hash from `sendTransaction`, poll Polygon RPCs for the transaction receipt to confirm `status: 0x1` (success). This ensures we don't proceed with a failed/pending approval.
 
-**Step 2: Fix the frontend approval target**
-- Update `usePolygonUSDC.ts` and `usePrivyFeeTransfer.ts` to fetch the correct relayer address from the health endpoint (or update the hardcoded constant to match)
-- If the relayer key IS the treasury key, they already match and the issue is elsewhere
-- If they differ, the frontend must approve the relayer address, not the treasury
+```text
+Current flow:  sendTransaction → get hash → return success
+Fixed flow:    sendTransaction → get hash → poll receipt (up to 15s) → verify status=0x1 → return success
+```
 
-**Step 3: Fund the correct wallet**
-- Once you know the relayer's derived address, send MATIC there (not to the Polymarket API wallet)
-- Only ~0.1 MATIC is needed for hundreds of `transferFrom` calls (~30k gas each at ~30 gwei)
+**2. Increase propagation wait and add a fresh allowance re-check**
 
-### Files
-- **Create**: `supabase/functions/prediction-health/index.ts` — diagnostic endpoint
-- **Edit**: `src/hooks/usePolygonUSDC.ts` — align `FEE_RELAYER_ADDRESS` with actual relayer
-- **Edit**: `src/hooks/usePrivyFeeTransfer.ts` — same alignment
+In `FightPredictions.tsx`, after approval succeeds:
+- Increase wait from 4s to 6s
+- Re-fetch allowance from RPC directly (don't rely on the polling hook's stale state)
+- If allowance is still 0 after the wait, show an explicit error asking user to retry rather than silently submitting to a guaranteed failure
 
-### Why This Unblocks Everything
-Once the frontend approves the correct spender AND that spender has MATIC, the existing `collectFeeViaRelayer` code will work as-is — and the flow will finally reach Polymarket CLOB submission.
+### Files to edit
+- `src/hooks/usePrivyFeeTransfer.ts` — add receipt polling after sendTransaction
+- `src/pages/FightPredictions.tsx` — add post-approval allowance verification
+
+### Technical Details
+
+In `usePrivyFeeTransfer.ts`, add a `waitForReceipt` helper that calls `eth_getTransactionReceipt` on Polygon RPCs in a loop (up to 8 attempts, 2s apart). Only return `success: true` when `receipt.status === "0x1"`.
+
+In `FightPredictions.tsx`, after the approval wait, make a direct RPC call to check the new allowance before proceeding. If still 0, throw with a clear message instead of submitting to the backend.
 
