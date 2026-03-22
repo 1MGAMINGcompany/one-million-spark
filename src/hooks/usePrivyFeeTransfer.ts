@@ -29,6 +29,47 @@ const erc20Abi = parseAbi([
   "function approve(address spender, uint256 amount) returns (bool)",
 ]);
 
+const POLYGON_RPCS = [
+  "https://polygon-bor-rpc.publicnode.com",
+  "https://polygon.drpc.org",
+  "https://rpc.ankr.com/polygon",
+];
+
+/** Poll Polygon RPCs for a transaction receipt until mined or timeout */
+async function waitForReceipt(
+  txHash: string,
+  maxAttempts = 8,
+  intervalMs = 2000,
+): Promise<{ status: string | null; found: boolean }> {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, intervalMs));
+    for (const rpc of POLYGON_RPCS) {
+      try {
+        const res = await fetch(rpc, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            method: "eth_getTransactionReceipt",
+            params: [txHash],
+          }),
+        });
+        if (!res.ok) continue;
+        const json = await res.json();
+        if (json.result) {
+          return { status: json.result.status, found: true };
+        }
+        // result is null → not mined yet, try next attempt
+        break;
+      } catch {
+        continue;
+      }
+    }
+  }
+  return { status: null, found: false };
+}
+
 interface ApproveResult {
   success: boolean;
   txHash?: string;
@@ -41,7 +82,7 @@ export function usePrivyFeeTransfer() {
   /**
    * Request a one-time ERC-20 approve for the fee relayer.
    * Only call this when allowance is insufficient.
-   * Returns the approval tx hash on success.
+   * Waits for on-chain confirmation before returning success.
    */
   const approveFeeAllowance = useCallback(
     async (): Promise<ApproveResult> => {
@@ -79,7 +120,22 @@ export function usePrivyFeeTransfer() {
           return { success: false, error: "no_tx_hash_returned" };
         }
 
-        console.log("[usePrivyFeeTransfer] Sponsored approval tx hash:", txHash);
+        console.log("[usePrivyFeeTransfer] Got tx hash, waiting for on-chain confirmation:", txHash);
+
+        // Poll for receipt to confirm the tx was mined and succeeded
+        const onChainReceipt = await waitForReceipt(txHash);
+
+        if (!onChainReceipt.found) {
+          console.warn("[usePrivyFeeTransfer] Receipt not found after polling — tx may still be pending");
+          return { success: false, error: "tx_not_confirmed_after_16s" };
+        }
+
+        if (onChainReceipt.status !== "0x1") {
+          console.error("[usePrivyFeeTransfer] Approval tx reverted on-chain, status:", onChainReceipt.status);
+          return { success: false, error: "approval_tx_reverted" };
+        }
+
+        console.log("[usePrivyFeeTransfer] Approval confirmed on-chain ✓", txHash);
         return { success: true, txHash };
       } catch (err: any) {
         console.error("[usePrivyFeeTransfer] Approval failed:", err);
