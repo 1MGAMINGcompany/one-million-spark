@@ -252,6 +252,7 @@ Deno.serve(async (req) => {
           let gammaCompetitive: number | null = null;
           let gammaFee: string | null = null;
           let priceSource: "gamma" | "clob" | "none" = "none";
+          let marketResolved = false;
 
           if (fight.polymarket_market_id) {
             try {
