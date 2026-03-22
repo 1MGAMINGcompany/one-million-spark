@@ -57,20 +57,14 @@ Deno.serve(async (req: Request) => {
 
   const privyToken = req.headers.get("x-privy-token");
   const appId = Deno.env.get("VITE_PRIVY_APP_ID");
-  const appSecret = Deno.env.get("PRIVY_APP_SECRET");
 
   if (!privyToken || privyToken.length < 20 || !appId) {
     console.warn("[preflight] Missing token or appId");
     return json({ ok: false, error: "auth_required" }, 401);
   }
 
-  if (!appSecret) {
-    console.error("[preflight] PRIVY_APP_SECRET not configured — cannot verify");
-    return json({ ok: false, error: "server_config_error" }, 500);
-  }
-
   try {
-    const { did } = await verifyPrivyToken(privyToken, appId, appSecret);
+    const { did } = verifyPrivyTokenLocal(privyToken, appId);
     console.log("[preflight] Success — DID resolved");
     return json({ ok: true, did });
   } catch (e) {
