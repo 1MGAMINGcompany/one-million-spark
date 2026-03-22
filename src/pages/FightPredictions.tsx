@@ -575,14 +575,12 @@ export default function FightPredictions() {
               </div>
             )}
 
-            {/* AWAITING RESULTS */}
+            {/* PAST EVENTS — collapsible, 48h window */}
             {pastEvents.length > 0 && (
-              <div>
-                <StatusSectionHeader section="past" count={pastEvents.length} />
-                <div className="space-y-3">
-                  {renderEventList(pastEvents)}
-                </div>
-              </div>
+              <PastEventsSection
+                pastEvents={pastEvents}
+                renderEventList={renderEventList}
+              />
             )}
 
             {/* Coming Soon cards */}
