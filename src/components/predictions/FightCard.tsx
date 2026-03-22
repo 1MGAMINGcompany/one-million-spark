@@ -327,7 +327,7 @@ export default function FightCard({
 
   const displayStatus = (eventHasStarted && fight.status === "open") ? "locked" : fight.status;
   const badge = STATUS_BADGE[displayStatus] || STATUS_BADGE.open;
-  const canPredict = displayStatus === "open";
+  const canPredict = displayStatus === "open" && !resolving;
 
   const sport = detectSport(fight);
   const isSoccer = isSoccerEvent || sport === "soccer";
