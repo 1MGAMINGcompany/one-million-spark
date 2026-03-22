@@ -221,46 +221,77 @@ const erc20TransferFromAbi = parseAbi([
   "function allowance(address owner, address spender) view returns (uint256)",
 ]);
 
+const POLYGON_RPCS = [
+  "https://polygon-bor-rpc.publicnode.com",
+  "https://polygon.drpc.org",
+  "https://rpc.ankr.com/polygon",
+  "https://polygon-rpc.com",
+];
+
+/** Try a JSON-RPC call across multiple endpoints, return first valid result */
+async function polygonRpcCall(
+  body: Record<string, unknown>,
+): Promise<{ result?: string; error?: string; rpc?: string }> {
+  for (const rpc of POLYGON_RPCS) {
+    try {
+      const res = await fetch(rpc, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) { await res.text().catch(() => {}); continue; }
+      const json = await res.json();
+      if (json.error) continue;
+      if (json.result != null && json.result !== "0x") {
+        return { result: json.result, rpc };
+      }
+      // "0x" is valid for zero balances/allowances
+      if (json.result === "0x") return { result: "0x0", rpc };
+    } catch {
+      continue;
+    }
+  }
+  return { error: "all_rpcs_failed" };
+}
+
 async function collectFeeViaRelayer(
   userWallet: string,
   feeUsdc: number,
-): Promise<{ success: boolean; txHash?: string; error?: string }> {
+): Promise<{ success: boolean; txHash?: string; error?: string; error_code?: string }> {
   const relayerKey = Deno.env.get("FEE_RELAYER_PRIVATE_KEY");
   if (!relayerKey) {
-    return { success: false, error: "relayer_not_configured" };
+    return { success: false, error: "relayer_not_configured", error_code: "relayer_not_configured" };
   }
-
-  const POLYGON_RPC = "https://polygon-rpc.com";
 
   try {
     const account = privateKeyToAccount(relayerKey as `0x${string}`);
     const feeRaw = BigInt(Math.floor(feeUsdc * 10 ** USDC_DECIMALS));
 
     // Step 1: Check allowance first
-    const allowanceData = encodeFunctionData({
+    const allowanceCallData = encodeFunctionData({
       abi: erc20TransferFromAbi,
       functionName: "allowance",
       args: [userWallet as `0x${string}`, account.address],
     });
 
-    const allowanceRes = await fetch(POLYGON_RPC, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0", id: 1,
-        method: "eth_call",
-        params: [{ to: USDC_CONTRACT, data: allowanceData }, "latest"],
-      }),
+    const allowanceRpc = await polygonRpcCall({
+      jsonrpc: "2.0", id: 1,
+      method: "eth_call",
+      params: [{ to: USDC_CONTRACT, data: allowanceCallData }, "latest"],
     });
-    const allowanceJson = await allowanceRes.json();
-    if (allowanceJson.result) {
-      const currentAllowance = BigInt(allowanceJson.result);
-      if (currentAllowance < feeRaw) {
-        return {
-          success: false,
-          error: `insufficient_allowance: have ${currentAllowance}, need ${feeRaw}`,
-        };
-      }
+
+    if (allowanceRpc.error || !allowanceRpc.result) {
+      console.error("[prediction-submit] Allowance RPC failed:", allowanceRpc.error);
+      return { success: false, error: "rpc_allowance_unavailable", error_code: "rpc_allowance_unavailable" };
+    }
+
+    const currentAllowance = BigInt(allowanceRpc.result);
+    if (currentAllowance < feeRaw) {
+      return {
+        success: false,
+        error: `insufficient_allowance: have ${currentAllowance}, need ${feeRaw}`,
+        error_code: "insufficient_allowance",
+      };
     }
 
     // Step 2: Execute transferFrom via raw RPC
@@ -275,36 +306,41 @@ async function collectFeeViaRelayer(
     });
 
     // Get nonce
-    const nonceRes = await fetch(POLYGON_RPC, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0", id: 2,
-        method: "eth_getTransactionCount",
-        params: [account.address, "latest"],
-      }),
+    const nonceRpc = await polygonRpcCall({
+      jsonrpc: "2.0", id: 2,
+      method: "eth_getTransactionCount",
+      params: [account.address, "latest"],
     });
-    const nonceJson = await nonceRes.json();
-    const nonce = Number(BigInt(nonceJson.result));
+
+    if (nonceRpc.error || nonceRpc.result == null) {
+      console.error("[prediction-submit] Nonce RPC failed:", nonceRpc.error);
+      return { success: false, error: "rpc_nonce_unavailable", error_code: "rpc_nonce_unavailable" };
+    }
+
+    const nonce = Number(BigInt(nonceRpc.result));
 
     // Get gas price
-    const gasPriceRes = await fetch(POLYGON_RPC, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0", id: 3,
-        method: "eth_gasPrice",
-        params: [],
-      }),
+    const gasPriceRpc = await polygonRpcCall({
+      jsonrpc: "2.0", id: 3,
+      method: "eth_gasPrice",
+      params: [],
     });
-    const gasPriceJson = await gasPriceRes.json();
-    const gasPrice = BigInt(gasPriceJson.result);
+
+    if (gasPriceRpc.error || gasPriceRpc.result == null) {
+      console.error("[prediction-submit] Gas price RPC failed:", gasPriceRpc.error);
+      return { success: false, error: "rpc_gas_price_unavailable", error_code: "rpc_gas_price_unavailable" };
+    }
+
+    const gasPrice = BigInt(gasPriceRpc.result);
+
+    // Pick the RPC that worked for gas price for the wallet client
+    const workingRpc = gasPriceRpc.rpc || POLYGON_RPCS[0];
 
     // Sign tx using viem
     const walletClient = createWalletClient({
       account,
       chain: polygon,
-      transport: http(POLYGON_RPC),
+      transport: http(workingRpc),
     });
 
     const txHash = await walletClient.sendTransaction({
@@ -316,13 +352,14 @@ async function collectFeeViaRelayer(
       value: 0n,
     });
 
-    console.log(`[prediction-submit] Fee collected via relayer: ${txHash}, fee=$${feeUsdc}`);
+    console.log(`[prediction-submit] Fee collected via relayer: ${txHash}, fee=$${feeUsdc}, rpc=${workingRpc}`);
     return { success: true, txHash };
   } catch (err) {
     console.error("[prediction-submit] Relayer transferFrom failed:", err);
     return {
       success: false,
       error: err instanceof Error ? err.message : String(err),
+      error_code: "relayer_tx_failed",
     };
   }
 }
@@ -895,15 +932,18 @@ Deno.serve(async (req) => {
       } else {
         await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_collection_failed", null, {
           error: collectResult.error,
+          error_code: collectResult.error_code,
           fee_usdc: fee_usd,
         });
 
         // If allowance is insufficient, tell client to approve
-        const isAllowanceError = collectResult.error?.includes("insufficient_allowance");
+        const isAllowanceError = collectResult.error_code === "insufficient_allowance" || collectResult.error?.includes("insufficient_allowance");
+        const isRpcError = collectResult.error_code?.startsWith("rpc_");
+        const specificCode = collectResult.error_code || (isAllowanceError ? "insufficient_allowance" : "fee_collection_failed");
 
         await updateTradeOrder(supabase, tradeOrderId, {
           status: "failed",
-          error_code: isAllowanceError ? "insufficient_allowance" : "fee_collection_failed",
+          error_code: specificCode,
           error_message: collectResult.error?.substring(0, 500),
           finalized_at: new Date().toISOString(),
         });
@@ -912,8 +952,10 @@ Deno.serve(async (req) => {
           {
             error: isAllowanceError
               ? "USDC approval needed. Please approve USDC spending and try again."
+              : isRpcError
+              ? "Network temporarily unavailable. Please try again in a moment."
               : "Fee collection failed. Please try again.",
-            error_code: isAllowanceError ? "insufficient_allowance" : "fee_collection_failed",
+            error_code: specificCode,
             trade_order_id: tradeOrderId,
           },
           isAllowanceError ? 403 : 502,

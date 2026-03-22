@@ -466,6 +466,12 @@ export default function FightPredictions() {
 
       if (error || data?.error) {
         const backendMsg = data?.error || error?.message || "Backend error";
+        const errorCode = data?.error_code || "";
+        // Distinguish relayer/RPC failures from exchange failures
+        const isRelayerError = errorCode.startsWith("rpc_") || errorCode === "relayer_not_configured" || errorCode === "relayer_tx_failed" || errorCode === "fee_collection_failed";
+        if (isRelayerError) {
+          throw new Error("fee_relay_failed:" + backendMsg);
+        }
         throw new Error(backendMsg);
       }
 
@@ -495,11 +501,17 @@ export default function FightPredictions() {
         msg.includes("auth_required") ||
         msg.includes("privy_api");
       const isApprovalError = msg.includes("approval") || msg.includes("allowance");
+      const isRelayerError = msg.startsWith("fee_relay_failed:");
 
       if (isAuthError) {
         toast.error("Session expired", {
           description: "Please log in again to place predictions.",
           action: { label: "Log in", onClick: () => login() },
+        });
+      } else if (isRelayerError) {
+        toast.error("Network issue — try again", {
+          description: "Your approval is fine. The payment network was temporarily unavailable. Please retry.",
+          duration: 6000,
         });
       } else if (isApprovalError) {
         toast.error("USDC approval failed", {
