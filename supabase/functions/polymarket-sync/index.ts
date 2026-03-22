@@ -134,13 +134,8 @@ Deno.serve(async (req) => {
         console.log(`[polymarket-sync] Multi-tag fetch for sports (${SPORTS_TAGS.join(", ")})`);
         gammaEvents = await fetchSportsEvents(limit);
       } else {
-        const gammaUrl = `${GAMMA_BASE}/events?tag=${encodeURIComponent(tagFilter)}&active=true&closed=false&limit=${limit}`;
-        console.log(`[polymarket-sync] Fetching: ${gammaUrl}`);
-        const gammaRes = await fetch(gammaUrl);
-        if (!gammaRes.ok) {
-          return json({ error: `Gamma API returned ${gammaRes.status}` }, 502);
-        }
-        gammaEvents = await gammaRes.json();
+        console.log(`[polymarket-sync] Fetching tag="${tagFilter}" with pagination, limit=${limit}`);
+        gammaEvents = await fetchTagEvents(tagFilter, limit);
       }
 
       // Filter out past events

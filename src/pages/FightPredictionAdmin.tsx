@@ -2363,6 +2363,20 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
         ))}
       </div>
 
+      {/* Limit control */}
+      <div className="flex items-center gap-2">
+        <Label className="text-xs text-muted-foreground whitespace-nowrap">Limit</Label>
+        <Input
+          type="number"
+          min={10}
+          max={500}
+          value={syncLimit}
+          onChange={e => setSyncLimit(Math.max(10, Math.min(500, parseInt(e.target.value) || 200)))}
+          className="w-20 h-7 text-xs"
+        />
+        <span className="text-[10px] text-muted-foreground">per tag (paginated)</span>
+      </div>
+
       {/* Sync + Price buttons */}
       <div className="grid grid-cols-2 gap-2">
         <Button
@@ -2389,8 +2403,11 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
         <div className="bg-muted/30 border border-border/30 rounded-lg p-3 text-xs space-y-1">
           <p className="text-foreground font-medium">✅ Sync Complete</p>
           <p className="text-muted-foreground">
-            Events: {lastSyncResult.total_events} · Markets upserted: {lastSyncResult.markets_upserted} · Skipped: {lastSyncResult.skipped}
+            Events: {lastSyncResult.total_events} · Markets upserted: {lastSyncResult.markets_upserted} · New events: {lastSyncResult.events_upserted} · Skipped: {lastSyncResult.skipped}
           </p>
+          {lastSyncResult.expired_closed > 0 && (
+            <p className="text-yellow-400">Auto-closed {lastSyncResult.expired_closed} expired fights</p>
+          )}
         </div>
       )}
 
