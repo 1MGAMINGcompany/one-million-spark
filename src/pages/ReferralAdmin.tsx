@@ -335,7 +335,7 @@ export default function ReferralAdmin() {
             <div>
               <Label className="text-xs text-muted-foreground">Wallet Address *</Label>
               <Input
-                placeholder="Solana wallet address"
+                placeholder="Solana or Polygon wallet address"
                 value={targetWallet}
                 onChange={(e) => setTargetWallet(e.target.value)}
                 className="mt-1"
