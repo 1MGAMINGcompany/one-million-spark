@@ -351,18 +351,14 @@ Deno.serve(async (req) => {
               }
               if (priceA > 0 || priceB > 0) {
                 priceSource = "clob";
-                // Derive complement for binary markets
                 if (priceA > 0 && priceA <= 1 && priceB === 0) {
                   priceB = Math.round((1 - priceA) * 10000) / 10000;
                 } else if (priceB > 0 && priceB <= 1 && priceA === 0) {
                   priceA = Math.round((1 - priceB) * 10000) / 10000;
                 }
-                // CLOB sanity check: if both prices are extreme (>0.99 or <0.01)
-                // and volume exists, flag as potentially misleading
                 if (priceA > 0.99 || priceB > 0.99) {
                   enriched.push(`${fight.id}: clob_extreme_price a=${priceA} b=${priceB}`);
                 }
-                // Re-derive pools
                 if (totalVolume > 0 && priceA > 0 && priceB > 0) {
                   poolAUsd = Math.round(totalVolume * priceA * 100) / 100;
                   poolBUsd = Math.round(totalVolume * priceB * 100) / 100;
@@ -370,6 +366,24 @@ Deno.serve(async (req) => {
               }
             } catch (e) {
               console.warn(`[polymarket-prices] CLOB price fetch failed for ${fight.id}:`, e);
+            }
+          }
+
+          // ── 2b. Data API fallback — last resort when both Gamma and CLOB fail ──
+          if (priceA === 0 && priceB === 0 && fight.polymarket_market_id) {
+            try {
+              const dataApiRes = await fetch(`https://data-api.polymarket.com/activity?market=${fight.polymarket_market_id}&limit=1`);
+              if (dataApiRes.ok) {
+                const activityData = await dataApiRes.json();
+                if (activityData?.lastTradePrice) {
+                  priceA = parseFloat(activityData.lastTradePrice);
+                  priceB = Math.round((1 - priceA) * 10000) / 10000;
+                  priceSource = "data_api";
+                  enriched.push(`${fight.id}: data_api_fallback a=${priceA} b=${priceB}`);
+                }
+              }
+            } catch (e) {
+              console.warn(`[polymarket-prices] Data API fallback failed for ${fight.id}:`, e);
             }
           }
 

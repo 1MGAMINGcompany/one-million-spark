@@ -2271,16 +2271,35 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
   const [syncLimit, setSyncLimit] = useState(200);
   const [directUrl, setDirectUrl] = useState("");
   const [directImportBusy, setDirectImportBusy] = useState(false);
+  const [availableSports, setAvailableSports] = useState<{ sport: string; series: string; label: string }[]>([]);
+  const [sportsLoading, setSportsLoading] = useState(false);
+  const [selectedSeries, setSelectedSeries] = useState<string>("");
 
   const TAGS = ["sports", "soccer", "mma", "boxing"];
+
+  // Fetch available sports on mount
+  useEffect(() => {
+    (async () => {
+      setSportsLoading(true);
+      try {
+        const { data, error } = await supabase.functions.invoke("polymarket-sync", {
+          body: { wallet, action: "browse_sports" },
+        });
+        if (!error && data?.sports) {
+          setAvailableSports(data.sports);
+        }
+      } catch { /* non-fatal */ }
+      finally { setSportsLoading(false); }
+    })();
+  }, [wallet]);
 
   const runSync = async () => {
     setSyncBusy(true);
     setLastSyncResult(null);
     try {
-      const { data, error } = await supabase.functions.invoke("polymarket-sync", {
-        body: { wallet, action: "sync", tag: selectedTag, limit: syncLimit },
-      });
+      const body: Record<string, any> = { wallet, action: "sync", tag: selectedTag, limit: syncLimit };
+      if (selectedSeries) body.series_id = selectedSeries;
+      const { data, error } = await supabase.functions.invoke("polymarket-sync", { body });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       setLastSyncResult(data);
@@ -2321,7 +2340,6 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
       if (data?.error) throw new Error(data.error);
       toast.success(`Imported "${title}" — ${data.imported} market(s)`);
       onComplete();
-      // Mark as imported in search results
       setSearchResults(prev => prev?.map(r =>
         String(r.id) === String(pmEventId) ? { ...r, imported: true } : r
       ) || null);
@@ -2372,13 +2390,13 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
       <div className="flex flex-wrap gap-1.5">
         {TAGS.map(t => {
           const label = t === "sports" ? "All" : t === "mma" ? "UFC / MMA" : t === "boxing" ? "Boxing" : t === "soccer" ? "Soccer" : t;
-          const hint = (t === "mma" || t === "boxing") ? " (search)" : "";
+          const hint = (t === "mma" || t === "boxing") ? " (search)" : " (series)";
           return (
             <button
               key={t}
-              onClick={() => setSelectedTag(t)}
+              onClick={() => { setSelectedTag(t); setSelectedSeries(""); }}
               className={`text-xs px-2.5 py-1 rounded-full border transition-colors capitalize ${
-                selectedTag === t
+                selectedTag === t && !selectedSeries
                   ? "bg-purple-500/20 text-purple-400 border-purple-500/40"
                   : "bg-muted/30 text-muted-foreground border-border/30 hover:border-border"
               }`}
@@ -2388,6 +2406,26 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
           );
         })}
       </div>
+
+      {/* Browse Sports — individual league sync */}
+      {availableSports.length > 0 && (
+        <div className="border border-border/30 rounded-lg p-2.5 bg-muted/10">
+          <p className="text-[10px] text-muted-foreground font-medium mb-1.5">🏟️ Browse Sports (series-based)</p>
+          <Select value={selectedSeries} onValueChange={(val) => { setSelectedSeries(val); setSelectedTag(""); }}>
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue placeholder={sportsLoading ? "Loading sports..." : `${availableSports.length} leagues available`} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">All sports (default)</SelectItem>
+              {availableSports.map(s => (
+                <SelectItem key={s.series} value={s.series}>
+                  {s.label || s.sport} (#{s.series})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {/* Limit control */}
       <div className="flex items-center gap-2">
@@ -2400,7 +2438,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
           onChange={e => setSyncLimit(Math.max(10, Math.min(500, parseInt(e.target.value) || 200)))}
           className="w-20 h-7 text-xs"
         />
-        <span className="text-[10px] text-muted-foreground">per tag (paginated)</span>
+        <span className="text-[10px] text-muted-foreground">per series/tag</span>
       </div>
 
       {/* Sync + Price buttons */}
@@ -2411,7 +2449,10 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
           disabled={syncBusy || parentBusy}
         >
           {syncBusy ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Download className="w-4 h-4 mr-2" />}
-          Sync {selectedTag === "mma" ? "UFC/MMA" : selectedTag === "boxing" ? "Boxing" : selectedTag}
+          {selectedSeries
+            ? `Sync ${availableSports.find(s => s.series === selectedSeries)?.label || selectedSeries}`
+            : `Sync ${selectedTag === "mma" ? "UFC/MMA" : selectedTag === "boxing" ? "Boxing" : selectedTag || "All"}`
+          }
         </Button>
         <Button
           variant="outline"
@@ -2431,8 +2472,22 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
           <p className="text-muted-foreground">
             Events: {lastSyncResult.total_events} · Markets upserted: {lastSyncResult.markets_upserted} · New events: {lastSyncResult.events_upserted} · Skipped: {lastSyncResult.skipped}
           </p>
-          {lastSyncResult.search_events_found > 0 && (
-            <p className="text-purple-400">🔍 {lastSyncResult.search_events_found} events found via search (combat sports)</p>
+          {lastSyncResult.discovery_method && (
+            <p className="text-purple-400 text-[10px]">
+              Discovery: <span className="font-bold">{lastSyncResult.discovery_method}</span>
+              {lastSyncResult.series_synced?.length > 0 && (
+                <span className="ml-1">· {lastSyncResult.series_synced.length} series</span>
+              )}
+            </p>
+          )}
+          {lastSyncResult.series_stats && Object.keys(lastSyncResult.series_stats).length > 0 && (
+            <div className="text-[10px] text-muted-foreground mt-1 flex flex-wrap gap-1.5">
+              {Object.entries(lastSyncResult.series_stats as Record<string, number>).map(([k, v]) => (
+                <span key={k} className="bg-muted/50 px-1.5 py-0.5 rounded">
+                  {k}: {v}
+                </span>
+              ))}
+            </div>
           )}
           {lastSyncResult.expired_closed > 0 && (
             <p className="text-yellow-400">Auto-closed {lastSyncResult.expired_closed} expired fights</p>
