@@ -2409,6 +2409,9 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
           <p className="text-muted-foreground">
             Events: {lastSyncResult.total_events} · Markets upserted: {lastSyncResult.markets_upserted} · New events: {lastSyncResult.events_upserted} · Skipped: {lastSyncResult.skipped}
           </p>
+          {lastSyncResult.search_events_found > 0 && (
+            <p className="text-purple-400">🔍 {lastSyncResult.search_events_found} events found via search (combat sports)</p>
+          )}
           {lastSyncResult.expired_closed > 0 && (
             <p className="text-yellow-400">Auto-closed {lastSyncResult.expired_closed} expired fights</p>
           )}
