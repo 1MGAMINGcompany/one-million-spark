@@ -555,7 +555,7 @@ export default function FightCard({
             odds={oddsB}
             isWinner={fight.winner === "fighter_b" && isClaimable}
             canPredict={canPredict}
-            onPredict={() => wallet ? onPredict(fight, "fighter_b") : onWalletRequired?.()}
+            onPredict={() => onPredict(fight, "fighter_b")}
             photo={fight.fighter_b_photo}
             record={fight.fighter_b_record}
             sport={sport}

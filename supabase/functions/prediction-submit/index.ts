@@ -677,6 +677,37 @@ Deno.serve(async (req) => {
     }
 
     // ═══════════════════════════════════════════════════
+    // EVENT DATE GUARD — reject trades on started events
+    // ═══════════════════════════════════════════════════
+    if (fight.event_id) {
+      const { data: eventData } = await supabase
+        .from("prediction_events")
+        .select("event_date, status")
+        .eq("id", fight.event_id)
+        .single();
+
+      if (eventData?.event_date) {
+        const eventStart = new Date(eventData.event_date).getTime();
+        if (eventStart <= Date.now()) {
+          await auditLog(supabase, null, normalizedWallet, "tradability_check_failed", { fight_id, event_date: eventData.event_date }, { error_code: "event_already_started" });
+          return json({ error: "This event has already started — predictions are closed", error_code: "event_already_started" }, 400);
+        }
+      }
+
+      // Also check if sibling fights are locked/live (event underway even if date not past)
+      const { count: lockedSiblings } = await supabase
+        .from("prediction_fights")
+        .select("id", { count: "exact", head: true })
+        .eq("event_id", fight.event_id)
+        .in("status", ["locked", "live"]);
+
+      if ((lockedSiblings ?? 0) > 0) {
+        await auditLog(supabase, null, normalizedWallet, "tradability_check_failed", { fight_id, locked_siblings: lockedSiblings }, { error_code: "event_already_started" });
+        return json({ error: "This event has already started — predictions are closed", error_code: "event_already_started" }, 400);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════
     // MARKET ALLOWLIST ENFORCEMENT
     // ═══════════════════════════════════════════════════
     const marketMode = controls?.allowed_market_mode ?? "all";
