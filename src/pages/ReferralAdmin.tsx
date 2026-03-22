@@ -36,6 +36,10 @@ interface PayoutLog {
 }
 
 /* ───── helpers ───── */
+function isPolygonWallet(address: string): boolean {
+  return address.startsWith("0x");
+}
+
 function shortenWallet(address: string): string {
   if (!address || address.length < 10) return address;
   return `${address.slice(0, 4)}…${address.slice(-4)}`;
