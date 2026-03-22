@@ -223,6 +223,7 @@ export default function EventSection({
             {displayLocation && <span>📍 {displayLocation}</span>}
             <span>{fights.length} {getSportItemLabel(sport, fights.length)}</span>
             {openCount > 0 && <span className="text-green-400">{openCount} Open {getSportItemLabel(sport, openCount)}</span>}
+            {lockedCount > 0 && <span className="text-yellow-400">{lockedCount} Locked</span>}
             <span className="text-primary font-bold">
               {allPolymarket
                 ? (hasLiveOdds ? "📊 Live Odds via Polymarket" : "Polymarket Liquidity")

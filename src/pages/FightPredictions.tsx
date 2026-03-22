@@ -519,7 +519,13 @@ export default function FightPredictions() {
   };
 
   const handlePredict = (fight: Fight, pick: "fighter_a" | "fighter_b") => {
-    if (fight.status !== "open") return;
+    console.log("[Predict] handlePredict called", { fightId: fight.id, status: fight.status, pick });
+    if (fight.status !== "open") {
+      toast.error("Predictions closed", {
+        description: "This market is locked — predictions are no longer accepted.",
+      });
+      return;
+    }
     if (!isConnected) {
       // Trigger Privy login if not authenticated
       if (!authenticated) {

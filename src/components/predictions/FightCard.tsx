@@ -744,7 +744,7 @@ function SoccerTeamColumn({
         {poolAmount > 0 ? `$${poolAmount.toFixed(2)} USDC` : "Market-backed"}
       </p>
       <p className="text-xl sm:text-2xl font-bold text-primary leading-none">{odds > 0 ? `${odds.toFixed(2)}x` : '—'}</p>
-      {canPredict && (
+      {canPredict ? (
         <Button
           size="sm"
           className="mt-1.5 w-full bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.97] transition-all text-sm py-2.5 font-bold"
@@ -752,6 +752,8 @@ function SoccerTeamColumn({
         >
           Predict
         </Button>
+      ) : !isWinner && (
+        <p className="mt-1.5 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wide">Predictions Closed</p>
       )}
       {isWinner && (
         <div className="mt-1 flex items-center justify-center gap-1 text-primary">
