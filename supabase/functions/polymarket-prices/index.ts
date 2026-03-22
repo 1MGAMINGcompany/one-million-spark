@@ -503,6 +503,14 @@ Deno.serve(async (req) => {
             }
           }
 
+          // ── Bad-market safeguard: flag fights with volume but no usable odds ──
+          if (totalVolume > 0 && priceA === 0 && priceB === 0) {
+            console.warn(`[polymarket-prices] BAD_MARKET: fight=${fight.id} has volume=$${totalVolume} but no usable prices`);
+            if (!updatePayload.enrichment_notes) {
+              updatePayload.enrichment_notes = `price_missing: volume=$${totalVolume.toFixed(0)} but no CLOB/Gamma prices available`;
+            }
+          }
+
           await supabase
             .from("prediction_fights")
             .update(updatePayload)
