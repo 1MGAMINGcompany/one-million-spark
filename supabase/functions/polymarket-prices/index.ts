@@ -313,8 +313,12 @@ Deno.serve(async (req) => {
             polymarket_last_synced_at: new Date().toISOString(),
           };
 
+          // Always persist volume/liquidity even when prices are incomplete
           if (totalVolume > 0) {
             updatePayload.polymarket_volume_usd = totalVolume;
+          }
+          // Write derived pools whenever we have both prices AND volume
+          if (poolAUsd > 0 || poolBUsd > 0) {
             updatePayload.pool_a_usd = poolAUsd;
             updatePayload.pool_b_usd = poolBUsd;
           }
