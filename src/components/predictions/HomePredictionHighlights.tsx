@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Swords, Clock, ChevronDown } from "lucide-react";
+import { Swords, Clock, ChevronDown, Lock } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -26,24 +26,36 @@ const SPORT_IMG: Record<string, string> = {
   FUTBOL: futbolImg,
 };
 
+/** Detect if Polymarket prices are in resolving state (exactly 0/1) */
+function isResolvingPrice(priceA?: number | null, priceB?: number | null, source?: string | null): boolean {
+  if (source !== "polymarket") return false;
+  const a = priceA ?? 0;
+  const b = priceB ?? 0;
+  return (a === 0 && b === 1) || (a === 1 && b === 0) || (a === 0 && b === 0);
+}
+
 function calcOdds(poolA: number, poolB: number, priceA?: number | null, priceB?: number | null, source?: string | null) {
+  if (isResolvingPrice(priceA, priceB, source)) {
+    return { oddsA: 0, oddsB: 0, noData: false, resolving: true };
+  }
   if (priceA && priceA > 0 && priceB && priceB > 0) {
-    return { oddsA: +(1 / priceA).toFixed(2), oddsB: +(1 / priceB).toFixed(2), noData: false };
+    return { oddsA: +(1 / priceA).toFixed(2), oddsB: +(1 / priceB).toFixed(2), noData: false, resolving: false };
   }
   if (priceA && priceA > 0 && priceA <= 1) {
     const dB = 1 - priceA;
-    return { oddsA: +(1 / priceA).toFixed(2), oddsB: dB > 0 ? +(1 / dB).toFixed(2) : 0, noData: false };
+    return { oddsA: +(1 / priceA).toFixed(2), oddsB: dB > 0 ? +(1 / dB).toFixed(2) : 0, noData: false, resolving: false };
   }
   if (priceB && priceB > 0 && priceB <= 1) {
     const dA = 1 - priceB;
-    return { oddsA: dA > 0 ? +(1 / dA).toFixed(2) : 0, oddsB: +(1 / priceB).toFixed(2), noData: false };
+    return { oddsA: dA > 0 ? +(1 / dA).toFixed(2) : 0, oddsB: +(1 / priceB).toFixed(2), noData: false, resolving: false };
   }
   const total = poolA + poolB;
-  if (total === 0) return { oddsA: 0, oddsB: 0, noData: source === "polymarket" };
+  if (total === 0) return { oddsA: 0, oddsB: 0, noData: source === "polymarket", resolving: false };
   return {
     oddsA: poolA > 0 ? +(total / poolA).toFixed(2) : 0,
     oddsB: poolB > 0 ? +(total / poolB).toFixed(2) : 0,
     noData: false,
+    resolving: false,
   };
 }
 
@@ -56,7 +68,7 @@ function CompactFightCard({
 }) {
   const poolA = (fight.pool_a_usd ?? 0) > 0 ? fight.pool_a_usd! : fight.pool_a_lamports / 1_000_000_000;
   const poolB = (fight.pool_b_usd ?? 0) > 0 ? fight.pool_b_usd! : fight.pool_b_lamports / 1_000_000_000;
-  const { oddsA, oddsB, noData } = calcOdds(poolA, poolB, fight.price_a, fight.price_b, (fight as any).source);
+  const { oddsA, oddsB, noData, resolving } = calcOdds(poolA, poolB, fight.price_a, fight.price_b, (fight as any).source);
   const totalPool = poolA + poolB;
   const isPolymarketPool = fight.source === "polymarket" && totalPool === 0;
   const isOpen = fight.status === "open";
@@ -80,35 +92,47 @@ function CompactFightCard({
       </div>
 
       <div className="p-3">
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2" dir="ltr">
-          <div className="text-center">
-            <p className="text-xs font-bold text-foreground truncate">{fight.fighter_a_name}</p>
-            <p className="text-primary font-bold text-sm">{oddsA > 0 ? `${oddsA.toFixed(2)}x` : '—'}</p>
-            {isOpen && onPredict && (
-              <Button
-                size="sm"
-                className="mt-1 w-full text-[10px] h-7 bg-primary text-primary-foreground hover:bg-primary/90"
-                onClick={() => onPredict(fight, "fighter_a")}
-              >
-                Predict
-              </Button>
-            )}
+        {resolving ? (
+          <div className="text-center py-2">
+            <p className="text-xs font-bold text-foreground truncate mb-1">
+              {fight.fighter_a_name} vs {fight.fighter_b_name}
+            </p>
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-yellow-400 bg-yellow-500/10 px-3 py-1 rounded-full">
+              <Lock className="w-3 h-3" />
+              Market Settling
+            </span>
           </div>
-          <Swords className="w-4 h-4 text-primary/60" />
-          <div className="text-center">
-            <p className="text-xs font-bold text-foreground truncate">{fight.fighter_b_name}</p>
-            <p className="text-primary font-bold text-sm">{oddsB > 0 ? `${oddsB.toFixed(2)}x` : '—'}</p>
-            {isOpen && onPredict && (
-              <Button
-                size="sm"
-                className="mt-1 w-full text-[10px] h-7 bg-primary text-primary-foreground hover:bg-primary/90"
-                onClick={() => onPredict(fight, "fighter_b")}
-              >
-                Predict
-              </Button>
-            )}
+        ) : (
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2" dir="ltr">
+            <div className="text-center">
+              <p className="text-xs font-bold text-foreground truncate">{fight.fighter_a_name}</p>
+              <p className="text-primary font-bold text-sm">{oddsA > 0 ? `${oddsA.toFixed(2)}x` : '—'}</p>
+              {isOpen && !resolving && onPredict && (
+                <Button
+                  size="sm"
+                  className="mt-1 w-full text-[10px] h-7 bg-primary text-primary-foreground hover:bg-primary/90"
+                  onClick={() => onPredict(fight, "fighter_a")}
+                >
+                  Predict
+                </Button>
+              )}
+            </div>
+            <Swords className="w-4 h-4 text-primary/60" />
+            <div className="text-center">
+              <p className="text-xs font-bold text-foreground truncate">{fight.fighter_b_name}</p>
+              <p className="text-primary font-bold text-sm">{oddsB > 0 ? `${oddsB.toFixed(2)}x` : '—'}</p>
+              {isOpen && !resolving && onPredict && (
+                <Button
+                  size="sm"
+                  className="mt-1 w-full text-[10px] h-7 bg-primary text-primary-foreground hover:bg-primary/90"
+                  onClick={() => onPredict(fight, "fighter_b")}
+                >
+                  Predict
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="mt-2 pt-1.5 border-t border-border/30 flex items-center justify-between">
           <span className="text-[10px] text-muted-foreground">{isPolymarketPool ? "Liquidity" : "Pool"}</span>
