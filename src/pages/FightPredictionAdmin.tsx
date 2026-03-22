@@ -2411,12 +2411,12 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
       {availableSports.length > 0 && (
         <div className="border border-border/30 rounded-lg p-2.5 bg-muted/10">
           <p className="text-[10px] text-muted-foreground font-medium mb-1.5">🏟️ Browse Sports (series-based)</p>
-          <Select value={selectedSeries} onValueChange={(val) => { setSelectedSeries(val); setSelectedTag(""); }}>
+          <Select value={selectedSeries || "__all__"} onValueChange={(val) => { setSelectedSeries(val === "__all__" ? "" : val); setSelectedTag(""); }}>
             <SelectTrigger className="h-8 text-xs">
               <SelectValue placeholder={sportsLoading ? "Loading sports..." : `${availableSports.length} leagues available`} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All sports (default)</SelectItem>
+              <SelectItem value="__all__">All sports (default)</SelectItem>
               {availableSports.map(s => (
                 <SelectItem key={s.series} value={s.series}>
                   {s.label || s.sport} (#{s.series})
