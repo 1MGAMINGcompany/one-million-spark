@@ -932,15 +932,18 @@ Deno.serve(async (req) => {
       } else {
         await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_collection_failed", null, {
           error: collectResult.error,
+          error_code: collectResult.error_code,
           fee_usdc: fee_usd,
         });
 
         // If allowance is insufficient, tell client to approve
-        const isAllowanceError = collectResult.error?.includes("insufficient_allowance");
+        const isAllowanceError = collectResult.error_code === "insufficient_allowance" || collectResult.error?.includes("insufficient_allowance");
+        const isRpcError = collectResult.error_code?.startsWith("rpc_");
+        const specificCode = collectResult.error_code || (isAllowanceError ? "insufficient_allowance" : "fee_collection_failed");
 
         await updateTradeOrder(supabase, tradeOrderId, {
           status: "failed",
-          error_code: isAllowanceError ? "insufficient_allowance" : "fee_collection_failed",
+          error_code: specificCode,
           error_message: collectResult.error?.substring(0, 500),
           finalized_at: new Date().toISOString(),
         });
@@ -949,8 +952,10 @@ Deno.serve(async (req) => {
           {
             error: isAllowanceError
               ? "USDC approval needed. Please approve USDC spending and try again."
+              : isRpcError
+              ? "Network temporarily unavailable. Please try again in a moment."
               : "Fee collection failed. Please try again.",
-            error_code: isAllowanceError ? "insufficient_allowance" : "fee_collection_failed",
+            error_code: specificCode,
             trade_order_id: tradeOrderId,
           },
           isAllowanceError ? 403 : 502,
