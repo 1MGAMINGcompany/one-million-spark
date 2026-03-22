@@ -36,6 +36,10 @@ interface PayoutLog {
 }
 
 /* ───── helpers ───── */
+function isPolygonWallet(address: string): boolean {
+  return address.startsWith("0x");
+}
+
 function shortenWallet(address: string): string {
   if (!address || address.length < 10) return address;
   return `${address.slice(0, 4)}…${address.slice(-4)}`;
@@ -454,7 +458,10 @@ export default function ReferralAdmin() {
                     <span className="text-muted-foreground">by {shortenWallet(l.paid_by_admin_wallet)}</span>
                     {l.tx_hash && (
                       <a
-                        href={`https://solscan.io/tx/${l.tx_hash}`}
+                        href={isPolygonWallet(l.referral_wallet)
+                          ? `https://polygonscan.com/tx/${l.tx_hash}`
+                          : `https://solscan.io/tx/${l.tx_hash}`
+                        }
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-primary underline"
@@ -508,7 +515,7 @@ export default function ReferralAdmin() {
             <div>
               <Label className="text-xs text-muted-foreground">Tx Hash (optional)</Label>
               <Input
-                placeholder="Solana transaction signature"
+                placeholder="Transaction hash (Solana or Polygon)"
                 value={payoutTxHash}
                 onChange={(e) => setPayoutTxHash(e.target.value)}
                 className="mt-1"

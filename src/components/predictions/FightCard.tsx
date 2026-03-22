@@ -319,6 +319,8 @@ export default function FightCard({
   const isFeatured = fight.featured === true;
 
   const isClaimable = ["confirmed", "settled"].includes(fight.status);
+  const isFinished = ["locked", "confirmed", "settled", "result_selected"].includes(fight.status);
+  const winnerName = fight.winner === "fighter_a" ? fight.fighter_a_name : fight.winner === "fighter_b" ? fight.fighter_b_name : null;
   const hasWinningEntries =
     isClaimable &&
     fight.winner &&
@@ -434,6 +436,19 @@ export default function FightCard({
                fight.status === "refund_pending" ? "📋 Refunds queued" :
                "🤝 Draw / No Contest"}
             </p>
+          </div>
+        )}
+
+        {/* Winner banner for finished soccer fights */}
+        {isFinished && winnerName && !["draw", "refund_pending", "refunds_processing", "refunds_complete"].includes(fight.status) && (
+          <div className="mx-4 sm:mx-6 mb-3 bg-primary/10 border border-primary/20 rounded-lg p-3 text-center">
+            <div className="flex items-center justify-center gap-1.5">
+              <Trophy className="w-4 h-4 text-primary" />
+              <span className="text-sm font-bold text-primary">Winner: {winnerName}</span>
+            </div>
+            {fight.method && (
+              <p className="text-[10px] text-muted-foreground mt-1">via {fight.method}</p>
+            )}
           </div>
         )}
 
@@ -562,6 +577,19 @@ export default function FightCard({
                fight.status === "refund_pending" ? "📋 Refunds queued" :
                "🤝 Draw / No Contest"}
             </p>
+          </div>
+        )}
+
+        {/* Winner banner for finished fights */}
+        {isFinished && winnerName && !["draw", "refund_pending", "refunds_processing", "refunds_complete"].includes(fight.status) && (
+          <div className="mt-3 bg-primary/10 border border-primary/20 rounded-lg p-3 text-center">
+            <div className="flex items-center justify-center gap-1.5">
+              <Trophy className="w-4 h-4 text-primary" />
+              <span className="text-sm font-bold text-primary">Winner: {winnerName}</span>
+            </div>
+            {fight.method && (
+              <p className="text-[10px] text-muted-foreground mt-1">via {fight.method}</p>
+            )}
           </div>
         )}
 
