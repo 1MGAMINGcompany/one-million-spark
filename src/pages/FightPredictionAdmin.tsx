@@ -2268,15 +2268,16 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
   const [lastSyncResult, setLastSyncResult] = useState<any>(null);
   const [selectedTag, setSelectedTag] = useState("sports");
   const [importingId, setImportingId] = useState<string | null>(null);
+  const [syncLimit, setSyncLimit] = useState(200);
 
-  const TAGS = ["sports", "politics", "crypto", "entertainment", "science"];
+  const TAGS = ["sports", "soccer", "mma", "boxing", "politics", "crypto", "entertainment", "science"];
 
   const runSync = async () => {
     setSyncBusy(true);
     setLastSyncResult(null);
     try {
       const { data, error } = await supabase.functions.invoke("polymarket-sync", {
-        body: { wallet, action: "sync", tag: selectedTag, limit: 50 },
+        body: { wallet, action: "sync", tag: selectedTag, limit: syncLimit },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
