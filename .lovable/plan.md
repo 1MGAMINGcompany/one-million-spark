@@ -1,60 +1,46 @@
 
 
-## Plan: Fix Prediction Submission Failures
+## Plan: Fix Stale Events Showing + Prediction Submission Failures
 
 ### Root Cause Analysis
 
-After a full audit, here's what I found:
+**Two separate but related issues:**
 
-**Database is correctly configured:**
-- All current fights have `trading_allowed: true` in the database
-- System is in `allowlist` mode and the admin toggle works
-- Events have correct timestamps and statuses
+**Issue 1: UFC event shows "OPEN" + Predict buttons despite being over**
+- The UFC Mason Jones event has `event_date: 2026-03-22T03:59:59.999+00:00` — this is the Polymarket market *end date*, not the actual event start time.
+- The real UFC card started hours earlier. The `eventHasStarted` check in EventSection (line 140) compares `event_date` to `Date.now()`, but since the date is still slightly in the future, fights with DB status `open` still show Predict buttons.
+- The polymarket-prices worker already locked some fights (detected extreme prices), but prop bets like "Jones to win by KO/TKO?" remain `open` in the DB because their Polymarket prices haven't resolved yet.
+- **Fix needed:** Client-side needs a smarter "started" check. If *any* fight in the event is already `locked` or `live`, the event has started and remaining `open` fights should show as locked too. Additionally, the backend submit should reject trades on events where the majority of fights are already locked/live.
 
-**The actual problem:** The prediction submission never reaches the backend. Zero logs in `prediction-preflight` or `prediction-submit`. This means the failure happens client-side before any API call is made. Two likely causes:
+**Issue 2: Futbol prediction submission fails silently**
+- The futbol fights ("Real Sociedad de Fútbol B", "Granada CF", "Draw") are structured as separate Yes/No fights — not as a single A-vs-B fight.
+- `fighter_a_name: "Yes"`, `fighter_b_name: "No"`. When the user picks "Yes" on "Real Sociedad de Fútbol B", the fight card sends `fighter_pick: "fighter_a"` to `handlePredict`.
+- DB confirms: `status: open`, `trading_allowed: true`. The backend should accept this.
+- No console logs or network requests appeared, meaning the failure is *before* `handleSubmit` is called. The most likely cause: after clicking Predict, the PredictionModal opens, but either:
+  - (a) The `wallet` prop is null (Privy EVM wallet not resolved), so clicking Predict triggers `onWalletRequired` instead of `onPredict`
+  - (b) The modal opens but the user sees an error during the allowance/preflight step
+- Since the user says they're logged in and have USDC, the issue is likely (a): the `wallet` value (EVM address from `usePrivyWallet`) isn't resolving. The FightCard checks `wallet ? onPredict(fight, "fighter_a") : onWalletRequired?.()` — if `wallet` is falsy, it silently opens the wallet gate instead of submitting.
 
-1. **Privy `getAccessToken()` returning null** — If the Privy session has expired or isn't fully initialized, line 354-357 throws "Unable to get authentication token" immediately
-2. **Silent button blocking** — When `handlePredict` fires on line 497, if `fight.status !== "open"` it does a silent `return` with no feedback to the user. Some fights were auto-locked by the schedule worker.
+### Fixes (3 changes)
 
-### Fixes (4 changes)
+**1. Fix `eventHasStarted` detection — use sibling fight statuses**
+- File: `src/components/predictions/EventSection.tsx`
+- Change `eventHasStarted` logic: if any fight in the event group has status `locked` or `live`, treat the entire event as started. This prevents showing Predict buttons on remaining `open` fights when the event is clearly underway.
+- Current: `const eventHasStarted = event?.event_date ? new Date(event.event_date).getTime() <= Date.now() : false;`
+- New: Also check `fights.some(f => f.status === "locked" || f.status === "live")` as an additional signal.
 
-**1. Add error feedback when predict button is silently blocked**
-- File: `src/pages/FightPredictions.tsx` — `handlePredict` function
-- When `fight.status !== "open"`, show a toast: "This market is locked — predictions are closed" instead of silently returning
-- When `getAccessToken()` fails, offer a "Re-login" action in the toast
-
-**2. Add visible loading/error states for Privy auth**
-- File: `src/pages/FightPredictions.tsx` — `handleSubmit` function
-- Wrap `getAccessToken()` in a try-catch with a descriptive toast: "Session expired — please log in again"
-- Add a retry mechanism: if token is null, call `login()` automatically and retry once
-
-**3. Show locked status more clearly on fight cards**
+**2. Fix FightCard silent wallet gate redirect**
 - File: `src/components/predictions/FightCard.tsx`
-- When a fight is `locked` (either from DB or from `eventHasStarted` override), show "Predictions Closed" text on the predict buttons instead of just disabling them silently
+- The predict button checks `wallet ? onPredict(...) : onWalletRequired?.()`. When the wallet gate triggers instead of the predict flow, the user sees no error — it just opens a modal they don't expect.
+- Add a toast when `onWalletRequired` fires from a Predict button click: "Wallet not connected — please connect your wallet to predict."
+- Also pass `onPredict` directly and let `handlePredict` in FightPredictions.tsx handle the wallet check (it already does on lines 530-537). Remove the duplicate wallet check from FightCard.
 
-**4. Add client-side console logging for debugging**
-- File: `src/pages/FightPredictions.tsx`
-- Add `console.log` breadcrumbs at each step of `handleSubmit` so future failures can be diagnosed from console logs
-
-### Technical Details
-
-```text
-Current flow:
-  User clicks Predict → handlePredict checks status → (silent return if locked)
-                       → handleSubmit → getAccessToken() → (throws if null)
-                       → preflight → (throws if fails)
-                       → allowance check → submit
-
-Proposed flow:
-  User clicks Predict → handlePredict checks status → (TOAST if locked)
-                       → handleSubmit → getAccessToken() → (TOAST + re-login if null)
-                       → preflight → (TOAST with retry suggestion)
-                       → allowance check → submit
-                       → console.log at each step for audit trail
-```
+**3. Add backend guard for events that have started**
+- File: `supabase/functions/prediction-submit/index.ts`
+- After the fight status check, add a cross-check: look up the event's `event_date` and if it's in the past, reject the trade even if the individual fight is still `open`. This prevents edge cases where the polymarket-prices worker hasn't locked all fights yet.
 
 ### Files to edit
-1. `src/pages/FightPredictions.tsx` — Add toasts for silent failures, auth retry, console logging
-2. `src/components/predictions/FightCard.tsx` — Show "Predictions Closed" on locked fight buttons
-3. `src/components/predictions/EventSection.tsx` — Show locked fight count alongside open count
+1. `src/components/predictions/EventSection.tsx` — Improve `eventHasStarted` to check sibling fight statuses
+2. `src/components/predictions/FightCard.tsx` — Remove duplicate wallet gating, let parent handle auth
+3. `supabase/functions/prediction-submit/index.ts` — Add event_date guard to reject trades on started events
 
