@@ -373,7 +373,7 @@ export default function FightCard({
               odds={oddsA}
               poolAmount={poolA}
               canPredict={canPredict}
-              onPredict={() => wallet ? onPredict(fight, "fighter_a") : onWalletRequired?.()}
+              onPredict={() => onPredict(fight, "fighter_a")}
               logo={hasLogos ? fight.home_logo : undefined}
               isWinner={fight.winner === "fighter_a" && isClaimable}
             />
@@ -385,7 +385,7 @@ export default function FightCard({
               odds={oddsB}
               poolAmount={poolB}
               canPredict={canPredict}
-              onPredict={() => wallet ? onPredict(fight, "fighter_b") : onWalletRequired?.()}
+              onPredict={() => onPredict(fight, "fighter_b")}
               logo={hasLogos ? fight.away_logo : undefined}
               isWinner={fight.winner === "fighter_b" && isClaimable}
             />
@@ -540,7 +540,7 @@ export default function FightCard({
             odds={oddsA}
             isWinner={fight.winner === "fighter_a" && isClaimable}
             canPredict={canPredict}
-            onPredict={() => wallet ? onPredict(fight, "fighter_a") : onWalletRequired?.()}
+            onPredict={() => onPredict(fight, "fighter_a")}
             photo={fight.fighter_a_photo}
             record={fight.fighter_a_record}
             sport={sport}
@@ -555,7 +555,7 @@ export default function FightCard({
             odds={oddsB}
             isWinner={fight.winner === "fighter_b" && isClaimable}
             canPredict={canPredict}
-            onPredict={() => wallet ? onPredict(fight, "fighter_b") : onWalletRequired?.()}
+            onPredict={() => onPredict(fight, "fighter_b")}
             photo={fight.fighter_b_photo}
             record={fight.fighter_b_record}
             sport={sport}

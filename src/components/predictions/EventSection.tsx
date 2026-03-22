@@ -137,7 +137,9 @@ export default function EventSection({
   event?: PredictionEvent;
   isStaleLive?: boolean;
 }) {
-  const eventHasStarted = event?.event_date ? new Date(event.event_date).getTime() <= Date.now() : false;
+  const isDatePast = event?.event_date ? new Date(event.event_date).getTime() <= Date.now() : false;
+  const hasSiblingLocked = fights.some(f => f.status === "locked" || f.status === "live");
+  const eventHasStarted = isDatePast || hasSiblingLocked;
   const hasOpen = fights.some(f => f.status === "open") && !eventHasStarted;
   const [expanded, setExpanded] = useState(false);
   const [leagueLogoError, setLeagueLogoError] = useState(false);
