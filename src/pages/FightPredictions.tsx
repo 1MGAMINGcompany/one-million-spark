@@ -98,6 +98,53 @@ function StatusSectionHeader({ section, count }: { section: StatusSection; count
   );
 }
 
+function PastEventsSection({
+  pastEvents,
+  renderEventList,
+}: {
+  pastEvents: [string, { event?: PredictionEvent; fights: Fight[] }][];
+  renderEventList: (entries: [string, { event?: PredictionEvent; fights: Fight[] }][]) => React.ReactNode;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  // Filter to events with at least one fight resolved in the last 48h
+  const cutoff = Date.now() - 48 * 60 * 60 * 1000;
+  const recentPast = pastEvents.filter(([, group]) =>
+    group.fights.some(f => {
+      const resolvedAt = f.resolved_at || f.claims_open_at;
+      return resolvedAt ? new Date(resolvedAt).getTime() > cutoff : true;
+    })
+  );
+
+  if (recentPast.length === 0) return null;
+
+  return (
+    <div className="mt-4">
+      <button
+        className="w-full flex items-center justify-between bg-card border border-border/50 rounded-lg px-4 py-3"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div className="flex items-center gap-2">
+          <History className="w-4 h-4 text-amber-400" />
+          <span className="text-sm font-bold text-foreground">Past Events</span>
+          <span className="text-[10px] text-muted-foreground">({recentPast.length})</span>
+        </div>
+        {expanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+      </button>
+      {expanded && (
+        <div className="mt-3 space-y-3">
+          <div className="bg-card/60 border border-border/30 rounded-lg px-4 py-3 text-center">
+            <p className="text-xs text-muted-foreground">
+              ✅ Results stay visible for <span className="font-bold text-foreground">48 hours</span>. Winnings are automatically sent to your wallet.
+            </p>
+          </div>
+          {renderEventList(recentPast)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function FightPredictions() {
   // Use Privy EVM wallet for predictions (Polygon)
   const { walletAddress: address, isPrivyUser } = usePrivyWallet();

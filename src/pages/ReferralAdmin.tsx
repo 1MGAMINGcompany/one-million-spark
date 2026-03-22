@@ -515,7 +515,7 @@ export default function ReferralAdmin() {
             <div>
               <Label className="text-xs text-muted-foreground">Tx Hash (optional)</Label>
               <Input
-                placeholder="Solana transaction signature"
+                placeholder="Transaction hash (Solana or Polygon)"
                 value={payoutTxHash}
                 onChange={(e) => setPayoutTxHash(e.target.value)}
                 className="mt-1"
