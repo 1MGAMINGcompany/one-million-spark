@@ -1,26 +1,32 @@
 
 
-## Plan: Enable Gas Sponsorship for USDC Approval Transaction
+## Plan: Fix Stuck USDC Approval Transaction
 
 ### Problem
-The `usePrivyFeeTransfer` hook uses `useSmartWallets().client.sendTransaction()` — the old smart wallet SDK path. This doesn't utilize Privy's native gas sponsorship even though it's enabled in the dashboard. The `AA21 didn't pay prefund` error occurs because the smart wallet has no MATIC and no paymaster is attached.
+The Privy "Confirm address" modal shows correctly (gas sponsored), but the transaction hangs on "Loading..." and never completes. The **$1.68** shown is your wallet balance — not the prediction amount.
+
+### Root Cause
+The `sendTransaction` call is missing the `chainId: 137` (Polygon) parameter. Without explicit chain routing, the Privy SDK may fail to resolve the correct network for the UserOperation, causing the transaction to hang indefinitely.
 
 ### Fix (1 file)
 
 **`src/hooks/usePrivyFeeTransfer.ts`**
-
-Replace `useSmartWallets().client.sendTransaction()` with Privy's `useSendTransaction` hook from `@privy-io/react-auth`, passing `sponsor: true` to activate dashboard-configured gas sponsorship.
+- Add `chainId: 137` to the transaction request to explicitly target Polygon
+- This ensures the smart wallet routes the approval to the correct chain and the paymaster can properly sponsor it
 
 ```typescript
-// Before (broken — no gas sponsorship):
-const { client } = useSmartWallets();
-await client.sendTransaction({ to, data, value: 0n });
+// Before (missing chainId — hangs):
+await sendTransaction(
+  { to: USDC_CONTRACT, data, value: 0 },
+  { sponsor: true }
+);
 
-// After (sponsored):
-import { useSendTransaction } from '@privy-io/react-auth';
-const { sendTransaction } = useSendTransaction();
-await sendTransaction({ to, data, value: 0 }, { sponsor: true });
+// After (explicit Polygon routing):
+await sendTransaction(
+  { to: USDC_CONTRACT, data, value: 0, chainId: 137 },
+  { sponsor: true }
+);
 ```
 
-This is a minimal 1-file change. The dashboard already has Polygon sponsorship enabled with $20 credits — we just need the SDK call to opt in.
+Single line change, should resolve the stuck modal.
 
