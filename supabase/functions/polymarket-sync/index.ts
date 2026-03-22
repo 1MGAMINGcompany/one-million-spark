@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
     );
 
     const body = await req.json().catch(() => ({}));
-    const { wallet, action = "sync", tag, limit = 50, event_slug } = body;
+    const { wallet, action = "sync", tag, limit = 200, event_slug } = body;
 
     // ── Admin verification ──
     if (wallet) {
