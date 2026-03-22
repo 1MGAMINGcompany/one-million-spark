@@ -608,7 +608,7 @@ function FighterColumn({
       <p className={`text-muted-foreground mt-1 ${isSoccer ? 'text-xs sm:text-sm' : 'text-xs'}`}>
         {poolAmount > 0 ? `$${poolAmount.toFixed(2)} USDC` : "Market-backed"}
       </p>
-      <p className={`text-primary font-bold ${isSoccer ? 'text-xl sm:text-2xl' : 'text-lg'}`}>{odds.toFixed(2)}x</p>
+      <p className={`text-primary font-bold ${isSoccer ? 'text-xl sm:text-2xl' : 'text-lg'}`}>{odds > 0 ? `${odds.toFixed(2)}x` : '—'}</p>
       {canPredict && (
         <Button size="sm" className={`mt-2 w-full bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.97] transition-all ${isSoccer ? 'text-sm py-2.5 font-bold' : 'text-xs'}`} onClick={onPredict}>
           Predict
