@@ -10,7 +10,8 @@
  * gas sponsorship policy.
  *
  * USDC on Polygon: 0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359 (6 decimals)
- * Relayer/Treasury: 0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d
+ * Relayer/Spender: 0x3b3bf64329CCf08a727e4fEd41821E8534685fAD (derived from FEE_RELAYER_PRIVATE_KEY)
+ * Treasury/Destination: 0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d (receives fees via transferFrom)
  */
 import { useCallback } from "react";
 import { useSendTransaction } from "@privy-io/react-auth";
