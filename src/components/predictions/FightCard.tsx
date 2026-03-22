@@ -311,7 +311,7 @@ export default function FightCard({
   eventHasStarted?: boolean;
 }) {
   const { poolA, poolB } = getPoolUsd(fight);
-  const { oddsA, oddsB, noData } = calcOdds(poolA, poolB, fight.price_a, fight.price_b, fight.source);
+  const { oddsA, oddsB, noData, resolving } = calcOdds(poolA, poolB, fight.price_a, fight.price_b, fight.source);
   const totalPool = poolA + poolB;
   const isPolymarket = fight.source === "polymarket";
   const isFeatured = fight.featured === true;
