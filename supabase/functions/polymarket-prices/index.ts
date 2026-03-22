@@ -350,6 +350,10 @@ Deno.serve(async (req) => {
             polymarket_last_synced_at: new Date().toISOString(),
           };
 
+          if (priceSource !== "none") {
+            enriched.push(`${fight.id}: price_source=${priceSource} a=${priceA} b=${priceB}`);
+          }
+
           // Always persist volume/liquidity even when prices are incomplete
           if (totalVolume > 0) {
             updatePayload.polymarket_volume_usd = totalVolume;

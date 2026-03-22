@@ -138,40 +138,52 @@ function getPoolUsd(fight: Fight): { poolA: number; poolB: number } {
   return { poolA: fight.pool_a_lamports / 1_000_000_000, poolB: fight.pool_b_lamports / 1_000_000_000 };
 }
 
+/** Format probability — avoids misleading 0% / 100% for extreme values */
+function formatProb(p: number): string {
+  if (p <= 0) return "<1%";
+  if (p >= 100) return ">99%";
+  if (p < 1) return `${p.toFixed(1)}%`;
+  if (p > 99) return `${p.toFixed(1)}%`;
+  return `${Math.round(p)}%`;
+}
+
 /** Derive probability percentages from Polymarket prices (handles one-sided) */
 function getProbabilities(fight: Fight): { probA: number; probB: number } | null {
   const pA = fight.price_a ?? 0;
   const pB = fight.price_b ?? 0;
   if (pA > 0 && pB > 0) {
-    return { probA: Math.round(pA * 100), probB: Math.round(pB * 100) };
+    return { probA: pA * 100, probB: pB * 100 };
   }
   // One-sided: derive complement
   if (pA > 0 && pA <= 1) {
-    return { probA: Math.round(pA * 100), probB: Math.round((1 - pA) * 100) };
+    return { probA: pA * 100, probB: (1 - pA) * 100 };
   }
   if (pB > 0 && pB <= 1) {
-    return { probA: Math.round((1 - pB) * 100), probB: Math.round(pB * 100) };
+    return { probA: (1 - pB) * 100, probB: pB * 100 };
   }
   return null;
 }
 
 /** Probability split bar component */
 function ProbabilityBar({ probA, probB }: { probA: number; probB: number }) {
+  // Clamp for bar width rendering
+  const barA = Math.max(0.5, Math.min(99.5, probA));
+  const barB = Math.max(0.5, Math.min(99.5, probB));
   return (
     <div className="w-full">
       <div className="flex justify-between text-[10px] font-bold mb-1">
-        <span className="text-blue-400">{probA}%</span>
+        <span className="text-blue-400">{formatProb(probA)}</span>
         <span className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Live Odds</span>
-        <span className="text-red-400">{probB}%</span>
+        <span className="text-red-400">{formatProb(probB)}</span>
       </div>
       <div className="h-2 rounded-full overflow-hidden flex bg-muted/30">
         <div
           className="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-500"
-          style={{ width: `${probA}%` }}
+          style={{ width: `${barA}%` }}
         />
         <div
           className="h-full bg-gradient-to-r from-red-400 to-red-500 transition-all duration-500"
-          style={{ width: `${probB}%` }}
+          style={{ width: `${barB}%` }}
         />
       </div>
     </div>
