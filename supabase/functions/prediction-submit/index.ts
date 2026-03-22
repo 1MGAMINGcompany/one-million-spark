@@ -392,11 +392,13 @@ Deno.serve(async (req) => {
     }
 
     try {
-      // Retry JWKS verification up to 3 times to handle transient Privy outages
+      // Retry JWKS verification up to 4 times to handle transient Privy outages
       let lastJwksError: Error | undefined;
       let jwtPayload: Record<string, unknown> | null = null;
-      for (let attempt = 0; attempt < 3; attempt++) {
+      const maxAttempts = 4;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
         try {
+          console.log(`[prediction-submit] JWKS verify attempt ${attempt + 1}/${maxAttempts}`);
           const jwks = createRemoteJWKSet(
             new URL("https://auth.privy.io/.well-known/jwks.json"),
           );
@@ -405,17 +407,21 @@ Deno.serve(async (req) => {
             audience: appId,
           });
           jwtPayload = payload as Record<string, unknown>;
+          console.log(`[prediction-submit] JWKS verify succeeded on attempt ${attempt + 1}`);
           break;
         } catch (retryErr) {
           lastJwksError = retryErr as Error;
           const msg = lastJwksError.message ?? "";
+          console.warn(`[prediction-submit] JWKS attempt ${attempt + 1} failed: ${msg}`);
           const isTransient =
             msg.includes("Expected 200 OK") ||
             msg.includes("fetch") ||
             msg.includes("network") ||
-            msg.includes("ECONNREFUSED");
-          if (!isTransient || attempt === 2) break;
-          await new Promise((r) => setTimeout(r, 1000));
+            msg.includes("ECONNREFUSED") ||
+            msg.includes("timed out") ||
+            msg.includes("timeout");
+          if (!isTransient || attempt === maxAttempts - 1) break;
+          await new Promise((r) => setTimeout(r, 1500));
         }
       }
       if (!jwtPayload) {
