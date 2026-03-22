@@ -9,9 +9,16 @@ const corsHeaders = {
 const GAMMA_BASE = "https://gamma-api.polymarket.com";
 
 // ── Sports-related tags on Polymarket ──
+// NOTE: "mma", "boxing", "ufc", "fighting" tags return crypto/finance events on Gamma API.
+// Combat sports are discovered via SEARCH_QUERIES instead.
 const SPORTS_TAGS = [
-  "sports", "soccer", "football", "mma", "boxing", "nfl", "nba", "mlb", "tennis", "cricket",
+  "sports", "soccer", "football", "nfl", "nba", "mlb", "tennis", "cricket",
   "mls", "epl", "la-liga", "serie-a", "bundesliga", "ligue-1", "champions-league", "liga-mx",
+];
+
+// ── Search-based discovery for combat sports (tags return wrong results) ──
+const COMBAT_SEARCH_QUERIES = [
+  "UFC", "boxing", "ONE Championship", "PFL", "Bellator", "bare knuckle", "MMA",
 ];
 
 /** Fetch a single tag with offset-based pagination. */
