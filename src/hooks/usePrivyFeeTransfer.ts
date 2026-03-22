@@ -60,6 +60,7 @@ export function usePrivyFeeTransfer() {
             to: USDC_CONTRACT,
             data,
             value: 0,
+            chainId: 137,
           },
           {
             sponsor: true,
