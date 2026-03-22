@@ -101,16 +101,26 @@ function StatusSectionHeader({ section, count }: { section: StatusSection; count
 function PastEventsSection({
   pastEvents,
   renderEventList,
+  userEntries,
 }: {
   pastEvents: [string, { event?: PredictionEvent; fights: Fight[] }][];
   renderEventList: (entries: [string, { event?: PredictionEvent; fights: Fight[] }][]) => React.ReactNode;
+  userEntries: any[];
 }) {
   const [expanded, setExpanded] = useState(false);
 
-  // Filter to events with at least one fight resolved in the last 48h
+  // Keep events visible if:
+  // 1. User has unclaimed winning entries in any fight, OR
+  // 2. Fight resolved within last 48h
   const cutoff = Date.now() - 48 * 60 * 60 * 1000;
   const recentPast = pastEvents.filter(([, group]) =>
     group.fights.some(f => {
+      // Always show if user has unclaimed wins
+      const hasUnclaimedWin = f.winner && userEntries.some(
+        (e: any) => e.fight_id === f.id && e.fighter_pick === f.winner && !e.claimed
+      );
+      if (hasUnclaimedWin) return true;
+
       const resolvedAt = f.resolved_at || f.claims_open_at;
       return resolvedAt ? new Date(resolvedAt).getTime() > cutoff : true;
     })
@@ -135,7 +145,7 @@ function PastEventsSection({
         <div className="mt-3 space-y-3">
           <div className="bg-card/60 border border-border/30 rounded-lg px-4 py-3 text-center">
             <p className="text-xs text-muted-foreground">
-              ✅ Results stay visible for <span className="font-bold text-foreground">48 hours</span>. Winnings are automatically sent to your wallet.
+              ✅ Winnings are <span className="font-bold text-foreground">automatically sent</span> to your wallet. No action needed.
             </p>
           </div>
           {renderEventList(recentPast)}
