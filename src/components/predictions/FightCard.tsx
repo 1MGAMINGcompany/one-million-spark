@@ -652,7 +652,7 @@ function SoccerTeamColumn({
       <p className="text-[10px] text-muted-foreground">
         {poolAmount > 0 ? `$${poolAmount.toFixed(2)} USDC` : "Market-backed"}
       </p>
-      <p className="text-xl sm:text-2xl font-bold text-primary leading-none">{odds.toFixed(2)}x</p>
+      <p className="text-xl sm:text-2xl font-bold text-primary leading-none">{odds > 0 ? `${odds.toFixed(2)}x` : '—'}</p>
       {canPredict && (
         <Button
           size="sm"

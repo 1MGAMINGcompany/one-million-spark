@@ -141,7 +141,7 @@ function HighlightCard({
           </div>
           <div className="text-center">
             <p className="text-xs font-bold text-foreground truncate">{fight.fighter_b_name}</p>
-            <p className="text-primary font-bold text-sm">{oddsB.toFixed(2)}x</p>
+            <p className="text-primary font-bold text-sm">{oddsB > 0 ? `${oddsB.toFixed(2)}x` : '—'}</p>
             {!btn.disabled && onPredict && (
               <Button
                 size="sm"
