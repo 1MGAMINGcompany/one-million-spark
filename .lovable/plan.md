@@ -1,52 +1,77 @@
 
+Findings
 
-# ONE Friday Fights — Muay Thai Section Hub
+- This is not a frontend refresh problem. The live price poll is mounted on the predictions page in `src/pages/FightPredictions.tsx` via `usePolymarketPrices()`, and the MMA fights in the database have fresh `polymarket_last_synced_at` timestamps.
+- The problem is in the data the UI receives for many MMA Polymarket markets:
+  - several MMA fights have `polymarket_volume_usd > 0`
+  - but `price_a` / `price_b` are often `0.0000`, or one side is `0.9990` while the other is `0.0000`
+- The UI odds logic in:
+  - `src/components/predictions/FightCard.tsx`
+  - `src/components/predictions/PredictionHighlights.tsx`
+  - `src/components/predictions/HomePredictionHighlights.tsx`
+  only uses Polymarket odds when both sides are `> 0`. Otherwise it falls back to pool math, and if pool totals are zero it renders `2.00x`.
 
-## What Changes
+Root cause
 
-When the user selects the **MUAY THAI** sport filter, a branded hub component renders at the top of the content area (before the status sections). No other sport filters are affected.
+- In `supabase/functions/polymarket-prices/index.ts`, the worker fetches CLOB BUY prices per outcome token.
+- For many MMA prop/Yes-No/O-U markets, that endpoint is returning incomplete quotes:
+  - both sides zero, or
+  - only one side priced
+- The worker then writes:
+  - `price_a` / `price_b` as received
+  - but only writes `pool_a_usd` / `pool_b_usd` when `totalVolume > 0 && priceA > 0 && priceB > 0`
+- So the frontend ends up with:
+  - no usable prices
+  - no derived pool fallback
+  - and the hardcoded empty-state fallback becomes `2.00x`
 
-## New Component: `ONEFridayFightsHub.tsx`
+Why fútbol looks better
 
-A self-contained component placed in `src/components/predictions/` with:
+- The soccer markets you’re comparing against are getting valid two-sided prices more consistently, so the UI can compute `1 / price` and show real odds.
+- MMA has more markets where Polymarket is effectively returning sparse or one-sided quote data, especially on props.
 
-### Section Header
-- Title: "ONE Friday Fights" (Cinzel font, matching site style)
-- Subtitle: "Live Every Friday Night from Bangkok"
-- "Weekly Event" badge (styled like existing badges — small rounded pill)
+Plan to fix it so it does not happen again
 
-### Countdown Timer
-- Targets every Friday at 7:30 AM ET (11:30 UTC)
-- Auto-resets weekly to next Friday
-- Displays: Days / Hours / Minutes / Seconds in styled boxes (dark card bg, primary accent numbers)
-- Tagline underneath: "Fast fights. Big moments. Every Friday."
+1. Harden the price ingestion worker
+- Update `supabase/functions/polymarket-prices/index.ts` so it no longer treats “both sides must be present” as required.
+- For binary Polymarket markets:
+  - if only one side is valid, derive the other side from the complement when appropriate
+  - if the CLOB price endpoint is empty, fall back to Gamma market outcome pricing if available
+- Always persist a usable market state instead of raw zeroes whenever the source provides enough information.
 
-### Live State
-- If current time is between event time and event time + 4 hours:
-  - Replace countdown with "LIVE NOW" banner
-  - Pulsing red dot + red glow effect (matching existing live badge style)
+2. Stop coupling displayed liquidity to two valid prices
+- Change the worker so `polymarket_volume_usd`, `polymarket_liquidity`, and any displayable derived values are saved even when one side price is missing.
+- This prevents the UI from looking like a dead even market when the market actually has activity.
 
-### Info Card
-- Card with fire emoji and educational text about weekly Muay Thai action, how prediction markets open when fight cards are confirmed
+3. Replace the misleading `2.00x` fallback for Polymarket fights
+- Update `calcOdds` logic in:
+  - `src/components/predictions/FightCard.tsx`
+  - `src/components/predictions/PredictionHighlights.tsx`
+  - `src/components/predictions/HomePredictionHighlights.tsx`
+- New behavior:
+  - use two-sided prices when available
+  - use one-sided/complement price when only one side is available
+  - if the fight is Polymarket-backed but pricing is unavailable, show a non-misleading state like `—` or `Market price unavailable` instead of `2.00x`
 
-### Fight Card States (handled by existing system)
-- When no Muay Thai events exist in the data → show 3-5 skeleton placeholder cards with "Fight card coming soon..." message
-- When events exist → existing `EventSection` components render as normal
-- Live state lockout already handled by existing `eventHasStarted` logic
+4. Add a bad-market safeguard in admin/backend
+- Add a detection path for Polymarket fights where:
+  - `source='polymarket'`
+  - `polymarket_active=true`
+  - volume/liquidity exists
+  - but usable odds are missing
+- Surface these as “needs price refresh / incomplete market data” in admin so they can be identified before going live.
 
-## Changes to `FightPredictions.tsx`
+5. Add a regression check
+- Add a small validation rule in the worker or admin diagnostics:
+  - if a Polymarket fight has volume/liquidity but would display as empty/even fallback, flag it
+- This prevents future MMA imports from silently showing fake 2.00x odds again.
 
-- Import `ONEFridayFightsHub`
-- Render it inside the content area, right before the status sections, **only when `activeSport === "MUAY THAI"`**
-- When Muay Thai is selected and no events exist, show the hub with skeleton cards instead of the generic "No events" message
+Technical details
 
-## Technical Details
-
-- **Files created**: `src/components/predictions/ONEFridayFightsHub.tsx`
-- **Files modified**: `src/pages/FightPredictions.tsx` (add conditional render)
-- Countdown uses `useState` + `setInterval` (1s tick), computes next Friday 11:30 UTC
-- Skeleton cards use existing `Skeleton` component from `src/components/ui/skeleton.tsx`
-- All styling uses existing Tailwind classes and design tokens (bg-card, border-border, text-primary, font-['Cinzel'], etc.)
-- No new dependencies
-- No changes to other sport sections, wallet logic, or prediction system
-
+- Current failing UI condition:
+  - `if (priceA && priceA > 0 && priceB && priceB > 0) ...`
+  - else fallback to pool totals
+  - if total pool is zero => `2.00x`
+- Current failing worker condition:
+  - derived pool display values are only written when both prices are valid
+- No backend auth/RLS changes are needed for this fix; this is worker + display logic.
