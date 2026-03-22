@@ -12,8 +12,7 @@ const GAMMA_BASE = "https://gamma-api.polymarket.com";
 // NOTE: "mma", "boxing", "ufc", "fighting" tags return crypto/finance events on Gamma API.
 // Combat sports are discovered via SEARCH_QUERIES instead.
 const SPORTS_TAGS = [
-  "sports", "soccer", "football", "nfl", "nba", "mlb", "tennis", "cricket",
-  "mls", "epl", "la-liga", "serie-a", "bundesliga", "ligue-1", "champions-league", "liga-mx",
+  "soccer", "mls", "epl", "la-liga", "serie-a", "bundesliga", "ligue-1", "champions-league", "liga-mx",
 ];
 
 // ── Search-based discovery for combat sports (tags return wrong results) ──
@@ -84,10 +83,15 @@ async function fetchSearchEvents(queries: string[]): Promise<GammaEvent[]> {
   return deduped;
 }
 
-/** Return true if event endDate is in the future (or missing). */
+/** Return true if event has at least one date >24h in the future. Events with no dates pass through. */
 function isFutureEvent(ev: GammaEvent): boolean {
-  if (!ev.endDate) return true; // no end date = perpetual, keep it
-  return new Date(ev.endDate).getTime() > Date.now();
+  const cutoff = Date.now() + 24 * 60 * 60 * 1000; // 24h from now
+  const startMs = ev.startDate ? new Date(ev.startDate).getTime() : null;
+  const endMs = ev.endDate ? new Date(ev.endDate).getTime() : null;
+  // If no dates at all, let it through (rare)
+  if (!startMs && !endMs) return true;
+  // At least one date must be >24h in the future
+  return (startMs !== null && startMs > cutoff) || (endMs !== null && endMs > cutoff);
 }
 
 interface GammaMarket {
@@ -354,7 +358,7 @@ Deno.serve(async (req) => {
       }
 
       // 2) Fights linked to events whose event_date is >48h in the past (catches those without polymarket_end_date)
-      const cutoff48h = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      const cutoff48h = new Date().toISOString(); // immediate: any event_date in the past
       const { data: staleEvents } = await supabase
         .from("prediction_events")
         .select("id")
