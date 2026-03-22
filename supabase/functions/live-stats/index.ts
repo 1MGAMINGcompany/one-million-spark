@@ -296,8 +296,9 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err: any) {
-    console.error("[live-stats]", err);
-    return new Response(JSON.stringify({ error: err.message }), {
+    const msg = err?.message || err?.toString?.() || "unknown_error";
+    console.error("[live-stats]", msg, typeof err === "object" ? JSON.stringify(err).slice(0, 300) : "");
+    return new Response(JSON.stringify({ error: msg }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
