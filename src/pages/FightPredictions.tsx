@@ -346,15 +346,29 @@ export default function FightPredictions() {
   const handleSubmit = async (amountUsd: number) => {
     if (!selectedFight || !selectedPick || !isConnected || !address) return;
     setSubmitting(true);
+    console.log("[Predict] handleSubmit start", { fightId: selectedFight.id, pick: selectedPick, amountUsd, wallet: address });
     try {
       // Polymarket credentials are now handled server-side (shared backend keys)
       // No SIWE signing required from users
 
       // Step 1: Get Privy access token FIRST (before any money moves)
-      const privyToken = await getAccessToken();
-      if (!privyToken) {
-        throw new Error("Unable to get authentication token. Please log in again.");
+      console.log("[Predict] Step 1: Getting Privy access token...");
+      let privyToken: string | null = null;
+      try {
+        privyToken = await getAccessToken();
+      } catch (tokenErr) {
+        console.error("[Predict] getAccessToken threw:", tokenErr);
       }
+      if (!privyToken) {
+        console.error("[Predict] Token is null — session likely expired");
+        toast.error("Session expired", {
+          description: "Please log in again to place predictions.",
+          action: { label: "Log in", onClick: () => login() },
+        });
+        setSubmitting(false);
+        return;
+      }
+      console.log("[Predict] Step 1 complete — token obtained");
 
       // Step 2: Auth preflight — verify JWKS/JWT are working before fee transfer
       const { data: preflightData, error: preflightError } = await supabase.functions.invoke(
