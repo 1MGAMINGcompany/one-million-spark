@@ -59,9 +59,9 @@ Deno.serve(async (req) => {
       return json({ error: "Internal configuration error" }, 500);
     }
 
-    let claims: Awaited<ReturnType<typeof verifyPrivyToken>>;
+    let claims: ReturnType<typeof verifyPrivyTokenLocal>;
     try {
-      claims = await verifyPrivyToken(privyToken, appId);
+      claims = verifyPrivyTokenLocal(privyToken, appId);
     } catch (err) {
       console.warn("[prediction-trade-status] Privy JWT verification failed:", (err as Error).message);
       return json({ error: "Invalid or expired authentication token", error_code: "auth_invalid" }, 401);
