@@ -42,7 +42,7 @@ interface PredictionEvent {
 function formatCountdown(eventDate: string | null): string | null {
   if (!eventDate) return null;
   const diff = new Date(eventDate).getTime() - Date.now();
-  if (diff <= 0) return "Started";
+  if (diff <= 0) return null; // Event already started — hide countdown entirely
   const hours = Math.floor(diff / 3_600_000);
   const mins = Math.floor((diff % 3_600_000) / 60_000);
   const localTime = formatEventTime(eventDate);
