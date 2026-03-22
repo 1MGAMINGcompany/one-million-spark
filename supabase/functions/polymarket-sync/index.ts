@@ -399,6 +399,7 @@ Deno.serve(async (req) => {
           stale_event_fights_closed: staleFightsClosedCount,
           filtered_out_past: filteredOut,
           total_events: gammaEvents.length,
+          search_events_found: searchEventsCount,
         },
       });
 
@@ -409,6 +410,7 @@ Deno.serve(async (req) => {
         skipped,
         expired_closed: expiredCount,
         total_events: gammaEvents.length,
+        search_events_found: searchEventsCount,
       });
     }
 
