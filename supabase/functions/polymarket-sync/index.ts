@@ -8,58 +8,17 @@ const corsHeaders = {
 
 const GAMMA_BASE = "https://gamma-api.polymarket.com";
 
-// ── Sports-related tags on Polymarket ──
-// NOTE: "mma", "boxing", "ufc", "fighting" tags return crypto/finance events on Gamma API.
-// Combat sports are discovered via SEARCH_QUERIES instead.
-const SPORTS_TAGS = [
-  "soccer", "mls", "epl", "la-liga", "serie-a", "bundesliga", "ligue-1", "champions-league", "liga-mx",
+// ── Search-based discovery (tags are unreliable on Gamma API) ──
+const SOCCER_SEARCH_QUERIES = [
+  "MLS", "EPL", "La Liga", "Serie A", "Bundesliga",
+  "Ligue 1", "Champions League", "Liga MX", "soccer",
 ];
 
-// ── Search-based discovery for combat sports (tags return wrong results) ──
 const COMBAT_SEARCH_QUERIES = [
   "UFC", "boxing", "ONE Championship", "PFL", "Bellator", "bare knuckle", "MMA",
 ];
 
-/** Fetch a single tag with offset-based pagination. */
-async function fetchTagEvents(tag: string, limit: number): Promise<GammaEvent[]> {
-  const all: GammaEvent[] = [];
-  let offset = 0;
-  const maxPages = 5; // safety cap
-  for (let page = 0; page < maxPages; page++) {
-    const url = `${GAMMA_BASE}/events?tag=${encodeURIComponent(tag)}&active=true&closed=false&limit=${limit}&offset=${offset}`;
-    try {
-      const res = await fetch(url);
-      if (!res.ok) break;
-      const batch = (await res.json()) as GammaEvent[];
-      all.push(...batch);
-      if (batch.length < limit) break; // no more pages
-      offset += limit;
-    } catch {
-      break;
-    }
-  }
-  return all;
-}
-
-/** When tag is "sports", fan out to all SPORTS_TAGS in parallel and dedupe. */
-async function fetchSportsEvents(limit: number): Promise<GammaEvent[]> {
-  const fetches = SPORTS_TAGS.map((t) => fetchTagEvents(t, limit));
-  const arrays = await Promise.all(fetches);
-  // Deduplicate by event id
-  const seen = new Set<string>();
-  const deduped: GammaEvent[] = [];
-  for (const arr of arrays) {
-    for (const ev of arr) {
-      if (!seen.has(String(ev.id))) {
-        seen.add(String(ev.id));
-        deduped.push(ev);
-      }
-    }
-  }
-  return deduped;
-}
-
-/** Search-based discovery via /public-search endpoint. Used for combat sports. */
+/** Search-based discovery via /public-search endpoint. */
 async function fetchSearchEvents(queries: string[]): Promise<GammaEvent[]> {
   const seen = new Set<string>();
   const deduped: GammaEvent[] = [];
@@ -83,7 +42,7 @@ async function fetchSearchEvents(queries: string[]): Promise<GammaEvent[]> {
   return deduped;
 }
 
-/** Return true if event has at least one date >24h in the future. Events with no dates pass through. */
+/** Return true if event has at least one date >24h in the future. */
 function isFutureEvent(ev: GammaEvent): boolean {
   const cutoff = Date.now() + 24 * 60 * 60 * 1000; // 24h from now
   const startMs = ev.startDate ? new Date(ev.startDate).getTime() : null;
@@ -99,9 +58,9 @@ interface GammaMarket {
   question: string;
   conditionId: string;
   slug: string;
-  outcomes: string;       // JSON string: '["Yes","No"]' or '["Team A","Team B"]'
-  outcomePrices: string;  // JSON string: '["0.65","0.35"]'
-  clobTokenIds: string;   // JSON string: '["token_a","token_b"]'
+  outcomes: string;
+  outcomePrices: string;
+  clobTokenIds: string;
   active: boolean;
   closed: boolean;
   endDate: string | null;
@@ -163,43 +122,28 @@ Deno.serve(async (req) => {
       const tagFilter = tag || "sports";
 
       let gammaEvents: GammaEvent[];
-      let searchEventsCount = 0;
+      let searchQueries: string[];
 
-      if (tagFilter === "mma" || tagFilter === "boxing") {
-        // Combat sports: use search-based discovery (tags return wrong results)
-        console.log(`[polymarket-sync] Search-based fetch for combat sports: ${COMBAT_SEARCH_QUERIES.join(", ")}`);
-        gammaEvents = await fetchSearchEvents(
-          tagFilter === "boxing" ? ["boxing", "bare knuckle"] : COMBAT_SEARCH_QUERIES
-        );
-        searchEventsCount = gammaEvents.length;
-      } else if (tagFilter === "sports") {
-        // Multi-tag parallel fetch for comprehensive sports coverage
-        console.log(`[polymarket-sync] Multi-tag fetch for sports (${SPORTS_TAGS.join(", ")})`);
-        gammaEvents = await fetchSportsEvents(limit);
-
-        // Also fetch combat sports via search and merge
-        console.log(`[polymarket-sync] Adding combat sports via search: ${COMBAT_SEARCH_QUERIES.join(", ")}`);
-        const combatEvents = await fetchSearchEvents(COMBAT_SEARCH_QUERIES);
-        searchEventsCount = combatEvents.length;
-        const seen = new Set(gammaEvents.map(e => String(e.id)));
-        for (const ev of combatEvents) {
-          if (!seen.has(String(ev.id))) {
-            seen.add(String(ev.id));
-            gammaEvents.push(ev);
-          }
-        }
-        console.log(`[polymarket-sync] After combat merge: ${gammaEvents.length} total (${searchEventsCount} from search)`);
+      if (tagFilter === "mma") {
+        searchQueries = COMBAT_SEARCH_QUERIES;
+      } else if (tagFilter === "boxing") {
+        searchQueries = ["boxing", "bare knuckle"];
+      } else if (tagFilter === "soccer") {
+        searchQueries = SOCCER_SEARCH_QUERIES;
       } else {
-        console.log(`[polymarket-sync] Fetching tag="${tagFilter}" with pagination, limit=${limit}`);
-        gammaEvents = await fetchTagEvents(tagFilter, limit);
+        // "sports" or "All" — fetch everything
+        searchQueries = [...SOCCER_SEARCH_QUERIES, ...COMBAT_SEARCH_QUERIES];
       }
+
+      console.log(`[polymarket-sync] Search-based fetch for "${tagFilter}": ${searchQueries.join(", ")}`);
+      gammaEvents = await fetchSearchEvents(searchQueries);
+      console.log(`[polymarket-sync] Raw search results: ${gammaEvents.length} events`);
 
       // Filter out past events
       const beforeFilter = gammaEvents.length;
       gammaEvents = gammaEvents.filter(isFutureEvent);
       const filteredOut = beforeFilter - gammaEvents.length;
       console.log(`[polymarket-sync] ${gammaEvents.length} future events (filtered out ${filteredOut} past)`);
-
 
       let eventsUpserted = 0;
       let marketsUpserted = 0;
@@ -221,14 +165,12 @@ Deno.serve(async (req) => {
         let eventId: string;
 
         if (existingEvent) {
-          // Update non-enrichment fields only
           await supabase
             .from("prediction_events")
             .update({
               polymarket_slug: gEvent.slug,
               event_date: gEvent.startDate || gEvent.endDate || null,
               updated_at: new Date().toISOString(),
-              // Do NOT overwrite: event_name, league_logo, location, organization (enrichment)
             })
             .eq("id", existingEvent.id);
           eventId = existingEvent.id;
@@ -284,7 +226,6 @@ Deno.serve(async (req) => {
             continue;
           }
 
-          // Check if already exists
           const { data: existing } = await supabase
             .from("prediction_fights")
             .select("id, home_logo, away_logo, fight_class, weight_class")
@@ -295,7 +236,6 @@ Deno.serve(async (req) => {
           const priceB = parseFloat(outcomePrices[1] || "0");
 
           if (existing) {
-            // Update prices & status only — preserve enrichment fields
             await supabase
               .from("prediction_fights")
               .update({
@@ -305,7 +245,6 @@ Deno.serve(async (req) => {
                 polymarket_end_date: market.endDate || null,
                 polymarket_last_synced_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
-                // Do NOT overwrite: home_logo, away_logo, fight_class, weight_class (enrichment)
               })
               .eq("id", existing.id);
           } else {
@@ -318,7 +257,7 @@ Deno.serve(async (req) => {
                 event_name: gEvent.title,
                 event_id: eventId,
                 source: "polymarket",
-                commission_bps: 200, // 2% for imported Polymarket events
+                commission_bps: 200,
                 polymarket_market_id: market.id,
                 polymarket_condition_id: market.conditionId,
                 polymarket_slug: market.slug,
@@ -344,7 +283,6 @@ Deno.serve(async (req) => {
       }
 
       // ── Auto-close past events in DB ──
-      // 1) Fights with polymarket_end_date in the past
       const { data: expiredRows } = await supabase
         .from("prediction_fights")
         .update({ polymarket_active: false, updated_at: new Date().toISOString() })
@@ -357,12 +295,12 @@ Deno.serve(async (req) => {
         console.log(`[polymarket-sync] Auto-closed ${expiredCount} past fights (polymarket_end_date)`);
       }
 
-      // 2) Fights linked to events whose event_date is >48h in the past (catches those without polymarket_end_date)
-      const cutoff48h = new Date().toISOString(); // immediate: any event_date in the past
+      // Immediate cleanup: any event_date in the past → cancel open fights
+      const cutoffNow = new Date().toISOString();
       const { data: staleEvents } = await supabase
         .from("prediction_events")
         .select("id")
-        .lt("event_date", cutoff48h)
+        .lt("event_date", cutoffNow)
         .not("event_date", "is", null);
       const staleEventIds = (staleEvents || []).map(e => e.id);
       let staleFightsClosedCount = 0;
@@ -375,7 +313,7 @@ Deno.serve(async (req) => {
           .select("id");
         staleFightsClosedCount = staleFights?.length ?? 0;
         if (staleFightsClosedCount > 0) {
-          console.log(`[polymarket-sync] Auto-cancelled ${staleFightsClosedCount} fights from stale events (>48h past)`);
+          console.log(`[polymarket-sync] Auto-cancelled ${staleFightsClosedCount} fights from stale events`);
         }
       }
 
@@ -403,7 +341,7 @@ Deno.serve(async (req) => {
           stale_event_fights_closed: staleFightsClosedCount,
           filtered_out_past: filteredOut,
           total_events: gammaEvents.length,
-          search_events_found: searchEventsCount,
+          search_queries: searchQueries,
         },
       });
 
@@ -414,12 +352,11 @@ Deno.serve(async (req) => {
         skipped,
         expired_closed: expiredCount,
         total_events: gammaEvents.length,
-        search_events_found: searchEventsCount,
       });
     }
 
     // ══════════════════════════════════════════════════
-    // ACTION: refresh_prices — Update prices for active Polymarket-backed fights
+    // ACTION: refresh_prices
     // ══════════════════════════════════════════════════
     if (action === "refresh_prices") {
       const { data: pmFights } = await supabase
@@ -436,7 +373,6 @@ Deno.serve(async (req) => {
       let updated = 0;
       for (const fight of pmFights) {
         try {
-          // Fetch best prices from CLOB (public, no auth needed)
           const [buyA, buyB] = await Promise.all([
             fetch(`https://clob.polymarket.com/price?token_id=${fight.polymarket_outcome_a_token}&side=BUY`).then(r => r.json()),
             fetch(`https://clob.polymarket.com/price?token_id=${fight.polymarket_outcome_b_token}&side=BUY`).then(r => r.json()),
@@ -464,21 +400,22 @@ Deno.serve(async (req) => {
     }
 
     // ══════════════════════════════════════════════════
-    // ACTION: search — Search Polymarket events by query
+    // ACTION: search — Search Polymarket events by query (with future-only filter)
     // ══════════════════════════════════════════════════
     if (action === "search") {
       const { query } = body;
       if (!query) return json({ error: "Missing query" }, 400);
 
-      // Use the /public-search endpoint for real keyword search
       const searchUrl = `${GAMMA_BASE}/public-search?q=${encodeURIComponent(query)}&limit=${limit}`;
       console.log(`[polymarket-sync] Search: ${searchUrl}`);
       const gammaRes = await fetch(searchUrl);
       if (!gammaRes.ok) return json({ error: `Gamma API returned ${gammaRes.status}` }, 502);
 
       const searchData = await gammaRes.json();
-      const results: GammaEvent[] = searchData.events || [];
-      console.log(`[polymarket-sync] Search returned ${results.length} events for "${query}"`);
+      const rawResults: GammaEvent[] = searchData.events || [];
+      // Filter out past events so admin never sees stale results
+      const results = rawResults.filter(isFutureEvent);
+      console.log(`[polymarket-sync] Search returned ${results.length} future events (${rawResults.length - results.length} past filtered) for "${query}"`);
       return json({
         results: results.map(e => ({
           id: e.id,
@@ -513,9 +450,6 @@ Deno.serve(async (req) => {
 
       const gEvent: GammaEvent = await gammaRes.json();
 
-      // Re-run the upsert logic for this single event (same as sync but for 1)
-      const singleBody = { wallet, action: "sync", tag: "__skip__", limit: 0 };
-      // Actually just inline the logic:
       let outcomes: string[], tokenIds: string[], outcomePrices: string[];
 
       // Upsert event
@@ -578,7 +512,7 @@ Deno.serve(async (req) => {
             event_name: gEvent.title,
             event_id: eventId,
             source: "polymarket",
-            commission_bps: 200, // 2% for imported Polymarket events
+            commission_bps: 200,
             polymarket_market_id: market.id,
             polymarket_condition_id: market.conditionId,
             polymarket_slug: market.slug,
