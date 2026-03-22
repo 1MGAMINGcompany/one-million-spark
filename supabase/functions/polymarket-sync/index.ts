@@ -9,9 +9,16 @@ const corsHeaders = {
 const GAMMA_BASE = "https://gamma-api.polymarket.com";
 
 // ── Sports-related tags on Polymarket ──
+// NOTE: "mma", "boxing", "ufc", "fighting" tags return crypto/finance events on Gamma API.
+// Combat sports are discovered via SEARCH_QUERIES instead.
 const SPORTS_TAGS = [
-  "sports", "soccer", "football", "mma", "boxing", "nfl", "nba", "mlb", "tennis", "cricket",
+  "sports", "soccer", "football", "nfl", "nba", "mlb", "tennis", "cricket",
   "mls", "epl", "la-liga", "serie-a", "bundesliga", "ligue-1", "champions-league", "liga-mx",
+];
+
+// ── Search-based discovery for combat sports (tags return wrong results) ──
+const COMBAT_SEARCH_QUERIES = [
+  "UFC", "boxing", "ONE Championship", "PFL", "Bellator", "bare knuckle", "MMA",
 ];
 
 /** Fetch a single tag with offset-based pagination. */
@@ -48,6 +55,30 @@ async function fetchSportsEvents(limit: number): Promise<GammaEvent[]> {
         seen.add(String(ev.id));
         deduped.push(ev);
       }
+    }
+  }
+  return deduped;
+}
+
+/** Search-based discovery via /public-search endpoint. Used for combat sports. */
+async function fetchSearchEvents(queries: string[]): Promise<GammaEvent[]> {
+  const seen = new Set<string>();
+  const deduped: GammaEvent[] = [];
+  for (const q of queries) {
+    try {
+      const url = `${GAMMA_BASE}/public-search?q=${encodeURIComponent(q)}&limit=100`;
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const data = await res.json();
+      const events: GammaEvent[] = data.events || [];
+      for (const ev of events) {
+        if (!seen.has(String(ev.id))) {
+          seen.add(String(ev.id));
+          deduped.push(ev);
+        }
+      }
+    } catch {
+      continue;
     }
   }
   return deduped;
@@ -128,11 +159,32 @@ Deno.serve(async (req) => {
       const tagFilter = tag || "sports";
 
       let gammaEvents: GammaEvent[];
+      let searchEventsCount = 0;
 
-      if (tagFilter === "sports") {
+      if (tagFilter === "mma" || tagFilter === "boxing") {
+        // Combat sports: use search-based discovery (tags return wrong results)
+        console.log(`[polymarket-sync] Search-based fetch for combat sports: ${COMBAT_SEARCH_QUERIES.join(", ")}`);
+        gammaEvents = await fetchSearchEvents(
+          tagFilter === "boxing" ? ["boxing", "bare knuckle"] : COMBAT_SEARCH_QUERIES
+        );
+        searchEventsCount = gammaEvents.length;
+      } else if (tagFilter === "sports") {
         // Multi-tag parallel fetch for comprehensive sports coverage
         console.log(`[polymarket-sync] Multi-tag fetch for sports (${SPORTS_TAGS.join(", ")})`);
         gammaEvents = await fetchSportsEvents(limit);
+
+        // Also fetch combat sports via search and merge
+        console.log(`[polymarket-sync] Adding combat sports via search: ${COMBAT_SEARCH_QUERIES.join(", ")}`);
+        const combatEvents = await fetchSearchEvents(COMBAT_SEARCH_QUERIES);
+        searchEventsCount = combatEvents.length;
+        const seen = new Set(gammaEvents.map(e => String(e.id)));
+        for (const ev of combatEvents) {
+          if (!seen.has(String(ev.id))) {
+            seen.add(String(ev.id));
+            gammaEvents.push(ev);
+          }
+        }
+        console.log(`[polymarket-sync] After combat merge: ${gammaEvents.length} total (${searchEventsCount} from search)`);
       } else {
         console.log(`[polymarket-sync] Fetching tag="${tagFilter}" with pagination, limit=${limit}`);
         gammaEvents = await fetchTagEvents(tagFilter, limit);
@@ -347,6 +399,7 @@ Deno.serve(async (req) => {
           stale_event_fights_closed: staleFightsClosedCount,
           filtered_out_past: filteredOut,
           total_events: gammaEvents.length,
+          search_events_found: searchEventsCount,
         },
       });
 
@@ -357,6 +410,7 @@ Deno.serve(async (req) => {
         skipped,
         expired_closed: expiredCount,
         total_events: gammaEvents.length,
+        search_events_found: searchEventsCount,
       });
     }
 
