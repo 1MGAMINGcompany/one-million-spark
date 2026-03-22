@@ -701,7 +701,11 @@ export default function FightPredictions() {
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-bold text-primary">${(entry.amount_usd ?? entry.amount_lamports / 1_000_000_000).toFixed(2)}</p>
-                      {entry.claimed && <p className="text-xs text-green-400">✓ Claimed</p>}
+                      {entry.claimed && entry.tx_signature && <p className="text-xs text-green-400">✅ Paid</p>}
+                      {entry.claimed && !entry.tx_signature && <p className="text-xs text-green-400">✓ Claimed</p>}
+                      {!entry.claimed && f?.winner === entry.fighter_pick && ["confirmed", "settled"].includes(f?.status || "") && (
+                        <p className="text-xs text-primary animate-pulse">⏳ Payout processing...</p>
+                      )}
                     </div>
                   </div>
                 );
