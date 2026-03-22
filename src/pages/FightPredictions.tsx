@@ -15,6 +15,7 @@ import PredictionModal from "@/components/predictions/PredictionModal";
 import ComingSoonCard from "@/components/predictions/ComingSoonCard";
 
 import { WalletGateModal } from "@/components/WalletGateModal";
+import ONEFridayFightsHub from "@/components/predictions/ONEFridayFightsHub";
 import SocialShareModal from "@/components/SocialShareModal";
 import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
 import { useMyReferralCode } from "@/hooks/useMyReferralCode";
@@ -530,11 +531,14 @@ export default function FightPredictions() {
 
       {/* Content — organized by status sections */}
       <div className="max-w-4xl mx-auto px-4 pb-8 space-y-6">
+        {activeSport === "MUAY THAI" && (
+          <ONEFridayFightsHub hasFights={hasContent} />
+        )}
         {loading ? (
           <div className="flex justify-center py-12">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
           </div>
-        ) : !hasContent ? (
+        ) : !hasContent && activeSport !== "MUAY THAI" ? (
           <div className="text-center py-12 text-muted-foreground">
             <Swords className="w-12 h-12 mx-auto mb-3 opacity-40" />
             <p>{activeSport !== "ALL" ? `No ${activeSport} events yet. Stay tuned!` : "No events available."}</p>
