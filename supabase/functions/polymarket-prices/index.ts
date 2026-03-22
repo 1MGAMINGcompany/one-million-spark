@@ -289,6 +289,33 @@ Deno.serve(async (req) => {
                     poolAUsd = Math.round(totalVolume * priceA * 100) / 100;
                     poolBUsd = Math.round(totalVolume * priceB * 100) / 100;
                   }
+
+                  // Gamma fallback: if CLOB prices are still zero, try Gamma outcome prices
+                  if (priceA === 0 && priceB === 0 && market.outcomePrices) {
+                    try {
+                      const gammaPrices = JSON.parse(market.outcomePrices);
+                      if (Array.isArray(gammaPrices) && gammaPrices.length >= 2) {
+                        const gA = parseFloat(gammaPrices[0] || "0");
+                        const gB = parseFloat(gammaPrices[1] || "0");
+                        if (gA > 0 || gB > 0) {
+                          priceA = gA;
+                          priceB = gB;
+                          // Derive complement if only one side
+                          if (priceA > 0 && priceA <= 1 && priceB === 0) priceB = Math.round((1 - priceA) * 10000) / 10000;
+                          else if (priceB > 0 && priceB <= 1 && priceA === 0) priceA = Math.round((1 - priceB) * 10000) / 10000;
+                          // Re-derive pools with Gamma prices
+                          if (totalVolume > 0 && priceA > 0 && priceB > 0) {
+                            poolAUsd = Math.round(totalVolume * priceA * 100) / 100;
+                            poolBUsd = Math.round(totalVolume * priceB * 100) / 100;
+                          }
+                          // Update the payload prices since we derived them
+                          updatePayload.price_a = priceA;
+                          updatePayload.price_b = priceB;
+                          enriched.push(`${fight.id}: gamma_price_fallback`);
+                        }
+                      }
+                    } catch { /* ignore parse errors */ }
+                  }
                   gammaImage = market.image || market.icon || null;
                   gammaOutcomes = parseOutcomeNames(market.outcomes);
                   gammaDescription = market.description || null;
