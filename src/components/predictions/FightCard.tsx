@@ -452,15 +452,30 @@ export default function FightCard({
           </div>
         )}
 
+        {/* Auto-payout status for winners */}
+        {isClaimable && fight.winner && userEntries.some((e) => e.fighter_pick === fight.winner && e.claimed && e.tx_signature) && (
+          <div className="mx-4 sm:mx-6 mb-4 bg-green-500/10 border border-green-500/20 rounded-lg p-3 text-center">
+            <p className="text-xs font-bold text-green-400 mb-0.5">✅ Paid — Winnings sent to your wallet</p>
+            <p className="text-[10px] text-muted-foreground">
+              USDC was automatically transferred to your connected wallet.
+            </p>
+          </div>
+        )}
         {hasWinningEntries && claimsOpen && (
-          <div className="px-4 sm:px-6 pb-4">
+          <div className="mx-4 sm:mx-6 mb-4 bg-primary/10 border border-primary/20 rounded-lg p-3 text-center">
+            <p className="text-xs font-bold text-primary mb-0.5">🎉 You won!</p>
+            <p className="text-[11px] text-muted-foreground mb-2">
+              Winnings are being automatically sent to your wallet.
+            </p>
             <Button
-              className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground font-bold"
+              size="sm"
+              variant="outline"
+              className="text-xs"
               onClick={() => onClaim(fight.id)}
               disabled={claiming}
             >
-              {claiming ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Trophy className="w-4 h-4 mr-2" />}
-              Claim Reward
+              {claiming ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+              Claim Now (if not received)
             </Button>
           </div>
         )}
@@ -468,7 +483,7 @@ export default function FightCard({
           <div className="mx-4 sm:mx-6 mb-4 bg-primary/10 border border-primary/20 rounded-lg p-3 text-center">
             <p className="text-xs font-bold text-primary mb-1">🎉 You won!</p>
             <p className="text-[11px] text-muted-foreground">
-              Rewards will become claimable shortly.
+              Winnings will be automatically sent to your wallet shortly.
             </p>
           </div>
         )}
