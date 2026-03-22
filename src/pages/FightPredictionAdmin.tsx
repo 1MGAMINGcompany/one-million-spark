@@ -2269,6 +2269,8 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
   const [selectedTag, setSelectedTag] = useState("sports");
   const [importingId, setImportingId] = useState<string | null>(null);
   const [syncLimit, setSyncLimit] = useState(200);
+  const [directUrl, setDirectUrl] = useState("");
+  const [directImportBusy, setDirectImportBusy] = useState(false);
 
   const TAGS = ["sports", "soccer", "mma", "boxing"];
 
