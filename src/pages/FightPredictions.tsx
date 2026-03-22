@@ -346,17 +346,32 @@ export default function FightPredictions() {
   const handleSubmit = async (amountUsd: number) => {
     if (!selectedFight || !selectedPick || !isConnected || !address) return;
     setSubmitting(true);
+    console.log("[Predict] handleSubmit start", { fightId: selectedFight.id, pick: selectedPick, amountUsd, wallet: address });
     try {
       // Polymarket credentials are now handled server-side (shared backend keys)
       // No SIWE signing required from users
 
       // Step 1: Get Privy access token FIRST (before any money moves)
-      const privyToken = await getAccessToken();
-      if (!privyToken) {
-        throw new Error("Unable to get authentication token. Please log in again.");
+      console.log("[Predict] Step 1: Getting Privy access token...");
+      let privyToken: string | null = null;
+      try {
+        privyToken = await getAccessToken();
+      } catch (tokenErr) {
+        console.error("[Predict] getAccessToken threw:", tokenErr);
       }
+      if (!privyToken) {
+        console.error("[Predict] Token is null — session likely expired");
+        toast.error("Session expired", {
+          description: "Please log in again to place predictions.",
+          action: { label: "Log in", onClick: () => login() },
+        });
+        setSubmitting(false);
+        return;
+      }
+      console.log("[Predict] Step 1 complete — token obtained");
 
       // Step 2: Auth preflight — verify JWKS/JWT are working before fee transfer
+      console.log("[Predict] Step 2: Running preflight...");
       const { data: preflightData, error: preflightError } = await supabase.functions.invoke(
         "prediction-preflight",
         { headers: { "x-privy-token": privyToken } },
@@ -374,12 +389,22 @@ export default function FightPredictions() {
             detail = preflightError.message;
           }
         }
+        console.error("[Predict] Preflight failed:", detail);
+        const isAuthIssue = typeof detail === "string" && (detail.includes("JWKS") || detail.includes("Expected 200 OK") || detail.includes("auth_failed"));
+        if (isAuthIssue) {
+          toast.error("Temporary auth issue", {
+            description: "Please try again in a few seconds.",
+          });
+          setSubmitting(false);
+          return;
+        }
         throw new Error(
           `Authentication check failed (${detail || "unknown"}). No funds were moved. Please try again in a moment.`,
         );
       }
+      console.log("[Predict] Step 2 complete — preflight OK");
 
-      // Step 3: Check relayer allowance — prompt one-time approve if needed
+      console.log("[Predict] Step 3: Checking allowance...", { feeUsdc: amountUsd * (selectedFight.commission_bps != null ? selectedFight.commission_bps / 10_000 : 0.05), allowance: relayer_allowance });
       const feeRate = selectedFight.commission_bps != null
         ? selectedFight.commission_bps / 10_000
         : (selectedFight.source === "polymarket" ? 0.02 : 0.05);
@@ -401,6 +426,7 @@ export default function FightPredictions() {
         }
       }
 
+      console.log("[Predict] Step 4: Submitting to backend...");
       // Step 4: Submit prediction — backend handles fee collection via relayer
       const { data, error } = await supabase.functions.invoke("prediction-submit", {
         body: {
@@ -494,7 +520,13 @@ export default function FightPredictions() {
   };
 
   const handlePredict = (fight: Fight, pick: "fighter_a" | "fighter_b") => {
-    if (fight.status !== "open") return;
+    console.log("[Predict] handlePredict called", { fightId: fight.id, status: fight.status, pick });
+    if (fight.status !== "open") {
+      toast.error("Predictions closed", {
+        description: "This market is locked — predictions are no longer accepted.",
+      });
+      return;
+    }
     if (!isConnected) {
       // Trigger Privy login if not authenticated
       if (!authenticated) {

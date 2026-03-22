@@ -150,6 +150,7 @@ export default function EventSection({
   const allPolymarket = fights.every(f => f.source === "polymarket") && totalPool === 0;
   const hasLiveOdds = allPolymarket && fights.some(f => (f.price_a ?? 0) > 0 && (f.price_b ?? 0) > 0);
   const openCount = eventHasStarted ? 0 : fights.filter(f => f.status === "open").length;
+  const lockedCount = fights.filter(f => f.status === "locked" || (eventHasStarted && f.status === "open")).length;
   const liveCount = fights.filter(f => f.status === "live").length;
 
   const mainFights = fights.filter(f => !f.event_name.includes("Road to Tulum"));
@@ -222,6 +223,7 @@ export default function EventSection({
             {displayLocation && <span>📍 {displayLocation}</span>}
             <span>{fights.length} {getSportItemLabel(sport, fights.length)}</span>
             {openCount > 0 && <span className="text-green-400">{openCount} Open {getSportItemLabel(sport, openCount)}</span>}
+            {lockedCount > 0 && <span className="text-yellow-400">{lockedCount} Locked</span>}
             <span className="text-primary font-bold">
               {allPolymarket
                 ? (hasLiveOdds ? "📊 Live Odds via Polymarket" : "Polymarket Liquidity")
