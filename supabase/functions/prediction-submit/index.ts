@@ -428,15 +428,8 @@ Deno.serve(async (req) => {
 
     normalizedWallet = wallet ? String(wallet).trim().toLowerCase() : null;
 
-    // ── WALLET VERIFICATION: client wallet must match Privy embedded wallet ──
-    if (privyEmbeddedWalletAddress && normalizedWallet !== privyEmbeddedWalletAddress) {
-      await auditLog(supabase, null, normalizedWallet, "wallet_mismatch", null, {
-        submitted_wallet: normalizedWallet,
-        privy_wallet: privyEmbeddedWalletAddress,
-        privy_did: privyDid,
-      });
-      return json({ error: "Wallet does not match authenticated user", error_code: "wallet_mismatch" }, 403);
-    }
+    // Wallet verification is now done via prediction_accounts table (DID → wallet binding)
+    // rather than a live Privy API call, since the REST endpoint is unreliable.
 
     // ═══════════════════════════════════════════════════
     // 1) LOAD SYSTEM CONTROLS
