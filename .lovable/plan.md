@@ -1,52 +1,60 @@
 
 
-## Plan: Past Events Tab + Polygon Wallet Support for Referrals
+## Plan: Fix Prediction Submission Failures
 
-### Part 1: Past Events — "View Past Events" Section
+### Root Cause Analysis
 
-**Problem**: Finished fights disappear or show misleading data. Users need to see results and know their winnings are coming.
+After a full audit, here's what I found:
 
-**Solution**: Replace the current "AWAITING RESULTS" past section with a collapsible "Past Events" section at the bottom of the predictions page, hidden by default behind a button. Only shows events from the last 48 hours.
+**Database is correctly configured:**
+- All current fights have `trading_allowed: true` in the database
+- System is in `allowlist` mode and the admin toggle works
+- Events have correct timestamps and statuses
 
-**File: `src/pages/FightPredictions.tsx`**
-- Filter `pastEvents` to only include events whose fights resolved within the last 48 hours
-- Replace the inline past section with a "View Past Events" button at the bottom
-- When expanded, show a header explaining: "Results stay visible for 48 hours. Winnings are automatically sent to your wallet."
-- Inside, render the same `EventSection` components but with a "COMPLETED" visual treatment
-- Each fight card already handles winner display via `FightCard` status logic
+**The actual problem:** The prediction submission never reaches the backend. Zero logs in `prediction-preflight` or `prediction-submit`. This means the failure happens client-side before any API call is made. Two likely causes:
 
-**File: `src/components/predictions/EventSection.tsx`**
-- No major changes needed — it already renders fights with their status badges
+1. **Privy `getAccessToken()` returning null** — If the Privy session has expired or isn't fully initialized, line 354-357 throws "Unable to get authentication token" immediately
+2. **Silent button blocking** — When `handlePredict` fires on line 497, if `fight.status !== "open"` it does a silent `return` with no feedback to the user. Some fights were auto-locked by the schedule worker.
 
-**File: `src/components/predictions/FightCard.tsx`**
-- Ensure `locked`, `confirmed`, `settled` statuses show the winner name clearly
-- For settled fights with a winner, show "Winner: [name]" badge prominently
+### Fixes (4 changes)
 
-### Part 2: Referral Admin — Polygon Wallet Support
+**1. Add error feedback when predict button is silently blocked**
+- File: `src/pages/FightPredictions.tsx` — `handlePredict` function
+- When `fight.status !== "open"`, show a toast: "This market is locked — predictions are closed" instead of silently returning
+- When `getAccessToken()` fails, offer a "Re-login" action in the toast
 
-**Problem**: The referral admin issue-code form says "Solana or Polygon wallet address" but the edge function validates `wallet.length < 32`. Polygon addresses are 42 characters (0x + 40 hex), so they pass validation. However, the payout history links to Solscan (Solana explorer), and the payout modal says "Solana transaction signature". These need updating for Polygon support.
+**2. Add visible loading/error states for Privy auth**
+- File: `src/pages/FightPredictions.tsx` — `handleSubmit` function
+- Wrap `getAccessToken()` in a try-catch with a descriptive toast: "Session expired — please log in again"
+- Add a retry mechanism: if token is null, call `login()` automatically and retry once
 
-**Changes needed:**
+**3. Show locked status more clearly on fight cards**
+- File: `src/components/predictions/FightCard.tsx`
+- When a fight is `locked` (either from DB or from `eventHasStarted` override), show "Predictions Closed" text on the predict buttons instead of just disabling them silently
 
-**File: `src/pages/ReferralAdmin.tsx`**
-- Detect wallet type (starts with `0x` = Polygon, else Solana)
-- Payout history: use Polygonscan link for `0x` wallets, Solscan for others
-- Payout modal: change "Solana transaction signature" to "Transaction hash" (generic)
-- Change "SOL" labels to show appropriate currency based on wallet type
-- Add a "Payout Wallet (Polygon)" optional field in the issue-code form so admins can associate an EVM address for payouts
+**4. Add client-side console logging for debugging**
+- File: `src/pages/FightPredictions.tsx`
+- Add `console.log` breadcrumbs at each step of `handleSubmit` so future failures can be diagnosed from console logs
 
-**File: `supabase/functions/referral-admin-set-code/index.ts`**
-- Already accepts wallets >= 32 chars — Polygon `0x...` (42 chars) passes. No change needed.
+### Technical Details
 
-**File: `supabase/functions/referral-bind/index.ts`**
-- Already accepts wallets >= 32 chars — works for both chains. No change needed.
+```text
+Current flow:
+  User clicks Predict → handlePredict checks status → (silent return if locked)
+                       → handleSubmit → getAccessToken() → (throws if null)
+                       → preflight → (throws if fails)
+                       → allowance check → submit
 
-**File: `supabase/functions/referral-admin-record-payout/index.ts`**
-- Already accepts wallets >= 32 chars. No change needed.
+Proposed flow:
+  User clicks Predict → handlePredict checks status → (TOAST if locked)
+                       → handleSubmit → getAccessToken() → (TOAST + re-login if null)
+                       → preflight → (TOAST with retry suggestion)
+                       → allowance check → submit
+                       → console.log at each step for audit trail
+```
 
-### Summary of File Changes
-
-1. **`src/pages/FightPredictions.tsx`** — Add collapsible "Past Events" section at bottom with 48h filter and user-friendly messaging
-2. **`src/components/predictions/FightCard.tsx`** — Add winner display for settled/confirmed fights
-3. **`src/pages/ReferralAdmin.tsx`** — Update payout history links to support Polygonscan, make labels chain-aware, update copy to be generic
+### Files to edit
+1. `src/pages/FightPredictions.tsx` — Add toasts for silent failures, auth retry, console logging
+2. `src/components/predictions/FightCard.tsx` — Show "Predictions Closed" on locked fight buttons
+3. `src/components/predictions/EventSection.tsx` — Show locked fight count alongside open count
 
