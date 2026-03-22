@@ -369,6 +369,31 @@ Deno.serve(async (req) => {
         }
       }
 
+      // ── Clean up existing futures junk in DB ──
+      // Cancel any open fights that look like futures markets (no "vs" in title)
+      const { data: futuresJunk } = await supabase
+        .from("prediction_fights")
+        .select("id, title")
+        .eq("status", "open")
+        .eq("source", "polymarket");
+      let futuresCleanedCount = 0;
+      if (futuresJunk && futuresJunk.length > 0) {
+        const junkIds = futuresJunk
+          .filter(f => isFuturesMarket(f.title) || !f.title.toLowerCase().includes("vs"))
+          .map(f => f.id);
+        if (junkIds.length > 0) {
+          const { data: cleaned } = await supabase
+            .from("prediction_fights")
+            .update({ status: "cancelled", polymarket_active: false, updated_at: new Date().toISOString() })
+            .in("id", junkIds)
+            .select("id");
+          futuresCleanedCount = cleaned?.length ?? 0;
+          if (futuresCleanedCount > 0) {
+            console.log(`[polymarket-sync] Cleaned ${futuresCleanedCount} futures/non-fixture markets from DB`);
+          }
+        }
+      }
+
       // Update sync state
       await supabase
         .from("polymarket_sync_state")
@@ -391,6 +416,8 @@ Deno.serve(async (req) => {
           skipped,
           expired_closed: expiredCount,
           stale_event_fights_closed: staleFightsClosedCount,
+          futures_cleaned: futuresCleanedCount,
+          futures_filtered: futuresFiltered,
           filtered_out_past: filteredOut,
           total_events: gammaEvents.length,
           search_queries: searchQueries,
@@ -403,6 +430,7 @@ Deno.serve(async (req) => {
         markets_upserted: marketsUpserted,
         skipped,
         expired_closed: expiredCount,
+        futures_cleaned: futuresCleanedCount,
         total_events: gammaEvents.length,
       });
     }
