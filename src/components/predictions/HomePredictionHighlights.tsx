@@ -26,15 +26,24 @@ const SPORT_IMG: Record<string, string> = {
   FUTBOL: futbolImg,
 };
 
-function calcOdds(poolA: number, poolB: number, priceA?: number | null, priceB?: number | null) {
+function calcOdds(poolA: number, poolB: number, priceA?: number | null, priceB?: number | null, source?: string | null) {
   if (priceA && priceA > 0 && priceB && priceB > 0) {
-    return { oddsA: +(1 / priceA).toFixed(2), oddsB: +(1 / priceB).toFixed(2) };
+    return { oddsA: +(1 / priceA).toFixed(2), oddsB: +(1 / priceB).toFixed(2), noData: false };
+  }
+  if (priceA && priceA > 0 && priceA <= 1) {
+    const dB = 1 - priceA;
+    return { oddsA: +(1 / priceA).toFixed(2), oddsB: dB > 0 ? +(1 / dB).toFixed(2) : 0, noData: false };
+  }
+  if (priceB && priceB > 0 && priceB <= 1) {
+    const dA = 1 - priceB;
+    return { oddsA: dA > 0 ? +(1 / dA).toFixed(2) : 0, oddsB: +(1 / priceB).toFixed(2), noData: false };
   }
   const total = poolA + poolB;
-  if (total === 0) return { oddsA: 2.0, oddsB: 2.0 };
+  if (total === 0) return { oddsA: 0, oddsB: 0, noData: source === "polymarket" };
   return {
-    oddsA: poolA > 0 ? total / poolA : 0,
-    oddsB: poolB > 0 ? total / poolB : 0,
+    oddsA: poolA > 0 ? +(total / poolA).toFixed(2) : 0,
+    oddsB: poolB > 0 ? +(total / poolB).toFixed(2) : 0,
+    noData: false,
   };
 }
 
@@ -47,7 +56,7 @@ function CompactFightCard({
 }) {
   const poolA = (fight.pool_a_usd ?? 0) > 0 ? fight.pool_a_usd! : fight.pool_a_lamports / 1_000_000_000;
   const poolB = (fight.pool_b_usd ?? 0) > 0 ? fight.pool_b_usd! : fight.pool_b_lamports / 1_000_000_000;
-  const { oddsA, oddsB } = calcOdds(poolA, poolB, fight.price_a, fight.price_b);
+  const { oddsA, oddsB, noData } = calcOdds(poolA, poolB, fight.price_a, fight.price_b, (fight as any).source);
   const totalPool = poolA + poolB;
   const isPolymarketPool = fight.source === "polymarket" && totalPool === 0;
   const isOpen = fight.status === "open";
@@ -74,7 +83,7 @@ function CompactFightCard({
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2" dir="ltr">
           <div className="text-center">
             <p className="text-xs font-bold text-foreground truncate">{fight.fighter_a_name}</p>
-            <p className="text-primary font-bold text-sm">{oddsA.toFixed(2)}x</p>
+            <p className="text-primary font-bold text-sm">{oddsA > 0 ? `${oddsA.toFixed(2)}x` : '—'}</p>
             {isOpen && onPredict && (
               <Button
                 size="sm"
@@ -88,7 +97,7 @@ function CompactFightCard({
           <Swords className="w-4 h-4 text-primary/60" />
           <div className="text-center">
             <p className="text-xs font-bold text-foreground truncate">{fight.fighter_b_name}</p>
-            <p className="text-primary font-bold text-sm">{oddsB.toFixed(2)}x</p>
+            <p className="text-primary font-bold text-sm">{oddsB > 0 ? `${oddsB.toFixed(2)}x` : '—'}</p>
             {isOpen && onPredict && (
               <Button
                 size="sm"

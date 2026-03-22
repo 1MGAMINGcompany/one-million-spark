@@ -92,18 +92,42 @@ const STATUS_BADGE: Record<string, { label: string; className: string }> = {
   cancelled: { label: "CANCELLED", className: "bg-muted text-muted-foreground" },
 };
 
-function calcOdds(poolA: number, poolB: number, priceA?: number | null, priceB?: number | null) {
+function calcOdds(poolA: number, poolB: number, priceA?: number | null, priceB?: number | null, source?: string | null) {
+  // Both Polymarket prices available
   if (priceA && priceA > 0 && priceB && priceB > 0) {
     return {
       oddsA: +(1 / priceA).toFixed(2),
       oddsB: +(1 / priceB).toFixed(2),
+      noData: false,
     };
   }
+  // One-sided Polymarket price — derive complement
+  if (priceA && priceA > 0 && priceA <= 1) {
+    const derivedB = 1 - priceA;
+    return {
+      oddsA: +(1 / priceA).toFixed(2),
+      oddsB: derivedB > 0 ? +(1 / derivedB).toFixed(2) : 0,
+      noData: false,
+    };
+  }
+  if (priceB && priceB > 0 && priceB <= 1) {
+    const derivedA = 1 - priceB;
+    return {
+      oddsA: derivedA > 0 ? +(1 / derivedA).toFixed(2) : 0,
+      oddsB: +(1 / priceB).toFixed(2),
+      noData: false,
+    };
+  }
+  // Pool-based odds
   const total = poolA + poolB;
-  if (total === 0) return { oddsA: 2.0, oddsB: 2.0 };
+  if (total === 0) {
+    // For Polymarket fights with no usable data, flag it
+    return { oddsA: 0, oddsB: 0, noData: source === "polymarket" };
+  }
   return {
-    oddsA: poolA > 0 ? total / poolA : 0,
-    oddsB: poolB > 0 ? total / poolB : 0,
+    oddsA: poolA > 0 ? +(total / poolA).toFixed(2) : 0,
+    oddsB: poolB > 0 ? +(total / poolB).toFixed(2) : 0,
+    noData: false,
   };
 }
 
@@ -114,13 +138,19 @@ function getPoolUsd(fight: Fight): { poolA: number; poolB: number } {
   return { poolA: fight.pool_a_lamports / 1_000_000_000, poolB: fight.pool_b_lamports / 1_000_000_000 };
 }
 
-/** Derive probability percentages from Polymarket prices */
+/** Derive probability percentages from Polymarket prices (handles one-sided) */
 function getProbabilities(fight: Fight): { probA: number; probB: number } | null {
-  if (fight.price_a && fight.price_a > 0 && fight.price_b && fight.price_b > 0) {
-    return {
-      probA: Math.round(fight.price_a * 100),
-      probB: Math.round(fight.price_b * 100),
-    };
+  const pA = fight.price_a ?? 0;
+  const pB = fight.price_b ?? 0;
+  if (pA > 0 && pB > 0) {
+    return { probA: Math.round(pA * 100), probB: Math.round(pB * 100) };
+  }
+  // One-sided: derive complement
+  if (pA > 0 && pA <= 1) {
+    return { probA: Math.round(pA * 100), probB: Math.round((1 - pA) * 100) };
+  }
+  if (pB > 0 && pB <= 1) {
+    return { probA: Math.round((1 - pB) * 100), probB: Math.round(pB * 100) };
   }
   return null;
 }
@@ -254,7 +284,7 @@ export default function FightCard({
   eventHasStarted?: boolean;
 }) {
   const { poolA, poolB } = getPoolUsd(fight);
-  const { oddsA, oddsB } = calcOdds(poolA, poolB, fight.price_a, fight.price_b);
+  const { oddsA, oddsB, noData } = calcOdds(poolA, poolB, fight.price_a, fight.price_b, fight.source);
   const totalPool = poolA + poolB;
   const isPolymarket = fight.source === "polymarket";
   const isFeatured = fight.featured === true;
@@ -578,7 +608,7 @@ function FighterColumn({
       <p className={`text-muted-foreground mt-1 ${isSoccer ? 'text-xs sm:text-sm' : 'text-xs'}`}>
         {poolAmount > 0 ? `$${poolAmount.toFixed(2)} USDC` : "Market-backed"}
       </p>
-      <p className={`text-primary font-bold ${isSoccer ? 'text-xl sm:text-2xl' : 'text-lg'}`}>{odds.toFixed(2)}x</p>
+      <p className={`text-primary font-bold ${isSoccer ? 'text-xl sm:text-2xl' : 'text-lg'}`}>{odds > 0 ? `${odds.toFixed(2)}x` : '—'}</p>
       {canPredict && (
         <Button size="sm" className={`mt-2 w-full bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.97] transition-all ${isSoccer ? 'text-sm py-2.5 font-bold' : 'text-xs'}`} onClick={onPredict}>
           Predict
@@ -622,7 +652,7 @@ function SoccerTeamColumn({
       <p className="text-[10px] text-muted-foreground">
         {poolAmount > 0 ? `$${poolAmount.toFixed(2)} USDC` : "Market-backed"}
       </p>
-      <p className="text-xl sm:text-2xl font-bold text-primary leading-none">{odds.toFixed(2)}x</p>
+      <p className="text-xl sm:text-2xl font-bold text-primary leading-none">{odds > 0 ? `${odds.toFixed(2)}x` : '—'}</p>
       {canPredict && (
         <Button
           size="sm"

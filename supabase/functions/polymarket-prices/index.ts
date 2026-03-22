@@ -243,12 +243,23 @@ Deno.serve(async (req) => {
           try {
             const [resA, resB] = await Promise.all([
               fetch(`${CLOB_BASE}/price?token_id=${fight.polymarket_outcome_a_token}&side=BUY`),
-              fetch(`${CLOB_BASE}/price?token_id=${fight.polymarket_outcome_b_token}&side=BUY`),
+              fight.polymarket_outcome_b_token
+                ? fetch(`${CLOB_BASE}/price?token_id=${fight.polymarket_outcome_b_token}&side=BUY`)
+                : Promise.resolve(null),
             ]);
-            if (resA.ok && resB.ok) {
-              const [dataA, dataB] = await Promise.all([resA.json(), resB.json()]);
+            if (resA.ok) {
+              const dataA = await resA.json();
               priceA = parseFloat(dataA?.price || "0");
+            }
+            if (resB && resB.ok) {
+              const dataB = await resB.json();
               priceB = parseFloat(dataB?.price || "0");
+            }
+            // Derive complement for binary markets when only one side is available
+            if (priceA > 0 && priceA <= 1 && priceB === 0) {
+              priceB = Math.round((1 - priceA) * 10000) / 10000;
+            } else if (priceB > 0 && priceB <= 1 && priceA === 0) {
+              priceA = Math.round((1 - priceB) * 10000) / 10000;
             }
           } catch (e) {
             console.warn(`[polymarket-prices] CLOB price fetch failed for ${fight.id}:`, e);
@@ -278,6 +289,33 @@ Deno.serve(async (req) => {
                     poolAUsd = Math.round(totalVolume * priceA * 100) / 100;
                     poolBUsd = Math.round(totalVolume * priceB * 100) / 100;
                   }
+
+                  // Gamma fallback: if CLOB prices are still zero, try Gamma outcome prices
+                  if (priceA === 0 && priceB === 0 && market.outcomePrices) {
+                    try {
+                      const gammaPrices = JSON.parse(market.outcomePrices);
+                      if (Array.isArray(gammaPrices) && gammaPrices.length >= 2) {
+                        const gA = parseFloat(gammaPrices[0] || "0");
+                        const gB = parseFloat(gammaPrices[1] || "0");
+                        if (gA > 0 || gB > 0) {
+                          priceA = gA;
+                          priceB = gB;
+                          // Derive complement if only one side
+                          if (priceA > 0 && priceA <= 1 && priceB === 0) priceB = Math.round((1 - priceA) * 10000) / 10000;
+                          else if (priceB > 0 && priceB <= 1 && priceA === 0) priceA = Math.round((1 - priceB) * 10000) / 10000;
+                          // Re-derive pools with Gamma prices
+                          if (totalVolume > 0 && priceA > 0 && priceB > 0) {
+                            poolAUsd = Math.round(totalVolume * priceA * 100) / 100;
+                            poolBUsd = Math.round(totalVolume * priceB * 100) / 100;
+                          }
+                          // Update the payload prices since we derived them
+                          updatePayload.price_a = priceA;
+                          updatePayload.price_b = priceB;
+                          enriched.push(`${fight.id}: gamma_price_fallback`);
+                        }
+                      }
+                    } catch { /* ignore parse errors */ }
+                  }
                   gammaImage = market.image || market.icon || null;
                   gammaOutcomes = parseOutcomeNames(market.outcomes);
                   gammaDescription = market.description || null;
@@ -302,8 +340,12 @@ Deno.serve(async (req) => {
             polymarket_last_synced_at: new Date().toISOString(),
           };
 
+          // Always persist volume/liquidity even when prices are incomplete
           if (totalVolume > 0) {
             updatePayload.polymarket_volume_usd = totalVolume;
+          }
+          // Write derived pools whenever we have both prices AND volume
+          if (poolAUsd > 0 || poolBUsd > 0) {
             updatePayload.pool_a_usd = poolAUsd;
             updatePayload.pool_b_usd = poolBUsd;
           }
@@ -458,6 +500,14 @@ Deno.serve(async (req) => {
                 updatePayload.fighter_b_photo = photo;
                 enriched.push(`${fight.id}: fighter_b_photo`);
               }
+            }
+          }
+
+          // ── Bad-market safeguard: flag fights with volume but no usable odds ──
+          if (totalVolume > 0 && priceA === 0 && priceB === 0) {
+            console.warn(`[polymarket-prices] BAD_MARKET: fight=${fight.id} has volume=$${totalVolume} but no usable prices`);
+            if (!updatePayload.enrichment_notes) {
+              updatePayload.enrichment_notes = `price_missing: volume=$${totalVolume.toFixed(0)} but no CLOB/Gamma prices available`;
             }
           }
 
