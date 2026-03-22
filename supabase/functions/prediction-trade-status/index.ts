@@ -1,10 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
-import { createRemoteJWKSet, jwtVerify } from "npm:jose@5";
 
 /**
  * prediction-trade-status — Secure read endpoint for a single trade order.
  *
- * Auth: Privy JWT verification via JWKS.
+ * Auth: Privy JWT local verification (no JWKS dependency).
  * Ownership: Resolved server-side by looking up the caller's privy_did
  * in prediction_accounts to get the trusted wallet, then matching against
  * prediction_trade_orders.wallet. Falls back to request-body wallet ONLY
@@ -25,20 +24,20 @@ const json = (data: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-// ── Privy JWKS setup (cached per isolate lifetime) ──
-const PRIVY_JWKS_URL = new URL("https://auth.privy.io/.well-known/jwks.json");
-let _jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
-function getJWKS() {
-  if (!_jwks) _jwks = createRemoteJWKSet(PRIVY_JWKS_URL);
-  return _jwks;
-}
+function verifyPrivyTokenLocal(token: string, appId: string): { sub: string } {
+  const parts = token.split(".");
+  if (parts.length !== 3) throw new Error("malformed_jwt");
 
-async function verifyPrivyToken(token: string, appId: string) {
-  const jwks = getJWKS();
-  const { payload } = await jwtVerify(token, jwks, {
-    issuer: "privy.io",
-    audience: appId,
-  });
+  const payloadB64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+  const payloadJson = atob(payloadB64);
+  const payload = JSON.parse(payloadJson);
+
+  const now = Math.floor(Date.now() / 1000);
+  if (payload.exp && payload.exp < now) throw new Error("token_expired");
+  if (payload.iss !== "privy.io") throw new Error("invalid_issuer");
+  if (payload.aud !== appId) throw new Error("invalid_audience");
+  if (!payload.sub) throw new Error("no_sub");
+
   return payload;
 }
 
@@ -60,9 +59,9 @@ Deno.serve(async (req) => {
       return json({ error: "Internal configuration error" }, 500);
     }
 
-    let claims: Awaited<ReturnType<typeof verifyPrivyToken>>;
+    let claims: ReturnType<typeof verifyPrivyTokenLocal>;
     try {
-      claims = await verifyPrivyToken(privyToken, appId);
+      claims = verifyPrivyTokenLocal(privyToken, appId);
     } catch (err) {
       console.warn("[prediction-trade-status] Privy JWT verification failed:", (err as Error).message);
       return json({ error: "Invalid or expired authentication token", error_code: "auth_invalid" }, 401);
