@@ -2389,7 +2389,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
           disabled={syncBusy || parentBusy}
         >
           {syncBusy ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Download className="w-4 h-4 mr-2" />}
-          Sync {selectedTag}
+          Sync {selectedTag === "mma" ? "UFC/MMA" : selectedTag === "boxing" ? "Boxing" : selectedTag}
         </Button>
         <Button
           variant="outline"
