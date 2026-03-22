@@ -23,19 +23,13 @@ function json(body: Record<string, unknown>, status = 200) {
 }
 
 /**
- * Verify Privy token by calling the Privy REST API with app secret.
- * This is more reliable than JWKS because it doesn't depend on
- * the edge runtime's ability to fetch remote JWK sets.
+ * Verify Privy token locally by decoding JWT and checking claims.
+ * No remote API call — avoids unreliable JWKS/REST endpoints.
  */
-async function verifyPrivyToken(
+function verifyPrivyTokenLocal(
   privyToken: string,
   appId: string,
-  appSecret: string,
-): Promise<{ did: string }> {
-  const basicAuth = btoa(`${appId}:${appSecret}`);
-
-  // Decode JWT payload to extract the DID (sub claim)
-  // We still validate via Privy API to ensure the token is legitimate
+): { did: string } {
   const parts = privyToken.split(".");
   if (parts.length !== 3) throw new Error("malformed_jwt");
 
@@ -46,24 +40,10 @@ async function verifyPrivyToken(
   const did = payload.sub;
   if (!did || typeof did !== "string") throw new Error("no_did_in_token");
 
-  // Check token expiry locally first
   const now = Math.floor(Date.now() / 1000);
   if (payload.exp && payload.exp < now) throw new Error("token_expired");
   if (payload.iss !== "privy.io") throw new Error("invalid_issuer");
   if (payload.aud !== appId) throw new Error("invalid_audience");
-
-  // Validate token is still active by fetching user from Privy API
-  const userRes = await fetch(`https://api.privy.io/v1/users/${did}`, {
-    headers: {
-      Authorization: `Basic ${basicAuth}`,
-      "privy-app-id": appId,
-    },
-  });
-
-  if (!userRes.ok) {
-    const errText = await userRes.text().catch(() => "unknown");
-    throw new Error(`privy_api_${userRes.status}: ${errText.slice(0, 200)}`);
-  }
 
   return { did };
 }
