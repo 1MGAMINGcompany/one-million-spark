@@ -2348,19 +2348,23 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
     <div className="space-y-3">
       {/* Tag selector */}
       <div className="flex flex-wrap gap-1.5">
-        {TAGS.map(t => (
-          <button
-            key={t}
-            onClick={() => setSelectedTag(t)}
-            className={`text-xs px-2.5 py-1 rounded-full border transition-colors capitalize ${
-              selectedTag === t
-                ? "bg-purple-500/20 text-purple-400 border-purple-500/40"
-                : "bg-muted/30 text-muted-foreground border-border/30 hover:border-border"
-            }`}
-          >
-            {t}
-          </button>
-        ))}
+        {TAGS.map(t => {
+          const label = t === "mma" ? "UFC / MMA" : t === "boxing" ? "Boxing" : t;
+          const hint = (t === "mma" || t === "boxing") ? " (search)" : "";
+          return (
+            <button
+              key={t}
+              onClick={() => setSelectedTag(t)}
+              className={`text-xs px-2.5 py-1 rounded-full border transition-colors capitalize ${
+                selectedTag === t
+                  ? "bg-purple-500/20 text-purple-400 border-purple-500/40"
+                  : "bg-muted/30 text-muted-foreground border-border/30 hover:border-border"
+              }`}
+            >
+              {label}{hint && <span className="text-[9px] opacity-60">{hint}</span>}
+            </button>
+          );
+        })}
       </div>
 
       {/* Limit control */}
