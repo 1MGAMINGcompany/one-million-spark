@@ -637,6 +637,7 @@ export default function FightPredictions() {
               <PastEventsSection
                 pastEvents={pastEvents}
                 renderEventList={renderEventList}
+                userEntries={userEntries}
               />
             )}
 
