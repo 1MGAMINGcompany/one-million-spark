@@ -26,24 +26,36 @@ const SPORT_IMG: Record<string, string> = {
   FUTBOL: futbolImg,
 };
 
+/** Detect if Polymarket prices are in resolving state (exactly 0/1) */
+function isResolvingPrice(priceA?: number | null, priceB?: number | null, source?: string | null): boolean {
+  if (source !== "polymarket") return false;
+  const a = priceA ?? 0;
+  const b = priceB ?? 0;
+  return (a === 0 && b === 1) || (a === 1 && b === 0) || (a === 0 && b === 0);
+}
+
 function calcOdds(poolA: number, poolB: number, priceA?: number | null, priceB?: number | null, source?: string | null) {
+  if (isResolvingPrice(priceA, priceB, source)) {
+    return { oddsA: 0, oddsB: 0, noData: false, resolving: true };
+  }
   if (priceA && priceA > 0 && priceB && priceB > 0) {
-    return { oddsA: +(1 / priceA).toFixed(2), oddsB: +(1 / priceB).toFixed(2), noData: false };
+    return { oddsA: +(1 / priceA).toFixed(2), oddsB: +(1 / priceB).toFixed(2), noData: false, resolving: false };
   }
   if (priceA && priceA > 0 && priceA <= 1) {
     const dB = 1 - priceA;
-    return { oddsA: +(1 / priceA).toFixed(2), oddsB: dB > 0 ? +(1 / dB).toFixed(2) : 0, noData: false };
+    return { oddsA: +(1 / priceA).toFixed(2), oddsB: dB > 0 ? +(1 / dB).toFixed(2) : 0, noData: false, resolving: false };
   }
   if (priceB && priceB > 0 && priceB <= 1) {
     const dA = 1 - priceB;
-    return { oddsA: dA > 0 ? +(1 / dA).toFixed(2) : 0, oddsB: +(1 / priceB).toFixed(2), noData: false };
+    return { oddsA: dA > 0 ? +(1 / dA).toFixed(2) : 0, oddsB: +(1 / priceB).toFixed(2), noData: false, resolving: false };
   }
   const total = poolA + poolB;
-  if (total === 0) return { oddsA: 0, oddsB: 0, noData: source === "polymarket" };
+  if (total === 0) return { oddsA: 0, oddsB: 0, noData: source === "polymarket", resolving: false };
   return {
     oddsA: poolA > 0 ? +(total / poolA).toFixed(2) : 0,
     oddsB: poolB > 0 ? +(total / poolB).toFixed(2) : 0,
     noData: false,
+    resolving: false,
   };
 }
 
