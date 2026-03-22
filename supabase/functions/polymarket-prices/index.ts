@@ -243,12 +243,23 @@ Deno.serve(async (req) => {
           try {
             const [resA, resB] = await Promise.all([
               fetch(`${CLOB_BASE}/price?token_id=${fight.polymarket_outcome_a_token}&side=BUY`),
-              fetch(`${CLOB_BASE}/price?token_id=${fight.polymarket_outcome_b_token}&side=BUY`),
+              fight.polymarket_outcome_b_token
+                ? fetch(`${CLOB_BASE}/price?token_id=${fight.polymarket_outcome_b_token}&side=BUY`)
+                : Promise.resolve(null),
             ]);
-            if (resA.ok && resB.ok) {
-              const [dataA, dataB] = await Promise.all([resA.json(), resB.json()]);
+            if (resA.ok) {
+              const dataA = await resA.json();
               priceA = parseFloat(dataA?.price || "0");
+            }
+            if (resB && resB.ok) {
+              const dataB = await resB.json();
               priceB = parseFloat(dataB?.price || "0");
+            }
+            // Derive complement for binary markets when only one side is available
+            if (priceA > 0 && priceA <= 1 && priceB === 0) {
+              priceB = Math.round((1 - priceA) * 10000) / 10000;
+            } else if (priceB > 0 && priceB <= 1 && priceA === 0) {
+              priceA = Math.round((1 - priceB) * 10000) / 10000;
             }
           } catch (e) {
             console.warn(`[polymarket-prices] CLOB price fetch failed for ${fight.id}:`, e);
