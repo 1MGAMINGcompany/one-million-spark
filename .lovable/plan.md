@@ -1,57 +1,36 @@
 
 
-## Plan: Fix Smart Wallet Approval Confirmation (UserOp Hash vs Tx Hash)
+## Plan: Fix Polymarket Soccer Market Discovery
 
-### What's Actually Wrong
+### Problem
+The admin sync panel can't find the soccer matches you see on Polymarket's website. Two root causes:
 
-The user confirms the approval wallet prompt works ("says accepted"), but the toast shows **"USDC approval failed"**. The screenshot confirms this exact toast.
+1. **`limit=50` is far too low** — The sync fetches at most 50 events total across all sports tags combined. Polymarket has 120+ MLS markets alone, plus La Liga (14), EPL (12), Serie A (21), Ligue 1 (36), Bundesliga (35), etc. Most soccer markets never make it into your system.
 
-**Root cause**: With Privy smart wallets (ERC-4337) and `sponsor: true`, `sendTransaction` returns a **UserOperation hash**, not a standard transaction hash. The `waitForReceipt` function polls `eth_getTransactionReceipt` with this UserOp hash, which **never resolves** because Polygon RPCs don't recognize UserOp hashes as transaction hashes. After 16 seconds of polling, it returns `{ found: false }` and the hook returns `{ success: false, error: "tx_not_confirmed_after_16s" }`.
+2. **Missing soccer-specific tags** — Polymarket tags soccer markets under more specific tags like `"mls"`, `"epl"`, `"la-liga"`, `"serie-a"`, `"bundesliga"`, `"ligue-1"`, `"champions-league"` that aren't in the current `SPORTS_TAGS` array. The generic `"soccer"` and `"football"` tags may not cover all leagues.
 
-Then in `FightPredictions.tsx` line 446: `throw new Error("tx_not_confirmed_after_16s")` — wait, this doesn't contain "approval" or "allowance"...
+### Changes
 
-**Correction**: There's a second path. If `waitForReceipt` happens to find a receipt (perhaps Privy sometimes returns the actual tx hash), the approval IS confirmed, and we proceed to the 6-second wait + direct RPC allowance check. But the allowance check at line 455 uses `address!` from `usePrivyWallet()` which returns the **smart wallet** address. If `useSendTransaction` internally sends the `approve` call from the **embedded EOA** (not the smart wallet), then `allowance[EOA][relayer] = 100 USDC` but `allowance[smartWallet][relayer] = 0`. This causes the error at line 473: *"Approval confirmed but allowance not yet visible on-chain"* — which contains "allowance" and triggers the "USDC approval failed" toast.
+**1. `supabase/functions/polymarket-sync/index.ts`**
+- Increase default limit from 50 → 200
+- Add soccer-specific league tags to `SPORTS_TAGS`: `"mls"`, `"epl"`, `"la-liga"`, `"serie-a"`, `"bundesliga"`, `"ligue-1"`, `"champions-league"`, `"liga-mx"`
+- Add pagination support: if Gamma returns exactly `limit` results for a tag, fetch the next page (offset-based)
+- The existing deduplication by event ID already handles overlap between tags
 
-**Either way, both failure paths stem from the same issue**: `useSendTransaction` with smart wallets behaves differently than expected for receipt/address resolution.
+**2. `src/pages/FightPredictionAdmin.tsx`**
+- Add a `"soccer"` quick-tag button alongside existing tags so you can sync soccer-only
+- Allow custom limit input (default 200) so you can pull more if needed
+- Show per-tag breakdown in sync results (e.g., "MLS: 120, La Liga: 14, ...")
 
-### Solution
+### Why Search Doesn't Find Them
+The search action uses Gamma's `/public-search?q=...` endpoint which works for event-level searches. Individual game matches (like "Minnesota United vs Seattle Sounders") are **sub-markets within grouped events** — the event title might be "MLS March 22" with 50+ sub-markets inside it. Searching "Portland Timbers" should work, but searching "MLS" returns the parent event which contains all the individual matches.
 
-**Step 1: Replace `waitForReceipt` with allowance-based confirmation**
+The fix is primarily about the sync pulling more data, not search.
 
-Instead of polling for a transaction receipt (unreliable with UserOps), confirm the approval by polling the on-chain allowance directly. This works regardless of whether the hash is a UserOp hash or tx hash.
+### Files to Modify
 
-**Step 2: Add address diagnostics**
-
-Log the exact address that `usePrivyWallet` returns vs. what Privy uses as the `from` for the approval. This captures whether there's an EOA/smart-wallet mismatch.
-
-**Step 3: Retry allowance check with backoff**
-
-Replace the single allowance check in `FightPredictions.tsx` with a retry loop (up to 4 attempts, 3s apart). Polygon block time is ~2s, so 12 seconds total should be more than enough for any confirmed tx to propagate.
-
-### Files to Edit
-
-- **`src/hooks/usePrivyFeeTransfer.ts`** — Replace `waitForReceipt` (tx receipt polling) with `waitForAllowance` (polls the ERC-20 allowance until it's non-zero or timeout). This is the primary fix.
-
-- **`src/pages/FightPredictions.tsx`** — Remove the redundant post-approval allowance check (lines 452-474) since the hook now handles confirmation. Add diagnostic `console.log` of the wallet address being used.
-
-### Technical Details
-
-```text
-Current flow (broken):
-  sendTransaction → get hash → poll eth_getTransactionReceipt (fails for UserOps)
-  → "tx_not_confirmed" → error
-
-Fixed flow:
-  sendTransaction → get hash → poll allowance(owner, relayer) via eth_call
-  → allowance > 0 = success → proceed to backend submission
-  → allowance still 0 after 20s = fail → clear error message
-```
-
-The `waitForAllowance` function will:
-1. Accept the user's wallet address and the relayer address
-2. Poll `allowance(owner, spender)` via `eth_call` on Polygon RPCs
-3. Return success as soon as allowance >= 1 USDC (the approval cap is 100 USDC)
-4. Timeout after ~20 seconds with a clear error
-
-This approach is **chain-agnostic** — it works for EOA transactions, smart wallet UserOps, and any other execution path Privy might use internally.
+| File | Change |
+|------|--------|
+| `supabase/functions/polymarket-sync/index.ts` | Add league-specific tags, increase limit to 200, add pagination |
+| `src/pages/FightPredictionAdmin.tsx` | Add soccer quick-tag, configurable limit, better sync result display |
 
