@@ -426,6 +426,7 @@ export default function FightPredictions() {
         }
       }
 
+      console.log("[Predict] Step 4: Submitting to backend...");
       // Step 4: Submit prediction — backend handles fee collection via relayer
       const { data, error } = await supabase.functions.invoke("prediction-submit", {
         body: {
