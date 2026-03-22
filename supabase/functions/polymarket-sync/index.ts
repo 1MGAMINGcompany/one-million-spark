@@ -12,8 +12,7 @@ const GAMMA_BASE = "https://gamma-api.polymarket.com";
 // NOTE: "mma", "boxing", "ufc", "fighting" tags return crypto/finance events on Gamma API.
 // Combat sports are discovered via SEARCH_QUERIES instead.
 const SPORTS_TAGS = [
-  "sports", "soccer", "football", "nfl", "nba", "mlb", "tennis", "cricket",
-  "mls", "epl", "la-liga", "serie-a", "bundesliga", "ligue-1", "champions-league", "liga-mx",
+  "soccer", "mls", "epl", "la-liga", "serie-a", "bundesliga", "ligue-1", "champions-league", "liga-mx",
 ];
 
 // ── Search-based discovery for combat sports (tags return wrong results) ──
