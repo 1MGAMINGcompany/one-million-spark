@@ -138,13 +138,19 @@ function getPoolUsd(fight: Fight): { poolA: number; poolB: number } {
   return { poolA: fight.pool_a_lamports / 1_000_000_000, poolB: fight.pool_b_lamports / 1_000_000_000 };
 }
 
-/** Derive probability percentages from Polymarket prices */
+/** Derive probability percentages from Polymarket prices (handles one-sided) */
 function getProbabilities(fight: Fight): { probA: number; probB: number } | null {
-  if (fight.price_a && fight.price_a > 0 && fight.price_b && fight.price_b > 0) {
-    return {
-      probA: Math.round(fight.price_a * 100),
-      probB: Math.round(fight.price_b * 100),
-    };
+  const pA = fight.price_a ?? 0;
+  const pB = fight.price_b ?? 0;
+  if (pA > 0 && pB > 0) {
+    return { probA: Math.round(pA * 100), probB: Math.round(pB * 100) };
+  }
+  // One-sided: derive complement
+  if (pA > 0 && pA <= 1) {
+    return { probA: Math.round(pA * 100), probB: Math.round((1 - pA) * 100) };
+  }
+  if (pB > 0 && pB <= 1) {
+    return { probA: Math.round((1 - pB) * 100), probB: Math.round(pB * 100) };
   }
   return null;
 }
