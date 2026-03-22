@@ -234,7 +234,7 @@ function PolymarketPoolStrip({ fight }: { fight: Fight }) {
       <div className="flex items-center justify-between text-[10px]">
         <div className="text-center">
           <span className="block font-bold text-foreground text-xs">
-            {hasPool ? `$${poolA.toFixed(2)}` : probs ? `${probs.probA}¢` : "—"}
+            {hasPool ? `$${poolA.toFixed(2)}` : probs ? `${formatProb(probs.probA)}` : "—"}
           </span>
           <span className="text-muted-foreground">{nameA.split(" ").pop()}</span>
         </div>
