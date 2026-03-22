@@ -2437,6 +2437,9 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
           {lastSyncResult.expired_closed > 0 && (
             <p className="text-yellow-400">Auto-closed {lastSyncResult.expired_closed} expired fights</p>
           )}
+          {lastSyncResult.futures_cleaned > 0 && (
+            <p className="text-orange-400">🧹 Cleaned {lastSyncResult.futures_cleaned} futures/non-fixture markets</p>
+          )}
         </div>
       )}
 
