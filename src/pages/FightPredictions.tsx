@@ -371,17 +371,24 @@ export default function FightPredictions() {
       console.log("[Predict] Step 1 complete — token obtained");
 
       // Step 2: Auth preflight — verify JWKS/JWT are working before fee transfer
+      // Preflight is a safety gate only; prediction-submit also verifies JWT independently.
+      // If preflight fails twice (transient JWKS), we skip it and let submit handle auth.
       console.log("[Predict] Step 2: Running preflight...");
-      const { data: preflightData, error: preflightError } = await supabase.functions.invoke(
-        "prediction-preflight",
-        { headers: { "x-privy-token": privyToken } },
-      );
-      if (preflightError || !preflightData?.ok) {
-        // supabase.functions.invoke puts non-2xx response body in `error`, not `data`
+      let preflightPassed = false;
+      for (let preflightAttempt = 0; preflightAttempt < 2; preflightAttempt++) {
+        const { data: preflightData, error: preflightError } = await supabase.functions.invoke(
+          "prediction-preflight",
+          { headers: { "x-privy-token": privyToken } },
+        );
+        if (!preflightError && preflightData?.ok) {
+          preflightPassed = true;
+          break;
+        }
+        // Extract error detail for logging
         let detail = preflightData?.detail || preflightData?.error;
         if (!detail && preflightError) {
           try {
-            const errBody = typeof preflightError === "object" && preflightError.context
+            const errBody = typeof preflightError === "object" && (preflightError as any).context
               ? await (preflightError as any).context.json()
               : null;
             detail = errBody?.detail || errBody?.error || preflightError.message;
@@ -389,20 +396,35 @@ export default function FightPredictions() {
             detail = preflightError.message;
           }
         }
-        console.error("[Predict] Preflight failed:", detail);
-        const isAuthIssue = typeof detail === "string" && (detail.includes("JWKS") || detail.includes("Expected 200 OK") || detail.includes("auth_failed"));
-        if (isAuthIssue) {
-          toast.error("Temporary auth issue", {
-            description: "Please try again in a few seconds.",
+        console.warn(`[Predict] Preflight attempt ${preflightAttempt + 1} failed:`, detail);
+
+        const isTransient = typeof detail === "string" && (
+          detail.includes("JWKS") || detail.includes("Expected 200 OK") ||
+          detail.includes("jwt_verification_failed") || detail.includes("fetch")
+        );
+
+        if (!isTransient) {
+          // Non-transient auth error (e.g. expired token) — don't retry or bypass
+          toast.error("Authentication failed", {
+            description: "Please log in again to place predictions.",
+            action: { label: "Log in", onClick: () => login() },
           });
           setSubmitting(false);
           return;
         }
-        throw new Error(
-          `Authentication check failed (${detail || "unknown"}). No funds were moved. Please try again in a moment.`,
-        );
+
+        if (preflightAttempt === 0) {
+          // Wait briefly before second attempt
+          await new Promise((r) => setTimeout(r, 2000));
+        }
       }
-      console.log("[Predict] Step 2 complete — preflight OK");
+
+      if (!preflightPassed) {
+        console.warn("[Predict] Preflight failed twice — bypassing (submit has its own JWT check)");
+        toast.info("Auth check slow — proceeding directly", { duration: 3000 });
+      } else {
+        console.log("[Predict] Step 2 complete — preflight OK");
+      }
 
       console.log("[Predict] Step 3: Checking allowance...", { feeUsdc: amountUsd * (selectedFight.commission_bps != null ? selectedFight.commission_bps / 10_000 : 0.05), allowance: relayer_allowance });
       const feeRate = selectedFight.commission_bps != null
