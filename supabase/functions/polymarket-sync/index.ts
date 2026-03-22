@@ -160,7 +160,7 @@ Deno.serve(async (req) => {
             .from("prediction_events")
             .update({
               polymarket_slug: gEvent.slug,
-              event_date: gEvent.endDate || gEvent.startDate || null,
+              event_date: gEvent.startDate || gEvent.endDate || null,
               updated_at: new Date().toISOString(),
               // Do NOT overwrite: event_name, league_logo, location, organization (enrichment)
             })
