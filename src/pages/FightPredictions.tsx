@@ -371,6 +371,7 @@ export default function FightPredictions() {
       console.log("[Predict] Step 1 complete — token obtained");
 
       // Step 2: Auth preflight — verify JWKS/JWT are working before fee transfer
+      console.log("[Predict] Step 2: Running preflight...");
       const { data: preflightData, error: preflightError } = await supabase.functions.invoke(
         "prediction-preflight",
         { headers: { "x-privy-token": privyToken } },
@@ -388,10 +389,20 @@ export default function FightPredictions() {
             detail = preflightError.message;
           }
         }
+        console.error("[Predict] Preflight failed:", detail);
+        const isAuthIssue = typeof detail === "string" && (detail.includes("JWKS") || detail.includes("Expected 200 OK") || detail.includes("auth_failed"));
+        if (isAuthIssue) {
+          toast.error("Temporary auth issue", {
+            description: "Please try again in a few seconds.",
+          });
+          setSubmitting(false);
+          return;
+        }
         throw new Error(
           `Authentication check failed (${detail || "unknown"}). No funds were moved. Please try again in a moment.`,
         );
       }
+      console.log("[Predict] Step 2 complete — preflight OK");
 
       // Step 3: Check relayer allowance — prompt one-time approve if needed
       const feeRate = selectedFight.commission_bps != null
