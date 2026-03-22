@@ -2269,6 +2269,8 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
   const [selectedTag, setSelectedTag] = useState("sports");
   const [importingId, setImportingId] = useState<string | null>(null);
   const [syncLimit, setSyncLimit] = useState(200);
+  const [directUrl, setDirectUrl] = useState("");
+  const [directImportBusy, setDirectImportBusy] = useState(false);
 
   const TAGS = ["sports", "soccer", "mma", "boxing"];
 
@@ -2344,6 +2346,26 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
     }
   };
 
+  const importByUrl = async () => {
+    const trimmed = directUrl.trim();
+    if (!trimmed) return;
+    setDirectImportBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("polymarket-sync", {
+        body: { wallet, action: "import_by_url", url: trimmed },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`Imported "${data.event_name}" — ${data.imported} market(s)`);
+      setDirectUrl("");
+      onComplete();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setDirectImportBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-3">
       {/* Tag selector */}
@@ -2415,8 +2437,33 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
           {lastSyncResult.expired_closed > 0 && (
             <p className="text-yellow-400">Auto-closed {lastSyncResult.expired_closed} expired fights</p>
           )}
+          {lastSyncResult.futures_cleaned > 0 && (
+            <p className="text-orange-400">🧹 Cleaned {lastSyncResult.futures_cleaned} futures/non-fixture markets</p>
+          )}
         </div>
       )}
+
+      {/* Direct URL Import */}
+      <div className="border-t border-border/30 pt-3 mt-1">
+        <p className="text-[10px] text-muted-foreground mb-1.5 font-medium">📋 Paste Polymarket Event URL</p>
+        <div className="flex gap-2">
+          <Input
+            placeholder="https://polymarket.com/event/silkeborg-if-vs-fc-fredericia"
+            value={directUrl}
+            onChange={e => setDirectUrl(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && importByUrl()}
+            className="flex-1 text-xs"
+          />
+          <Button
+            variant="outline"
+            className="border-purple-500/30 text-purple-400 hover:bg-purple-500/20"
+            onClick={importByUrl}
+            disabled={directImportBusy || !directUrl.trim()}
+          >
+            {directImportBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+          </Button>
+        </div>
+      </div>
 
       {/* Search */}
       <div className="flex gap-2">

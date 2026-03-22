@@ -9,14 +9,49 @@ const corsHeaders = {
 const GAMMA_BASE = "https://gamma-api.polymarket.com";
 
 // ── Search-based discovery (tags are unreliable on Gamma API) ──
+// Fixture-focused queries bias toward actual "Team A vs Team B" matches
 const SOCCER_SEARCH_QUERIES = [
-  "MLS", "EPL", "La Liga", "Serie A", "Bundesliga",
-  "Ligue 1", "Champions League", "Liga MX", "soccer",
+  "soccer vs", "football vs",
+  "Premier League vs", "La Liga vs", "Serie A vs", "Bundesliga vs",
+  "Ligue 1 vs", "MLS vs", "Liga MX vs",
+  "Champions League vs", "Europa League vs",
+  "Denmark Superliga vs", "Norway Eliteserien vs",
+  "Eredivisie vs", "Indian Super League vs",
+  "Scottish Premiership vs", "Championship vs",
 ];
 
 const COMBAT_SEARCH_QUERIES = [
   "UFC", "boxing", "ONE Championship", "PFL", "Bellator", "bare knuckle", "MMA",
 ];
+
+/** Futures / non-fixture keywords to reject for soccer events */
+const FUTURES_KEYWORDS = [
+  "winner", "to win", "cup winner", "league winner",
+  "top scorer", "relegated", "promoted", "qualify",
+  "champion", "most goals", "golden boot", "ballon d'or",
+  "mvp", "best player", "transfer",
+];
+
+/** Returns true if event title looks like an actual fixture (contains "vs") */
+function isActualFixture(title: string): boolean {
+  const lower = title.toLowerCase();
+  // Must contain "vs" or "vs."
+  if (!lower.includes("vs")) return false;
+  // Reject if it contains futures keywords
+  for (const kw of FUTURES_KEYWORDS) {
+    if (lower.includes(kw)) return false;
+  }
+  return true;
+}
+
+/** Returns true if title is clearly a futures/props market (not a fixture) */
+function isFuturesMarket(title: string): boolean {
+  const lower = title.toLowerCase();
+  for (const kw of FUTURES_KEYWORDS) {
+    if (lower.includes(kw)) return true;
+  }
+  return false;
+}
 
 /** Search-based discovery via /public-search endpoint. */
 async function fetchSearchEvents(queries: string[]): Promise<GammaEvent[]> {
@@ -144,6 +179,23 @@ Deno.serve(async (req) => {
       gammaEvents = gammaEvents.filter(isFutureEvent);
       const filteredOut = beforeFilter - gammaEvents.length;
       console.log(`[polymarket-sync] ${gammaEvents.length} future events (filtered out ${filteredOut} past)`);
+
+      // For soccer syncs, require actual fixture titles (contains "vs", no futures keywords)
+      const isSoccerSync = tagFilter === "soccer" || tagFilter === "sports";
+      let futuresFiltered = 0;
+      if (isSoccerSync) {
+        const beforeFixture = gammaEvents.length;
+        gammaEvents = gammaEvents.filter(ev => {
+          // Combat sports events pass through (looser filter)
+          const lower = ev.title.toLowerCase();
+          const isCombat = COMBAT_SEARCH_QUERIES.some(q => lower.includes(q.toLowerCase()));
+          if (isCombat) return true;
+          // Soccer events must be actual fixtures
+          return isActualFixture(ev.title);
+        });
+        futuresFiltered = beforeFixture - gammaEvents.length;
+        console.log(`[polymarket-sync] Fixture filter: kept ${gammaEvents.length}, rejected ${futuresFiltered} futures/props`);
+      }
 
       let eventsUpserted = 0;
       let marketsUpserted = 0;
@@ -317,6 +369,31 @@ Deno.serve(async (req) => {
         }
       }
 
+      // ── Clean up existing futures junk in DB ──
+      // Cancel any open fights that look like futures markets (no "vs" in title)
+      const { data: futuresJunk } = await supabase
+        .from("prediction_fights")
+        .select("id, title")
+        .eq("status", "open")
+        .eq("source", "polymarket");
+      let futuresCleanedCount = 0;
+      if (futuresJunk && futuresJunk.length > 0) {
+        const junkIds = futuresJunk
+          .filter(f => isFuturesMarket(f.title) || !f.title.toLowerCase().includes("vs"))
+          .map(f => f.id);
+        if (junkIds.length > 0) {
+          const { data: cleaned } = await supabase
+            .from("prediction_fights")
+            .update({ status: "cancelled", polymarket_active: false, updated_at: new Date().toISOString() })
+            .in("id", junkIds)
+            .select("id");
+          futuresCleanedCount = cleaned?.length ?? 0;
+          if (futuresCleanedCount > 0) {
+            console.log(`[polymarket-sync] Cleaned ${futuresCleanedCount} futures/non-fixture markets from DB`);
+          }
+        }
+      }
+
       // Update sync state
       await supabase
         .from("polymarket_sync_state")
@@ -339,6 +416,8 @@ Deno.serve(async (req) => {
           skipped,
           expired_closed: expiredCount,
           stale_event_fights_closed: staleFightsClosedCount,
+          futures_cleaned: futuresCleanedCount,
+          futures_filtered: futuresFiltered,
           filtered_out_past: filteredOut,
           total_events: gammaEvents.length,
           search_queries: searchQueries,
@@ -351,6 +430,7 @@ Deno.serve(async (req) => {
         markets_upserted: marketsUpserted,
         skipped,
         expired_closed: expiredCount,
+        futures_cleaned: futuresCleanedCount,
         total_events: gammaEvents.length,
       });
     }
@@ -538,6 +618,134 @@ Deno.serve(async (req) => {
       });
 
       return json({ success: true, event_id: eventId, imported });
+    }
+
+    // ══════════════════════════════════════════════════
+    // ACTION: import_by_url — Import from a Polymarket URL, slug, or event ID
+    // ══════════════════════════════════════════════════
+    if (action === "import_by_url") {
+      const { url } = body;
+      if (!url || typeof url !== "string") return json({ error: "Missing url" }, 400);
+
+      // Extract event slug from various URL formats:
+      // https://polymarket.com/event/silkeborg-if-vs-fc-fredericia
+      // https://polymarket.com/event/silkeborg-if-vs-fc-fredericia?tid=...
+      // Or just the slug: silkeborg-if-vs-fc-fredericia
+      let slug = url.trim();
+      // Strip query params
+      slug = slug.split("?")[0].split("#")[0];
+      // Extract slug from URL path
+      const eventMatch = slug.match(/polymarket\.com\/event\/([^/]+)/);
+      if (eventMatch) {
+        slug = eventMatch[1];
+      } else {
+        // Remove any leading/trailing slashes
+        slug = slug.replace(/^\/+|\/+$/g, "");
+      }
+
+      if (!slug) return json({ error: "Could not parse event slug from URL" }, 400);
+
+      console.log(`[polymarket-sync] import_by_url: resolved slug="${slug}"`);
+
+      // Try fetching by slug
+      const gammaRes = await fetch(`${GAMMA_BASE}/events?slug=${encodeURIComponent(slug)}`);
+      if (!gammaRes.ok) return json({ error: `Event not found (${gammaRes.status})` }, 404);
+
+      const gammaData = await gammaRes.json();
+      // The events endpoint returns an array
+      const events: GammaEvent[] = Array.isArray(gammaData) ? gammaData : [gammaData];
+      const gEvent = events[0];
+
+      if (!gEvent || !gEvent.id) return json({ error: "Event not found for slug: " + slug }, 404);
+
+      let outcomes: string[], tokenIds: string[], outcomePrices: string[];
+
+      // Upsert event
+      const { data: existingEvt } = await supabase
+        .from("prediction_events")
+        .select("id")
+        .eq("polymarket_event_id", String(gEvent.id))
+        .maybeSingle();
+
+      let eventId: string;
+      if (existingEvt) {
+        eventId = existingEvt.id;
+      } else {
+        const { data: newEvt, error } = await supabase
+          .from("prediction_events")
+          .insert({
+            event_name: gEvent.title,
+            polymarket_event_id: String(gEvent.id),
+            polymarket_slug: gEvent.slug,
+            event_date: gEvent.startDate || gEvent.endDate || null,
+            source: "polymarket",
+            source_provider: "polymarket",
+            source_event_id: `pm_${gEvent.id}`,
+            status: "draft",
+          })
+          .select("id")
+          .single();
+        if (error) return json({ error: error.message }, 500);
+        eventId = newEvt!.id;
+      }
+
+      let imported = 0;
+      for (const market of (gEvent.markets || [])) {
+        try {
+          outcomes = JSON.parse(market.outcomes || "[]");
+          outcomePrices = JSON.parse(market.outcomePrices || "[]");
+          tokenIds = JSON.parse(market.clobTokenIds || "[]");
+        } catch { continue; }
+
+        if (outcomes.length < 2 || tokenIds.length < 2) continue;
+
+        const { data: existingFight } = await supabase
+          .from("prediction_fights")
+          .select("id")
+          .eq("polymarket_market_id", market.id)
+          .maybeSingle();
+
+        if (existingFight) {
+          await supabase.from("prediction_fights").update({
+            price_a: parseFloat(outcomePrices[0] || "0"),
+            price_b: parseFloat(outcomePrices[1] || "0"),
+            polymarket_active: market.active && !market.closed,
+            polymarket_last_synced_at: new Date().toISOString(),
+          }).eq("id", existingFight.id);
+        } else {
+          await supabase.from("prediction_fights").insert({
+            title: market.groupItemTitle || market.question,
+            fighter_a_name: outcomes[0],
+            fighter_b_name: outcomes[1],
+            event_name: gEvent.title,
+            event_id: eventId,
+            source: "polymarket",
+            commission_bps: 200,
+            polymarket_market_id: market.id,
+            polymarket_condition_id: market.conditionId,
+            polymarket_slug: market.slug,
+            polymarket_outcome_a_token: tokenIds[0],
+            polymarket_outcome_b_token: tokenIds[1],
+            polymarket_active: market.active && !market.closed,
+            polymarket_end_date: market.endDate || null,
+            polymarket_question: market.question,
+            polymarket_last_synced_at: new Date().toISOString(),
+            price_a: parseFloat(outcomePrices[0] || "0"),
+            price_b: parseFloat(outcomePrices[1] || "0"),
+            status: "open",
+          });
+        }
+        imported++;
+      }
+
+      await supabase.from("automation_logs").insert({
+        action: "polymarket_import_by_url",
+        source: "polymarket-sync",
+        admin_wallet: wallet || null,
+        details: { url, slug, event_name: gEvent.title, imported },
+      });
+
+      return json({ success: true, event_id: eventId, event_name: gEvent.title, imported, slug });
     }
 
     return json({ error: "Unknown action" }, 400);
