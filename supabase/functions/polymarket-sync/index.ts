@@ -358,7 +358,7 @@ Deno.serve(async (req) => {
       }
 
       // 2) Fights linked to events whose event_date is >48h in the past (catches those without polymarket_end_date)
-      const cutoff48h = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      const cutoff48h = new Date().toISOString(); // immediate: any event_date in the past
       const { data: staleEvents } = await supabase
         .from("prediction_events")
         .select("id")

@@ -2349,7 +2349,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
       {/* Tag selector */}
       <div className="flex flex-wrap gap-1.5">
         {TAGS.map(t => {
-          const label = t === "mma" ? "UFC / MMA" : t === "boxing" ? "Boxing" : t;
+          const label = t === "sports" ? "All" : t === "mma" ? "UFC / MMA" : t === "boxing" ? "Boxing" : t === "soccer" ? "Soccer" : t;
           const hint = (t === "mma" || t === "boxing") ? " (search)" : "";
           return (
             <button
