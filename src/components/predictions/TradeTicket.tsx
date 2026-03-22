@@ -151,6 +151,10 @@ export default function TradeTicket({
           Minimum: ${minUsd.toFixed(2)}
         </p>
       )}
+
+      <p className="text-[10px] text-muted-foreground/50 text-center">
+        First prediction requires a one-time USDC approval. No charge until you submit.
+      </p>
     </div>
   );
 }
