@@ -173,7 +173,7 @@ Deno.serve(async (req) => {
               event_name: gEvent.title,
               polymarket_event_id: String(gEvent.id),
               polymarket_slug: gEvent.slug,
-              event_date: gEvent.endDate || gEvent.startDate || null,
+              event_date: gEvent.startDate || gEvent.endDate || null,
               source: "polymarket",
               source_provider: "polymarket",
               source_event_id: `pm_${gEvent.id}`,
