@@ -466,6 +466,12 @@ export default function FightPredictions() {
 
       if (error || data?.error) {
         const backendMsg = data?.error || error?.message || "Backend error";
+        const errorCode = data?.error_code || "";
+        // Distinguish relayer/RPC failures from exchange failures
+        const isRelayerError = errorCode.startsWith("rpc_") || errorCode === "relayer_not_configured" || errorCode === "relayer_tx_failed" || errorCode === "fee_collection_failed";
+        if (isRelayerError) {
+          throw new Error("fee_relay_failed:" + backendMsg);
+        }
         throw new Error(backendMsg);
       }
 
