@@ -850,7 +850,7 @@ Deno.serve(async (req) => {
       if (leagueKey) {
         const cfg = LEAGUE_SOURCES[leagueKey];
         const { events: rawEvents, endpoints } = await fetchByLeagueSource(cfg);
-        const results = filterFixtures(rawEvents);
+        const { accepted: results, rejected, rawSample } = filterFixtures(rawEvents);
 
         const tel = buildTelemetry({
           mode: "search_redirected_to_browse",
@@ -863,7 +863,7 @@ Deno.serve(async (req) => {
           zero_reason: results.length === 0
             ? rawEvents.length === 0
               ? `league_redirect_no_events_from_${cfg.fetchStrategy}`
-              : `league_redirect_all_${rawEvents.length}_filtered`
+              : `league_redirect_all_${rawEvents.length}_rejected`
             : undefined,
           duration_ms: Date.now() - startTime,
         });
@@ -873,6 +873,11 @@ Deno.serve(async (req) => {
           redirected_to_league: leagueKey,
           league: cfg.label,
           results: results.map(e => toPreview(e, "league_browse")),
+          raw_sample: rawSample,
+          rejection_sample: rejected.slice(0, 5).map(r => ({ title: r.event.title, dateReason: r.dateReason, fixtureReason: r.fixtureReason })),
+          filter_message: results.length === 0 && rawEvents.length > 0
+            ? `Data found from Polymarket (${rawEvents.length} events), but local filters rejected all results.`
+            : undefined,
           telemetry: tel,
         });
       }
