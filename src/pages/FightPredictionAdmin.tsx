@@ -2786,7 +2786,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
                 : null;
               const isPast = diffHours !== null && diffHours < 0;
               const marketCount = event.markets?.length || 0;
-              const isFuturesMarket = marketCount >= 20;
+              const isFuturesMarket = marketCount >= 10;
 
               // Source badge
               const sourceBadge = event.source === "url_import" ? "📋 URL"
