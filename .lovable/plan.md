@@ -1,37 +1,46 @@
 
 
-## Fix: Polymarket Admin URL Import and Search Not Finding Events
+## Fix: Admin Search Returns Irrelevant Results (Political Instead of Sports)
+
+### Problem
+When searching "FIFA Friendlies", the `/public-search` Gamma API endpoint returns 165 unrelated results (political markets like "Macron out by...?", "Ukraine recognizes Ru..."). This is because Polymarket's public search is a generic text search across ALL markets — it does not understand sport/league context.
 
 ### Root Cause
+The `search` action in `polymarket-sync` relies entirely on Gamma's `/public-search` endpoint, which is a broad text search. For sports leagues, the correct approach is **series-based discovery** via the `/sports` endpoint, which returns `series_id` values that can be used with `/events?series_id=X` to get actual match fixtures.
 
-Two bugs in `polymarket-sync/index.ts`:
-
-**1. URL import fails for sports pages:** The user pastes `https://polymarket.com/sports/fifa-friendlies/games`, but the regex on line 773 only matches `/event/` URLs. Sports pages use `/sports/{slug}/games` — a completely different path. The slug extraction either fails or produces garbage.
-
-**2. Search returns nothing for series names:** Searching "FIFA Friendlies" via Gamma's `/public-search` endpoint doesn't return individual match fixtures. It may return the old parlay event or nothing. The actual fixtures live under the **tag** system — `GET /events?tag=fifa-friendly&active=true&closed=false` returns the real matches (Vietnam vs Bangladesh, etc.).
-
-I verified this by testing the Gamma API directly:
-- `/events?slug=fifa-friendlies` → Returns an old 2025 parlay, not current fixtures
-- `/events?tag=fifa-friendly&active=true&closed=false` → Returns actual upcoming matches
+From Polymarket's API docs:
+```text
+GET /sports                                    → returns series IDs per league
+GET /events?series_id=10345&active=true        → returns fixtures for that league
+GET /events?series_id=10345&tag_id=100639      → filters to game bets only (not futures)
+```
 
 ### Changes
 
 **File: `supabase/functions/polymarket-sync/index.ts`**
 
-1. **Fix `import_by_url` URL parsing** (line 773): Add a regex for `/sports/{slug}` URLs. When detected, convert the slug to a tag format and use `/events?tag={tag}&active=true&closed=false` to fetch all fixtures in that sport/league — bulk import instead of single event.
+1. **Rewrite `search` action logic**: Before falling back to `/public-search`, first check if the query matches any known sport/series from `/sports`. If it does, use `series_id`-based lookup to return actual fixtures instead of generic search results.
 
-2. **Fix `search` action** (line 628): Add a fallback — when `/public-search` returns 0 results, retry using `/events?tag={query-as-slug}&active=true&closed=false`. This catches cases like "FIFA Friendlies" → tag `fifa-friendly`.
+2. **Add series name matching**: Compare the search query against sport labels and series names from `/sports` (e.g., "FIFA Friendlies" would match a series with label containing "FIFA" or "Friendlies"). Use fuzzy matching (lowercase substring check).
 
-3. **URL pattern support**: Handle all three Polymarket URL formats:
-   - `/event/{slug}` — existing, works (single event import)
-   - `/sports/{slug}` or `/sports/{slug}/games` — NEW: bulk import via tag
-   - Plain slug text — try event slug first, then tag fallback
+3. **Filter results for sports**: When results come from series-based discovery, apply the existing `isActualFixture` filter to exclude futures markets and only show "Team A vs Team B" style events.
+
+4. **Keep `/public-search` as final fallback**: If no series matches, still use `/public-search` but limit results to events that look like actual sports fixtures (contain "vs") when the query appears to be sports-related.
 
 **File: `src/pages/FightPredictionAdmin.tsx`**
 
-4. **Show import count for sports URLs**: When a sports URL bulk-imports multiple fixtures, show a more descriptive success message (e.g., "Imported 12 fixtures from FIFA Friendlies").
+5. **Show result source**: Display whether results came from series-based discovery ("League fixtures") vs generic search, so the admin knows what they're looking at.
 
 ### Technical Detail
 
-The Gamma API tag slug uses a slightly different format than the URL slug (e.g., URL: `fifa-friendlies`, tag: `fifa-friendly`). The fix will try multiple slug variations: exact, without trailing 's', and with common suffix changes. It will also try `/events?tag_slug={slug}` as a parameter.
+The search flow becomes:
+```text
+User types "FIFA Friendlies"
+  → Step 1: GET /sports → find series where label/sport matches "FIFA" or "Friendlies"
+  → Step 2: GET /events?series_id=X&active=true&closed=false → real fixtures
+  → Step 3: Filter with isActualFixture() → only "Team A vs Team B" events
+  → Step 4 (fallback): If no series match, use /public-search + tag fallback
+```
+
+This ensures the admin sees actual soccer match fixtures instead of 165 political prediction markets.
 
