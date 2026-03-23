@@ -2845,6 +2845,11 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
                             ⚠️ No date
                           </span>
                         )}
+                        {isFuturesMarket && (
+                          <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400">
+                            ⚠️ Futures ({marketCount} markets)
+                          </span>
+                        )}
                         {isHighlighted && (
                           <span className="text-[9px] font-bold text-yellow-400">⭐ Match</span>
                         )}
