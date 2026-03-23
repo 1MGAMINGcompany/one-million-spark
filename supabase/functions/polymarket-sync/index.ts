@@ -87,6 +87,10 @@ function isAcceptableEvent(ev: GammaEvent): { accepted: boolean; reason: string 
     return { accepted: true, reason: "combat_card_event" };
   }
 
+  // Reject futures/outright/prop markets before binary fallback
+  const FUTURES_RE = /\b(who will .* (fight|face) next|top scorer|mvp|most valuable|champion at|will .* win the)\b|winner$/i;
+  if (FUTURES_RE.test(title)) return { accepted: false, reason: `futures_market: "${title}"` };
+
   // Accept events with binary (2-outcome) markets — these are inherently matchup markets
   // on Polymarket (e.g., "Team A" vs "Team B" outcomes) even if title doesn't contain "vs"
   const hasBinaryMarket = markets.some(m => {
