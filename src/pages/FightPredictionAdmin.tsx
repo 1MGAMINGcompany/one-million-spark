@@ -2265,6 +2265,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
   const [searchBusy, setSearchBusy] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[] | null>(null);
+  const [searchDiscoveryMethod, setSearchDiscoveryMethod] = useState<string | null>(null);
   const [lastSyncResult, setLastSyncResult] = useState<any>(null);
   const [selectedTag, setSelectedTag] = useState("sports");
   const [importingId, setImportingId] = useState<string | null>(null);
@@ -2323,6 +2324,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       setSearchResults(data.results || []);
+      setSearchDiscoveryMethod(data.discovery_method || null);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -2548,7 +2550,12 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
           {searchResults.length > 0 && (
             <p className="text-[10px] text-purple-400 font-bold flex items-center gap-1.5 mb-1">
               <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block" />
-              LIVE from Polymarket · {searchResults.length} result(s) for &ldquo;{searchQuery}&rdquo;
+              {searchDiscoveryMethod === "series"
+                ? `⚽ League fixtures · ${searchResults.length} match(es)`
+                : searchDiscoveryMethod === "tag"
+                  ? `🏷️ Tag discovery · ${searchResults.length} result(s)`
+                  : `LIVE from Polymarket · ${searchResults.length} result(s)`}
+              {" "}for &ldquo;{searchQuery}&rdquo;
             </p>
           )}
           {searchResults.length === 0 && (
