@@ -380,12 +380,13 @@ export default function FightPredictionAdmin() {
     return ef.length > 0 && ef.every(f => ["settled", "refunds_complete", "cancelled"].includes(f.status));
   };
 
-  type AdminFilterType = "needs_action" | "active" | "pending" | "live" | "review" | "archived" | "dismissed";
+  type AdminFilterType = "needs_action" | "active" | "pending" | "pending_review" | "live" | "review" | "archived" | "dismissed";
 
   // Mutually exclusive filter assignment: each event belongs to exactly one bucket
   const getEventBucket = (e: PredictionEvent): AdminFilterType => {
     if (["dismissed", "rejected"].includes(e.status)) return "dismissed";
     if (e.status === "archived") return "archived";
+    if (e.status === "pending_review") return "pending_review";
     if (e.status === "draft") return "pending";
 
     // Auto-archive past events that are fully settled or have no fights
@@ -406,15 +407,16 @@ export default function FightPredictionAdmin() {
     return "active";
   };
 
-  const bucketCounts: Record<AdminFilterType, number> = { needs_action: 0, active: 0, pending: 0, live: 0, review: 0, archived: 0, dismissed: 0 };
+  const bucketCounts: Record<AdminFilterType, number> = { needs_action: 0, active: 0, pending: 0, pending_review: 0, live: 0, review: 0, archived: 0, dismissed: 0 };
   events.forEach(e => { bucketCounts[getEventBucket(e)]++; });
 
   const FILTER_TABS: { key: AdminFilterType; label: string; count: number }[] = [
     { key: "needs_action", label: "⚡ Action", count: bucketCounts.needs_action },
     { key: "active", label: "Active", count: bucketCounts.active },
+    { key: "pending_review", label: "📋 Review", count: bucketCounts.pending_review },
     { key: "pending", label: "Pending", count: bucketCounts.pending },
     { key: "live", label: "Live", count: bucketCounts.live },
-    { key: "review", label: "Review", count: bucketCounts.review },
+    { key: "review", label: "Fight Review", count: bucketCounts.review },
     { key: "archived", label: "Archived", count: bucketCounts.archived },
     { key: "dismissed", label: "Dismissed", count: bucketCounts.dismissed },
   ];
