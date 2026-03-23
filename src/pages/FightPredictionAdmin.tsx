@@ -2507,7 +2507,26 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
         ))}
       </div>
 
-      {/* Search input */}
+      {/* League browser dropdown */}
+      <div className="flex gap-2">
+        <Select
+          value={selectedLeague}
+          onValueChange={(val) => {
+            setSelectedLeague(val);
+            browseLeague(val);
+          }}
+        >
+          <SelectTrigger className="flex-1 text-xs">
+            <SelectValue placeholder="Browse by league..." />
+          </SelectTrigger>
+          <SelectContent>
+            {LEAGUE_OPTIONS.filter(l => l.key).map(l => (
+              <SelectItem key={l.key} value={l.key}>{l.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {leagueBrowseBusy && <Loader2 className="w-4 h-4 animate-spin text-purple-400 self-center" />}
+      </div>
       <div className="flex gap-2">
         <Input
           placeholder={sportFilter === "soccer" ? "e.g. Premier League, MLS, Real Madrid..." : sportFilter === "mma" ? "e.g. UFC 315, Adesanya..." : sportFilter === "boxing" ? "e.g. Canelo, Tyson Fury..." : "Search Polymarket events..."}
