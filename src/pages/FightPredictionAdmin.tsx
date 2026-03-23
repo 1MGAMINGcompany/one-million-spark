@@ -2774,15 +2774,19 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
               const isImported = importedIds.has(id);
               const isImporting = importingIds.has(id);
               const isHighlighted = highlightSlug && event.slug === highlightSlug;
+              const endDate = event.endDate ? new Date(event.endDate) : null;
               const startDate = event.startDate ? new Date(event.startDate) : null;
+              const bestDate = endDate || startDate;
               const now = new Date();
-              const diffMs = startDate ? startDate.getTime() - now.getTime() : null;
+              const diffMs = bestDate ? bestDate.getTime() - now.getTime() : null;
               const diffHours = diffMs ? Math.round(diffMs / (1000 * 60 * 60)) : null;
               const diffDays = diffMs ? Math.round(diffMs / (1000 * 60 * 60 * 24)) : null;
               const timeLabel = diffHours !== null
                 ? diffHours < 0 ? "Past" : diffHours < 24 ? `${diffHours}h` : `${diffDays}d`
                 : null;
               const isPast = diffHours !== null && diffHours < 0;
+              const marketCount = event.markets?.length || 0;
+              const isFuturesMarket = marketCount >= 20;
 
               // Source badge
               const sourceBadge = event.source === "url_import" ? "📋 URL"
