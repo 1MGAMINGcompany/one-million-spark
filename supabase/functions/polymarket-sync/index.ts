@@ -107,15 +107,30 @@ function isDateEligible(ev: GammaEvent): { eligible: boolean; reason: string; mi
   const endMs = ev.endDate ? new Date(ev.endDate).getTime() : null;
   const now = Date.now();
 
-  if (startMs !== null && startMs < now) {
-    return { eligible: false, reason: `past_start: ${ev.startDate}`, missingDate: false };
+  // If endDate exists and is in the future, always eligible (market still active)
+  if (endMs !== null && endMs > now) {
+    return { eligible: true, reason: "future_end", missingDate: false };
   }
-  if (startMs !== null) {
-    return { eligible: true, reason: "future_start", missingDate: false };
-  }
+
+  // If endDate exists and is in the past, reject
   if (endMs !== null && endMs < now) {
     return { eligible: false, reason: `past_end: ${ev.endDate}`, missingDate: false };
   }
+
+  // No endDate — check startDate
+  if (startMs !== null && startMs < now) {
+    // Only reject if the event is also closed/inactive
+    if (ev.closed === true || ev.active === false) {
+      return { eligible: false, reason: `past_start_and_inactive: ${ev.startDate}`, missingDate: false };
+    }
+    // startDate past but event still active — keep it (startDate may be creation date)
+    return { eligible: true, reason: "past_start_but_active", missingDate: false };
+  }
+
+  if (startMs !== null) {
+    return { eligible: true, reason: "future_start", missingDate: false };
+  }
+
   return { eligible: true, reason: "no_date_available", missingDate: true };
 }
 
