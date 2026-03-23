@@ -2374,7 +2374,11 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      toast.success(`Imported "${data.event_name}" — ${data.imported} market(s)`);
+      if (data?.bulk) {
+        toast.success(`Imported ${data.imported} market(s) from ${data.events_processed} events (${data.sport_slug})`);
+      } else {
+        toast.success(`Imported "${data.event_name}" — ${data.imported} market(s)`);
+      }
       setDirectUrl("");
       onComplete();
     } catch (err: any) {

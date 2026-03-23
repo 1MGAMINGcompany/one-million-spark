@@ -41,7 +41,30 @@ function isFuturesMarket(title: string): boolean {
   return false;
 }
 
-// ── Sports Series Discovery (replaces search-based soccer queries) ──
+/**
+ * Build tag slug variations from a URL slug or search query.
+ * e.g. "fifa-friendlies" → ["fifa-friendlies", "fifa-friendly", "fifa friendlies", "fifa-friendlies-games"]
+ * e.g. "FIFA Friendlies" → ["fifa-friendlies", "fifa-friendly", "fifa friendlies"]
+ */
+function buildTagVariations(input: string): string[] {
+  const base = input.toLowerCase().trim()
+    .replace(/\/games\/?$/, "")     // strip trailing /games
+    .replace(/\s+/g, "-");          // spaces → hyphens
+  const variations = new Set<string>();
+  variations.add(base);
+  // Without trailing 's' (e.g. friendlies → friendlie → friendly)
+  if (base.endsWith("ies")) {
+    variations.add(base.slice(0, -3) + "y");
+  } else if (base.endsWith("s") && !base.endsWith("ss")) {
+    variations.add(base.slice(0, -1));
+  }
+  // With spaces instead of hyphens
+  variations.add(base.replace(/-/g, " "));
+  // With trailing -games
+  variations.add(base + "-games");
+  return [...variations];
+}
+
 
 /** Known soccer sport codes from Gamma /sports endpoint */
 const SOCCER_SPORT_CODES = [
