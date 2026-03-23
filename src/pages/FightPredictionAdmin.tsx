@@ -2308,6 +2308,10 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
   const [highlightSlug, setHighlightSlug] = useState<string | null>(null);
   const [resultSource, setResultSource] = useState<string>("");
   const [telemetry, setTelemetry] = useState<any>(null);
+  const [rawSample, setRawSample] = useState<any[] | null>(null);
+  const [rejectionSample, setRejectionSample] = useState<any[] | null>(null);
+  const [filterMessage, setFilterMessage] = useState<string | null>(null);
+  const [showRawDebug, setShowRawDebug] = useState(false);
 
   // Mode 1 state
   const [urlInput, setUrlInput] = useState("");
