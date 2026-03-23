@@ -720,7 +720,6 @@ Deno.serve(async (req) => {
       if (!parsed) return json({ error: "Could not parse URL. Supported formats: /event/{slug}, /sports/{league}/games, /sports/{league}/{event}" }, 400);
 
       let rawResults: GammaEvent[] = [];
-      let results: GammaEvent[] = [];
       let highlightSlug: string | null = null;
       const endpoints: string[] = [];
       let mode = parsed.type;
