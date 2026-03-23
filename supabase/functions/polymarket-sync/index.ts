@@ -228,31 +228,113 @@ Deno.serve(async (req) => {
     }
 
     // ══════════════════════════════════════════════════
+    // ACTION: list_leagues — Return available leagues for dropdown
+    // ══════════════════════════════════════════════════
+    if (action === "list_leagues") {
+      const leagues = Object.entries(LEAGUE_TAG_MAP).map(([key, v]) => ({
+        key,
+        label: v.label,
+        sport_code: v.sport_code,
+      }));
+      return json({ leagues });
+    }
+
+    // ══════════════════════════════════════════════════
+    // ACTION: browse_league — Fetch fixtures for a specific league via tag_id
+    // ══════════════════════════════════════════════════
+    if (action === "browse_league") {
+      const { league_key } = body;
+      if (!league_key || !LEAGUE_TAG_MAP[league_key]) {
+        return json({ error: "Unknown league_key. Use list_leagues to see available keys." }, 400);
+      }
+      const league = LEAGUE_TAG_MAP[league_key];
+      const rawEvents = await fetchEventsByTagId(league.tag_id, limit);
+
+      // Filter: future + fixtures only, exclude "More Markets" variants
+      let results = rawEvents.filter(isFutureEvent);
+      const fixtureResults = results.filter(ev => isActualFixture(ev.title));
+      if (fixtureResults.length > 0) {
+        results = fixtureResults;
+      }
+
+      console.log(`[polymarket-sync] browse_league "${league_key}" (tag ${league.tag_id}): ${results.length} fixtures`);
+
+      return json({
+        league: league.label,
+        results: results.map(e => ({
+          id: e.id,
+          title: e.title,
+          slug: e.slug,
+          startDate: e.startDate,
+          endDate: e.endDate,
+          markets: (e.markets || []).map(m => ({
+            id: m.id,
+            question: m.question,
+            conditionId: m.conditionId,
+            slug: m.slug,
+            outcomes: (() => { try { return JSON.parse(m.outcomes || "[]"); } catch { return []; } })(),
+            outcomePrices: (() => { try { return JSON.parse(m.outcomePrices || "[]"); } catch { return []; } })(),
+            active: m.active,
+            closed: m.closed,
+            volume: m.volume,
+          })),
+        })),
+      });
+    }
+
+    // ══════════════════════════════════════════════════
     // ACTION: search — Preview-only search (no DB writes)
-    // Uses /public-search, filtered for fixtures + future dates
+    // Uses /public-search + tag_id fallback for league names
     // ══════════════════════════════════════════════════
     if (action === "search") {
       const { query, sport_filter } = body;
       if (!query) return json({ error: "Missing query" }, 400);
 
-      // Build search queries based on sport filter
-      let searchQueries: string[] = [query];
-      if (sport_filter === "soccer" && !query.toLowerCase().includes("soccer") && !query.toLowerCase().includes("football")) {
-        // Append soccer context if not already in query
-      }
-      if (sport_filter === "mma") {
-        if (!query.toLowerCase().includes("ufc") && !query.toLowerCase().includes("mma")) {
-          searchQueries = [query, `${query} MMA`, `${query} UFC`];
-        }
-      }
-      if (sport_filter === "boxing") {
-        if (!query.toLowerCase().includes("boxing")) {
-          searchQueries = [query, `${query} boxing`];
+      // Step 1: Check if query matches a known league name → use tag_id directly
+      const queryLower = query.toLowerCase().trim();
+      let matchedLeagueKey: string | null = null;
+      for (const [key, league] of Object.entries(LEAGUE_TAG_MAP)) {
+        if (queryLower === league.label.toLowerCase() || queryLower === key.replace(/-/g, " ")) {
+          matchedLeagueKey = key;
+          break;
         }
       }
 
-      // Fetch from /public-search
-      const rawResults = await fetchSearchEvents(searchQueries, limit);
+      let rawResults: GammaEvent[] = [];
+
+      if (matchedLeagueKey) {
+        // Direct tag_id lookup — reliable for league names
+        const league = LEAGUE_TAG_MAP[matchedLeagueKey];
+        rawResults = await fetchEventsByTagId(league.tag_id, limit);
+        console.log(`[polymarket-sync] Tag-based lookup for "${query}" → tag ${league.tag_id}: ${rawResults.length} raw`);
+      } else {
+        // Build search queries based on sport filter
+        let searchQueries: string[] = [query];
+        if (sport_filter === "mma") {
+          if (!queryLower.includes("ufc") && !queryLower.includes("mma")) {
+            searchQueries = [query, `${query} MMA`, `${query} UFC`];
+          }
+        }
+        if (sport_filter === "boxing") {
+          if (!queryLower.includes("boxing")) {
+            searchQueries = [query, `${query} boxing`];
+          }
+        }
+
+        // Fetch from /public-search
+        rawResults = await fetchSearchEvents(searchQueries, limit);
+
+        // If text search returned nothing, try fuzzy league match
+        if (rawResults.length === 0) {
+          for (const [key, league] of Object.entries(LEAGUE_TAG_MAP)) {
+            if (league.label.toLowerCase().includes(queryLower) || queryLower.includes(league.label.toLowerCase())) {
+              rawResults = await fetchEventsByTagId(league.tag_id, limit);
+              console.log(`[polymarket-sync] Fuzzy tag fallback "${query}" → ${league.label}: ${rawResults.length} raw`);
+              break;
+            }
+          }
+        }
+      }
 
       // Filter: future events only + actual fixtures
       let results = rawResults.filter(isFutureEvent);
