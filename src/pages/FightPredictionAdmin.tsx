@@ -2696,9 +2696,16 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
           )}
 
           {results.length === 0 && (
-            <div className="text-center py-4 space-y-2">
-              <p className="text-xs text-muted-foreground">No matching fixtures found.</p>
-              {/* Telemetry debug for zero results */}
+            <div className="text-center py-4 space-y-3">
+              {filterMessage ? (
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-left">
+                  <p className="text-xs text-yellow-400 font-medium">⚠️ {filterMessage}</p>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">No matching fixtures found.</p>
+              )}
+
+              {/* Telemetry debug */}
               {telemetry && (
                 <div className="bg-muted/20 border border-border/30 rounded-lg p-3 text-left text-[10px] space-y-1">
                   <p className="font-bold text-foreground">🔍 Query Debug</p>
@@ -2718,6 +2725,42 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
                   </div>
                   {telemetry.zero_reason && (
                     <p className="text-yellow-400 font-medium mt-1">⚠ {telemetry.zero_reason}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Rejection reasons */}
+              {rejectionSample && rejectionSample.length > 0 && (
+                <details className="text-left">
+                  <summary className="text-[10px] text-muted-foreground cursor-pointer hover:text-foreground">
+                    🚫 Why events were rejected ({rejectionSample.length} samples)
+                  </summary>
+                  <div className="mt-1 bg-muted/20 border border-border/30 rounded p-2 space-y-1 text-[10px]">
+                    {rejectionSample.map((r: any, i: number) => (
+                      <div key={i} className="flex gap-2">
+                        <span className="text-foreground font-medium truncate max-w-[200px]">{r.title}</span>
+                        <span className="text-destructive">{r.dateReason || r.fixtureReason}</span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+
+              {/* Raw results debug toggle */}
+              {rawSample && rawSample.length > 0 && (
+                <div className="text-left">
+                  <button
+                    onClick={() => setShowRawDebug(!showRawDebug)}
+                    className="text-[10px] text-primary hover:underline"
+                  >
+                    {showRawDebug ? "Hide" : "Show"} raw Polymarket results ({rawSample.length} samples)
+                  </button>
+                  {showRawDebug && (
+                    <div className="mt-2 bg-muted/20 border border-border/30 rounded p-2 max-h-[400px] overflow-y-auto">
+                      <pre className="text-[9px] text-foreground whitespace-pre-wrap break-all">
+                        {JSON.stringify(rawSample, null, 2)}
+                      </pre>
+                    </div>
                   )}
                 </div>
               )}
