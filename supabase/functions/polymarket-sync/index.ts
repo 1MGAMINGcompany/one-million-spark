@@ -113,21 +113,24 @@ function isDateEligible(ev: GammaEvent): { eligible: boolean; reason: string; mi
   tomorrow.setUTCHours(0, 0, 0, 0);
   const cutoff = tomorrow.getTime();
 
-  // Only use event-level dates — child market endDates are market expiry, not match time
-  const eventDates = [ev.endDate, ev.startDate]
-    .map(d => d ? new Date(d).getTime() : null)
-    .filter((ms): ms is number => ms !== null && !isNaN(ms));
+  // startDate = actual match/event time on Polymarket
+  // endDate = market resolution window (can be weeks/months later — unreliable for match timing)
+  // Always prefer startDate when available
+  const startMs = ev.startDate ? new Date(ev.startDate).getTime() : null;
+  const endMs = ev.endDate ? new Date(ev.endDate).getTime() : null;
 
-  if (eventDates.length === 0) {
-    return { eligible: false, reason: "no_event_date", missingDate: true };
+  if (startMs && !isNaN(startMs)) {
+    if (startMs >= cutoff) return { eligible: true, reason: "future_start", missingDate: false };
+    return { eligible: false, reason: `past_start: ${ev.startDate}`, missingDate: false };
   }
 
-  const best = Math.max(...eventDates);
-  if (best >= cutoff) {
-    return { eligible: true, reason: "future_event", missingDate: false };
+  // No startDate — fall back to endDate (less reliable)
+  if (endMs && !isNaN(endMs)) {
+    if (endMs >= cutoff) return { eligible: true, reason: "future_end_no_start", missingDate: false };
+    return { eligible: false, reason: `past_end: ${ev.endDate}`, missingDate: false };
   }
 
-  return { eligible: false, reason: `past_or_today: ${new Date(best).toISOString()}`, missingDate: false };
+  return { eligible: false, reason: "no_event_date", missingDate: true };
 }
 
 // ── Curated league/category config ──
