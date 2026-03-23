@@ -87,6 +87,18 @@ function isAcceptableEvent(ev: GammaEvent): { accepted: boolean; reason: string 
     return { accepted: true, reason: "combat_card_event" };
   }
 
+  // Accept events with binary (2-outcome) markets — these are inherently matchup markets
+  // on Polymarket (e.g., "Team A" vs "Team B" outcomes) even if title doesn't contain "vs"
+  const hasBinaryMarket = markets.some(m => {
+    try {
+      const outcomes = JSON.parse(m.outcomes || "[]");
+      return outcomes.length === 2 && !m.closed;
+    } catch { return false; }
+  });
+  if (hasBinaryMarket) {
+    return { accepted: true, reason: "binary_market_detected" };
+  }
+
   return { accepted: false, reason: `no_matchup_pattern_in_any_field` };
 }
 
