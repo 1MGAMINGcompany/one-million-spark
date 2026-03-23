@@ -899,13 +899,20 @@ Deno.serve(async (req) => {
       const endpoints = searchQueries.map(q => `public-search?q=${q}`);
       const rawResults = await fetchSearchEvents(searchQueries);
 
-      // Strict filtering: future + fixture + exclude props
-      let results = filterFixtures(rawResults);
+      const { accepted, rejected, rawSample } = filterFixtures(rawResults);
 
-      // Apply sport_filter category matching
+      // Apply sport_filter category matching on accepted results
+      let results = accepted;
       if (sport_filter === "soccer") {
-        results = results.filter(ev => ev.title.toLowerCase().includes("vs"));
+        results = results.filter(ev => {
+          const texts = [ev.title, ev.slug.replace(/-/g, " ")];
+          return texts.some(t => /\bvs\.?\b|\sv\s/i.test(t));
+        });
       }
+
+      const rejectionSummary = rejected.length > 0
+        ? rejected.slice(0, 5).map(r => ({ title: r.event.title, dateReason: r.dateReason, fixtureReason: r.fixtureReason }))
+        : [];
 
       const tel = buildTelemetry({
         mode: "search",
@@ -917,7 +924,7 @@ Deno.serve(async (req) => {
         zero_reason: results.length === 0
           ? rawResults.length === 0
             ? "no_results_from_public_search"
-            : `all_${rawResults.length}_filtered: titles_lacked_vs_or_were_past_or_props`
+            : `all_${rawResults.length}_rejected_by_filters`
           : undefined,
         duration_ms: Date.now() - startTime,
       });
@@ -925,6 +932,11 @@ Deno.serve(async (req) => {
 
       return json({
         results: results.map(e => toPreview(e, "exact_search")),
+        raw_sample: rawSample,
+        rejection_sample: rejectionSummary,
+        filter_message: results.length === 0 && rawResults.length > 0
+          ? `Data found from Polymarket (${rawResults.length} events), but local filters rejected all results.`
+          : undefined,
         telemetry: tel,
       });
     }
