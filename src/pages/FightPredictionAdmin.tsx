@@ -2840,6 +2840,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
                           <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400">
                             ⚠️ No date
                           </span>
+                        )}
                         {isHighlighted && (
                           <span className="text-[9px] font-bold text-yellow-400">⭐ Match</span>
                         )}
