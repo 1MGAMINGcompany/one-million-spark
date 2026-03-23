@@ -2373,6 +2373,10 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
     setHighlightSlug(null);
     setResultSource("");
     setTelemetry(null);
+    setRawSample(null);
+    setRejectionSample(null);
+    setFilterMessage(null);
+    setShowRawDebug(false);
   };
 
   // MODE 1: URL Preview
