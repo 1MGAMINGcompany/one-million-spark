@@ -18,10 +18,24 @@ const FUTURES_KEYWORDS = [
   "mvp", "best player", "transfer", "winning method",
   "total goals", "total points", "spread", "handicap",
   "over/under", "o/u", "prop", "special",
+  "next manager", "sack", "fired", "hire",
+  "man of the match", "first goal", "last goal",
+  "clean sheet", "both teams to score",
+  "corners", "cards", "yellow card", "red card",
+  "penalty", "hat trick", "assists",
 ];
 
 const MORE_MARKETS_RE = /- more markets/i;
-const PROP_KEYWORDS = ["method of victory", "round betting", "to go the distance", "total rounds"];
+const PROP_KEYWORDS = [
+  "method of victory", "round betting", "to go the distance",
+  "total rounds", "fight to go", "points spread",
+  "point spread", "moneyline",
+];
+const POLITICS_KEYWORDS = [
+  "election", "president", "congress", "senate", "vote",
+  "democrat", "republican", "political", "legislation",
+  "governor", "mayor", "biden", "trump", "politics",
+];
 
 /** Returns true if event title looks like an actual fixture (team vs team or fighter vs fighter) */
 function isActualFixture(title: string): boolean {
@@ -34,6 +48,9 @@ function isActualFixture(title: string): boolean {
   for (const pk of PROP_KEYWORDS) {
     if (lower.includes(pk)) return false;
   }
+  for (const pk of POLITICS_KEYWORDS) {
+    if (lower.includes(pk)) return false;
+  }
   return true;
 }
 
@@ -44,55 +61,65 @@ function isFutureEvent(ev: GammaEvent): boolean {
   const endMs = ev.endDate ? new Date(ev.endDate).getTime() : null;
   if (startMs !== null) return startMs > now;
   if (endMs !== null) return endMs > now;
-  return true;
+  return true; // no date info — keep it
 }
 
 // ── Curated league/category config ──
 
-interface LeagueConfig {
+type FetchStrategy = "tag" | "series" | "search";
+
+interface LeagueSource {
+  key: string;
   label: string;
-  sportType: "soccer" | "combat";
-  tagId: string;
+  sportType: "soccer" | "mma" | "boxing" | "bkfc";
+  fetchStrategy: FetchStrategy;
+  tagId?: string;
   tagSlug?: string;
   seriesId?: string;
+  /** For search-based discovery, append these keywords */
+  searchSeed?: string[];
 }
 
-const LEAGUE_CONFIGS: Record<string, LeagueConfig> = {
-  // Soccer
-  "epl": { label: "EPL", sportType: "soccer", tagId: "306" },
-  "mls": { label: "MLS", sportType: "soccer", tagId: "100100" },
-  "ucl": { label: "UCL", sportType: "soccer", tagId: "100977" },
-  "uel": { label: "UEL", sportType: "soccer", tagId: "101787" },
-  "la-liga": { label: "La Liga", sportType: "soccer", tagId: "780" },
-  "bundesliga": { label: "Bundesliga", sportType: "soccer", tagId: "1494" },
-  "serie-a": { label: "Serie A", sportType: "soccer", tagId: "102008" },
-  "ligue-1": { label: "Ligue 1", sportType: "soccer", tagId: "102070" },
-  "liga-mx": { label: "Liga MX", sportType: "soccer", tagId: "102448" },
-  "eredivisie": { label: "Eredivisie", sportType: "soccer", tagId: "101735" },
-  "fifa-friendlies": { label: "FIFA Friendlies", sportType: "soccer", tagId: "102539" },
-  "copa-libertadores": { label: "Copa Libertadores", sportType: "soccer", tagId: "102562" },
-  "copa-sudamericana": { label: "Copa Sudamericana", sportType: "soccer", tagId: "102563" },
-  "brazil-serie-a": { label: "Brazil Série A", sportType: "soccer", tagId: "102648" },
-  "j-league": { label: "J. League", sportType: "soccer", tagId: "102649" },
-  "k-league": { label: "K-League", sportType: "soccer", tagId: "102771" },
-  "a-league": { label: "A-League", sportType: "soccer", tagId: "102765" },
-  "super-lig": { label: "Süper Lig", sportType: "soccer", tagId: "102564" },
-  "primeira-liga": { label: "Primeira Liga", sportType: "soccer", tagId: "101772" },
-  "concacaf": { label: "CONCACAF", sportType: "soccer", tagId: "100787" },
-  "conmebol": { label: "CONMEBOL", sportType: "soccer", tagId: "101280" },
-  // Combat
-  "ufc": { label: "UFC", sportType: "combat", tagId: "100639" },
-  "mma": { label: "MMA", sportType: "combat", tagId: "100639" },
-  "boxing": { label: "Boxing", sportType: "combat", tagId: "100639", tagSlug: "boxing" },
-  "bkfc": { label: "BKFC", sportType: "combat", tagId: "100639", tagSlug: "bkfc" },
+const LEAGUE_SOURCES: Record<string, LeagueSource> = {
+  // ─── Soccer (tag-based) ───
+  "epl":                { key: "epl",                label: "EPL",                sportType: "soccer", fetchStrategy: "tag", tagId: "306" },
+  "mls":                { key: "mls",                label: "MLS",                sportType: "soccer", fetchStrategy: "tag", tagId: "100100" },
+  "ucl":                { key: "ucl",                label: "UCL",                sportType: "soccer", fetchStrategy: "tag", tagId: "100977" },
+  "uel":                { key: "uel",                label: "UEL",                sportType: "soccer", fetchStrategy: "tag", tagId: "101787" },
+  "la-liga":            { key: "la-liga",            label: "La Liga",            sportType: "soccer", fetchStrategy: "tag", tagId: "780" },
+  "bundesliga":         { key: "bundesliga",         label: "Bundesliga",         sportType: "soccer", fetchStrategy: "tag", tagId: "1494" },
+  "serie-a":            { key: "serie-a",            label: "Serie A",            sportType: "soccer", fetchStrategy: "tag", tagId: "102008" },
+  "ligue-1":            { key: "ligue-1",            label: "Ligue 1",            sportType: "soccer", fetchStrategy: "tag", tagId: "102070" },
+  "liga-mx":            { key: "liga-mx",            label: "Liga MX",            sportType: "soccer", fetchStrategy: "tag", tagId: "102448" },
+  "eredivisie":         { key: "eredivisie",         label: "Eredivisie",         sportType: "soccer", fetchStrategy: "tag", tagId: "101735" },
+  "fifa-friendlies":    { key: "fifa-friendlies",    label: "FIFA Friendlies",    sportType: "soccer", fetchStrategy: "tag", tagId: "102539" },
+  "copa-libertadores":  { key: "copa-libertadores",  label: "Copa Libertadores",  sportType: "soccer", fetchStrategy: "tag", tagId: "102562" },
+  "copa-sudamericana":  { key: "copa-sudamericana",  label: "Copa Sudamericana",  sportType: "soccer", fetchStrategy: "tag", tagId: "102563" },
+  "brazil-serie-a":     { key: "brazil-serie-a",     label: "Brazil Série A",     sportType: "soccer", fetchStrategy: "tag", tagId: "102648" },
+  "j-league":           { key: "j-league",           label: "J. League",          sportType: "soccer", fetchStrategy: "tag", tagId: "102649" },
+  "k-league":           { key: "k-league",           label: "K-League",           sportType: "soccer", fetchStrategy: "tag", tagId: "102771" },
+  "a-league":           { key: "a-league",           label: "A-League",           sportType: "soccer", fetchStrategy: "tag", tagId: "102765" },
+  "super-lig":          { key: "super-lig",          label: "Süper Lig",          sportType: "soccer", fetchStrategy: "tag", tagId: "102564" },
+  "primeira-liga":      { key: "primeira-liga",      label: "Primeira Liga",      sportType: "soccer", fetchStrategy: "tag", tagId: "101772" },
+  "concacaf":           { key: "concacaf",           label: "CONCACAF",           sportType: "soccer", fetchStrategy: "tag", tagId: "100787" },
+  "conmebol":           { key: "conmebol",           label: "CONMEBOL",           sportType: "soccer", fetchStrategy: "tag", tagId: "101280" },
+  // ─── Combat (search-seeded — Polymarket combat tags are unreliable) ───
+  "ufc":    { key: "ufc",    label: "UFC",    sportType: "mma",    fetchStrategy: "search", searchSeed: ["UFC", "UFC fight"] },
+  "mma":    { key: "mma",    label: "MMA",    sportType: "mma",    fetchStrategy: "search", searchSeed: ["MMA", "MMA fight", "UFC"] },
+  "boxing": { key: "boxing", label: "Boxing", sportType: "boxing", fetchStrategy: "search", searchSeed: ["boxing", "boxing fight", "boxing match"] },
+  "bkfc":   { key: "bkfc",   label: "BKFC",   sportType: "bkfc",   fetchStrategy: "search", searchSeed: ["BKFC", "bare knuckle"] },
 };
 
 // Slug → league key mapping for URL parsing
 const SPORTS_SLUG_MAP: Record<string, string> = {};
-for (const [key, cfg] of Object.entries(LEAGUE_CONFIGS)) {
+for (const [key, cfg] of Object.entries(LEAGUE_SOURCES)) {
   SPORTS_SLUG_MAP[key] = key;
   SPORTS_SLUG_MAP[cfg.label.toLowerCase().replace(/\s+/g, "-")] = key;
 }
+// Extra aliases
+SPORTS_SLUG_MAP["premier-league"] = "epl";
+SPORTS_SLUG_MAP["champions-league"] = "ucl";
+SPORTS_SLUG_MAP["europa-league"] = "uel";
 
 // ── API helpers ──
 
@@ -128,7 +155,37 @@ interface GammaEvent {
   tags?: { label: string; slug: string }[];
 }
 
-/** Fetch events by tag_id — reliable for league-based discovery */
+// ── Telemetry ──
+
+interface QueryTelemetry {
+  mode: string;
+  strategy: string;
+  endpoints_called: string[];
+  raw_count: number;
+  filtered_count: number;
+  zero_reason?: string;
+  league_key?: string;
+  query?: string;
+  duration_ms: number;
+}
+
+function buildTelemetry(partial: Partial<QueryTelemetry>): QueryTelemetry {
+  return {
+    mode: partial.mode || "unknown",
+    strategy: partial.strategy || "unknown",
+    endpoints_called: partial.endpoints_called || [],
+    raw_count: partial.raw_count || 0,
+    filtered_count: partial.filtered_count || 0,
+    zero_reason: partial.zero_reason,
+    league_key: partial.league_key,
+    query: partial.query,
+    duration_ms: partial.duration_ms || 0,
+  };
+}
+
+// ── Fetch functions ──
+
+/** Fetch events by tag_id — reliable for soccer league discovery */
 async function fetchEventsByTagId(tagId: string, limit = 200): Promise<GammaEvent[]> {
   try {
     const url = `${GAMMA_BASE}/events?tag_id=${tagId}&active=true&closed=false&limit=${limit}`;
@@ -204,6 +261,34 @@ async function fetchMarketVolume(marketId: string): Promise<{ volume: number; tr
   }
 }
 
+/** Execute the fetch strategy for a league source */
+async function fetchByLeagueSource(src: LeagueSource): Promise<{ events: GammaEvent[]; endpoints: string[] }> {
+  const endpoints: string[] = [];
+
+  if (src.fetchStrategy === "tag" && src.tagId) {
+    endpoints.push(`events?tag_id=${src.tagId}`);
+    const events = await fetchEventsByTagId(src.tagId);
+    return { events, endpoints };
+  }
+
+  if (src.fetchStrategy === "search" && src.searchSeed) {
+    endpoints.push(...src.searchSeed.map(s => `public-search?q=${s}`));
+    const events = await fetchSearchEvents(src.searchSeed);
+    return { events, endpoints };
+  }
+
+  // Fallback: try tag if available, else search by label
+  if (src.tagId) {
+    endpoints.push(`events?tag_id=${src.tagId}`);
+    const events = await fetchEventsByTagId(src.tagId);
+    return { events, endpoints };
+  }
+
+  endpoints.push(`public-search?q=${src.label}`);
+  const events = await fetchSearchEvents([src.label]);
+  return { events, endpoints };
+}
+
 /** Apply strict safety filters: future + fixture + no props/more-markets */
 function filterFixtures(events: GammaEvent[]): GammaEvent[] {
   return events
@@ -242,16 +327,19 @@ function safeJsonParse(s: string | undefined | null): any[] {
 function isLeagueQuery(query: string): string | null {
   const q = query.toLowerCase().trim().replace(/\s+/g, "-");
   // Direct match
-  if (LEAGUE_CONFIGS[q]) return q;
+  if (LEAGUE_SOURCES[q]) return q;
   // Label match
-  for (const [key, cfg] of Object.entries(LEAGUE_CONFIGS)) {
+  for (const [key, cfg] of Object.entries(LEAGUE_SOURCES)) {
     if (cfg.label.toLowerCase() === query.toLowerCase().trim()) return key;
     if (cfg.label.toLowerCase().replace(/\s+/g, "-") === q) return key;
   }
-  // Partial match
-  for (const [key, cfg] of Object.entries(LEAGUE_CONFIGS)) {
-    if (query.toLowerCase().trim().includes(cfg.label.toLowerCase()) ||
-        cfg.label.toLowerCase().includes(query.toLowerCase().trim())) return key;
+  // Slug alias match
+  if (SPORTS_SLUG_MAP[q]) return SPORTS_SLUG_MAP[q];
+  // Partial match (but only if strong)
+  for (const [key, cfg] of Object.entries(LEAGUE_SOURCES)) {
+    const labelLower = cfg.label.toLowerCase();
+    const queryLower = query.toLowerCase().trim();
+    if (queryLower === labelLower || labelLower.startsWith(queryLower) && queryLower.length >= 3) return key;
   }
   return null;
 }
@@ -267,7 +355,6 @@ interface ParsedUrl {
 
 function parsePolymarketUrl(url: string): ParsedUrl | null {
   let path = url.trim().replace(/\?.*$/, "").replace(/#.*$/, "");
-  // Strip domain
   const domainMatch = path.match(/polymarket\.com\/(.+)/);
   if (domainMatch) path = domainMatch[1];
   path = path.replace(/^\/+|\/+$/g, "");
@@ -284,7 +371,7 @@ function parsePolymarketUrl(url: string): ParsedUrl | null {
   const sportsEventMatch = path.match(/^sports\/([^/]+)\/([^/]+)$/);
   if (sportsEventMatch) return { type: "sports_league_event", leagueSlug: sportsEventMatch[1], eventSlug: sportsEventMatch[2] };
 
-  // /sports/{league-slug}  (treat as games)
+  // /sports/{league-slug} (treat as games)
   const leagueMatch = path.match(/^sports\/([^/]+)$/);
   if (leagueMatch) return { type: "sports_league_games", leagueSlug: leagueMatch[1] };
 
@@ -353,9 +440,11 @@ async function importSingleEvent(
     // Skip prop/more-markets at market level
     const mq = (market.question || "").toLowerCase();
     if (MORE_MARKETS_RE.test(mq)) continue;
+    let skipMarket = false;
     for (const pk of PROP_KEYWORDS) {
-      if (mq.includes(pk)) continue;
+      if (mq.includes(pk)) { skipMarket = true; break; }
     }
+    if (skipMarket) continue;
 
     const { data: existingFight } = await supabase
       .from("prediction_fights")
@@ -418,6 +507,19 @@ async function importSingleEvent(
     is_past: isPastEvent,
     warning: isPastEvent ? `⚠️ This event's start date (${gEvent.startDate}) is in the past.` : undefined,
   };
+}
+
+/** Log admin query telemetry */
+async function logTelemetry(supabase: any, wallet: string | null, telemetry: QueryTelemetry) {
+  try {
+    await supabase.from("automation_logs").insert({
+      action: `polymarket_query_${telemetry.mode}`,
+      source: "polymarket-sync",
+      admin_wallet: wallet || null,
+      details: telemetry,
+    });
+  } catch { /* non-fatal */ }
+  console.log(`[polymarket-sync] telemetry:`, JSON.stringify(telemetry));
 }
 
 // ══════════════════════════════════════════════════
@@ -493,66 +595,92 @@ Deno.serve(async (req) => {
     // ACTION: list_leagues — Return curated league configs for dropdown
     // ══════════════════════════════════════════════════
     if (action === "list_leagues") {
-      const leagues = Object.entries(LEAGUE_CONFIGS).map(([key, v]) => ({
+      const leagues = Object.entries(LEAGUE_SOURCES).map(([key, v]) => ({
         key,
         label: v.label,
         sportType: v.sportType,
+        fetchStrategy: v.fetchStrategy,
       }));
       return json({ leagues });
     }
 
     // ══════════════════════════════════════════════════
-    // MODE 1: url_import — Parse URL, fetch, return preview
-    // Supports: /event/{slug}, /sports/{league}/games, /sports/{league}/{event}
+    // MODE 1: url_preview — Parse URL, fetch, return preview
     // ══════════════════════════════════════════════════
     if (action === "url_preview") {
+      const startTime = Date.now();
       const { url } = body;
       if (!url || typeof url !== "string") return json({ error: "Missing url" }, 400);
 
       const parsed = parsePolymarketUrl(url);
       if (!parsed) return json({ error: "Could not parse URL. Supported formats: /event/{slug}, /sports/{league}/games, /sports/{league}/{event}" }, 400);
 
+      let rawResults: GammaEvent[] = [];
       let results: GammaEvent[] = [];
       let highlightSlug: string | null = null;
+      const endpoints: string[] = [];
       let mode = parsed.type;
 
       if (parsed.type === "event_slug") {
+        endpoints.push(`events?slug=${parsed.slug}`);
         const ev = await fetchEventBySlug(parsed.slug!);
-        if (ev) results = [ev];
-        else return json({ error: `Event not found for slug: ${parsed.slug}` }, 404);
+        if (ev) rawResults = [ev];
+        else {
+          const tel = buildTelemetry({ mode: "url", strategy: "slug", endpoints_called: endpoints, raw_count: 0, filtered_count: 0, zero_reason: `slug_not_found: ${parsed.slug}`, duration_ms: Date.now() - startTime });
+          await logTelemetry(supabase, wallet, tel);
+          return json({ error: `Event not found for slug: ${parsed.slug}`, telemetry: tel }, 404);
+        }
       } else if (parsed.type === "sports_league_games") {
         const leagueKey = SPORTS_SLUG_MAP[parsed.leagueSlug!] || parsed.leagueSlug!;
-        const cfg = LEAGUE_CONFIGS[leagueKey];
+        const cfg = LEAGUE_SOURCES[leagueKey];
         if (cfg) {
-          results = await fetchEventsByTagId(cfg.tagId);
-          results = filterFixtures(results);
+          const fetched = await fetchByLeagueSource(cfg);
+          rawResults = fetched.events;
+          endpoints.push(...fetched.endpoints);
         } else {
-          return json({ error: `Unknown league: ${parsed.leagueSlug}. Use list_leagues for available options.` }, 400);
+          const tel = buildTelemetry({ mode: "url", strategy: "league_games", endpoints_called: [], raw_count: 0, filtered_count: 0, zero_reason: `unknown_league: ${parsed.leagueSlug}`, duration_ms: Date.now() - startTime });
+          await logTelemetry(supabase, wallet, tel);
+          return json({ error: `Unknown league: ${parsed.leagueSlug}. Use list_leagues for available options.`, telemetry: tel }, 400);
         }
       } else if (parsed.type === "sports_league_event") {
         const leagueKey = SPORTS_SLUG_MAP[parsed.leagueSlug!] || parsed.leagueSlug!;
-        const cfg = LEAGUE_CONFIGS[leagueKey];
+        const cfg = LEAGUE_SOURCES[leagueKey];
 
-        // Try to fetch the exact event by slug first
+        // Try to fetch exact event by slug first
+        endpoints.push(`events?slug=${parsed.eventSlug}`);
         const exactEv = await fetchEventBySlug(parsed.eventSlug!);
         if (exactEv) {
-          results = [exactEv];
+          rawResults = [exactEv];
         } else if (cfg) {
-          // Fetch all league events and highlight the matching one
-          results = await fetchEventsByTagId(cfg.tagId);
-          results = filterFixtures(results);
+          const fetched = await fetchByLeagueSource(cfg);
+          rawResults = fetched.events;
+          endpoints.push(...fetched.endpoints);
           highlightSlug = parsed.eventSlug!;
         } else {
-          return json({ error: `Could not resolve event: ${parsed.eventSlug}` }, 404);
+          const tel = buildTelemetry({ mode: "url", strategy: "league_event", endpoints_called: endpoints, raw_count: 0, filtered_count: 0, zero_reason: `event_not_found_league_unknown: ${parsed.eventSlug}`, duration_ms: Date.now() - startTime });
+          await logTelemetry(supabase, wallet, tel);
+          return json({ error: `Could not resolve event: ${parsed.eventSlug}`, telemetry: tel }, 404);
         }
       }
 
-      console.log(`[polymarket-sync] url_preview: mode=${mode}, results=${results.length}`);
+      results = filterFixtures(rawResults);
+
+      const tel = buildTelemetry({
+        mode: "url",
+        strategy: String(mode),
+        endpoints_called: endpoints,
+        raw_count: rawResults.length,
+        filtered_count: results.length,
+        zero_reason: results.length === 0 ? `all_${rawResults.length}_filtered_by_safety` : undefined,
+        duration_ms: Date.now() - startTime,
+      });
+      await logTelemetry(supabase, wallet, tel);
 
       return json({
         mode,
         highlightSlug,
         results: results.map(e => toPreview(e, "url_import")),
+        telemetry: tel,
       });
     }
 
@@ -560,42 +688,77 @@ Deno.serve(async (req) => {
     // MODE 2: browse_league — Fetch fixtures for a curated league
     // ══════════════════════════════════════════════════
     if (action === "browse_league") {
+      const startTime = Date.now();
       const { league_key } = body;
-      if (!league_key || !LEAGUE_CONFIGS[league_key]) {
+      if (!league_key || !LEAGUE_SOURCES[league_key]) {
         return json({ error: "Unknown league_key. Use list_leagues to see available keys." }, 400);
       }
-      const cfg = LEAGUE_CONFIGS[league_key];
-      const rawEvents = await fetchEventsByTagId(cfg.tagId);
+      const cfg = LEAGUE_SOURCES[league_key];
+      const { events: rawEvents, endpoints } = await fetchByLeagueSource(cfg);
       const results = filterFixtures(rawEvents);
 
-      console.log(`[polymarket-sync] browse_league "${league_key}" (tag ${cfg.tagId}): ${results.length} fixtures`);
+      const tel = buildTelemetry({
+        mode: "browse",
+        strategy: cfg.fetchStrategy,
+        league_key,
+        endpoints_called: endpoints,
+        raw_count: rawEvents.length,
+        filtered_count: results.length,
+        zero_reason: results.length === 0
+          ? rawEvents.length === 0
+            ? `no_events_from_${cfg.fetchStrategy}_endpoint`
+            : `all_${rawEvents.length}_filtered_by_safety_filters`
+          : undefined,
+        duration_ms: Date.now() - startTime,
+      });
+      await logTelemetry(supabase, wallet, tel);
 
       return json({
         league: cfg.label,
         sportType: cfg.sportType,
+        fetchStrategy: cfg.fetchStrategy,
         results: results.map(e => toPreview(e, "league_browse")),
+        telemetry: tel,
       });
     }
 
     // ══════════════════════════════════════════════════
     // MODE 3: exact_search — Strict fixture/fight name search
-    // If query looks like a league, routes to browse_league instead
     // ══════════════════════════════════════════════════
     if (action === "search") {
+      const startTime = Date.now();
       const { query, sport_filter } = body;
       if (!query) return json({ error: "Missing query" }, 400);
 
       // Safety: if query matches a league name, redirect to tag-based browse
       const leagueKey = isLeagueQuery(query);
       if (leagueKey) {
-        const cfg = LEAGUE_CONFIGS[leagueKey];
-        const rawEvents = await fetchEventsByTagId(cfg.tagId);
+        const cfg = LEAGUE_SOURCES[leagueKey];
+        const { events: rawEvents, endpoints } = await fetchByLeagueSource(cfg);
         const results = filterFixtures(rawEvents);
-        console.log(`[polymarket-sync] search→league redirect "${query}" → ${cfg.label}: ${results.length}`);
+
+        const tel = buildTelemetry({
+          mode: "search_redirected_to_browse",
+          strategy: cfg.fetchStrategy,
+          league_key: leagueKey,
+          query,
+          endpoints_called: endpoints,
+          raw_count: rawEvents.length,
+          filtered_count: results.length,
+          zero_reason: results.length === 0
+            ? rawEvents.length === 0
+              ? `league_redirect_no_events_from_${cfg.fetchStrategy}`
+              : `league_redirect_all_${rawEvents.length}_filtered`
+            : undefined,
+          duration_ms: Date.now() - startTime,
+        });
+        await logTelemetry(supabase, wallet, tel);
+
         return json({
           redirected_to_league: leagueKey,
           league: cfg.label,
           results: results.map(e => toPreview(e, "league_browse")),
+          telemetry: tel,
         });
       }
 
@@ -613,28 +776,41 @@ Deno.serve(async (req) => {
         }
       }
 
-      let rawResults = await fetchSearchEvents(searchQueries);
+      const endpoints = searchQueries.map(q => `public-search?q=${q}`);
+      const rawResults = await fetchSearchEvents(searchQueries);
 
       // Strict filtering: future + fixture + exclude props
       let results = filterFixtures(rawResults);
 
       // Apply sport_filter category matching
       if (sport_filter === "soccer") {
-        results = results.filter(ev => {
-          const lower = ev.title.toLowerCase();
-          return lower.includes("vs"); // Soccer fixtures always have "vs"
-        });
+        results = results.filter(ev => ev.title.toLowerCase().includes("vs"));
       }
 
-      console.log(`[polymarket-sync] exact_search "${query}" (filter: ${sport_filter || "all"}): ${results.length} results`);
+      const tel = buildTelemetry({
+        mode: "search",
+        strategy: "public_search",
+        query,
+        endpoints_called: endpoints,
+        raw_count: rawResults.length,
+        filtered_count: results.length,
+        zero_reason: results.length === 0
+          ? rawResults.length === 0
+            ? "no_results_from_public_search"
+            : `all_${rawResults.length}_filtered: titles_lacked_vs_or_were_past_or_props`
+          : undefined,
+        duration_ms: Date.now() - startTime,
+      });
+      await logTelemetry(supabase, wallet, tel);
 
       return json({
         results: results.map(e => toPreview(e, "exact_search")),
+        telemetry: tel,
       });
     }
 
     // ══════════════════════════════════════════════════
-    // ACTION: import_single — Import a specific Polymarket event as pending_review
+    // ACTION: import_single
     // ══════════════════════════════════════════════════
     if (action === "import_single") {
       const { polymarket_event_id, import_source } = body;
@@ -648,7 +824,7 @@ Deno.serve(async (req) => {
     }
 
     // ══════════════════════════════════════════════════
-    // ACTION: import_by_url — Import from a Polymarket URL as pending_review
+    // ACTION: import_by_url
     // ══════════════════════════════════════════════════
     if (action === "import_by_url") {
       const { url } = body;
@@ -663,7 +839,6 @@ Deno.serve(async (req) => {
         const result = await importSingleEvent(supabase, gEvent, wallet, "url_import");
         return json({ success: true, event_name: gEvent.title, slug: gEvent.slug, ...result });
       } else if (parsed.type === "sports_league_games" || parsed.type === "sports_league_event") {
-        // For league URLs, don't auto-import — return error directing admin to use preview
         return json({
           error: "League/sports URLs should use url_preview first, then import selected events individually.",
           suggestion: "Use the URL preview mode to see all fixtures, then select which to import.",
