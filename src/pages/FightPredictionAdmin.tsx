@@ -2297,19 +2297,32 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
   );
 }
 
-// ── Polymarket Sync Panel (Search + Preview + Select) ──
+// ── Polymarket Sync Panel: 3-Mode Import ──
 function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string; busy: boolean; onComplete: () => void }) {
-  const [searchBusy, setSearchBusy] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<any[] | null>(null);
+  const [activeMode, setActiveMode] = useState<"url" | "browse" | "search">("url");
+  const [busy, setBusy] = useState(false);
+  const [results, setResults] = useState<any[] | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [importingIds, setImportingIds] = useState<Set<string>>(new Set());
   const [importedIds, setImportedIds] = useState<Set<string>>(new Set());
+  const [highlightSlug, setHighlightSlug] = useState<string | null>(null);
+  const [resultSource, setResultSource] = useState<string>("");
+
+  // Mode 1 state
+  const [urlInput, setUrlInput] = useState("");
+
+  // Mode 2 state
+  const [selectedLeague, setSelectedLeague] = useState("");
+
+  // Mode 3 state
+  const [searchQuery, setSearchQuery] = useState("");
   const [sportFilter, setSportFilter] = useState<string>("all");
-  const [directUrl, setDirectUrl] = useState("");
-  const [directImportBusy, setDirectImportBusy] = useState(false);
-  const [selectedLeague, setSelectedLeague] = useState<string>("");
-  const [leagueBrowseBusy, setLeagueBrowseBusy] = useState(false);
+
+  const MODES = [
+    { key: "url" as const, label: "📋 URL Import" },
+    { key: "browse" as const, label: "📂 Browse League" },
+    { key: "search" as const, label: "🔍 Exact Search" },
+  ];
 
   const SPORT_FILTERS = [
     { key: "all", label: "All" },
@@ -2318,68 +2331,112 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
     { key: "boxing", label: "🥊 Boxing" },
   ];
 
-  const LEAGUE_OPTIONS = [
-    { key: "", label: "Browse by league..." },
-    { key: "epl", label: "⚽ EPL" },
-    { key: "mls", label: "⚽ MLS" },
-    { key: "ucl", label: "⚽ UCL" },
-    { key: "uel", label: "⚽ UEL" },
-    { key: "la-liga", label: "⚽ La Liga" },
-    { key: "bundesliga", label: "⚽ Bundesliga" },
-    { key: "serie-a", label: "⚽ Serie A" },
-    { key: "ligue-1", label: "⚽ Ligue 1" },
-    { key: "liga-mx", label: "⚽ Liga MX" },
-    { key: "eredivisie", label: "⚽ Eredivisie" },
-    { key: "fifa-friendlies", label: "⚽ FIFA Friendlies" },
-    { key: "copa-libertadores", label: "⚽ Copa Libertadores" },
-    { key: "brazil-serie-a", label: "⚽ Brazil Série A" },
-    { key: "j-league", label: "⚽ J. League" },
-    { key: "k-league", label: "⚽ K-League" },
-    { key: "a-league", label: "⚽ A-League" },
-    { key: "super-lig", label: "⚽ Süper Lig" },
-    { key: "primeira-liga", label: "⚽ Primeira Liga" },
-    { key: "ufc", label: "🥊 UFC" },
+  const SOCCER_LEAGUES = [
+    { key: "epl", label: "EPL" },
+    { key: "mls", label: "MLS" },
+    { key: "ucl", label: "UCL" },
+    { key: "uel", label: "UEL" },
+    { key: "la-liga", label: "La Liga" },
+    { key: "bundesliga", label: "Bundesliga" },
+    { key: "serie-a", label: "Serie A" },
+    { key: "ligue-1", label: "Ligue 1" },
+    { key: "liga-mx", label: "Liga MX" },
+    { key: "eredivisie", label: "Eredivisie" },
+    { key: "fifa-friendlies", label: "FIFA Friendlies" },
+    { key: "copa-libertadores", label: "Copa Libertadores" },
+    { key: "copa-sudamericana", label: "Copa Sudamericana" },
+    { key: "brazil-serie-a", label: "Brazil Série A" },
+    { key: "j-league", label: "J. League" },
+    { key: "k-league", label: "K-League" },
+    { key: "a-league", label: "A-League" },
+    { key: "super-lig", label: "Süper Lig" },
+    { key: "primeira-liga", label: "Primeira Liga" },
+    { key: "concacaf", label: "CONCACAF" },
+    { key: "conmebol", label: "CONMEBOL" },
   ];
 
-  const browseLeague = async (leagueKey: string) => {
-    if (!leagueKey) return;
-    setLeagueBrowseBusy(true);
-    setSearchResults(null);
+  const COMBAT_LEAGUES = [
+    { key: "ufc", label: "UFC" },
+    { key: "mma", label: "MMA" },
+    { key: "boxing", label: "Boxing" },
+    { key: "bkfc", label: "BKFC" },
+  ];
+
+  const resetResults = () => {
+    setResults(null);
     setSelectedIds(new Set());
+    setHighlightSlug(null);
+    setResultSource("");
+  };
+
+  // MODE 1: URL Preview
+  const handleUrlPreview = async () => {
+    if (!urlInput.trim()) return;
+    setBusy(true);
+    resetResults();
+    try {
+      const { data, error } = await supabase.functions.invoke("polymarket-sync", {
+        body: { wallet, action: "url_preview", url: urlInput.trim() },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setResults(data.results || []);
+      setHighlightSlug(data.highlightSlug || null);
+      setResultSource("URL Import");
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // MODE 2: Browse League
+  const handleBrowseLeague = async (leagueKey: string) => {
+    if (!leagueKey) return;
+    setBusy(true);
+    resetResults();
     try {
       const { data, error } = await supabase.functions.invoke("polymarket-sync", {
         body: { wallet, action: "browse_league", league_key: leagueKey },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      setSearchResults(data.results || []);
-      setSearchQuery(data.league || leagueKey);
+      setResults(data.results || []);
+      setResultSource(`League: ${data.league || leagueKey}`);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
-      setLeagueBrowseBusy(false);
+      setBusy(false);
     }
   };
 
-  const runSearch = async () => {
+  // MODE 3: Exact Search
+  const handleSearch = async () => {
     if (!searchQuery.trim()) return;
-    setSearchBusy(true);
-    setSearchResults(null);
-    setSelectedIds(new Set());
+    setBusy(true);
+    resetResults();
     try {
       const { data, error } = await supabase.functions.invoke("polymarket-sync", {
         body: { wallet, action: "search", query: searchQuery, sport_filter: sportFilter !== "all" ? sportFilter : undefined },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      setSearchResults(data.results || []);
+
+      if (data.redirected_to_league) {
+        setResultSource(`League: ${data.league} (auto-detected)`);
+        toast.info(`"${searchQuery}" matched league "${data.league}" — showing league fixtures instead`);
+      } else {
+        setResultSource("Exact Search");
+      }
+      setResults(data.results || []);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
-      setSearchBusy(false);
+      setBusy(false);
     }
   };
 
+  // Selection
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -2389,13 +2446,14 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
   };
 
   const selectAll = () => {
-    if (!searchResults) return;
-    const allIds = searchResults.map(e => String(e.id)).filter(id => !importedIds.has(id));
+    if (!results) return;
+    const allIds = results.map(e => String(e.id)).filter(id => !importedIds.has(id));
     setSelectedIds(new Set(allIds));
   };
 
   const deselectAll = () => setSelectedIds(new Set());
 
+  // Import selected
   const importSelected = async () => {
     if (selectedIds.size === 0) return;
     const ids = [...selectedIds];
@@ -2404,13 +2462,11 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
     for (const pmEventId of ids) {
       try {
         const { data, error } = await supabase.functions.invoke("polymarket-sync", {
-          body: { wallet, action: "import_single", polymarket_event_id: pmEventId },
+          body: { wallet, action: "import_single", polymarket_event_id: pmEventId, import_source: activeMode },
         });
         if (error) throw error;
         if (data?.error) throw new Error(data.error);
-        if (data.warning) {
-          toast.warning(data.warning);
-        }
+        if (data.warning) toast.warning(data.warning);
         successCount++;
         setImportedIds(prev => new Set([...prev, pmEventId]));
       } catch (err: any) {
@@ -2420,13 +2476,14 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
     setImportingIds(new Set());
     setSelectedIds(new Set());
     if (successCount > 0) {
-      toast.success(`Imported ${successCount} event(s) to Pending Review`);
+      toast.success(`Imported ${successCount} event(s) → Pending Review`);
       onComplete();
     }
   };
 
+  // Refresh prices
   const refreshPrices = async () => {
-    setSearchBusy(true);
+    setBusy(true);
     try {
       const { data, error } = await supabase.functions.invoke("polymarket-sync", {
         body: { wallet, action: "refresh_prices" },
@@ -2436,113 +2493,153 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
     } catch (err: any) {
       toast.error(err.message);
     } finally {
-      setSearchBusy(false);
+      setBusy(false);
     }
   };
 
-  const importByUrl = async () => {
-    if (!directUrl.trim()) return;
-    setDirectImportBusy(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("polymarket-sync", {
-        body: { wallet, action: "import_by_url", url: directUrl.trim() },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      if (data.warning) {
-        toast.warning(data.warning);
-      } else {
-        toast.success(`Imported "${data.event_name || directUrl}" — ${data.imported} market(s) → Pending Review`);
-      }
-      setDirectUrl("");
-      onComplete();
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally {
-      setDirectImportBusy(false);
-    }
-  };
+  const ImportButton = ({ className = "" }: { className?: string }) => (
+    selectedIds.size > 0 ? (
+      <Button
+        className={`w-full bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 border border-purple-500/30 ${className}`}
+        onClick={importSelected}
+        disabled={importingIds.size > 0}
+      >
+        {importingIds.size > 0 ? (
+          <Loader2 className="w-4 h-4 animate-spin mr-2" />
+        ) : (
+          <Download className="w-4 h-4 mr-2" />
+        )}
+        Import {selectedIds.size} Selected → Pending Review
+      </Button>
+    ) : null
+  );
 
   return (
     <div className="space-y-4">
-      {/* Direct URL Import */}
-      <div>
-        <p className="text-[10px] text-muted-foreground mb-1.5 font-medium">📋 Paste Polymarket Event URL</p>
-        <div className="flex gap-2">
-          <Input
-            placeholder="https://polymarket.com/event/team-a-vs-team-b"
-            value={directUrl}
-            onChange={e => setDirectUrl(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && importByUrl()}
-            className="flex-1 text-xs"
-          />
-          <Button
-            variant="outline"
-            className="border-purple-500/30 text-purple-400 hover:bg-purple-500/20"
-            onClick={importByUrl}
-            disabled={directImportBusy || !directUrl.trim()}
-          >
-            {directImportBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-          </Button>
-        </div>
-      </div>
-
-      {/* Divider */}
-      <div className="border-t border-border/30" />
-
-      {/* Sport filter chips */}
-      <div className="flex flex-wrap gap-1.5">
-        {SPORT_FILTERS.map(f => (
+      {/* Mode tabs */}
+      <div className="flex gap-1.5">
+        {MODES.map(m => (
           <button
-            key={f.key}
-            onClick={() => setSportFilter(f.key)}
-            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-              sportFilter === f.key
-                ? "bg-purple-500/20 text-purple-400 border-purple-500/40"
-                : "bg-muted/30 text-muted-foreground border-border/30 hover:border-border"
+            key={m.key}
+            onClick={() => { setActiveMode(m.key); resetResults(); }}
+            className={`text-xs font-bold px-3 py-1.5 rounded-full transition-colors ${
+              activeMode === m.key
+                ? "bg-purple-500/20 text-purple-400 border border-purple-500/40"
+                : "bg-muted/30 text-muted-foreground border border-border/30 hover:border-border"
             }`}
           >
-            {f.label}
+            {m.label}
           </button>
         ))}
       </div>
 
-      {/* League browser dropdown */}
-      <div className="flex gap-2">
-        <Select
-          value={selectedLeague}
-          onValueChange={(val) => {
-            setSelectedLeague(val);
-            browseLeague(val);
-          }}
-        >
-          <SelectTrigger className="flex-1 text-xs">
-            <SelectValue placeholder="Browse by league..." />
-          </SelectTrigger>
-          <SelectContent>
-            {LEAGUE_OPTIONS.filter(l => l.key).map(l => (
-              <SelectItem key={l.key} value={l.key}>{l.label}</SelectItem>
+      {/* MODE 1: URL Import */}
+      {activeMode === "url" && (
+        <div className="space-y-3">
+          <p className="text-[10px] text-muted-foreground">
+            Paste a Polymarket URL: <code className="text-purple-400">/event/slug</code>, <code className="text-purple-400">/sports/league/games</code>, or <code className="text-purple-400">/sports/league/event</code>
+          </p>
+          <div className="flex gap-2">
+            <Input
+              placeholder="https://polymarket.com/event/team-a-vs-team-b"
+              value={urlInput}
+              onChange={e => setUrlInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleUrlPreview()}
+              className="flex-1 text-xs"
+            />
+            <Button
+              variant="outline"
+              className="border-purple-500/30 text-purple-400 hover:bg-purple-500/20"
+              onClick={handleUrlPreview}
+              disabled={busy || !urlInput.trim()}
+            >
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* MODE 2: Browse League */}
+      {activeMode === "browse" && (
+        <div className="space-y-3">
+          <p className="text-[10px] text-muted-foreground font-medium">⚽ Soccer</p>
+          <div className="flex flex-wrap gap-1.5">
+            {SOCCER_LEAGUES.map(l => (
+              <button
+                key={l.key}
+                onClick={() => { setSelectedLeague(l.key); handleBrowseLeague(l.key); }}
+                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                  selectedLeague === l.key
+                    ? "bg-purple-500/20 text-purple-400 border-purple-500/40"
+                    : "bg-muted/30 text-muted-foreground border-border/30 hover:border-border"
+                }`}
+              >
+                {l.label}
+              </button>
             ))}
-          </SelectContent>
-        </Select>
-        {leagueBrowseBusy && <Loader2 className="w-4 h-4 animate-spin text-purple-400 self-center" />}
-      </div>
-      <div className="flex gap-2">
-        <Input
-          placeholder={sportFilter === "soccer" ? "e.g. Premier League, MLS, Real Madrid..." : sportFilter === "mma" ? "e.g. UFC 315, Adesanya..." : sportFilter === "boxing" ? "e.g. Canelo, Tyson Fury..." : "Search Polymarket events..."}
-          value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && runSearch()}
-          className="flex-1"
-        />
-        <Button
-          onClick={runSearch}
-          disabled={searchBusy || !searchQuery.trim()}
-          className="bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 border border-purple-500/30"
-        >
-          {searchBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
-        </Button>
-      </div>
+          </div>
+          <p className="text-[10px] text-muted-foreground font-medium mt-2">🥊 Combat</p>
+          <div className="flex flex-wrap gap-1.5">
+            {COMBAT_LEAGUES.map(l => (
+              <button
+                key={l.key}
+                onClick={() => { setSelectedLeague(l.key); handleBrowseLeague(l.key); }}
+                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                  selectedLeague === l.key
+                    ? "bg-purple-500/20 text-purple-400 border-purple-500/40"
+                    : "bg-muted/30 text-muted-foreground border-border/30 hover:border-border"
+                }`}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
+          {busy && <div className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" /> Loading fixtures...</div>}
+        </div>
+      )}
+
+      {/* MODE 3: Exact Search */}
+      {activeMode === "search" && (
+        <div className="space-y-3">
+          <p className="text-[10px] text-muted-foreground">
+            Search for exact fixture names: <span className="text-purple-400">Vietnam vs Bangladesh</span>, <span className="text-purple-400">UFC 315</span>, <span className="text-purple-400">Canelo vs Benavidez</span>
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {SPORT_FILTERS.map(f => (
+              <button
+                key={f.key}
+                onClick={() => setSportFilter(f.key)}
+                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                  sportFilter === f.key
+                    ? "bg-purple-500/20 text-purple-400 border-purple-500/40"
+                    : "bg-muted/30 text-muted-foreground border-border/30 hover:border-border"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <Input
+              placeholder={sportFilter === "soccer" ? "e.g. Brazil vs France" : sportFilter === "mma" ? "e.g. UFC 315" : sportFilter === "boxing" ? "e.g. Canelo vs Benavidez" : "Search exact fixture name..."}
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleSearch()}
+              className="flex-1"
+            />
+            <Button
+              onClick={handleSearch}
+              disabled={busy || !searchQuery.trim()}
+              className="bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 border border-purple-500/30"
+            >
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Divider */}
+      <div className="border-t border-border/30" />
 
       {/* Refresh Prices */}
       <Button
@@ -2550,20 +2647,21 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
         size="sm"
         className="border-border text-muted-foreground"
         onClick={refreshPrices}
-        disabled={searchBusy || parentBusy}
+        disabled={busy || parentBusy}
       >
         <RefreshCw className="w-3 h-3 mr-1.5" /> Refresh Prices
       </Button>
 
-      {/* Search Results */}
-      {searchResults && (
+      {/* Results */}
+      {results && (
         <div className="space-y-2">
-          {searchResults.length > 0 && (
+          {results.length > 0 && (
             <>
               <div className="flex items-center justify-between">
                 <p className="text-[10px] text-purple-400 font-bold flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block" />
-                  {searchResults.length} result(s) for &ldquo;{searchQuery}&rdquo;
+                  {results.length} result(s)
+                  {resultSource && <span className="text-muted-foreground ml-1">· {resultSource}</span>}
                 </p>
                 <div className="flex gap-1.5">
                   <button onClick={selectAll} className="text-[10px] text-primary hover:underline">Select All</button>
@@ -2571,35 +2669,21 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
                   <button onClick={deselectAll} className="text-[10px] text-muted-foreground hover:underline">Clear</button>
                 </div>
               </div>
-
-              {/* Import Selected button */}
-              {selectedIds.size > 0 && (
-                <Button
-                  className="w-full bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 border border-purple-500/30"
-                  onClick={importSelected}
-                  disabled={importingIds.size > 0}
-                >
-                  {importingIds.size > 0 ? (
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  ) : (
-                    <Download className="w-4 h-4 mr-2" />
-                  )}
-                  Import {selectedIds.size} Selected → Pending Review
-                </Button>
-              )}
+              <ImportButton />
             </>
           )}
 
-          {searchResults.length === 0 && (
-            <p className="text-xs text-muted-foreground text-center py-4">No matching markets for &ldquo;{searchQuery}&rdquo;</p>
+          {results.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-4">No matching fixtures found.</p>
           )}
 
           <div className="max-h-[500px] overflow-y-auto space-y-2">
-            {searchResults.map((event: any) => {
+            {results.map((event: any) => {
               const id = String(event.id);
               const isSelected = selectedIds.has(id);
               const isImported = importedIds.has(id);
               const isImporting = importingIds.has(id);
+              const isHighlighted = highlightSlug && event.slug === highlightSlug;
               const startDate = event.startDate ? new Date(event.startDate) : null;
               const now = new Date();
               const diffMs = startDate ? startDate.getTime() - now.getTime() : null;
@@ -2610,19 +2694,29 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
                 : null;
               const isPast = diffHours !== null && diffHours < 0;
 
+              // Source badge
+              const sourceBadge = event.source === "url_import" ? "📋 URL"
+                : event.source === "league_browse" ? "📂 League"
+                : event.source === "exact_search" ? "🔍 Search"
+                : "📋";
+
+              // Base market (first non-prop market)
+              const baseMarket = event.markets?.[0];
+
               return (
                 <div
                   key={id}
                   onClick={() => !isImported && toggleSelect(id)}
                   className={`bg-background/60 border rounded-lg p-3 text-xs cursor-pointer transition-all ${
                     isImported ? 'border-green-500/30 opacity-60 cursor-default' :
+                    isHighlighted ? 'border-yellow-500/50 bg-yellow-500/5 ring-1 ring-yellow-500/20' :
                     isSelected ? 'border-purple-500/50 bg-purple-500/5 ring-1 ring-purple-500/20' :
                     isPast ? 'border-destructive/30 opacity-60' :
                     'border-border/30 hover:border-border/60'
                   }`}
                 >
                   <div className="flex items-start gap-3">
-                    {/* Checkbox area */}
+                    {/* Checkbox */}
                     <div className="pt-0.5 shrink-0">
                       {isImported ? (
                         <CheckCircle className="w-4 h-4 text-green-400" />
@@ -2641,12 +2735,19 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <p className="text-foreground font-bold truncate">{event.title}</p>
+                        {/* Source badge */}
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-muted/50 text-muted-foreground shrink-0">
+                          {sourceBadge}
+                        </span>
                         {timeLabel && (
                           <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
                             isPast ? 'bg-destructive/20 text-destructive' : 'bg-primary/20 text-primary'
                           }`}>
                             {isPast ? "Past" : timeLabel}
                           </span>
+                        )}
+                        {isHighlighted && (
+                          <span className="text-[9px] font-bold text-yellow-400">⭐ Match</span>
                         )}
                         {isImported && (
                           <span className="text-[9px] font-bold text-green-400">✅ In Review</span>
@@ -2656,18 +2757,16 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
                         {event.markets?.length || 0} market(s)
                         {startDate && <span className="ml-1.5">· {startDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span>}
                       </p>
-                      {event.markets?.slice(0, 2).map((m: any, i: number) => (
-                        <div key={i} className="mt-1 text-[10px] text-muted-foreground">
-                          <span>{m.question}</span>
-                          {m.outcomePrices?.length >= 2 && (
+                      {/* Show base market only */}
+                      {baseMarket && (
+                        <div className="mt-1 text-[10px] text-muted-foreground">
+                          <span>{baseMarket.question}</span>
+                          {baseMarket.outcomePrices?.length >= 2 && (
                             <span className="ml-1.5 text-purple-400 font-bold">
-                              {(parseFloat(m.outcomePrices[0]) * 100).toFixed(0)}¢ / {(parseFloat(m.outcomePrices[1]) * 100).toFixed(0)}¢
+                              {(parseFloat(baseMarket.outcomePrices[0]) * 100).toFixed(0)}¢ / {(parseFloat(baseMarket.outcomePrices[1]) * 100).toFixed(0)}¢
                             </span>
                           )}
                         </div>
-                      ))}
-                      {(event.markets?.length || 0) > 2 && (
-                        <p className="text-[10px] text-muted-foreground/60 mt-0.5">+{event.markets.length - 2} more market(s)</p>
                       )}
                     </div>
                   </div>
@@ -2676,21 +2775,8 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
             })}
           </div>
 
-          {/* Bottom import button */}
-          {selectedIds.size > 0 && searchResults.length > 3 && (
-            <Button
-              className="w-full bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 border border-purple-500/30"
-              onClick={importSelected}
-              disabled={importingIds.size > 0}
-            >
-              {importingIds.size > 0 ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-              ) : (
-                <Download className="w-4 h-4 mr-2" />
-              )}
-              Import {selectedIds.size} Selected → Pending Review
-            </Button>
-          )}
+          {/* Bottom import button for long lists */}
+          {results.length > 3 && <ImportButton />}
         </div>
       )}
     </div>
