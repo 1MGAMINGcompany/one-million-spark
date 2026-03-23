@@ -758,7 +758,11 @@ Deno.serve(async (req) => {
         }
       }
 
-      results = filterFixtures(rawResults);
+      const { accepted: results, rejected, rawSample } = filterFixtures(rawResults);
+
+      const rejectionSummary = rejected.length > 0
+        ? rejected.slice(0, 5).map(r => ({ title: r.event.title, dateReason: r.dateReason, fixtureReason: r.fixtureReason }))
+        : [];
 
       const tel = buildTelemetry({
         mode: "url",
@@ -766,7 +770,9 @@ Deno.serve(async (req) => {
         endpoints_called: endpoints,
         raw_count: rawResults.length,
         filtered_count: results.length,
-        zero_reason: results.length === 0 ? `all_${rawResults.length}_filtered_by_safety` : undefined,
+        zero_reason: results.length === 0 && rawResults.length > 0
+          ? `all_${rawResults.length}_rejected_by_filters`
+          : results.length === 0 ? "no_raw_results" : undefined,
         duration_ms: Date.now() - startTime,
       });
       await logTelemetry(supabase, wallet, tel);
@@ -775,6 +781,11 @@ Deno.serve(async (req) => {
         mode,
         highlightSlug,
         results: results.map(e => toPreview(e, "url_import")),
+        raw_sample: rawSample,
+        rejection_sample: rejectionSummary,
+        filter_message: results.length === 0 && rawResults.length > 0
+          ? `Data found from Polymarket (${rawResults.length} events), but local filters rejected all results.`
+          : undefined,
         telemetry: tel,
       });
     }
