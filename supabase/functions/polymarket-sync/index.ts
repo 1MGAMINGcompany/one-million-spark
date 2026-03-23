@@ -9,29 +9,35 @@ const corsHeaders = {
 const GAMMA_BASE = "https://gamma-api.polymarket.com";
 const DATA_API_BASE = "https://data-api.polymarket.com";
 
-/** Futures / non-fixture keywords to reject */
+// ── Safety filters ──
+
 const FUTURES_KEYWORDS = [
   "winner", "to win", "cup winner", "league winner",
   "top scorer", "relegated", "promoted", "qualify",
   "champion", "most goals", "golden boot", "ballon d'or",
-  "mvp", "best player", "transfer",
+  "mvp", "best player", "transfer", "winning method",
+  "total goals", "total points", "spread", "handicap",
+  "over/under", "o/u", "prop", "special",
 ];
 
-/** Returns true if event title looks like an actual fixture (contains "vs") */
+const MORE_MARKETS_RE = /- more markets/i;
+const PROP_KEYWORDS = ["method of victory", "round betting", "to go the distance", "total rounds"];
+
+/** Returns true if event title looks like an actual fixture (team vs team or fighter vs fighter) */
 function isActualFixture(title: string): boolean {
   const lower = title.toLowerCase();
   if (!lower.includes("vs")) return false;
   for (const kw of FUTURES_KEYWORDS) {
     if (lower.includes(kw)) return false;
   }
-  if (lower.includes("- more markets")) return false;
-  if (lower.includes("winning method")) return false;
+  if (MORE_MARKETS_RE.test(title)) return false;
+  for (const pk of PROP_KEYWORDS) {
+    if (lower.includes(pk)) return false;
+  }
   return true;
 }
 
-/**
- * Return true if the event's match/start date is in the future.
- */
+/** Return true if the event's match/start date is in the future. */
 function isFutureEvent(ev: GammaEvent): boolean {
   const now = Date.now();
   const startMs = ev.startDate ? new Date(ev.startDate).getTime() : null;
@@ -41,85 +47,54 @@ function isFutureEvent(ev: GammaEvent): boolean {
   return true;
 }
 
-/** Known league tag IDs for direct /events?tag_id= browsing */
-const LEAGUE_TAG_MAP: Record<string, { tag_id: string; label: string; sport_code: string }> = {
+// ── Curated league/category config ──
+
+interface LeagueConfig {
+  label: string;
+  sportType: "soccer" | "combat";
+  tagId: string;
+  tagSlug?: string;
+  seriesId?: string;
+}
+
+const LEAGUE_CONFIGS: Record<string, LeagueConfig> = {
   // Soccer
-  "epl": { tag_id: "306", label: "EPL", sport_code: "epl" },
-  "mls": { tag_id: "100100", label: "MLS", sport_code: "mls" },
-  "ucl": { tag_id: "100977", label: "UCL", sport_code: "ucl" },
-  "uel": { tag_id: "101787", label: "UEL", sport_code: "uel" },
-  "la-liga": { tag_id: "780", label: "La Liga", sport_code: "lal" },
-  "bundesliga": { tag_id: "1494", label: "Bundesliga", sport_code: "bun" },
-  "serie-a": { tag_id: "102008", label: "Serie A", sport_code: "itc" },
-  "ligue-1": { tag_id: "102070", label: "Ligue 1", sport_code: "fl1" },
-  "liga-mx": { tag_id: "102448", label: "Liga MX", sport_code: "mex" },
-  "eredivisie": { tag_id: "101735", label: "Eredivisie", sport_code: "ere" },
-  "fifa-friendlies": { tag_id: "102539", label: "FIFA Friendlies", sport_code: "fif" },
-  "copa-libertadores": { tag_id: "102562", label: "Copa Libertadores", sport_code: "lib" },
-  "copa-sudamericana": { tag_id: "102563", label: "Copa Sudamericana", sport_code: "sud" },
-  "brazil-serie-a": { tag_id: "102648", label: "Brazil Série A", sport_code: "bra" },
-  "j-league": { tag_id: "102649", label: "J. League", sport_code: "jap" },
-  "k-league": { tag_id: "102771", label: "K-League", sport_code: "kor" },
-  "a-league": { tag_id: "102765", label: "A-League", sport_code: "aus" },
-  "super-lig": { tag_id: "102564", label: "Süper Lig", sport_code: "tur" },
-  "primeira-liga": { tag_id: "101772", label: "Primeira Liga", sport_code: "por" },
-  "concacaf": { tag_id: "100787", label: "CONCACAF", sport_code: "con" },
-  "conmebol": { tag_id: "101280", label: "CONMEBOL", sport_code: "cof" },
+  "epl": { label: "EPL", sportType: "soccer", tagId: "306" },
+  "mls": { label: "MLS", sportType: "soccer", tagId: "100100" },
+  "ucl": { label: "UCL", sportType: "soccer", tagId: "100977" },
+  "uel": { label: "UEL", sportType: "soccer", tagId: "101787" },
+  "la-liga": { label: "La Liga", sportType: "soccer", tagId: "780" },
+  "bundesliga": { label: "Bundesliga", sportType: "soccer", tagId: "1494" },
+  "serie-a": { label: "Serie A", sportType: "soccer", tagId: "102008" },
+  "ligue-1": { label: "Ligue 1", sportType: "soccer", tagId: "102070" },
+  "liga-mx": { label: "Liga MX", sportType: "soccer", tagId: "102448" },
+  "eredivisie": { label: "Eredivisie", sportType: "soccer", tagId: "101735" },
+  "fifa-friendlies": { label: "FIFA Friendlies", sportType: "soccer", tagId: "102539" },
+  "copa-libertadores": { label: "Copa Libertadores", sportType: "soccer", tagId: "102562" },
+  "copa-sudamericana": { label: "Copa Sudamericana", sportType: "soccer", tagId: "102563" },
+  "brazil-serie-a": { label: "Brazil Série A", sportType: "soccer", tagId: "102648" },
+  "j-league": { label: "J. League", sportType: "soccer", tagId: "102649" },
+  "k-league": { label: "K-League", sportType: "soccer", tagId: "102771" },
+  "a-league": { label: "A-League", sportType: "soccer", tagId: "102765" },
+  "super-lig": { label: "Süper Lig", sportType: "soccer", tagId: "102564" },
+  "primeira-liga": { label: "Primeira Liga", sportType: "soccer", tagId: "101772" },
+  "concacaf": { label: "CONCACAF", sportType: "soccer", tagId: "100787" },
+  "conmebol": { label: "CONMEBOL", sportType: "soccer", tagId: "101280" },
   // Combat
-  "ufc": { tag_id: "100639", label: "UFC", sport_code: "ufc" },
+  "ufc": { label: "UFC", sportType: "combat", tagId: "100639" },
+  "mma": { label: "MMA", sportType: "combat", tagId: "100639" },
+  "boxing": { label: "Boxing", sportType: "combat", tagId: "100639", tagSlug: "boxing" },
+  "bkfc": { label: "BKFC", sportType: "combat", tagId: "100639", tagSlug: "bkfc" },
 };
 
-/** Search-based discovery via /public-search endpoint. */
-async function fetchSearchEvents(queries: string[], limit = 100): Promise<GammaEvent[]> {
-  const seen = new Set<string>();
-  const deduped: GammaEvent[] = [];
-  for (const q of queries) {
-    try {
-      const url = `${GAMMA_BASE}/public-search?q=${encodeURIComponent(q)}&limit=${limit}`;
-      const res = await fetch(url);
-      if (!res.ok) continue;
-      const data = await res.json();
-      const events: GammaEvent[] = data.events || [];
-      for (const ev of events) {
-        if (!seen.has(String(ev.id))) {
-          seen.add(String(ev.id));
-          deduped.push(ev);
-        }
-      }
-    } catch {
-      continue;
-    }
-  }
-  return deduped;
+// Slug → league key mapping for URL parsing
+const SPORTS_SLUG_MAP: Record<string, string> = {};
+for (const [key, cfg] of Object.entries(LEAGUE_CONFIGS)) {
+  SPORTS_SLUG_MAP[key] = key;
+  SPORTS_SLUG_MAP[cfg.label.toLowerCase().replace(/\s+/g, "-")] = key;
 }
 
-/** Tag-based discovery via /events?tag_id= endpoint — works for leagues */
-async function fetchEventsByTagId(tagId: string, limit = 100): Promise<GammaEvent[]> {
-  try {
-    const url = `${GAMMA_BASE}/events?tag_id=${tagId}&active=true&closed=false&limit=${limit}`;
-    const res = await fetch(url);
-    if (!res.ok) return [];
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return [];
-  }
-}
-
-/** Fetch trade volume from Data API for enrichment */
-async function fetchMarketVolume(marketId: string): Promise<{ volume: number; tradeCount: number } | null> {
-  try {
-    const res = await fetch(`${DATA_API_BASE}/activity?market=${marketId}&limit=1`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    return {
-      volume: parseFloat(data?.volume || "0"),
-      tradeCount: parseInt(data?.tradeCount || "0", 10),
-    };
-  } catch {
-    return null;
-  }
-}
+// ── API helpers ──
 
 interface GammaMarket {
   id: string;
@@ -153,11 +128,301 @@ interface GammaEvent {
   tags?: { label: string; slug: string }[];
 }
 
+/** Fetch events by tag_id — reliable for league-based discovery */
+async function fetchEventsByTagId(tagId: string, limit = 200): Promise<GammaEvent[]> {
+  try {
+    const url = `${GAMMA_BASE}/events?tag_id=${tagId}&active=true&closed=false&limit=${limit}`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Search via /public-search — for exact fixture names only */
+async function fetchSearchEvents(queries: string[], limit = 100): Promise<GammaEvent[]> {
+  const seen = new Set<string>();
+  const deduped: GammaEvent[] = [];
+  for (const q of queries) {
+    try {
+      const url = `${GAMMA_BASE}/public-search?q=${encodeURIComponent(q)}&limit=${limit}`;
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const data = await res.json();
+      const events: GammaEvent[] = data.events || [];
+      for (const ev of events) {
+        if (!seen.has(String(ev.id))) {
+          seen.add(String(ev.id));
+          deduped.push(ev);
+        }
+      }
+    } catch {
+      continue;
+    }
+  }
+  return deduped;
+}
+
+/** Fetch by slug — for /event/{slug} URLs */
+async function fetchEventBySlug(slug: string): Promise<GammaEvent | null> {
+  try {
+    const res = await fetch(`${GAMMA_BASE}/events?slug=${encodeURIComponent(slug)}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const events: GammaEvent[] = Array.isArray(data) ? data : [data];
+    return events[0] || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Fetch by event ID */
+async function fetchEventById(id: string): Promise<GammaEvent | null> {
+  try {
+    const res = await fetch(`${GAMMA_BASE}/events/${id}`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+/** Fetch trade volume from Data API for enrichment */
+async function fetchMarketVolume(marketId: string): Promise<{ volume: number; tradeCount: number } | null> {
+  try {
+    const res = await fetch(`${DATA_API_BASE}/activity?market=${marketId}&limit=1`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      volume: parseFloat(data?.volume || "0"),
+      tradeCount: parseInt(data?.tradeCount || "0", 10),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Apply strict safety filters: future + fixture + no props/more-markets */
+function filterFixtures(events: GammaEvent[]): GammaEvent[] {
+  return events
+    .filter(isFutureEvent)
+    .filter(ev => isActualFixture(ev.title));
+}
+
+/** Format event for preview response (no DB writes) */
+function toPreview(ev: GammaEvent, source: string) {
+  return {
+    id: ev.id,
+    title: ev.title,
+    slug: ev.slug,
+    startDate: ev.startDate,
+    endDate: ev.endDate,
+    source,
+    markets: (ev.markets || []).map(m => ({
+      id: m.id,
+      question: m.question,
+      conditionId: m.conditionId,
+      slug: m.slug,
+      outcomes: safeJsonParse(m.outcomes),
+      outcomePrices: safeJsonParse(m.outcomePrices),
+      active: m.active,
+      closed: m.closed,
+      volume: m.volume,
+    })),
+  };
+}
+
+function safeJsonParse(s: string | undefined | null): any[] {
+  try { return JSON.parse(s || "[]"); } catch { return []; }
+}
+
+/** Check if a query looks like a league/category name rather than a specific fixture */
+function isLeagueQuery(query: string): string | null {
+  const q = query.toLowerCase().trim().replace(/\s+/g, "-");
+  // Direct match
+  if (LEAGUE_CONFIGS[q]) return q;
+  // Label match
+  for (const [key, cfg] of Object.entries(LEAGUE_CONFIGS)) {
+    if (cfg.label.toLowerCase() === query.toLowerCase().trim()) return key;
+    if (cfg.label.toLowerCase().replace(/\s+/g, "-") === q) return key;
+  }
+  // Partial match
+  for (const [key, cfg] of Object.entries(LEAGUE_CONFIGS)) {
+    if (query.toLowerCase().trim().includes(cfg.label.toLowerCase()) ||
+        cfg.label.toLowerCase().includes(query.toLowerCase().trim())) return key;
+  }
+  return null;
+}
+
+// ── URL parsing ──
+
+interface ParsedUrl {
+  type: "event_slug" | "sports_league_event" | "sports_league_games";
+  slug?: string;
+  leagueSlug?: string;
+  eventSlug?: string;
+}
+
+function parsePolymarketUrl(url: string): ParsedUrl | null {
+  let path = url.trim().replace(/\?.*$/, "").replace(/#.*$/, "");
+  // Strip domain
+  const domainMatch = path.match(/polymarket\.com\/(.+)/);
+  if (domainMatch) path = domainMatch[1];
+  path = path.replace(/^\/+|\/+$/g, "");
+
+  // /event/{slug}
+  const eventMatch = path.match(/^event\/([^/]+)$/);
+  if (eventMatch) return { type: "event_slug", slug: eventMatch[1] };
+
+  // /sports/{league-slug}/games
+  const leagueGamesMatch = path.match(/^sports\/([^/]+)\/games$/);
+  if (leagueGamesMatch) return { type: "sports_league_games", leagueSlug: leagueGamesMatch[1] };
+
+  // /sports/{league-slug}/{event-slug}
+  const sportsEventMatch = path.match(/^sports\/([^/]+)\/([^/]+)$/);
+  if (sportsEventMatch) return { type: "sports_league_event", leagueSlug: sportsEventMatch[1], eventSlug: sportsEventMatch[2] };
+
+  // /sports/{league-slug}  (treat as games)
+  const leagueMatch = path.match(/^sports\/([^/]+)$/);
+  if (leagueMatch) return { type: "sports_league_games", leagueSlug: leagueMatch[1] };
+
+  // bare slug
+  if (path && !path.includes("/")) return { type: "event_slug", slug: path };
+
+  return null;
+}
+
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+
+// ── Import helper (shared by all modes) ──
+
+async function importSingleEvent(
+  supabase: any,
+  gEvent: GammaEvent,
+  wallet: string | null,
+  importSource: string,
+): Promise<{ event_id: string; imported: number; is_past: boolean; warning?: string }> {
+  const startMs = gEvent.startDate ? new Date(gEvent.startDate).getTime() : null;
+  const isPastEvent = startMs !== null && startMs < Date.now();
+
+  const { data: existingEvt } = await supabase
+    .from("prediction_events")
+    .select("id")
+    .eq("polymarket_event_id", String(gEvent.id))
+    .maybeSingle();
+
+  let eventId: string;
+  if (existingEvt) {
+    eventId = existingEvt.id;
+  } else {
+    const { data: newEvt, error } = await supabase
+      .from("prediction_events")
+      .insert({
+        event_name: gEvent.title,
+        polymarket_event_id: String(gEvent.id),
+        polymarket_slug: gEvent.slug,
+        event_date: gEvent.startDate || gEvent.endDate || null,
+        source: "polymarket",
+        source_provider: "polymarket",
+        source_event_id: `pm_${gEvent.id}`,
+        status: "pending_review",
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    eventId = newEvt!.id;
+  }
+
+  let imported = 0;
+  for (const market of (gEvent.markets || [])) {
+    let outcomes: string[], tokenIds: string[], outcomePrices: string[];
+    try {
+      outcomes = JSON.parse(market.outcomes || "[]");
+      outcomePrices = JSON.parse(market.outcomePrices || "[]");
+      tokenIds = JSON.parse(market.clobTokenIds || "[]");
+    } catch { continue; }
+
+    if (outcomes.length < 2 || tokenIds.length < 2) continue;
+
+    // Skip prop/more-markets at market level
+    const mq = (market.question || "").toLowerCase();
+    if (MORE_MARKETS_RE.test(mq)) continue;
+    for (const pk of PROP_KEYWORDS) {
+      if (mq.includes(pk)) continue;
+    }
+
+    const { data: existingFight } = await supabase
+      .from("prediction_fights")
+      .select("id")
+      .eq("polymarket_market_id", market.id)
+      .maybeSingle();
+
+    if (existingFight) {
+      await supabase.from("prediction_fights").update({
+        price_a: parseFloat(outcomePrices[0] || "0"),
+        price_b: parseFloat(outcomePrices[1] || "0"),
+        polymarket_active: market.active && !market.closed,
+        polymarket_last_synced_at: new Date().toISOString(),
+      }).eq("id", existingFight.id);
+    } else {
+      let volumeUsd = parseFloat(market.volume || "0");
+      try {
+        const dataApiVol = await fetchMarketVolume(market.id);
+        if (dataApiVol && dataApiVol.volume > volumeUsd) {
+          volumeUsd = dataApiVol.volume;
+        }
+      } catch { /* non-fatal */ }
+
+      await supabase.from("prediction_fights").insert({
+        title: market.groupItemTitle || market.question,
+        fighter_a_name: outcomes[0],
+        fighter_b_name: outcomes[1],
+        event_name: gEvent.title,
+        event_id: eventId,
+        source: "polymarket",
+        commission_bps: 200,
+        polymarket_market_id: market.id,
+        polymarket_condition_id: market.conditionId,
+        polymarket_slug: market.slug,
+        polymarket_outcome_a_token: tokenIds[0],
+        polymarket_outcome_b_token: tokenIds[1],
+        polymarket_active: market.active && !market.closed,
+        polymarket_end_date: market.endDate || null,
+        polymarket_question: market.question,
+        polymarket_last_synced_at: new Date().toISOString(),
+        polymarket_volume_usd: volumeUsd > 0 ? volumeUsd : null,
+        price_a: parseFloat(outcomePrices[0] || "0"),
+        price_b: parseFloat(outcomePrices[1] || "0"),
+        status: "open",
+      });
+    }
+    imported++;
+  }
+
+  await supabase.from("automation_logs").insert({
+    action: `polymarket_import_${importSource}`,
+    source: "polymarket-sync",
+    admin_wallet: wallet || null,
+    details: { polymarket_event_id: gEvent.id, event_name: gEvent.title, imported, is_past: isPastEvent, import_source: importSource },
+  });
+
+  return {
+    event_id: eventId,
+    imported,
+    is_past: isPastEvent,
+    warning: isPastEvent ? `⚠️ This event's start date (${gEvent.startDate}) is in the past.` : undefined,
+  };
+}
+
+// ══════════════════════════════════════════════════
+// MAIN HANDLER
+// ══════════════════════════════════════════════════
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -171,7 +436,7 @@ Deno.serve(async (req) => {
     );
 
     const body = await req.json().catch(() => ({}));
-    const { wallet, action = "search", limit = 200 } = body;
+    const { wallet, action = "search" } = body;
 
     // ── Admin verification ──
     if (wallet) {
@@ -205,7 +470,6 @@ Deno.serve(async (req) => {
             fetch(`https://clob.polymarket.com/price?token_id=${fight.polymarket_outcome_a_token}&side=BUY`).then(r => r.json()),
             fetch(`https://clob.polymarket.com/price?token_id=${fight.polymarket_outcome_b_token}&side=BUY`).then(r => r.json()),
           ]);
-
           const priceA = parseFloat(buyA?.price || "0");
           const priceB = parseFloat(buyB?.price || "0");
 
@@ -217,153 +481,155 @@ Deno.serve(async (req) => {
               polymarket_last_synced_at: new Date().toISOString(),
             })
             .eq("id", fight.id);
-
           updated++;
         } catch (e) {
           console.error(`[polymarket-sync] Price update error for ${fight.id}: ${e}`);
         }
       }
-
       return json({ success: true, updated, total: pmFights.length });
     }
 
     // ══════════════════════════════════════════════════
-    // ACTION: list_leagues — Return available leagues for dropdown
+    // ACTION: list_leagues — Return curated league configs for dropdown
     // ══════════════════════════════════════════════════
     if (action === "list_leagues") {
-      const leagues = Object.entries(LEAGUE_TAG_MAP).map(([key, v]) => ({
+      const leagues = Object.entries(LEAGUE_CONFIGS).map(([key, v]) => ({
         key,
         label: v.label,
-        sport_code: v.sport_code,
+        sportType: v.sportType,
       }));
       return json({ leagues });
     }
 
     // ══════════════════════════════════════════════════
-    // ACTION: browse_league — Fetch fixtures for a specific league via tag_id
+    // MODE 1: url_import — Parse URL, fetch, return preview
+    // Supports: /event/{slug}, /sports/{league}/games, /sports/{league}/{event}
     // ══════════════════════════════════════════════════
-    if (action === "browse_league") {
-      const { league_key } = body;
-      if (!league_key || !LEAGUE_TAG_MAP[league_key]) {
-        return json({ error: "Unknown league_key. Use list_leagues to see available keys." }, 400);
-      }
-      const league = LEAGUE_TAG_MAP[league_key];
-      const rawEvents = await fetchEventsByTagId(league.tag_id, limit);
+    if (action === "url_preview") {
+      const { url } = body;
+      if (!url || typeof url !== "string") return json({ error: "Missing url" }, 400);
 
-      // Filter: future + fixtures only, exclude "More Markets" variants
-      let results = rawEvents.filter(isFutureEvent);
-      const fixtureResults = results.filter(ev => isActualFixture(ev.title));
-      if (fixtureResults.length > 0) {
-        results = fixtureResults;
+      const parsed = parsePolymarketUrl(url);
+      if (!parsed) return json({ error: "Could not parse URL. Supported formats: /event/{slug}, /sports/{league}/games, /sports/{league}/{event}" }, 400);
+
+      let results: GammaEvent[] = [];
+      let highlightSlug: string | null = null;
+      let mode = parsed.type;
+
+      if (parsed.type === "event_slug") {
+        const ev = await fetchEventBySlug(parsed.slug!);
+        if (ev) results = [ev];
+        else return json({ error: `Event not found for slug: ${parsed.slug}` }, 404);
+      } else if (parsed.type === "sports_league_games") {
+        const leagueKey = SPORTS_SLUG_MAP[parsed.leagueSlug!] || parsed.leagueSlug!;
+        const cfg = LEAGUE_CONFIGS[leagueKey];
+        if (cfg) {
+          results = await fetchEventsByTagId(cfg.tagId);
+          results = filterFixtures(results);
+        } else {
+          return json({ error: `Unknown league: ${parsed.leagueSlug}. Use list_leagues for available options.` }, 400);
+        }
+      } else if (parsed.type === "sports_league_event") {
+        const leagueKey = SPORTS_SLUG_MAP[parsed.leagueSlug!] || parsed.leagueSlug!;
+        const cfg = LEAGUE_CONFIGS[leagueKey];
+
+        // Try to fetch the exact event by slug first
+        const exactEv = await fetchEventBySlug(parsed.eventSlug!);
+        if (exactEv) {
+          results = [exactEv];
+        } else if (cfg) {
+          // Fetch all league events and highlight the matching one
+          results = await fetchEventsByTagId(cfg.tagId);
+          results = filterFixtures(results);
+          highlightSlug = parsed.eventSlug!;
+        } else {
+          return json({ error: `Could not resolve event: ${parsed.eventSlug}` }, 404);
+        }
       }
 
-      console.log(`[polymarket-sync] browse_league "${league_key}" (tag ${league.tag_id}): ${results.length} fixtures`);
+      console.log(`[polymarket-sync] url_preview: mode=${mode}, results=${results.length}`);
 
       return json({
-        league: league.label,
-        results: results.map(e => ({
-          id: e.id,
-          title: e.title,
-          slug: e.slug,
-          startDate: e.startDate,
-          endDate: e.endDate,
-          markets: (e.markets || []).map(m => ({
-            id: m.id,
-            question: m.question,
-            conditionId: m.conditionId,
-            slug: m.slug,
-            outcomes: (() => { try { return JSON.parse(m.outcomes || "[]"); } catch { return []; } })(),
-            outcomePrices: (() => { try { return JSON.parse(m.outcomePrices || "[]"); } catch { return []; } })(),
-            active: m.active,
-            closed: m.closed,
-            volume: m.volume,
-          })),
-        })),
+        mode,
+        highlightSlug,
+        results: results.map(e => toPreview(e, "url_import")),
       });
     }
 
     // ══════════════════════════════════════════════════
-    // ACTION: search — Preview-only search (no DB writes)
-    // Uses /public-search + tag_id fallback for league names
+    // MODE 2: browse_league — Fetch fixtures for a curated league
+    // ══════════════════════════════════════════════════
+    if (action === "browse_league") {
+      const { league_key } = body;
+      if (!league_key || !LEAGUE_CONFIGS[league_key]) {
+        return json({ error: "Unknown league_key. Use list_leagues to see available keys." }, 400);
+      }
+      const cfg = LEAGUE_CONFIGS[league_key];
+      const rawEvents = await fetchEventsByTagId(cfg.tagId);
+      const results = filterFixtures(rawEvents);
+
+      console.log(`[polymarket-sync] browse_league "${league_key}" (tag ${cfg.tagId}): ${results.length} fixtures`);
+
+      return json({
+        league: cfg.label,
+        sportType: cfg.sportType,
+        results: results.map(e => toPreview(e, "league_browse")),
+      });
+    }
+
+    // ══════════════════════════════════════════════════
+    // MODE 3: exact_search — Strict fixture/fight name search
+    // If query looks like a league, routes to browse_league instead
     // ══════════════════════════════════════════════════
     if (action === "search") {
       const { query, sport_filter } = body;
       if (!query) return json({ error: "Missing query" }, 400);
 
-      // Step 1: Check if query matches a known league name → use tag_id directly
+      // Safety: if query matches a league name, redirect to tag-based browse
+      const leagueKey = isLeagueQuery(query);
+      if (leagueKey) {
+        const cfg = LEAGUE_CONFIGS[leagueKey];
+        const rawEvents = await fetchEventsByTagId(cfg.tagId);
+        const results = filterFixtures(rawEvents);
+        console.log(`[polymarket-sync] search→league redirect "${query}" → ${cfg.label}: ${results.length}`);
+        return json({
+          redirected_to_league: leagueKey,
+          league: cfg.label,
+          results: results.map(e => toPreview(e, "league_browse")),
+        });
+      }
+
+      // Build search queries
       const queryLower = query.toLowerCase().trim();
-      let matchedLeagueKey: string | null = null;
-      for (const [key, league] of Object.entries(LEAGUE_TAG_MAP)) {
-        if (queryLower === league.label.toLowerCase() || queryLower === key.replace(/-/g, " ")) {
-          matchedLeagueKey = key;
-          break;
+      let searchQueries: string[] = [query];
+      if (sport_filter === "mma") {
+        if (!queryLower.includes("ufc") && !queryLower.includes("mma")) {
+          searchQueries = [query, `${query} MMA`, `${query} UFC`];
+        }
+      }
+      if (sport_filter === "boxing") {
+        if (!queryLower.includes("boxing")) {
+          searchQueries = [query, `${query} boxing`];
         }
       }
 
-      let rawResults: GammaEvent[] = [];
+      let rawResults = await fetchSearchEvents(searchQueries);
 
-      if (matchedLeagueKey) {
-        // Direct tag_id lookup — reliable for league names
-        const league = LEAGUE_TAG_MAP[matchedLeagueKey];
-        rawResults = await fetchEventsByTagId(league.tag_id, limit);
-        console.log(`[polymarket-sync] Tag-based lookup for "${query}" → tag ${league.tag_id}: ${rawResults.length} raw`);
-      } else {
-        // Build search queries based on sport filter
-        let searchQueries: string[] = [query];
-        if (sport_filter === "mma") {
-          if (!queryLower.includes("ufc") && !queryLower.includes("mma")) {
-            searchQueries = [query, `${query} MMA`, `${query} UFC`];
-          }
-        }
-        if (sport_filter === "boxing") {
-          if (!queryLower.includes("boxing")) {
-            searchQueries = [query, `${query} boxing`];
-          }
-        }
+      // Strict filtering: future + fixture + exclude props
+      let results = filterFixtures(rawResults);
 
-        // Fetch from /public-search
-        rawResults = await fetchSearchEvents(searchQueries, limit);
-
-        // If text search returned nothing, try fuzzy league match
-        if (rawResults.length === 0) {
-          for (const [key, league] of Object.entries(LEAGUE_TAG_MAP)) {
-            if (league.label.toLowerCase().includes(queryLower) || queryLower.includes(league.label.toLowerCase())) {
-              rawResults = await fetchEventsByTagId(league.tag_id, limit);
-              console.log(`[polymarket-sync] Fuzzy tag fallback "${query}" → ${league.label}: ${rawResults.length} raw`);
-              break;
-            }
-          }
-        }
+      // Apply sport_filter category matching
+      if (sport_filter === "soccer") {
+        results = results.filter(ev => {
+          const lower = ev.title.toLowerCase();
+          return lower.includes("vs"); // Soccer fixtures always have "vs"
+        });
       }
 
-      // Filter: future events only + actual fixtures
-      let results = rawResults.filter(isFutureEvent);
-      const fixtureResults = results.filter(ev => isActualFixture(ev.title));
-      if (fixtureResults.length > 0) {
-        results = fixtureResults;
-      }
-
-      console.log(`[polymarket-sync] Search "${query}" (filter: ${sport_filter || "all"}): ${results.length} results`);
+      console.log(`[polymarket-sync] exact_search "${query}" (filter: ${sport_filter || "all"}): ${results.length} results`);
 
       return json({
-        results: results.map(e => ({
-          id: e.id,
-          title: e.title,
-          slug: e.slug,
-          startDate: e.startDate,
-          endDate: e.endDate,
-          markets: (e.markets || []).map(m => ({
-            id: m.id,
-            question: m.question,
-            conditionId: m.conditionId,
-            slug: m.slug,
-            outcomes: (() => { try { return JSON.parse(m.outcomes || "[]"); } catch { return []; } })(),
-            outcomePrices: (() => { try { return JSON.parse(m.outcomePrices || "[]"); } catch { return []; } })(),
-            active: m.active,
-            closed: m.closed,
-            volume: m.volume,
-          })),
-        })),
+        results: results.map(e => toPreview(e, "exact_search")),
       });
     }
 
@@ -371,249 +637,40 @@ Deno.serve(async (req) => {
     // ACTION: import_single — Import a specific Polymarket event as pending_review
     // ══════════════════════════════════════════════════
     if (action === "import_single") {
-      const { polymarket_event_id } = body;
+      const { polymarket_event_id, import_source } = body;
       if (!polymarket_event_id) return json({ error: "Missing polymarket_event_id" }, 400);
 
-      const gammaRes = await fetch(`${GAMMA_BASE}/events/${polymarket_event_id}`);
-      if (!gammaRes.ok) return json({ error: `Event not found (${gammaRes.status})` }, 404);
+      const gEvent = await fetchEventById(polymarket_event_id);
+      if (!gEvent) return json({ error: `Event not found (${polymarket_event_id})` }, 404);
 
-      const gEvent: GammaEvent = await gammaRes.json();
-
-      const startMs = gEvent.startDate ? new Date(gEvent.startDate).getTime() : null;
-      const isPastEvent = startMs !== null && startMs < Date.now();
-
-      const { data: existingEvt } = await supabase
-        .from("prediction_events")
-        .select("id")
-        .eq("polymarket_event_id", String(gEvent.id))
-        .maybeSingle();
-
-      let eventId: string;
-      if (existingEvt) {
-        eventId = existingEvt.id;
-      } else {
-        const { data: newEvt, error } = await supabase
-          .from("prediction_events")
-          .insert({
-            event_name: gEvent.title,
-            polymarket_event_id: String(gEvent.id),
-            polymarket_slug: gEvent.slug,
-            event_date: gEvent.startDate || gEvent.endDate || null,
-            source: "polymarket",
-            source_provider: "polymarket",
-            source_event_id: `pm_${gEvent.id}`,
-            status: "pending_review",
-          })
-          .select("id")
-          .single();
-        if (error) return json({ error: error.message }, 500);
-        eventId = newEvt!.id;
-      }
-
-      let imported = 0;
-      for (const market of (gEvent.markets || [])) {
-        let outcomes: string[], tokenIds: string[], outcomePrices: string[];
-        try {
-          outcomes = JSON.parse(market.outcomes || "[]");
-          outcomePrices = JSON.parse(market.outcomePrices || "[]");
-          tokenIds = JSON.parse(market.clobTokenIds || "[]");
-        } catch { continue; }
-
-        if (outcomes.length < 2 || tokenIds.length < 2) continue;
-
-        const { data: existingFight } = await supabase
-          .from("prediction_fights")
-          .select("id")
-          .eq("polymarket_market_id", market.id)
-          .maybeSingle();
-
-        if (existingFight) {
-          await supabase.from("prediction_fights").update({
-            price_a: parseFloat(outcomePrices[0] || "0"),
-            price_b: parseFloat(outcomePrices[1] || "0"),
-            polymarket_active: market.active && !market.closed,
-            polymarket_last_synced_at: new Date().toISOString(),
-          }).eq("id", existingFight.id);
-        } else {
-          let volumeUsd = parseFloat(market.volume || "0");
-          try {
-            const dataApiVol = await fetchMarketVolume(market.id);
-            if (dataApiVol && dataApiVol.volume > volumeUsd) {
-              volumeUsd = dataApiVol.volume;
-            }
-          } catch { /* non-fatal */ }
-
-          await supabase.from("prediction_fights").insert({
-            title: market.groupItemTitle || market.question,
-            fighter_a_name: outcomes[0],
-            fighter_b_name: outcomes[1],
-            event_name: gEvent.title,
-            event_id: eventId,
-            source: "polymarket",
-            commission_bps: 200,
-            polymarket_market_id: market.id,
-            polymarket_condition_id: market.conditionId,
-            polymarket_slug: market.slug,
-            polymarket_outcome_a_token: tokenIds[0],
-            polymarket_outcome_b_token: tokenIds[1],
-            polymarket_active: market.active && !market.closed,
-            polymarket_end_date: market.endDate || null,
-            polymarket_question: market.question,
-            polymarket_last_synced_at: new Date().toISOString(),
-            polymarket_volume_usd: volumeUsd > 0 ? volumeUsd : null,
-            price_a: parseFloat(outcomePrices[0] || "0"),
-            price_b: parseFloat(outcomePrices[1] || "0"),
-            status: "open",
-          });
-        }
-        imported++;
-      }
-
-      await supabase.from("automation_logs").insert({
-        action: "polymarket_import_single",
-        source: "polymarket-sync",
-        admin_wallet: wallet || null,
-        details: { polymarket_event_id, event_name: gEvent.title, imported, is_past: isPastEvent },
-      });
-
-      return json({
-        success: true,
-        event_id: eventId,
-        imported,
-        is_past: isPastEvent,
-        warning: isPastEvent ? `⚠️ This event's start date (${gEvent.startDate}) is in the past.` : undefined,
-      });
+      const result = await importSingleEvent(supabase, gEvent, wallet, import_source || "manual");
+      return json({ success: true, ...result });
     }
 
     // ══════════════════════════════════════════════════
-    // ACTION: import_by_url — Import from a Polymarket URL or slug as pending_review
+    // ACTION: import_by_url — Import from a Polymarket URL as pending_review
     // ══════════════════════════════════════════════════
     if (action === "import_by_url") {
       const { url } = body;
       if (!url || typeof url !== "string") return json({ error: "Missing url" }, 400);
 
-      let rawUrl = url.trim();
-      rawUrl = rawUrl.split("?")[0].split("#")[0];
+      const parsed = parsePolymarketUrl(url);
+      if (!parsed) return json({ error: "Could not parse event slug from URL" }, 400);
 
-      const eventMatch = rawUrl.match(/polymarket\.com\/event\/([^/]+)/);
-
-      let slug: string;
-      if (eventMatch) {
-        slug = eventMatch[1];
-      } else {
-        slug = rawUrl.replace(/^\/+|\/+$/g, "");
+      if (parsed.type === "event_slug") {
+        const gEvent = await fetchEventBySlug(parsed.slug!);
+        if (!gEvent) return json({ error: "Event not found for slug: " + parsed.slug }, 404);
+        const result = await importSingleEvent(supabase, gEvent, wallet, "url_import");
+        return json({ success: true, event_name: gEvent.title, slug: gEvent.slug, ...result });
+      } else if (parsed.type === "sports_league_games" || parsed.type === "sports_league_event") {
+        // For league URLs, don't auto-import — return error directing admin to use preview
+        return json({
+          error: "League/sports URLs should use url_preview first, then import selected events individually.",
+          suggestion: "Use the URL preview mode to see all fixtures, then select which to import.",
+        }, 400);
       }
 
-      if (!slug) return json({ error: "Could not parse event slug from URL" }, 400);
-
-      console.log(`[polymarket-sync] import_by_url: resolved slug="${slug}"`);
-
-      const gammaRes = await fetch(`${GAMMA_BASE}/events?slug=${encodeURIComponent(slug)}`);
-      if (!gammaRes.ok) return json({ error: `Event not found (${gammaRes.status})` }, 404);
-
-      const gammaData = await gammaRes.json();
-      const events: GammaEvent[] = Array.isArray(gammaData) ? gammaData : [gammaData];
-      const gEvent = events[0];
-
-      if (!gEvent || !gEvent.id) return json({ error: "Event not found for slug: " + slug }, 404);
-
-      const startMs = gEvent.startDate ? new Date(gEvent.startDate).getTime() : null;
-      const isPastEvent = startMs !== null && startMs < Date.now();
-
-      const { data: existingEvt } = await supabase
-        .from("prediction_events")
-        .select("id")
-        .eq("polymarket_event_id", String(gEvent.id))
-        .maybeSingle();
-
-      let eventId: string;
-      if (existingEvt) {
-        eventId = existingEvt.id;
-      } else {
-        const { data: newEvt, error } = await supabase
-          .from("prediction_events")
-          .insert({
-            event_name: gEvent.title,
-            polymarket_event_id: String(gEvent.id),
-            polymarket_slug: gEvent.slug,
-            event_date: gEvent.startDate || gEvent.endDate || null,
-            source: "polymarket",
-            source_provider: "polymarket",
-            source_event_id: `pm_${gEvent.id}`,
-            status: "pending_review",
-          })
-          .select("id")
-          .single();
-        if (error) return json({ error: error.message }, 500);
-        eventId = newEvt!.id;
-      }
-
-      let imported = 0;
-      for (const market of (gEvent.markets || [])) {
-        let outcomes: string[], tokenIds: string[], outcomePrices: string[];
-        try {
-          outcomes = JSON.parse(market.outcomes || "[]");
-          outcomePrices = JSON.parse(market.outcomePrices || "[]");
-          tokenIds = JSON.parse(market.clobTokenIds || "[]");
-        } catch { continue; }
-
-        if (outcomes.length < 2 || tokenIds.length < 2) continue;
-
-        const { data: existingFight } = await supabase
-          .from("prediction_fights")
-          .select("id")
-          .eq("polymarket_market_id", market.id)
-          .maybeSingle();
-
-        if (existingFight) {
-          await supabase.from("prediction_fights").update({
-            price_a: parseFloat(outcomePrices[0] || "0"),
-            price_b: parseFloat(outcomePrices[1] || "0"),
-            polymarket_active: market.active && !market.closed,
-            polymarket_last_synced_at: new Date().toISOString(),
-          }).eq("id", existingFight.id);
-        } else {
-          await supabase.from("prediction_fights").insert({
-            title: market.groupItemTitle || market.question,
-            fighter_a_name: outcomes[0],
-            fighter_b_name: outcomes[1],
-            event_name: gEvent.title,
-            event_id: eventId,
-            source: "polymarket",
-            commission_bps: 200,
-            polymarket_market_id: market.id,
-            polymarket_condition_id: market.conditionId,
-            polymarket_slug: market.slug,
-            polymarket_outcome_a_token: tokenIds[0],
-            polymarket_outcome_b_token: tokenIds[1],
-            polymarket_active: market.active && !market.closed,
-            polymarket_end_date: market.endDate || null,
-            polymarket_question: market.question,
-            polymarket_last_synced_at: new Date().toISOString(),
-            price_a: parseFloat(outcomePrices[0] || "0"),
-            price_b: parseFloat(outcomePrices[1] || "0"),
-            status: "open",
-          });
-        }
-        imported++;
-      }
-
-      await supabase.from("automation_logs").insert({
-        action: "polymarket_import_by_url",
-        source: "polymarket-sync",
-        admin_wallet: wallet || null,
-        details: { url, slug, event_name: gEvent.title, imported, is_past: isPastEvent },
-      });
-
-      return json({
-        success: true,
-        event_id: eventId,
-        event_name: gEvent.title,
-        imported,
-        slug,
-        is_past: isPastEvent,
-        warning: isPastEvent ? `⚠️ This event's start date (${gEvent.startDate}) is in the past.` : undefined,
-      });
+      return json({ error: "Could not parse URL" }, 400);
     }
 
     return json({ error: "Unknown action" }, 400);
