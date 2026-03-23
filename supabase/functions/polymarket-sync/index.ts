@@ -182,11 +182,15 @@ interface GammaEvent {
   id: string;
   title: string;
   slug: string;
+  ticker?: string;
   description: string;
   startDate: string | null;
   endDate: string | null;
+  closed?: boolean;
+  active?: boolean;
   markets: GammaMarket[];
   tags?: { label: string; slug: string }[];
+  series?: any;
 }
 
 // ── Telemetry ──
