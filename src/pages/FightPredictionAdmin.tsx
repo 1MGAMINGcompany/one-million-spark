@@ -2324,6 +2324,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       setSearchResults(data.results || []);
+      setSearchDiscoveryMethod(data.discovery_method || null);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
