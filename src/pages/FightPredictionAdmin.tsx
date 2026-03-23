@@ -2394,6 +2394,9 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
       setHighlightSlug(data.highlightSlug || null);
       setResultSource("URL Import");
       setTelemetry(data.telemetry || null);
+      setRawSample(data.raw_sample || null);
+      setRejectionSample(data.rejection_sample || null);
+      setFilterMessage(data.filter_message || null);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
