@@ -327,22 +327,79 @@ async function fetchByLeagueSource(src: LeagueSource): Promise<{ events: GammaEv
   return { events, endpoints };
 }
 
-/** Apply strict safety filters: future + fixture + no props/more-markets */
-function filterFixtures(events: GammaEvent[]): GammaEvent[] {
-  return events
-    .filter(isFutureEvent)
-    .filter(ev => isActualFixture(ev.title));
+interface FilterResult {
+  accepted: GammaEvent[];
+  rejected: { event: GammaEvent; dateReason?: string; fixtureReason?: string }[];
+  rawSample: any[];
+}
+
+/** Apply payload-aware safety filters with full rejection logging */
+function filterFixtures(events: GammaEvent[]): FilterResult {
+  const accepted: GammaEvent[] = [];
+  const rejected: FilterResult["rejected"] = [];
+
+  // Build raw sample: first 10 events with key fields for debug
+  const rawSample = events.slice(0, 10).map(ev => ({
+    id: ev.id,
+    title: ev.title,
+    slug: ev.slug,
+    ticker: ev.ticker,
+    startDate: ev.startDate,
+    endDate: ev.endDate,
+    closed: ev.closed,
+    active: ev.active,
+    tags: ev.tags?.slice(0, 5),
+    series: ev.series,
+    market_count: (ev.markets || []).length,
+    first_3_markets: (ev.markets || []).slice(0, 3).map(m => ({
+      question: m.question,
+      groupItemTitle: m.groupItemTitle,
+      active: m.active,
+      closed: m.closed,
+    })),
+  }));
+
+  for (const ev of events) {
+    // Date check
+    const dateCheck = isDateEligible(ev);
+    if (!dateCheck.eligible) {
+      rejected.push({ event: ev, dateReason: dateCheck.reason });
+      continue;
+    }
+
+    // Also skip if closed===true or active===false
+    if (ev.closed === true) {
+      rejected.push({ event: ev, fixtureReason: "closed=true" });
+      continue;
+    }
+
+    // Fixture/matchup check
+    const fixtureCheck = isAcceptableEvent(ev);
+    if (!fixtureCheck.accepted) {
+      rejected.push({ event: ev, fixtureReason: fixtureCheck.reason });
+      continue;
+    }
+
+    accepted.push(ev);
+  }
+
+  return { accepted, rejected, rawSample };
 }
 
 /** Format event for preview response (no DB writes) */
 function toPreview(ev: GammaEvent, source: string) {
+  const dateInfo = isDateEligible(ev);
   return {
     id: ev.id,
     title: ev.title,
     slug: ev.slug,
+    ticker: ev.ticker,
     startDate: ev.startDate,
     endDate: ev.endDate,
+    closed: ev.closed,
+    active: ev.active,
     source,
+    missingDate: dateInfo.missingDate,
     markets: (ev.markets || []).map(m => ({
       id: m.id,
       question: m.question,
