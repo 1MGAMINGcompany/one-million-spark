@@ -1,45 +1,64 @@
 
 
-## Two Issues to Fix
+## Fix: Only Show Future Events (Tomorrow+) & Block Futures Markets
 
-### Issue 1: Browse shows past events instead of future-only
+### Problem
+Two issues persist:
+1. **Past/today events still appear** — `isDateEligible` uses `Math.max()` across ALL dates including child market `endDate` values. Futures markets have far-future market expiry dates (Dec 2026+), so past events with long-tail sub-markets pass the filter.
+2. **Futures/prop markets pass** — Events like "Who will X fight next?" or "FIFA World Cup Winner" have binary markets, so `isAcceptableEvent` accepts them via the `binary_market_detected` fallback.
 
-**Root cause**: `isDateEligible()` in `polymarket-sync/index.ts` (line 121-127) keeps events with past `startDate` if Polymarket still marks them `active=true`. Polymarket doesn't flip `active` to `false` immediately after a match ends, so completed FIFA Friendlies from Feb/Mar still pass through.
-
-**Fix in `polymarket-sync/index.ts`**:
-- For **browse_league** and **url_preview** modes, apply a strict date cutoff: if the event's best available date (`endDate` or `startDate`) is in the past, reject it regardless of `active` flag.
-- Remove the `past_start_but_active` loophole from `isDateEligible`. An event with a past date should only be kept if it has NO date at all (show with warning badge).
-- Updated logic:
-  - `endDate` exists and is in the past → reject
-  - `startDate` exists and is in the past AND no future `endDate` → reject
-  - No dates at all → keep with warning
-  - Future date → keep
-
-### Issue 2: 3 approved Polymarket events don't appear on the predictions page
-
-**Root cause**: The 3 events you approved today have zero `open` fights:
-- **Club Atlético de Madrid vs. Real Sociedad** — 3 fights, all `cancelled` (event date was Mar 22, yesterday — auto-cancelled by the automation stack)
-- **2026 FIFA World Cup Winner** — 60 fights, all `cancelled` or `locked` (futures market, automation locked/cancelled sub-markets)
-- **MLS Cup Winner 2026** — 31 fights, all `cancelled` or `locked`
-
-The predictions page groups fights by event. When ALL fights in a group are `cancelled`/`locked`, the group is classified as "past" (line 289-291 in `FightPredictions.tsx`) and goes into the collapsed Past Events section.
-
-**Fix**: This is a data issue, not a code bug. The events were correctly auto-managed:
-- Atletico Madrid match already happened yesterday — its fights should stay cancelled
-- FIFA World Cup Winner and MLS Cup Winner are **futures/outright** markets (60+ sub-markets like "will Brazil win?"), not individual match fixtures. The automation stack locked/cancelled them because they're not standard matchup markets
-
-**Action**: No code change needed for this. Instead:
-1. The admin should import **actual upcoming match fixtures** (e.g., a specific La Liga game next week) rather than futures markets
-2. For the FIFA World Cup and MLS Cup futures that were already approved — these can be cleaned up in the admin panel (dismiss/archive them)
-3. I'll add a visible note in the admin UI when importing futures/outright markets (60+ sub-markets) warning that these aren't standard fixtures
-
-### Implementation
+### Changes
 
 **File: `supabase/functions/polymarket-sync/index.ts`**
-- Rewrite `isDateEligible` to strictly reject past events: if the best date (endDate > startDate > market endDate) is before now, reject
-- Remove the `past_start_but_active` exception
+
+#### 1. Rewrite `isDateEligible` (lines 105–131)
+- Only use **event-level** dates (`ev.endDate`, `ev.startDate`) — ignore child market `endDate` (those are market expiry, not match time).
+- Compute "tomorrow midnight UTC" as the cutoff instead of `Date.now()`.
+- If no event-level date exists → **reject** (hide undated, per user preference).
+- If best event-level date is before tomorrow → **reject**.
+
+```typescript
+function isDateEligible(ev: GammaEvent) {
+  // Tomorrow 00:00 UTC
+  const tomorrow = new Date();
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  tomorrow.setUTCHours(0, 0, 0, 0);
+  const cutoff = tomorrow.getTime();
+
+  const eventDates = [ev.endDate, ev.startDate]
+    .map(d => d ? new Date(d).getTime() : null)
+    .filter((ms): ms is number => ms !== null && !isNaN(ms));
+
+  if (eventDates.length === 0)
+    return { eligible: false, reason: "no_event_date", missingDate: true };
+
+  const best = Math.max(...eventDates);
+  if (best >= cutoff)
+    return { eligible: true, reason: "future_event", missingDate: false };
+
+  return { eligible: false, reason: `past_or_today: ${new Date(best).toISOString()}`, missingDate: false };
+}
+```
+
+#### 2. Add futures title rejection in `isAcceptableEvent` (before binary market fallback, ~line 90)
+Add a regex check to reject common futures/outright/prop patterns:
+
+```typescript
+const FUTURES_RE = /\b(who will .* (fight|face) next|winner$|top scorer|mvp|most valuable|champion at|will .* win the)\b/i;
+if (FUTURES_RE.test(title)) return { accepted: false, reason: `futures_market: "${title}"` };
+```
+
+This goes right before the binary market fallback (line 90), so real fixtures with "vs" patterns still pass at line 76.
+
+#### 3. Lower futures badge threshold in admin UI
 
 **File: `src/pages/FightPredictionAdmin.tsx`**
-- Add a warning badge on preview cards with 20+ markets: "⚠️ Futures market — not a single fixture"
-- Ensure the "Past" badge logic matches the stricter date filter so admins don't see events they can't usefully import
+- Change the futures warning badge from `≥ 20` markets to `≥ 10` markets.
+
+### Impact
+- Only events dated **tomorrow or later** appear in browse/search results.
+- Today's and yesterday's matches are filtered out.
+- Futures/prop markets ("Who will X fight next?", "World Cup Winner") are rejected by title pattern before the binary fallback can accept them.
+- Undated events are hidden entirely.
+- Real match fixtures with "vs"/"v"/"at" patterns and future dates continue to pass normally.
 
