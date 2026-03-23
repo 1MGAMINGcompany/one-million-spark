@@ -624,20 +624,45 @@ Deno.serve(async (req) => {
 
     // ══════════════════════════════════════════════════
     // ACTION: search — Search Polymarket events by query (with future-only filter)
+    // Falls back to tag-based discovery when /public-search returns nothing
     // ══════════════════════════════════════════════════
     if (action === "search") {
       const { query } = body;
       if (!query) return json({ error: "Missing query" }, 400);
 
+      // Step 1: Try /public-search
       const searchUrl = `${GAMMA_BASE}/public-search?q=${encodeURIComponent(query)}&limit=${limit}`;
       console.log(`[polymarket-sync] Search: ${searchUrl}`);
       const gammaRes = await fetch(searchUrl);
-      if (!gammaRes.ok) return json({ error: `Gamma API returned ${gammaRes.status}` }, 502);
-
-      const searchData = await gammaRes.json();
-      const rawResults: GammaEvent[] = searchData.events || [];
-      const results = rawResults.filter(isFutureEvent);
+      let rawResults: GammaEvent[] = [];
+      if (gammaRes.ok) {
+        const searchData = await gammaRes.json();
+        rawResults = searchData.events || [];
+      }
+      let results = rawResults.filter(isFutureEvent);
       console.log(`[polymarket-sync] Search returned ${results.length} future events (${rawResults.length - results.length} past filtered) for "${query}"`);
+
+      // Step 2: If no results, try tag-based lookup
+      if (results.length === 0) {
+        const tagSlugs = buildTagVariations(query);
+        console.log(`[polymarket-sync] Search fallback: trying tags [${tagSlugs.join(", ")}]`);
+        for (const tagSlug of tagSlugs) {
+          try {
+            const tagUrl = `${GAMMA_BASE}/events?tag=${encodeURIComponent(tagSlug)}&active=true&closed=false&limit=${limit}`;
+            const tagRes = await fetch(tagUrl);
+            if (!tagRes.ok) continue;
+            const tagData = await tagRes.json();
+            const tagEvents: GammaEvent[] = Array.isArray(tagData) ? tagData : [];
+            const futureTagEvents = tagEvents.filter(isFutureEvent);
+            if (futureTagEvents.length > 0) {
+              results = futureTagEvents;
+              console.log(`[polymarket-sync] Tag fallback "${tagSlug}" found ${results.length} events`);
+              break;
+            }
+          } catch { continue; }
+        }
+      }
+
       return json({
         results: results.map(e => ({
           id: e.id,
