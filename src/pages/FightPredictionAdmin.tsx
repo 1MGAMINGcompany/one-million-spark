@@ -2307,6 +2307,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
   const [importedIds, setImportedIds] = useState<Set<string>>(new Set());
   const [highlightSlug, setHighlightSlug] = useState<string | null>(null);
   const [resultSource, setResultSource] = useState<string>("");
+  const [telemetry, setTelemetry] = useState<any>(null);
 
   // Mode 1 state
   const [urlInput, setUrlInput] = useState("");
@@ -2367,6 +2368,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
     setSelectedIds(new Set());
     setHighlightSlug(null);
     setResultSource("");
+    setTelemetry(null);
   };
 
   // MODE 1: URL Preview
@@ -2383,6 +2385,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
       setResults(data.results || []);
       setHighlightSlug(data.highlightSlug || null);
       setResultSource("URL Import");
+      setTelemetry(data.telemetry || null);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -2402,7 +2405,8 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       setResults(data.results || []);
-      setResultSource(`League: ${data.league || leagueKey}`);
+      setResultSource(`League: ${data.league || leagueKey} (${data.fetchStrategy || "tag"})`);
+      setTelemetry(data.telemetry || null);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -2429,6 +2433,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
         setResultSource("Exact Search");
       }
       setResults(data.results || []);
+      setTelemetry(data.telemetry || null);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -2674,7 +2679,32 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
           )}
 
           {results.length === 0 && (
-            <p className="text-xs text-muted-foreground text-center py-4">No matching fixtures found.</p>
+            <div className="text-center py-4 space-y-2">
+              <p className="text-xs text-muted-foreground">No matching fixtures found.</p>
+              {/* Telemetry debug for zero results */}
+              {telemetry && (
+                <div className="bg-muted/20 border border-border/30 rounded-lg p-3 text-left text-[10px] space-y-1">
+                  <p className="font-bold text-foreground">🔍 Query Debug</p>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                    <span className="text-muted-foreground">Mode</span>
+                    <span className="text-foreground font-medium">{telemetry.mode}</span>
+                    <span className="text-muted-foreground">Strategy</span>
+                    <span className="text-foreground font-medium">{telemetry.strategy}</span>
+                    <span className="text-muted-foreground">Endpoints</span>
+                    <span className="text-foreground font-medium truncate">{telemetry.endpoints_called?.join(", ") || "—"}</span>
+                    <span className="text-muted-foreground">Raw results</span>
+                    <span className="text-foreground font-medium">{telemetry.raw_count}</span>
+                    <span className="text-muted-foreground">After filters</span>
+                    <span className="text-foreground font-medium">{telemetry.filtered_count}</span>
+                    <span className="text-muted-foreground">Duration</span>
+                    <span className="text-foreground font-medium">{telemetry.duration_ms}ms</span>
+                  </div>
+                  {telemetry.zero_reason && (
+                    <p className="text-yellow-400 font-medium mt-1">⚠ {telemetry.zero_reason}</p>
+                  )}
+                </div>
+              )}
+            </div>
           )}
 
           <div className="max-h-[500px] overflow-y-auto space-y-2">
@@ -2777,6 +2807,22 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
 
           {/* Bottom import button for long lists */}
           {results.length > 3 && <ImportButton />}
+
+          {/* Telemetry panel (always shown when available, collapsible for non-zero results) */}
+          {telemetry && results.length > 0 && (
+            <details className="text-[10px]">
+              <summary className="text-muted-foreground cursor-pointer hover:text-foreground">
+                🔍 Query telemetry ({telemetry.duration_ms}ms, {telemetry.raw_count} raw → {telemetry.filtered_count} filtered)
+              </summary>
+              <div className="mt-1 bg-muted/20 border border-border/30 rounded p-2 space-y-0.5">
+                <p>Mode: <span className="text-foreground font-medium">{telemetry.mode}</span></p>
+                <p>Strategy: <span className="text-foreground font-medium">{telemetry.strategy}</span></p>
+                <p>Endpoints: <span className="text-foreground font-medium">{telemetry.endpoints_called?.join(", ") || "—"}</span></p>
+                {telemetry.league_key && <p>League: <span className="text-foreground font-medium">{telemetry.league_key}</span></p>}
+                {telemetry.query && <p>Query: <span className="text-foreground font-medium">{telemetry.query}</span></p>}
+              </div>
+            </details>
+          )}
         </div>
       )}
     </div>
