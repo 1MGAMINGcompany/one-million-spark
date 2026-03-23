@@ -2308,6 +2308,8 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
   const [sportFilter, setSportFilter] = useState<string>("all");
   const [directUrl, setDirectUrl] = useState("");
   const [directImportBusy, setDirectImportBusy] = useState(false);
+  const [selectedLeague, setSelectedLeague] = useState<string>("");
+  const [leagueBrowseBusy, setLeagueBrowseBusy] = useState(false);
 
   const SPORT_FILTERS = [
     { key: "all", label: "All" },
@@ -2315,6 +2317,49 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
     { key: "mma", label: "🥊 UFC / MMA" },
     { key: "boxing", label: "🥊 Boxing" },
   ];
+
+  const LEAGUE_OPTIONS = [
+    { key: "", label: "Browse by league..." },
+    { key: "epl", label: "⚽ EPL" },
+    { key: "mls", label: "⚽ MLS" },
+    { key: "ucl", label: "⚽ UCL" },
+    { key: "uel", label: "⚽ UEL" },
+    { key: "la-liga", label: "⚽ La Liga" },
+    { key: "bundesliga", label: "⚽ Bundesliga" },
+    { key: "serie-a", label: "⚽ Serie A" },
+    { key: "ligue-1", label: "⚽ Ligue 1" },
+    { key: "liga-mx", label: "⚽ Liga MX" },
+    { key: "eredivisie", label: "⚽ Eredivisie" },
+    { key: "fifa-friendlies", label: "⚽ FIFA Friendlies" },
+    { key: "copa-libertadores", label: "⚽ Copa Libertadores" },
+    { key: "brazil-serie-a", label: "⚽ Brazil Série A" },
+    { key: "j-league", label: "⚽ J. League" },
+    { key: "k-league", label: "⚽ K-League" },
+    { key: "a-league", label: "⚽ A-League" },
+    { key: "super-lig", label: "⚽ Süper Lig" },
+    { key: "primeira-liga", label: "⚽ Primeira Liga" },
+    { key: "ufc", label: "🥊 UFC" },
+  ];
+
+  const browseLeague = async (leagueKey: string) => {
+    if (!leagueKey) return;
+    setLeagueBrowseBusy(true);
+    setSearchResults(null);
+    setSelectedIds(new Set());
+    try {
+      const { data, error } = await supabase.functions.invoke("polymarket-sync", {
+        body: { wallet, action: "browse_league", league_key: leagueKey },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setSearchResults(data.results || []);
+      setSearchQuery(data.league || leagueKey);
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setLeagueBrowseBusy(false);
+    }
+  };
 
   const runSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -2462,7 +2507,26 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
         ))}
       </div>
 
-      {/* Search input */}
+      {/* League browser dropdown */}
+      <div className="flex gap-2">
+        <Select
+          value={selectedLeague}
+          onValueChange={(val) => {
+            setSelectedLeague(val);
+            browseLeague(val);
+          }}
+        >
+          <SelectTrigger className="flex-1 text-xs">
+            <SelectValue placeholder="Browse by league..." />
+          </SelectTrigger>
+          <SelectContent>
+            {LEAGUE_OPTIONS.filter(l => l.key).map(l => (
+              <SelectItem key={l.key} value={l.key}>{l.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {leagueBrowseBusy && <Loader2 className="w-4 h-4 animate-spin text-purple-400 self-center" />}
+      </div>
       <div className="flex gap-2">
         <Input
           placeholder={sportFilter === "soccer" ? "e.g. Premier League, MLS, Real Madrid..." : sportFilter === "mma" ? "e.g. UFC 315, Adesanya..." : sportFilter === "boxing" ? "e.g. Canelo, Tyson Fury..." : "Search Polymarket events..."}

@@ -41,6 +41,34 @@ function isFutureEvent(ev: GammaEvent): boolean {
   return true;
 }
 
+/** Known league tag IDs for direct /events?tag_id= browsing */
+const LEAGUE_TAG_MAP: Record<string, { tag_id: string; label: string; sport_code: string }> = {
+  // Soccer
+  "epl": { tag_id: "306", label: "EPL", sport_code: "epl" },
+  "mls": { tag_id: "100100", label: "MLS", sport_code: "mls" },
+  "ucl": { tag_id: "100977", label: "UCL", sport_code: "ucl" },
+  "uel": { tag_id: "101787", label: "UEL", sport_code: "uel" },
+  "la-liga": { tag_id: "780", label: "La Liga", sport_code: "lal" },
+  "bundesliga": { tag_id: "1494", label: "Bundesliga", sport_code: "bun" },
+  "serie-a": { tag_id: "102008", label: "Serie A", sport_code: "itc" },
+  "ligue-1": { tag_id: "102070", label: "Ligue 1", sport_code: "fl1" },
+  "liga-mx": { tag_id: "102448", label: "Liga MX", sport_code: "mex" },
+  "eredivisie": { tag_id: "101735", label: "Eredivisie", sport_code: "ere" },
+  "fifa-friendlies": { tag_id: "102539", label: "FIFA Friendlies", sport_code: "fif" },
+  "copa-libertadores": { tag_id: "102562", label: "Copa Libertadores", sport_code: "lib" },
+  "copa-sudamericana": { tag_id: "102563", label: "Copa Sudamericana", sport_code: "sud" },
+  "brazil-serie-a": { tag_id: "102648", label: "Brazil Série A", sport_code: "bra" },
+  "j-league": { tag_id: "102649", label: "J. League", sport_code: "jap" },
+  "k-league": { tag_id: "102771", label: "K-League", sport_code: "kor" },
+  "a-league": { tag_id: "102765", label: "A-League", sport_code: "aus" },
+  "super-lig": { tag_id: "102564", label: "Süper Lig", sport_code: "tur" },
+  "primeira-liga": { tag_id: "101772", label: "Primeira Liga", sport_code: "por" },
+  "concacaf": { tag_id: "100787", label: "CONCACAF", sport_code: "con" },
+  "conmebol": { tag_id: "101280", label: "CONMEBOL", sport_code: "cof" },
+  // Combat
+  "ufc": { tag_id: "100639", label: "UFC", sport_code: "ufc" },
+};
+
 /** Search-based discovery via /public-search endpoint. */
 async function fetchSearchEvents(queries: string[], limit = 100): Promise<GammaEvent[]> {
   const seen = new Set<string>();
@@ -63,6 +91,19 @@ async function fetchSearchEvents(queries: string[], limit = 100): Promise<GammaE
     }
   }
   return deduped;
+}
+
+/** Tag-based discovery via /events?tag_id= endpoint — works for leagues */
+async function fetchEventsByTagId(tagId: string, limit = 100): Promise<GammaEvent[]> {
+  try {
+    const url = `${GAMMA_BASE}/events?tag_id=${tagId}&active=true&closed=false&limit=${limit}`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
 }
 
 /** Fetch trade volume from Data API for enrichment */
@@ -187,31 +228,113 @@ Deno.serve(async (req) => {
     }
 
     // ══════════════════════════════════════════════════
+    // ACTION: list_leagues — Return available leagues for dropdown
+    // ══════════════════════════════════════════════════
+    if (action === "list_leagues") {
+      const leagues = Object.entries(LEAGUE_TAG_MAP).map(([key, v]) => ({
+        key,
+        label: v.label,
+        sport_code: v.sport_code,
+      }));
+      return json({ leagues });
+    }
+
+    // ══════════════════════════════════════════════════
+    // ACTION: browse_league — Fetch fixtures for a specific league via tag_id
+    // ══════════════════════════════════════════════════
+    if (action === "browse_league") {
+      const { league_key } = body;
+      if (!league_key || !LEAGUE_TAG_MAP[league_key]) {
+        return json({ error: "Unknown league_key. Use list_leagues to see available keys." }, 400);
+      }
+      const league = LEAGUE_TAG_MAP[league_key];
+      const rawEvents = await fetchEventsByTagId(league.tag_id, limit);
+
+      // Filter: future + fixtures only, exclude "More Markets" variants
+      let results = rawEvents.filter(isFutureEvent);
+      const fixtureResults = results.filter(ev => isActualFixture(ev.title));
+      if (fixtureResults.length > 0) {
+        results = fixtureResults;
+      }
+
+      console.log(`[polymarket-sync] browse_league "${league_key}" (tag ${league.tag_id}): ${results.length} fixtures`);
+
+      return json({
+        league: league.label,
+        results: results.map(e => ({
+          id: e.id,
+          title: e.title,
+          slug: e.slug,
+          startDate: e.startDate,
+          endDate: e.endDate,
+          markets: (e.markets || []).map(m => ({
+            id: m.id,
+            question: m.question,
+            conditionId: m.conditionId,
+            slug: m.slug,
+            outcomes: (() => { try { return JSON.parse(m.outcomes || "[]"); } catch { return []; } })(),
+            outcomePrices: (() => { try { return JSON.parse(m.outcomePrices || "[]"); } catch { return []; } })(),
+            active: m.active,
+            closed: m.closed,
+            volume: m.volume,
+          })),
+        })),
+      });
+    }
+
+    // ══════════════════════════════════════════════════
     // ACTION: search — Preview-only search (no DB writes)
-    // Uses /public-search, filtered for fixtures + future dates
+    // Uses /public-search + tag_id fallback for league names
     // ══════════════════════════════════════════════════
     if (action === "search") {
       const { query, sport_filter } = body;
       if (!query) return json({ error: "Missing query" }, 400);
 
-      // Build search queries based on sport filter
-      let searchQueries: string[] = [query];
-      if (sport_filter === "soccer" && !query.toLowerCase().includes("soccer") && !query.toLowerCase().includes("football")) {
-        // Append soccer context if not already in query
-      }
-      if (sport_filter === "mma") {
-        if (!query.toLowerCase().includes("ufc") && !query.toLowerCase().includes("mma")) {
-          searchQueries = [query, `${query} MMA`, `${query} UFC`];
-        }
-      }
-      if (sport_filter === "boxing") {
-        if (!query.toLowerCase().includes("boxing")) {
-          searchQueries = [query, `${query} boxing`];
+      // Step 1: Check if query matches a known league name → use tag_id directly
+      const queryLower = query.toLowerCase().trim();
+      let matchedLeagueKey: string | null = null;
+      for (const [key, league] of Object.entries(LEAGUE_TAG_MAP)) {
+        if (queryLower === league.label.toLowerCase() || queryLower === key.replace(/-/g, " ")) {
+          matchedLeagueKey = key;
+          break;
         }
       }
 
-      // Fetch from /public-search
-      const rawResults = await fetchSearchEvents(searchQueries, limit);
+      let rawResults: GammaEvent[] = [];
+
+      if (matchedLeagueKey) {
+        // Direct tag_id lookup — reliable for league names
+        const league = LEAGUE_TAG_MAP[matchedLeagueKey];
+        rawResults = await fetchEventsByTagId(league.tag_id, limit);
+        console.log(`[polymarket-sync] Tag-based lookup for "${query}" → tag ${league.tag_id}: ${rawResults.length} raw`);
+      } else {
+        // Build search queries based on sport filter
+        let searchQueries: string[] = [query];
+        if (sport_filter === "mma") {
+          if (!queryLower.includes("ufc") && !queryLower.includes("mma")) {
+            searchQueries = [query, `${query} MMA`, `${query} UFC`];
+          }
+        }
+        if (sport_filter === "boxing") {
+          if (!queryLower.includes("boxing")) {
+            searchQueries = [query, `${query} boxing`];
+          }
+        }
+
+        // Fetch from /public-search
+        rawResults = await fetchSearchEvents(searchQueries, limit);
+
+        // If text search returned nothing, try fuzzy league match
+        if (rawResults.length === 0) {
+          for (const [key, league] of Object.entries(LEAGUE_TAG_MAP)) {
+            if (league.label.toLowerCase().includes(queryLower) || queryLower.includes(league.label.toLowerCase())) {
+              rawResults = await fetchEventsByTagId(league.tag_id, limit);
+              console.log(`[polymarket-sync] Fuzzy tag fallback "${query}" → ${league.label}: ${rawResults.length} raw`);
+              break;
+            }
+          }
+        }
+      }
 
       // Filter: future events only + actual fixtures
       let results = rawResults.filter(isFutureEvent);
