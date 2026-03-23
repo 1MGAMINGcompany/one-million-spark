@@ -801,7 +801,11 @@ Deno.serve(async (req) => {
       }
       const cfg = LEAGUE_SOURCES[league_key];
       const { events: rawEvents, endpoints } = await fetchByLeagueSource(cfg);
-      const results = filterFixtures(rawEvents);
+      const { accepted: results, rejected, rawSample } = filterFixtures(rawEvents);
+
+      const rejectionSummary = rejected.length > 0
+        ? rejected.slice(0, 5).map(r => ({ title: r.event.title, dateReason: r.dateReason, fixtureReason: r.fixtureReason }))
+        : [];
 
       const tel = buildTelemetry({
         mode: "browse",
@@ -813,7 +817,7 @@ Deno.serve(async (req) => {
         zero_reason: results.length === 0
           ? rawEvents.length === 0
             ? `no_events_from_${cfg.fetchStrategy}_endpoint`
-            : `all_${rawEvents.length}_filtered_by_safety_filters`
+            : `all_${rawEvents.length}_rejected_by_filters`
           : undefined,
         duration_ms: Date.now() - startTime,
       });
@@ -824,6 +828,11 @@ Deno.serve(async (req) => {
         sportType: cfg.sportType,
         fetchStrategy: cfg.fetchStrategy,
         results: results.map(e => toPreview(e, "league_browse")),
+        raw_sample: rawSample,
+        rejection_sample: rejectionSummary,
+        filter_message: results.length === 0 && rawEvents.length > 0
+          ? `Data found from Polymarket (${rawEvents.length} events), but local filters rejected all results.`
+          : undefined,
         telemetry: tel,
       });
     }
