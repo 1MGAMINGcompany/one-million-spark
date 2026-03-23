@@ -11,25 +11,14 @@ const DATA_API_BASE = "https://data-api.polymarket.com";
 
 // ── Safety filters ──
 
-const FUTURES_KEYWORDS = [
-  "winner", "to win", "cup winner", "league winner",
-  "top scorer", "relegated", "promoted", "qualify",
-  "champion", "most goals", "golden boot", "ballon d'or",
-  "mvp", "best player", "transfer", "winning method",
-  "total goals", "total points", "spread", "handicap",
-  "over/under", "o/u", "prop", "special",
-  "next manager", "sack", "fired", "hire",
-  "man of the match", "first goal", "last goal",
-  "clean sheet", "both teams to score",
-  "corners", "cards", "yellow card", "red card",
-  "penalty", "hat trick", "assists",
-];
-
 const MORE_MARKETS_RE = /- more markets/i;
-const PROP_KEYWORDS = [
-  "method of victory", "round betting", "to go the distance",
-  "total rounds", "fight to go", "points spread",
-  "point spread", "moneyline",
+const HARD_EXCLUDE_KEYWORDS = [
+  "more markets",
+  "winning method",
+  "method of victory",
+  "total rounds",
+  "spread",
+  "moneyline alt",
 ];
 const POLITICS_KEYWORDS = [
   "election", "president", "congress", "senate", "vote",
@@ -37,31 +26,76 @@ const POLITICS_KEYWORDS = [
   "governor", "mayor", "biden", "trump", "politics",
 ];
 
-/** Returns true if event title looks like an actual fixture (team vs team or fighter vs fighter) */
-function isActualFixture(title: string): boolean {
-  const lower = title.toLowerCase();
-  if (!lower.includes("vs")) return false;
-  for (const kw of FUTURES_KEYWORDS) {
-    if (lower.includes(kw)) return false;
-  }
-  if (MORE_MARKETS_RE.test(title)) return false;
-  for (const pk of PROP_KEYWORDS) {
-    if (lower.includes(pk)) return false;
-  }
-  for (const pk of POLITICS_KEYWORDS) {
-    if (lower.includes(pk)) return false;
-  }
-  return true;
+const MATCHUP_RE = /\bvs\.?\b|\sv\s|\bat\b/i;
+
+function hasMatchupPattern(texts: string[]): boolean {
+  return texts.some(t => MATCHUP_RE.test(t));
 }
 
-/** Return true if the event's match/start date is in the future. */
-function isFutureEvent(ev: GammaEvent): boolean {
-  const now = Date.now();
+function isHardExcluded(text: string): boolean {
+  const lower = text.toLowerCase();
+  for (const kw of HARD_EXCLUDE_KEYWORDS) {
+    if (lower.includes(kw)) return true;
+  }
+  return false;
+}
+
+function isPolitics(text: string): boolean {
+  const lower = text.toLowerCase();
+  return POLITICS_KEYWORDS.some(kw => lower.includes(kw));
+}
+
+/**
+ * Payload-aware fixture detection.
+ * Checks event title, slug, AND child market questions for matchup patterns.
+ * Only hard-excludes explicit prop keywords and politics.
+ */
+function isAcceptableEvent(ev: GammaEvent): { accepted: boolean; reason: string } {
+  const title = ev.title || "";
+
+  if (isHardExcluded(title)) return { accepted: false, reason: `hard_exclude_title: "${title}"` };
+  if (MORE_MARKETS_RE.test(title)) return { accepted: false, reason: `more_markets: "${title}"` };
+  if (isPolitics(title)) return { accepted: false, reason: `politics: "${title}"` };
+
+  const textsToCheck = [title, (ev.slug || "").replace(/-/g, " ")];
+  const markets = ev.markets || [];
+  for (const m of markets.slice(0, 10)) {
+    if (m.question) textsToCheck.push(m.question);
+    if (m.groupItemTitle) textsToCheck.push(m.groupItemTitle);
+  }
+
+  if (hasMatchupPattern(textsToCheck)) {
+    return { accepted: true, reason: "matchup_found" };
+  }
+
+  // Accept combat card events (UFC 315, BKFC 78, etc.) if child markets have matchups
+  const combatCardRe = /\b(UFC|BKFC|PFL|Bellator|ONE)\s*\d/i;
+  if (combatCardRe.test(title)) {
+    const marketTexts = markets.map(m => m.question || m.groupItemTitle || "");
+    if (hasMatchupPattern(marketTexts)) {
+      return { accepted: true, reason: "combat_card_with_matchup_markets" };
+    }
+    return { accepted: true, reason: "combat_card_event" };
+  }
+
+  return { accepted: false, reason: `no_matchup_pattern_in_any_field` };
+}
+
+function isDateEligible(ev: GammaEvent): { eligible: boolean; reason: string; missingDate: boolean } {
   const startMs = ev.startDate ? new Date(ev.startDate).getTime() : null;
   const endMs = ev.endDate ? new Date(ev.endDate).getTime() : null;
-  if (startMs !== null) return startMs > now;
-  if (endMs !== null) return endMs > now;
-  return true; // no date info — keep it
+  const now = Date.now();
+
+  if (startMs !== null && startMs < now) {
+    return { eligible: false, reason: `past_start: ${ev.startDate}`, missingDate: false };
+  }
+  if (startMs !== null) {
+    return { eligible: true, reason: "future_start", missingDate: false };
+  }
+  if (endMs !== null && endMs < now) {
+    return { eligible: false, reason: `past_end: ${ev.endDate}`, missingDate: false };
+  }
+  return { eligible: true, reason: "no_date_available", missingDate: true };
 }
 
 // ── Curated league/category config ──
