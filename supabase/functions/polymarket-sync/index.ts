@@ -11,25 +11,14 @@ const DATA_API_BASE = "https://data-api.polymarket.com";
 
 // ── Safety filters ──
 
-const FUTURES_KEYWORDS = [
-  "winner", "to win", "cup winner", "league winner",
-  "top scorer", "relegated", "promoted", "qualify",
-  "champion", "most goals", "golden boot", "ballon d'or",
-  "mvp", "best player", "transfer", "winning method",
-  "total goals", "total points", "spread", "handicap",
-  "over/under", "o/u", "prop", "special",
-  "next manager", "sack", "fired", "hire",
-  "man of the match", "first goal", "last goal",
-  "clean sheet", "both teams to score",
-  "corners", "cards", "yellow card", "red card",
-  "penalty", "hat trick", "assists",
-];
-
 const MORE_MARKETS_RE = /- more markets/i;
-const PROP_KEYWORDS = [
-  "method of victory", "round betting", "to go the distance",
-  "total rounds", "fight to go", "points spread",
-  "point spread", "moneyline",
+const HARD_EXCLUDE_KEYWORDS = [
+  "more markets",
+  "winning method",
+  "method of victory",
+  "total rounds",
+  "spread",
+  "moneyline alt",
 ];
 const POLITICS_KEYWORDS = [
   "election", "president", "congress", "senate", "vote",
@@ -37,31 +26,76 @@ const POLITICS_KEYWORDS = [
   "governor", "mayor", "biden", "trump", "politics",
 ];
 
-/** Returns true if event title looks like an actual fixture (team vs team or fighter vs fighter) */
-function isActualFixture(title: string): boolean {
-  const lower = title.toLowerCase();
-  if (!lower.includes("vs")) return false;
-  for (const kw of FUTURES_KEYWORDS) {
-    if (lower.includes(kw)) return false;
-  }
-  if (MORE_MARKETS_RE.test(title)) return false;
-  for (const pk of PROP_KEYWORDS) {
-    if (lower.includes(pk)) return false;
-  }
-  for (const pk of POLITICS_KEYWORDS) {
-    if (lower.includes(pk)) return false;
-  }
-  return true;
+const MATCHUP_RE = /\bvs\.?\b|\sv\s|\bat\b/i;
+
+function hasMatchupPattern(texts: string[]): boolean {
+  return texts.some(t => MATCHUP_RE.test(t));
 }
 
-/** Return true if the event's match/start date is in the future. */
-function isFutureEvent(ev: GammaEvent): boolean {
-  const now = Date.now();
+function isHardExcluded(text: string): boolean {
+  const lower = text.toLowerCase();
+  for (const kw of HARD_EXCLUDE_KEYWORDS) {
+    if (lower.includes(kw)) return true;
+  }
+  return false;
+}
+
+function isPolitics(text: string): boolean {
+  const lower = text.toLowerCase();
+  return POLITICS_KEYWORDS.some(kw => lower.includes(kw));
+}
+
+/**
+ * Payload-aware fixture detection.
+ * Checks event title, slug, AND child market questions for matchup patterns.
+ * Only hard-excludes explicit prop keywords and politics.
+ */
+function isAcceptableEvent(ev: GammaEvent): { accepted: boolean; reason: string } {
+  const title = ev.title || "";
+
+  if (isHardExcluded(title)) return { accepted: false, reason: `hard_exclude_title: "${title}"` };
+  if (MORE_MARKETS_RE.test(title)) return { accepted: false, reason: `more_markets: "${title}"` };
+  if (isPolitics(title)) return { accepted: false, reason: `politics: "${title}"` };
+
+  const textsToCheck = [title, (ev.slug || "").replace(/-/g, " ")];
+  const markets = ev.markets || [];
+  for (const m of markets.slice(0, 10)) {
+    if (m.question) textsToCheck.push(m.question);
+    if (m.groupItemTitle) textsToCheck.push(m.groupItemTitle);
+  }
+
+  if (hasMatchupPattern(textsToCheck)) {
+    return { accepted: true, reason: "matchup_found" };
+  }
+
+  // Accept combat card events (UFC 315, BKFC 78, etc.) if child markets have matchups
+  const combatCardRe = /\b(UFC|BKFC|PFL|Bellator|ONE)\s*\d/i;
+  if (combatCardRe.test(title)) {
+    const marketTexts = markets.map(m => m.question || m.groupItemTitle || "");
+    if (hasMatchupPattern(marketTexts)) {
+      return { accepted: true, reason: "combat_card_with_matchup_markets" };
+    }
+    return { accepted: true, reason: "combat_card_event" };
+  }
+
+  return { accepted: false, reason: `no_matchup_pattern_in_any_field` };
+}
+
+function isDateEligible(ev: GammaEvent): { eligible: boolean; reason: string; missingDate: boolean } {
   const startMs = ev.startDate ? new Date(ev.startDate).getTime() : null;
   const endMs = ev.endDate ? new Date(ev.endDate).getTime() : null;
-  if (startMs !== null) return startMs > now;
-  if (endMs !== null) return endMs > now;
-  return true; // no date info — keep it
+  const now = Date.now();
+
+  if (startMs !== null && startMs < now) {
+    return { eligible: false, reason: `past_start: ${ev.startDate}`, missingDate: false };
+  }
+  if (startMs !== null) {
+    return { eligible: true, reason: "future_start", missingDate: false };
+  }
+  if (endMs !== null && endMs < now) {
+    return { eligible: false, reason: `past_end: ${ev.endDate}`, missingDate: false };
+  }
+  return { eligible: true, reason: "no_date_available", missingDate: true };
 }
 
 // ── Curated league/category config ──
@@ -148,11 +182,15 @@ interface GammaEvent {
   id: string;
   title: string;
   slug: string;
+  ticker?: string;
   description: string;
   startDate: string | null;
   endDate: string | null;
+  closed?: boolean;
+  active?: boolean;
   markets: GammaMarket[];
   tags?: { label: string; slug: string }[];
+  series?: any;
 }
 
 // ── Telemetry ──
@@ -289,22 +327,79 @@ async function fetchByLeagueSource(src: LeagueSource): Promise<{ events: GammaEv
   return { events, endpoints };
 }
 
-/** Apply strict safety filters: future + fixture + no props/more-markets */
-function filterFixtures(events: GammaEvent[]): GammaEvent[] {
-  return events
-    .filter(isFutureEvent)
-    .filter(ev => isActualFixture(ev.title));
+interface FilterResult {
+  accepted: GammaEvent[];
+  rejected: { event: GammaEvent; dateReason?: string; fixtureReason?: string }[];
+  rawSample: any[];
+}
+
+/** Apply payload-aware safety filters with full rejection logging */
+function filterFixtures(events: GammaEvent[]): FilterResult {
+  const accepted: GammaEvent[] = [];
+  const rejected: FilterResult["rejected"] = [];
+
+  // Build raw sample: first 10 events with key fields for debug
+  const rawSample = events.slice(0, 10).map(ev => ({
+    id: ev.id,
+    title: ev.title,
+    slug: ev.slug,
+    ticker: ev.ticker,
+    startDate: ev.startDate,
+    endDate: ev.endDate,
+    closed: ev.closed,
+    active: ev.active,
+    tags: ev.tags?.slice(0, 5),
+    series: ev.series,
+    market_count: (ev.markets || []).length,
+    first_3_markets: (ev.markets || []).slice(0, 3).map(m => ({
+      question: m.question,
+      groupItemTitle: m.groupItemTitle,
+      active: m.active,
+      closed: m.closed,
+    })),
+  }));
+
+  for (const ev of events) {
+    // Date check
+    const dateCheck = isDateEligible(ev);
+    if (!dateCheck.eligible) {
+      rejected.push({ event: ev, dateReason: dateCheck.reason });
+      continue;
+    }
+
+    // Also skip if closed===true or active===false
+    if (ev.closed === true) {
+      rejected.push({ event: ev, fixtureReason: "closed=true" });
+      continue;
+    }
+
+    // Fixture/matchup check
+    const fixtureCheck = isAcceptableEvent(ev);
+    if (!fixtureCheck.accepted) {
+      rejected.push({ event: ev, fixtureReason: fixtureCheck.reason });
+      continue;
+    }
+
+    accepted.push(ev);
+  }
+
+  return { accepted, rejected, rawSample };
 }
 
 /** Format event for preview response (no DB writes) */
 function toPreview(ev: GammaEvent, source: string) {
+  const dateInfo = isDateEligible(ev);
   return {
     id: ev.id,
     title: ev.title,
     slug: ev.slug,
+    ticker: ev.ticker,
     startDate: ev.startDate,
     endDate: ev.endDate,
+    closed: ev.closed,
+    active: ev.active,
     source,
+    missingDate: dateInfo.missingDate,
     markets: (ev.markets || []).map(m => ({
       id: m.id,
       question: m.question,
@@ -663,7 +758,11 @@ Deno.serve(async (req) => {
         }
       }
 
-      results = filterFixtures(rawResults);
+      const { accepted: results, rejected, rawSample } = filterFixtures(rawResults);
+
+      const rejectionSummary = rejected.length > 0
+        ? rejected.slice(0, 5).map(r => ({ title: r.event.title, dateReason: r.dateReason, fixtureReason: r.fixtureReason }))
+        : [];
 
       const tel = buildTelemetry({
         mode: "url",
@@ -671,7 +770,9 @@ Deno.serve(async (req) => {
         endpoints_called: endpoints,
         raw_count: rawResults.length,
         filtered_count: results.length,
-        zero_reason: results.length === 0 ? `all_${rawResults.length}_filtered_by_safety` : undefined,
+        zero_reason: results.length === 0 && rawResults.length > 0
+          ? `all_${rawResults.length}_rejected_by_filters`
+          : results.length === 0 ? "no_raw_results" : undefined,
         duration_ms: Date.now() - startTime,
       });
       await logTelemetry(supabase, wallet, tel);
@@ -680,6 +781,11 @@ Deno.serve(async (req) => {
         mode,
         highlightSlug,
         results: results.map(e => toPreview(e, "url_import")),
+        raw_sample: rawSample,
+        rejection_sample: rejectionSummary,
+        filter_message: results.length === 0 && rawResults.length > 0
+          ? `Data found from Polymarket (${rawResults.length} events), but local filters rejected all results.`
+          : undefined,
         telemetry: tel,
       });
     }
@@ -695,7 +801,11 @@ Deno.serve(async (req) => {
       }
       const cfg = LEAGUE_SOURCES[league_key];
       const { events: rawEvents, endpoints } = await fetchByLeagueSource(cfg);
-      const results = filterFixtures(rawEvents);
+      const { accepted: results, rejected, rawSample } = filterFixtures(rawEvents);
+
+      const rejectionSummary = rejected.length > 0
+        ? rejected.slice(0, 5).map(r => ({ title: r.event.title, dateReason: r.dateReason, fixtureReason: r.fixtureReason }))
+        : [];
 
       const tel = buildTelemetry({
         mode: "browse",
@@ -707,7 +817,7 @@ Deno.serve(async (req) => {
         zero_reason: results.length === 0
           ? rawEvents.length === 0
             ? `no_events_from_${cfg.fetchStrategy}_endpoint`
-            : `all_${rawEvents.length}_filtered_by_safety_filters`
+            : `all_${rawEvents.length}_rejected_by_filters`
           : undefined,
         duration_ms: Date.now() - startTime,
       });
@@ -718,6 +828,11 @@ Deno.serve(async (req) => {
         sportType: cfg.sportType,
         fetchStrategy: cfg.fetchStrategy,
         results: results.map(e => toPreview(e, "league_browse")),
+        raw_sample: rawSample,
+        rejection_sample: rejectionSummary,
+        filter_message: results.length === 0 && rawEvents.length > 0
+          ? `Data found from Polymarket (${rawEvents.length} events), but local filters rejected all results.`
+          : undefined,
         telemetry: tel,
       });
     }
@@ -735,7 +850,7 @@ Deno.serve(async (req) => {
       if (leagueKey) {
         const cfg = LEAGUE_SOURCES[leagueKey];
         const { events: rawEvents, endpoints } = await fetchByLeagueSource(cfg);
-        const results = filterFixtures(rawEvents);
+        const { accepted: results, rejected, rawSample } = filterFixtures(rawEvents);
 
         const tel = buildTelemetry({
           mode: "search_redirected_to_browse",
@@ -748,7 +863,7 @@ Deno.serve(async (req) => {
           zero_reason: results.length === 0
             ? rawEvents.length === 0
               ? `league_redirect_no_events_from_${cfg.fetchStrategy}`
-              : `league_redirect_all_${rawEvents.length}_filtered`
+              : `league_redirect_all_${rawEvents.length}_rejected`
             : undefined,
           duration_ms: Date.now() - startTime,
         });
@@ -758,6 +873,11 @@ Deno.serve(async (req) => {
           redirected_to_league: leagueKey,
           league: cfg.label,
           results: results.map(e => toPreview(e, "league_browse")),
+          raw_sample: rawSample,
+          rejection_sample: rejected.slice(0, 5).map(r => ({ title: r.event.title, dateReason: r.dateReason, fixtureReason: r.fixtureReason })),
+          filter_message: results.length === 0 && rawEvents.length > 0
+            ? `Data found from Polymarket (${rawEvents.length} events), but local filters rejected all results.`
+            : undefined,
           telemetry: tel,
         });
       }
@@ -779,13 +899,20 @@ Deno.serve(async (req) => {
       const endpoints = searchQueries.map(q => `public-search?q=${q}`);
       const rawResults = await fetchSearchEvents(searchQueries);
 
-      // Strict filtering: future + fixture + exclude props
-      let results = filterFixtures(rawResults);
+      const { accepted, rejected, rawSample } = filterFixtures(rawResults);
 
-      // Apply sport_filter category matching
+      // Apply sport_filter category matching on accepted results
+      let results = accepted;
       if (sport_filter === "soccer") {
-        results = results.filter(ev => ev.title.toLowerCase().includes("vs"));
+        results = results.filter(ev => {
+          const texts = [ev.title, ev.slug.replace(/-/g, " ")];
+          return texts.some(t => /\bvs\.?\b|\sv\s/i.test(t));
+        });
       }
+
+      const rejectionSummary = rejected.length > 0
+        ? rejected.slice(0, 5).map(r => ({ title: r.event.title, dateReason: r.dateReason, fixtureReason: r.fixtureReason }))
+        : [];
 
       const tel = buildTelemetry({
         mode: "search",
@@ -797,7 +924,7 @@ Deno.serve(async (req) => {
         zero_reason: results.length === 0
           ? rawResults.length === 0
             ? "no_results_from_public_search"
-            : `all_${rawResults.length}_filtered: titles_lacked_vs_or_were_past_or_props`
+            : `all_${rawResults.length}_rejected_by_filters`
           : undefined,
         duration_ms: Date.now() - startTime,
       });
@@ -805,6 +932,11 @@ Deno.serve(async (req) => {
 
       return json({
         results: results.map(e => toPreview(e, "exact_search")),
+        raw_sample: rawSample,
+        rejection_sample: rejectionSummary,
+        filter_message: results.length === 0 && rawResults.length > 0
+          ? `Data found from Polymarket (${rawResults.length} events), but local filters rejected all results.`
+          : undefined,
         telemetry: tel,
       });
     }
