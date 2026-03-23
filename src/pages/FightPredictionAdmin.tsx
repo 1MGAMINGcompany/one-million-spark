@@ -2350,7 +2350,11 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      toast.success(`Imported "${title}" — ${data.imported} market(s)`);
+      if (data.warning) {
+        toast.warning(data.warning);
+      } else {
+        toast.success(`Imported "${title}" — ${data.imported} market(s)`);
+      }
       onComplete();
       setSearchResults(prev => prev?.map(r =>
         String(r.id) === String(pmEventId) ? { ...r, imported: true } : r
@@ -2386,7 +2390,9 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      if (data?.bulk) {
+      if (data?.warning) {
+        toast.warning(data.warning);
+      } else if (data?.bulk) {
         toast.success(`Imported ${data.imported} market(s) from ${data.events_processed} events (${data.sport_slug})`);
       } else {
         toast.success(`Imported "${data.event_name}" — ${data.imported} market(s)`);

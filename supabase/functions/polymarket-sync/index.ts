@@ -29,6 +29,9 @@ function isActualFixture(title: string): boolean {
   for (const kw of FUTURES_KEYWORDS) {
     if (lower.includes(kw)) return false;
   }
+  // Filter out prop/secondary markets ("More Markets", "Winning Method")
+  if (lower.includes("- more markets")) return false;
+  if (lower.includes("winning method")) return false;
   return true;
 }
 
@@ -43,38 +46,40 @@ function isFuturesMarket(title: string): boolean {
 
 /**
  * Build tag slug variations from a URL slug or search query.
- * e.g. "fifa-friendlies" → ["fifa-friendlies", "fifa-friendly", "fifa friendlies", "fifa-friendlies-games"]
- * e.g. "FIFA Friendlies" → ["fifa-friendlies", "fifa-friendly", "fifa friendlies"]
  */
 function buildTagVariations(input: string): string[] {
   const base = input.toLowerCase().trim()
-    .replace(/\/games\/?$/, "")     // strip trailing /games
-    .replace(/\s+/g, "-");          // spaces → hyphens
+    .replace(/\/games\/?$/, "")
+    .replace(/\s+/g, "-");
   const variations = new Set<string>();
   variations.add(base);
-  // Without trailing 's' (e.g. friendlies → friendlie → friendly)
   if (base.endsWith("ies")) {
     variations.add(base.slice(0, -3) + "y");
   } else if (base.endsWith("s") && !base.endsWith("ss")) {
     variations.add(base.slice(0, -1));
   }
-  // With spaces instead of hyphens
   variations.add(base.replace(/-/g, " "));
-  // With trailing -games
   variations.add(base + "-games");
   return [...variations];
 }
 
-
 /** Known soccer sport codes from Gamma /sports endpoint */
 const SOCCER_SPORT_CODES = [
-  "epl", "lal", "bun", "ser", "lig", "mls", "lgm", "ucl", "uel",
+  "epl", "lal", "bun", "ser", "sea", "lig", "mls", "lgm", "ucl", "uel",
   "den", "nor", "ere", "isl", "scp", "cha", "ale", "jle", "kle",
-  "spl", "bsa", "arg", "acn", "wc", "eur", "cpa",
+  "spl", "bsa", "arg", "acn", "wc", "eur", "cpa", "fif", "fl1",
+  "mex", "tur", "rus", "ofc", "afc", "con", "cof", "uef", "caf",
+  "efl", "lib", "sud", "lcs", "itc",
 ];
 
-/** Known combat sport codes */
-const COMBAT_SPORT_CODES = ["ufc", "box", "onc", "pfl", "bkf", "mma"];
+/**
+ * Combat sport codes from /sports that are KNOWN TO RETURN CORRECT DATA.
+ * NOTE: "ufc" series (10500) is polluted with stock data — do NOT use for series discovery.
+ * Combat sports rely on search-based discovery via /public-search which works well.
+ */
+const COMBAT_SPORT_CODES_SERIES: string[] = [
+  // Currently no reliable combat series in /sports — all use search
+];
 
 interface SportSeries {
   sport: string;
@@ -91,9 +96,7 @@ async function fetchSportsSeries(): Promise<SportSeries[]> {
       return [];
     }
     const data = await res.json();
-    // data is an array of { sport: string, series: string, ... }
     if (Array.isArray(data)) return data;
-    // Sometimes wrapped in an object
     if (data?.sports && Array.isArray(data.sports)) return data.sports;
     return [];
   } catch (e) {
@@ -139,13 +142,40 @@ async function fetchSearchEvents(queries: string[]): Promise<GammaEvent[]> {
   return deduped;
 }
 
-/** Return true if event has at least one date >24h in the future. */
+/**
+ * Return true if the event's match/start date is in the future.
+ * For sports fixtures, startDate is the match kick-off time.
+ * If startDate exists and is in the past, the match is over — reject it.
+ * If only endDate exists (rare), use that. If neither exists, include it.
+ */
 function isFutureEvent(ev: GammaEvent): boolean {
+  const now = Date.now();
+  const startMs = ev.startDate ? new Date(ev.startDate).getTime() : null;
+  const endMs = ev.endDate ? new Date(ev.endDate).getTime() : null;
+
+  // If startDate exists, that's the match time — it must be in the future
+  if (startMs !== null) {
+    return startMs > now;
+  }
+
+  // No startDate — fall back to endDate
+  if (endMs !== null) {
+    return endMs > now;
+  }
+
+  // No dates at all — include (will be filtered elsewhere)
+  return true;
+}
+
+/** Stricter check: event start must be >24h in the future (for sync/import) */
+function isFutureEvent24h(ev: GammaEvent): boolean {
   const cutoff = Date.now() + 24 * 60 * 60 * 1000;
   const startMs = ev.startDate ? new Date(ev.startDate).getTime() : null;
   const endMs = ev.endDate ? new Date(ev.endDate).getTime() : null;
-  if (!startMs && !endMs) return true;
-  return (startMs !== null && startMs > cutoff) || (endMs !== null && endMs > cutoff);
+
+  if (startMs !== null) return startMs > cutoff;
+  if (endMs !== null) return endMs > cutoff;
+  return true;
 }
 
 /** Fetch trade volume from Data API for enrichment */
@@ -246,7 +276,6 @@ Deno.serve(async (req) => {
     // ══════════════════════════════════════════════════
     if (action === "sync") {
       const tagFilter = tag || "sports";
-      // Optional: sync a specific series ID directly
       const specificSeriesId = body.series_id;
 
       let gammaEvents: GammaEvent[] = [];
@@ -256,14 +285,13 @@ Deno.serve(async (req) => {
 
       // ── Series-based discovery (soccer + sports) ──
       if (specificSeriesId) {
-        // Sync a single specific series
         console.log(`[polymarket-sync] Fetching specific series: ${specificSeriesId}`);
         const events = await fetchSeriesEvents(specificSeriesId, limit);
         gammaEvents.push(...events);
         seriesSynced.push(specificSeriesId);
         seriesStats[specificSeriesId] = events.length;
       } else if (tagFilter === "mma") {
-        // Combat: use search-based discovery
+        // Combat: use search-based discovery (series are unreliable for combat)
         searchQueries = COMBAT_SEARCH_QUERIES;
         console.log(`[polymarket-sync] Search-based fetch for MMA: ${searchQueries.join(", ")}`);
         gammaEvents = await fetchSearchEvents(searchQueries);
@@ -276,21 +304,18 @@ Deno.serve(async (req) => {
         const allSeries = await fetchSportsSeries();
         console.log(`[polymarket-sync] Found ${allSeries.length} sport series from /sports`);
 
-        // Determine which series to fetch
         let targetCodes: string[];
         if (tagFilter === "soccer") {
           targetCodes = SOCCER_SPORT_CODES;
         } else {
-          // "sports" = all sports
-          targetCodes = [...SOCCER_SPORT_CODES, ...COMBAT_SPORT_CODES];
+          // "sports" = soccer series only (combat uses search separately)
+          targetCodes = SOCCER_SPORT_CODES;
         }
 
-        // Match available series against target codes
         const matchedSeries = allSeries.filter(s =>
           targetCodes.some(code => s.sport.toLowerCase().includes(code.toLowerCase()))
         );
 
-        // If no series matched our codes, use ALL available series
         const seriesToFetch = matchedSeries.length > 0 ? matchedSeries : allSeries;
         console.log(`[polymarket-sync] Fetching ${seriesToFetch.length} series for "${tagFilter}"`);
 
@@ -327,9 +352,9 @@ Deno.serve(async (req) => {
 
       console.log(`[polymarket-sync] Raw discovery: ${gammaEvents.length} events`);
 
-      // Filter out past events
+      // Filter out past events (use 24h-ahead for sync)
       const beforeFilter = gammaEvents.length;
-      gammaEvents = gammaEvents.filter(isFutureEvent);
+      gammaEvents = gammaEvents.filter(isFutureEvent24h);
       const filteredOut = beforeFilter - gammaEvents.length;
       console.log(`[polymarket-sync] ${gammaEvents.length} future events (filtered out ${filteredOut} past)`);
 
@@ -451,7 +476,6 @@ Deno.serve(async (req) => {
               })
               .eq("id", existing.id);
           } else {
-            // Try Data API enrichment for volume
             let volumeUsd = parseFloat(market.volume || "0");
             try {
               const dataApiVol = await fetchMarketVolume(market.id);
@@ -650,6 +674,7 @@ Deno.serve(async (req) => {
     // Step 1: Try series-based discovery via /sports (best for leagues)
     // Step 2: Try tag-based lookup
     // Step 3: Fall back to /public-search (filtered for fixtures)
+    // ALL steps filter out past events (startDate in the past)
     // ══════════════════════════════════════════════════
     if (action === "search") {
       const { query } = body;
@@ -660,53 +685,56 @@ Deno.serve(async (req) => {
       const queryLower = query.toLowerCase().trim();
       const querySlug = queryLower.replace(/\s+/g, "-");
 
-      // ── Step 1: Series-based discovery via /sports ──
-      // This is the most reliable way to find league fixtures
-      try {
-        const allSeries = await fetchSportsSeries();
-        console.log(`[polymarket-sync] Search step 1: checking ${allSeries.length} series for "${query}"`);
+      // Check if query is combat-related (use search instead of series)
+      const isCombatQuery = COMBAT_SEARCH_QUERIES.some(q =>
+        queryLower.includes(q.toLowerCase()) || q.toLowerCase().includes(queryLower)
+      );
 
-        // Split query into words for matching
-        const queryWords = queryLower.split(/[\s\-]+/).filter(w => w.length > 2);
+      // ── Step 1: Series-based discovery via /sports (skip for combat) ──
+      if (!isCombatQuery) {
+        try {
+          const allSeries = await fetchSportsSeries();
+          console.log(`[polymarket-sync] Search step 1: checking ${allSeries.length} series for "${query}"`);
 
-        // Find series where sport or label matches any query word
-        const matchedSeries = allSeries.filter(s => {
-          const sport = (s.sport || "").toLowerCase();
-          const label = (s.label || "").toLowerCase();
-          const series = (s.series || "").toLowerCase();
-          // Check if any query word appears in sport/label/series
-          return queryWords.some(w =>
-            sport.includes(w) || label.includes(w) || series.includes(w) ||
-            w.includes(sport) || w.includes(label)
-          );
-        });
+          const queryWords = queryLower.split(/[\s\-]+/).filter(w => w.length > 2);
 
-        if (matchedSeries.length > 0) {
-          console.log(`[polymarket-sync] Matched ${matchedSeries.length} series: ${matchedSeries.map(s => s.sport).join(", ")}`);
-          const seen = new Set<string>();
-          for (const s of matchedSeries) {
-            const events = await fetchSeriesEvents(s.series, 50);
-            for (const ev of events) {
-              if (!seen.has(String(ev.id))) {
-                seen.add(String(ev.id));
-                results.push(ev);
+          const matchedSeries = allSeries.filter(s => {
+            const sport = (s.sport || "").toLowerCase();
+            const label = (s.label || "").toLowerCase();
+            const series = (s.series || "").toLowerCase();
+            return queryWords.some(w =>
+              sport.includes(w) || label.includes(w) || series.includes(w) ||
+              w.includes(sport) || w.includes(label)
+            );
+          });
+
+          if (matchedSeries.length > 0) {
+            console.log(`[polymarket-sync] Matched ${matchedSeries.length} series: ${matchedSeries.map(s => s.sport).join(", ")}`);
+            const seen = new Set<string>();
+            for (const s of matchedSeries) {
+              const events = await fetchSeriesEvents(s.series, 50);
+              for (const ev of events) {
+                if (!seen.has(String(ev.id))) {
+                  seen.add(String(ev.id));
+                  results.push(ev);
+                }
               }
             }
+            // Filter: future only + actual fixtures (no "More Markets", no futures)
+            results = results.filter(isFutureEvent);
+            results = results.filter(ev => isActualFixture(ev.title));
+            if (results.length > 0) {
+              discoveryMethod = "series";
+              console.log(`[polymarket-sync] Series discovery found ${results.length} fixtures`);
+            }
           }
-          // Filter: future only + actual fixtures
-          results = results.filter(isFutureEvent);
-          results = results.filter(ev => isActualFixture(ev.title));
-          if (results.length > 0) {
-            discoveryMethod = "series";
-            console.log(`[polymarket-sync] Series discovery found ${results.length} fixtures`);
-          }
+        } catch (e) {
+          console.warn(`[polymarket-sync] Series discovery error:`, e);
         }
-      } catch (e) {
-        console.warn(`[polymarket-sync] Series discovery error:`, e);
       }
 
-      // ── Step 2: Tag-based fallback ──
-      if (results.length === 0) {
+      // ── Step 2: Tag-based fallback (skip for combat) ──
+      if (results.length === 0 && !isCombatQuery) {
         const tagSlugs = buildTagVariations(query);
         console.log(`[polymarket-sync] Search step 2: trying tags [${tagSlugs.join(", ")}]`);
         for (const tagSlug of tagSlugs) {
@@ -716,6 +744,7 @@ Deno.serve(async (req) => {
             if (!tagRes.ok) continue;
             const tagData = await tagRes.json();
             const tagEvents: GammaEvent[] = Array.isArray(tagData) ? tagData : [];
+            // Filter: future only
             const futureTagEvents = tagEvents.filter(isFutureEvent);
             if (futureTagEvents.length > 0) {
               results = futureTagEvents;
@@ -737,7 +766,7 @@ Deno.serve(async (req) => {
           const searchData = await gammaRes.json();
           rawResults = searchData.events || [];
         }
-        // Filter to future events only
+        // Filter to future events only (startDate must be in the future)
         results = rawResults.filter(isFutureEvent);
         // For sports-like queries, prefer fixtures with "vs"
         const fixtureResults = results.filter(ev => isActualFixture(ev.title));
@@ -784,6 +813,10 @@ Deno.serve(async (req) => {
       if (!gammaRes.ok) return json({ error: `Event not found (${gammaRes.status})` }, 404);
 
       const gEvent: GammaEvent = await gammaRes.json();
+
+      // ── Past-date guard: warn if event startDate is in the past ──
+      const startMs = gEvent.startDate ? new Date(gEvent.startDate).getTime() : null;
+      const isPastEvent = startMs !== null && startMs < Date.now();
 
       let outcomes: string[], tokenIds: string[], outcomePrices: string[];
 
@@ -868,10 +901,16 @@ Deno.serve(async (req) => {
         action: "polymarket_import_single",
         source: "polymarket-sync",
         admin_wallet: wallet || null,
-        details: { polymarket_event_id, event_name: gEvent.title, imported },
+        details: { polymarket_event_id, event_name: gEvent.title, imported, is_past: isPastEvent },
       });
 
-      return json({ success: true, event_id: eventId, imported });
+      return json({
+        success: true,
+        event_id: eventId,
+        imported,
+        is_past: isPastEvent,
+        warning: isPastEvent ? `⚠️ This event's start date (${gEvent.startDate}) is in the past. It will NOT appear on the predictions page.` : undefined,
+      });
     }
 
     // ══════════════════════════════════════════════════
@@ -906,6 +945,7 @@ Deno.serve(async (req) => {
             const tagData = await tagRes.json();
             const tagEvents: GammaEvent[] = Array.isArray(tagData) ? tagData : [];
             if (tagEvents.length > 0) {
+              // Filter: future events only (no past matches)
               allEvents = tagEvents.filter(isFutureEvent);
               console.log(`[polymarket-sync] Tag "${tagSlug}" returned ${allEvents.length} future events`);
               break;
@@ -922,14 +962,18 @@ Deno.serve(async (req) => {
           );
           for (const s of matchedSeries) {
             const events = await fetchSeriesEvents(s.series, 100);
+            // Filter: future events only
             const future = events.filter(isFutureEvent);
             allEvents.push(...future);
           }
           console.log(`[polymarket-sync] Series fallback found ${allEvents.length} events`);
         }
 
+        // Final filter: only actual fixtures (Team vs Team)
+        allEvents = allEvents.filter(ev => isActualFixture(ev.title));
+
         if (allEvents.length === 0) {
-          return json({ error: `No active events found for sport "${sportSlug}". Try pasting a specific event URL instead.` }, 404);
+          return json({ error: `No active future events found for sport "${sportSlug}". Try pasting a specific event URL instead.` }, 404);
         }
 
         // Bulk import all found events
@@ -1059,6 +1103,10 @@ Deno.serve(async (req) => {
 
       if (!gEvent || !gEvent.id) return json({ error: "Event not found for slug: " + slug }, 404);
 
+      // ── Past-date guard ──
+      const startMs = gEvent.startDate ? new Date(gEvent.startDate).getTime() : null;
+      const isPastEvent = startMs !== null && startMs < Date.now();
+
       let outcomes: string[], tokenIds: string[], outcomePrices: string[];
 
       const { data: existingEvt } = await supabase
@@ -1142,10 +1190,18 @@ Deno.serve(async (req) => {
         action: "polymarket_import_by_url",
         source: "polymarket-sync",
         admin_wallet: wallet || null,
-        details: { url, slug, event_name: gEvent.title, imported },
+        details: { url, slug, event_name: gEvent.title, imported, is_past: isPastEvent },
       });
 
-      return json({ success: true, event_id: eventId, event_name: gEvent.title, imported, slug });
+      return json({
+        success: true,
+        event_id: eventId,
+        event_name: gEvent.title,
+        imported,
+        slug,
+        is_past: isPastEvent,
+        warning: isPastEvent ? `⚠️ This event's start date (${gEvent.startDate}) is in the past. It will NOT appear on the predictions page.` : undefined,
+      });
     }
 
     return json({ error: "Unknown action" }, 400);
