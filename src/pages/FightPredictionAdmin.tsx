@@ -502,10 +502,10 @@ export default function FightPredictionAdmin() {
         {/* ── Polymarket Search & Import ── */}
         <Card className="bg-card border-border/50 p-4">
           <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
-            <Download className="w-4 h-4 text-accent-foreground" /> Polymarket Search & Import
+            <Download className="w-4 h-4 text-accent-foreground" /> Polymarket Import
           </h2>
           <p className="text-xs text-muted-foreground mb-3">
-            Search Polymarket for events, preview results, then select which ones to import. Imported events land in <span className="font-bold text-purple-400">Pending Review</span> for your approval.
+            Import events via URL, browse by league, or search exact fixtures. All imports land in <span className="font-bold text-purple-400">Pending Review</span>.
           </p>
           <PolymarketSyncPanel wallet={address!} busy={busy} onComplete={loadData} />
         </Card>
