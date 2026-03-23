@@ -2296,72 +2296,37 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
   );
 }
 
-// ── Polymarket Sync Panel ──
+// ── Polymarket Sync Panel (Search + Preview + Select) ──
 function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string; busy: boolean; onComplete: () => void }) {
-  const [syncBusy, setSyncBusy] = useState(false);
   const [searchBusy, setSearchBusy] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[] | null>(null);
-  const [searchDiscoveryMethod, setSearchDiscoveryMethod] = useState<string | null>(null);
-  const [lastSyncResult, setLastSyncResult] = useState<any>(null);
-  const [selectedTag, setSelectedTag] = useState("sports");
-  const [importingId, setImportingId] = useState<string | null>(null);
-  const [syncLimit, setSyncLimit] = useState(200);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [importingIds, setImportingIds] = useState<Set<string>>(new Set());
+  const [importedIds, setImportedIds] = useState<Set<string>>(new Set());
+  const [sportFilter, setSportFilter] = useState<string>("all");
   const [directUrl, setDirectUrl] = useState("");
   const [directImportBusy, setDirectImportBusy] = useState(false);
-  const [availableSports, setAvailableSports] = useState<{ sport: string; series: string; label: string }[]>([]);
-  const [sportsLoading, setSportsLoading] = useState(false);
-  const [selectedSeries, setSelectedSeries] = useState<string>("");
 
-  const TAGS = ["sports", "soccer", "mma", "boxing"];
-
-  // Fetch available sports on mount
-  useEffect(() => {
-    (async () => {
-      setSportsLoading(true);
-      try {
-        const { data, error } = await supabase.functions.invoke("polymarket-sync", {
-          body: { wallet, action: "browse_sports" },
-        });
-        if (!error && data?.sports) {
-          setAvailableSports(data.sports);
-        }
-      } catch { /* non-fatal */ }
-      finally { setSportsLoading(false); }
-    })();
-  }, [wallet]);
-
-  const runSync = async () => {
-    setSyncBusy(true);
-    setLastSyncResult(null);
-    try {
-      const body: Record<string, any> = { wallet, action: "sync", tag: selectedTag, limit: syncLimit };
-      if (selectedSeries) body.series_id = selectedSeries;
-      const { data, error } = await supabase.functions.invoke("polymarket-sync", { body });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      setLastSyncResult(data);
-      toast.success(`Synced ${data.markets_upserted} markets from ${data.total_events} events`);
-      onComplete();
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally {
-      setSyncBusy(false);
-    }
-  };
+  const SPORT_FILTERS = [
+    { key: "all", label: "All" },
+    { key: "soccer", label: "⚽ Soccer" },
+    { key: "mma", label: "🥊 UFC / MMA" },
+    { key: "boxing", label: "🥊 Boxing" },
+  ];
 
   const runSearch = async () => {
     if (!searchQuery.trim()) return;
     setSearchBusy(true);
     setSearchResults(null);
+    setSelectedIds(new Set());
     try {
       const { data, error } = await supabase.functions.invoke("polymarket-sync", {
-        body: { wallet, action: "search", query: searchQuery },
+        body: { wallet, action: "search", query: searchQuery, sport_filter: sportFilter !== "all" ? sportFilter : undefined },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       setSearchResults(data.results || []);
-      setSearchDiscoveryMethod(data.discovery_method || null);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -2369,60 +2334,79 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
     }
   };
 
-  const importSingle = async (pmEventId: string, title: string) => {
-    setImportingId(pmEventId);
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (!searchResults) return;
+    const allIds = searchResults.map(e => String(e.id)).filter(id => !importedIds.has(id));
+    setSelectedIds(new Set(allIds));
+  };
+
+  const deselectAll = () => setSelectedIds(new Set());
+
+  const importSelected = async () => {
+    if (selectedIds.size === 0) return;
+    const ids = [...selectedIds];
+    setImportingIds(new Set(ids));
+    let successCount = 0;
+    for (const pmEventId of ids) {
+      try {
+        const { data, error } = await supabase.functions.invoke("polymarket-sync", {
+          body: { wallet, action: "import_single", polymarket_event_id: pmEventId },
+        });
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+        if (data.warning) {
+          toast.warning(data.warning);
+        }
+        successCount++;
+        setImportedIds(prev => new Set([...prev, pmEventId]));
+      } catch (err: any) {
+        toast.error(`Import failed: ${err.message}`);
+      }
+    }
+    setImportingIds(new Set());
+    setSelectedIds(new Set());
+    if (successCount > 0) {
+      toast.success(`Imported ${successCount} event(s) to Pending Review`);
+      onComplete();
+    }
+  };
+
+  const refreshPrices = async () => {
+    setSearchBusy(true);
     try {
       const { data, error } = await supabase.functions.invoke("polymarket-sync", {
-        body: { wallet, action: "import_single", polymarket_event_id: pmEventId },
+        body: { wallet, action: "refresh_prices" },
+      });
+      if (error) throw error;
+      toast.success(`Prices updated: ${data?.updated || 0} fights`);
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSearchBusy(false);
+    }
+  };
+
+  const importByUrl = async () => {
+    if (!directUrl.trim()) return;
+    setDirectImportBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("polymarket-sync", {
+        body: { wallet, action: "import_by_url", url: directUrl.trim() },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       if (data.warning) {
         toast.warning(data.warning);
       } else {
-        toast.success(`Imported "${title}" — ${data.imported} market(s)`);
-      }
-      onComplete();
-      setSearchResults(prev => prev?.map(r =>
-        String(r.id) === String(pmEventId) ? { ...r, imported: true } : r
-      ) || null);
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally {
-      setImportingId(null);
-    }
-  };
-
-  const refreshPrices = async () => {
-    setSyncBusy(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("polymarket-prices", { body: {} });
-      if (error) throw error;
-      toast.success(`Updated prices for ${data?.updated || 0} markets`);
-      onComplete();
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally {
-      setSyncBusy(false);
-    }
-  };
-
-  const importByUrl = async () => {
-    const trimmed = directUrl.trim();
-    if (!trimmed) return;
-    setDirectImportBusy(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("polymarket-sync", {
-        body: { wallet, action: "import_by_url", url: trimmed },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      if (data?.warning) {
-        toast.warning(data.warning);
-      } else if (data?.bulk) {
-        toast.success(`Imported ${data.imported} market(s) from ${data.events_processed} events (${data.sport_slug})`);
-      } else {
-        toast.success(`Imported "${data.event_name}" — ${data.imported} market(s)`);
+        toast.success(`Imported "${data.event_name || directUrl}" — ${data.imported} market(s) → Pending Review`);
       }
       setDirectUrl("");
       onComplete();
@@ -2434,125 +2418,13 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
   };
 
   return (
-    <div className="space-y-3">
-      {/* Tag selector */}
-      <div className="flex flex-wrap gap-1.5">
-        {TAGS.map(t => {
-          const label = t === "sports" ? "All" : t === "mma" ? "UFC / MMA" : t === "boxing" ? "Boxing" : t === "soccer" ? "Soccer" : t;
-          const hint = (t === "mma" || t === "boxing") ? " (search)" : " (series)";
-          return (
-            <button
-              key={t}
-              onClick={() => { setSelectedTag(t); setSelectedSeries(""); }}
-              className={`text-xs px-2.5 py-1 rounded-full border transition-colors capitalize ${
-                selectedTag === t && !selectedSeries
-                  ? "bg-purple-500/20 text-purple-400 border-purple-500/40"
-                  : "bg-muted/30 text-muted-foreground border-border/30 hover:border-border"
-              }`}
-            >
-              {label}{hint && <span className="text-[9px] opacity-60">{hint}</span>}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Browse Sports — individual league sync */}
-      {availableSports.length > 0 && (
-        <div className="border border-border/30 rounded-lg p-2.5 bg-muted/10">
-          <p className="text-[10px] text-muted-foreground font-medium mb-1.5">🏟️ Browse Sports (series-based)</p>
-          <Select value={selectedSeries || "__all__"} onValueChange={(val) => { setSelectedSeries(val === "__all__" ? "" : val); setSelectedTag(""); }}>
-            <SelectTrigger className="h-8 text-xs">
-              <SelectValue placeholder={sportsLoading ? "Loading sports..." : `${availableSports.length} leagues available`} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">All sports (default)</SelectItem>
-              {availableSports.map(s => (
-                <SelectItem key={s.series} value={s.series}>
-                  {s.label || s.sport} (#{s.series})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-
-      {/* Limit control */}
-      <div className="flex items-center gap-2">
-        <Label className="text-xs text-muted-foreground whitespace-nowrap">Limit</Label>
-        <Input
-          type="number"
-          min={10}
-          max={500}
-          value={syncLimit}
-          onChange={e => setSyncLimit(Math.max(10, Math.min(500, parseInt(e.target.value) || 200)))}
-          className="w-20 h-7 text-xs"
-        />
-        <span className="text-[10px] text-muted-foreground">per series/tag</span>
-      </div>
-
-      {/* Sync + Price buttons */}
-      <div className="grid grid-cols-2 gap-2">
-        <Button
-          className="bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 border border-purple-500/30"
-          onClick={runSync}
-          disabled={syncBusy || parentBusy}
-        >
-          {syncBusy ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Download className="w-4 h-4 mr-2" />}
-          {selectedSeries
-            ? `Sync ${availableSports.find(s => s.series === selectedSeries)?.label || selectedSeries}`
-            : `Sync ${selectedTag === "mma" ? "UFC/MMA" : selectedTag === "boxing" ? "Boxing" : selectedTag || "All"}`
-          }
-        </Button>
-        <Button
-          variant="outline"
-          className="border-border text-foreground"
-          onClick={refreshPrices}
-          disabled={syncBusy || parentBusy}
-        >
-          {syncBusy ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-          Refresh Prices
-        </Button>
-      </div>
-
-      {/* Sync results */}
-      {lastSyncResult && (
-        <div className="bg-muted/30 border border-border/30 rounded-lg p-3 text-xs space-y-1">
-          <p className="text-foreground font-medium">✅ Sync Complete</p>
-          <p className="text-muted-foreground">
-            Events: {lastSyncResult.total_events} · Markets upserted: {lastSyncResult.markets_upserted} · New events: {lastSyncResult.events_upserted} · Skipped: {lastSyncResult.skipped}
-          </p>
-          {lastSyncResult.discovery_method && (
-            <p className="text-purple-400 text-[10px]">
-              Discovery: <span className="font-bold">{lastSyncResult.discovery_method}</span>
-              {lastSyncResult.series_synced?.length > 0 && (
-                <span className="ml-1">· {lastSyncResult.series_synced.length} series</span>
-              )}
-            </p>
-          )}
-          {lastSyncResult.series_stats && Object.keys(lastSyncResult.series_stats).length > 0 && (
-            <div className="text-[10px] text-muted-foreground mt-1 flex flex-wrap gap-1.5">
-              {Object.entries(lastSyncResult.series_stats as Record<string, number>).map(([k, v]) => (
-                <span key={k} className="bg-muted/50 px-1.5 py-0.5 rounded">
-                  {k}: {v}
-                </span>
-              ))}
-            </div>
-          )}
-          {lastSyncResult.expired_closed > 0 && (
-            <p className="text-yellow-400">Auto-closed {lastSyncResult.expired_closed} expired fights</p>
-          )}
-          {lastSyncResult.futures_cleaned > 0 && (
-            <p className="text-orange-400">🧹 Cleaned {lastSyncResult.futures_cleaned} futures/non-fixture markets</p>
-          )}
-        </div>
-      )}
-
+    <div className="space-y-4">
       {/* Direct URL Import */}
-      <div className="border-t border-border/30 pt-3 mt-1">
+      <div>
         <p className="text-[10px] text-muted-foreground mb-1.5 font-medium">📋 Paste Polymarket Event URL</p>
         <div className="flex gap-2">
           <Input
-            placeholder="https://polymarket.com/event/silkeborg-if-vs-fc-fredericia"
+            placeholder="https://polymarket.com/event/team-a-vs-team-b"
             value={directUrl}
             onChange={e => setDirectUrl(e.target.value)}
             onKeyDown={e => e.key === "Enter" && importByUrl()}
@@ -2569,105 +2441,191 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
         </div>
       </div>
 
-      {/* Search */}
+      {/* Divider */}
+      <div className="border-t border-border/30" />
+
+      {/* Sport filter chips */}
+      <div className="flex flex-wrap gap-1.5">
+        {SPORT_FILTERS.map(f => (
+          <button
+            key={f.key}
+            onClick={() => setSportFilter(f.key)}
+            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+              sportFilter === f.key
+                ? "bg-purple-500/20 text-purple-400 border-purple-500/40"
+                : "bg-muted/30 text-muted-foreground border-border/30 hover:border-border"
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Search input */}
       <div className="flex gap-2">
         <Input
-          placeholder="Search Polymarket..."
+          placeholder={sportFilter === "soccer" ? "e.g. Premier League, MLS, Real Madrid..." : sportFilter === "mma" ? "e.g. UFC 315, Adesanya..." : sportFilter === "boxing" ? "e.g. Canelo, Tyson Fury..." : "Search Polymarket events..."}
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
           onKeyDown={e => e.key === "Enter" && runSearch()}
           className="flex-1"
         />
         <Button
-          variant="outline"
           onClick={runSearch}
           disabled={searchBusy || !searchQuery.trim()}
+          className="bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 border border-purple-500/30"
         >
           {searchBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
         </Button>
       </div>
 
-      {/* Search results */}
-      {searchResults && (
-        <div className="space-y-2 max-h-[400px] overflow-y-auto">
-          {searchResults.length > 0 && (
-            <p className="text-[10px] text-purple-400 font-bold flex items-center gap-1.5 mb-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block" />
-              {searchDiscoveryMethod === "series"
-                ? `⚽ League fixtures · ${searchResults.length} match(es)`
-                : searchDiscoveryMethod === "tag"
-                  ? `🏷️ Tag discovery · ${searchResults.length} result(s)`
-                  : `LIVE from Polymarket · ${searchResults.length} result(s)`}
-              {" "}for &ldquo;{searchQuery}&rdquo;
-            </p>
-          )}
-          {searchResults.length === 0 && (
-            <p className="text-xs text-muted-foreground text-center py-4">No matching markets on Polymarket for &ldquo;{searchQuery}&rdquo;</p>
-          )}
-          {searchResults.map((event: any) => {
-            const endDate = event.endDate ? new Date(event.endDate) : null;
-            const now = new Date();
-            const isPast = endDate && endDate < now;
-            const diffMs = endDate ? endDate.getTime() - now.getTime() : null;
-            const diffHours = diffMs ? Math.round(diffMs / (1000 * 60 * 60)) : null;
-            const diffDays = diffMs ? Math.round(diffMs / (1000 * 60 * 60 * 24)) : null;
-            const timeLabel = isPast
-              ? "Ended"
-              : diffHours !== null
-                ? diffHours < 24
-                  ? `${diffHours}h`
-                  : `${diffDays}d`
-                : null;
+      {/* Refresh Prices */}
+      <Button
+        variant="outline"
+        size="sm"
+        className="border-border text-muted-foreground"
+        onClick={refreshPrices}
+        disabled={searchBusy || parentBusy}
+      >
+        <RefreshCw className="w-3 h-3 mr-1.5" /> Refresh Prices
+      </Button>
 
-            return (
-            <div key={event.id} className={`bg-background/60 border rounded-lg p-3 text-xs ${isPast ? 'border-destructive/30 opacity-60' : 'border-border/30'}`}>
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-foreground font-bold truncate">{event.title}</p>
-                    {timeLabel && (
-                      <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${isPast ? 'bg-destructive/20 text-destructive' : 'bg-primary/20 text-primary'}`}>
-                        {isPast ? "Ended" : `Starts in ${timeLabel}`}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-muted-foreground text-[10px]">
-                    {event.markets?.length || 0} market(s)
-                    {endDate && <span className="ml-1.5">· {endDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span>}
-                  </p>
-                  {event.markets?.map((m: any, i: number) => (
-                    <div key={i} className="mt-1 text-[10px] text-muted-foreground">
-                      <span>{m.question}</span>
-                      {m.outcomePrices?.length >= 2 && (
-                        <span className="ml-1.5 text-purple-400 font-bold">
-                          {(parseFloat(m.outcomePrices[0]) * 100).toFixed(0)}¢ / {(parseFloat(m.outcomePrices[1]) * 100).toFixed(0)}¢
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                <div>
-                  {event.imported ? (
-                    <span className="text-[10px] font-bold text-green-400">✅ Imported</span>
-                  ) : (
-                    <button
-                      onClick={() => importSingle(event.id, event.title)}
-                      disabled={!!importingId}
-                      className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30 hover:bg-purple-500/30 transition-colors disabled:opacity-50"
-                    >
-                      {importingId === String(event.id) ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : (
-                        <Download className="w-3 h-3" />
-                      )}
-                      Import
-                    </button>
-                  )}
+      {/* Search Results */}
+      {searchResults && (
+        <div className="space-y-2">
+          {searchResults.length > 0 && (
+            <>
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] text-purple-400 font-bold flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block" />
+                  {searchResults.length} result(s) for &ldquo;{searchQuery}&rdquo;
+                </p>
+                <div className="flex gap-1.5">
+                  <button onClick={selectAll} className="text-[10px] text-primary hover:underline">Select All</button>
+                  <span className="text-muted-foreground/40">|</span>
+                  <button onClick={deselectAll} className="text-[10px] text-muted-foreground hover:underline">Clear</button>
                 </div>
               </div>
-            </div>
-            );
-          })}
+
+              {/* Import Selected button */}
+              {selectedIds.size > 0 && (
+                <Button
+                  className="w-full bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 border border-purple-500/30"
+                  onClick={importSelected}
+                  disabled={importingIds.size > 0}
+                >
+                  {importingIds.size > 0 ? (
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  ) : (
+                    <Download className="w-4 h-4 mr-2" />
+                  )}
+                  Import {selectedIds.size} Selected → Pending Review
+                </Button>
+              )}
+            </>
+          )}
+
+          {searchResults.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-4">No matching markets for &ldquo;{searchQuery}&rdquo;</p>
+          )}
+
+          <div className="max-h-[500px] overflow-y-auto space-y-2">
+            {searchResults.map((event: any) => {
+              const id = String(event.id);
+              const isSelected = selectedIds.has(id);
+              const isImported = importedIds.has(id);
+              const isImporting = importingIds.has(id);
+              const startDate = event.startDate ? new Date(event.startDate) : null;
+              const now = new Date();
+              const diffMs = startDate ? startDate.getTime() - now.getTime() : null;
+              const diffHours = diffMs ? Math.round(diffMs / (1000 * 60 * 60)) : null;
+              const diffDays = diffMs ? Math.round(diffMs / (1000 * 60 * 60 * 24)) : null;
+              const timeLabel = diffHours !== null
+                ? diffHours < 0 ? "Past" : diffHours < 24 ? `${diffHours}h` : `${diffDays}d`
+                : null;
+              const isPast = diffHours !== null && diffHours < 0;
+
+              return (
+                <div
+                  key={id}
+                  onClick={() => !isImported && toggleSelect(id)}
+                  className={`bg-background/60 border rounded-lg p-3 text-xs cursor-pointer transition-all ${
+                    isImported ? 'border-green-500/30 opacity-60 cursor-default' :
+                    isSelected ? 'border-purple-500/50 bg-purple-500/5 ring-1 ring-purple-500/20' :
+                    isPast ? 'border-destructive/30 opacity-60' :
+                    'border-border/30 hover:border-border/60'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    {/* Checkbox area */}
+                    <div className="pt-0.5 shrink-0">
+                      {isImported ? (
+                        <CheckCircle className="w-4 h-4 text-green-400" />
+                      ) : isImporting ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+                      ) : (
+                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
+                          isSelected ? 'border-purple-400 bg-purple-500/20' : 'border-border'
+                        }`}>
+                          {isSelected && <CheckCircle className="w-3 h-3 text-purple-400" />}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className="text-foreground font-bold truncate">{event.title}</p>
+                        {timeLabel && (
+                          <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                            isPast ? 'bg-destructive/20 text-destructive' : 'bg-primary/20 text-primary'
+                          }`}>
+                            {isPast ? "Past" : timeLabel}
+                          </span>
+                        )}
+                        {isImported && (
+                          <span className="text-[9px] font-bold text-green-400">✅ In Review</span>
+                        )}
+                      </div>
+                      <p className="text-muted-foreground text-[10px] mt-0.5">
+                        {event.markets?.length || 0} market(s)
+                        {startDate && <span className="ml-1.5">· {startDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span>}
+                      </p>
+                      {event.markets?.slice(0, 2).map((m: any, i: number) => (
+                        <div key={i} className="mt-1 text-[10px] text-muted-foreground">
+                          <span>{m.question}</span>
+                          {m.outcomePrices?.length >= 2 && (
+                            <span className="ml-1.5 text-purple-400 font-bold">
+                              {(parseFloat(m.outcomePrices[0]) * 100).toFixed(0)}¢ / {(parseFloat(m.outcomePrices[1]) * 100).toFixed(0)}¢
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                      {(event.markets?.length || 0) > 2 && (
+                        <p className="text-[10px] text-muted-foreground/60 mt-0.5">+{event.markets.length - 2} more market(s)</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Bottom import button */}
+          {selectedIds.size > 0 && searchResults.length > 3 && (
+            <Button
+              className="w-full bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 border border-purple-500/30"
+              onClick={importSelected}
+              disabled={importingIds.size > 0}
+            >
+              {importingIds.size > 0 ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <Download className="w-4 h-4 mr-2" />
+              )}
+              Import {selectedIds.size} Selected → Pending Review
+            </Button>
+          )}
         </div>
       )}
     </div>
