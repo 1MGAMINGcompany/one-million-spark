@@ -907,6 +907,31 @@ function AdminEventCard({
 
           {/* Event actions */}
           <div className="flex gap-2 flex-wrap">
+            {/* pending_review → Approve to Draft or Dismiss */}
+            {event.status === "pending_review" && (
+              <>
+                <Button size="sm" onClick={async () => {
+                  try {
+                    await callAdmin("updateEventStatus", { event_id: event.id, status: "draft" });
+                    toast.success("Promoted to Draft");
+                    loadData();
+                  } catch(e:any){toast.error(e.message);}
+                }} disabled={busy}
+                  className="bg-green-500/20 text-green-400 hover:bg-green-500/30">
+                  <CheckCircle className="w-3 h-3 mr-1" /> Approve to Draft
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => onConfirm(
+                  "Dismiss Event",
+                  `Dismiss "${event.event_name}"? It will be hidden from active view.`,
+                  () => onDismiss(event.id, event.event_name),
+                  false
+                )} disabled={busy}
+                  className="border-orange-500/50 text-orange-400 hover:bg-orange-500/10">
+                  <EyeOff className="w-3 h-3 mr-1" /> Dismiss
+                </Button>
+              </>
+            )}
+
             {event.status === "draft" && (
               <>
                 <Button size="sm" onClick={async () => { try { await callAdmin("approveEvent", { event_id: event.id }); toast.success("Approved"); loadData(); } catch(e:any){toast.error(e.message);} }} disabled={busy}
