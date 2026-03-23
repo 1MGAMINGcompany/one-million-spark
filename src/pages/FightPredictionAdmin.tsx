@@ -2550,7 +2550,12 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
           {searchResults.length > 0 && (
             <p className="text-[10px] text-purple-400 font-bold flex items-center gap-1.5 mb-1">
               <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block" />
-              LIVE from Polymarket · {searchResults.length} result(s) for &ldquo;{searchQuery}&rdquo;
+              {searchDiscoveryMethod === "series"
+                ? `⚽ League fixtures · ${searchResults.length} match(es)`
+                : searchDiscoveryMethod === "tag"
+                  ? `🏷️ Tag discovery · ${searchResults.length} result(s)`
+                  : `LIVE from Polymarket · ${searchResults.length} result(s)`}
+              {" "}for &ldquo;{searchQuery}&rdquo;
             </p>
           )}
           {searchResults.length === 0 && (
