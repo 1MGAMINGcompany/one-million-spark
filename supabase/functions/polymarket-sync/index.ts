@@ -87,6 +87,18 @@ function isAcceptableEvent(ev: GammaEvent): { accepted: boolean; reason: string 
     return { accepted: true, reason: "combat_card_event" };
   }
 
+  // Accept events with binary (2-outcome) markets — these are inherently matchup markets
+  // on Polymarket (e.g., "Team A" vs "Team B" outcomes) even if title doesn't contain "vs"
+  const hasBinaryMarket = markets.some(m => {
+    try {
+      const outcomes = JSON.parse(m.outcomes || "[]");
+      return outcomes.length === 2 && !m.closed;
+    } catch { return false; }
+  });
+  if (hasBinaryMarket) {
+    return { accepted: true, reason: "binary_market_detected" };
+  }
+
   return { accepted: false, reason: `no_matchup_pattern_in_any_field` };
 }
 
@@ -95,15 +107,30 @@ function isDateEligible(ev: GammaEvent): { eligible: boolean; reason: string; mi
   const endMs = ev.endDate ? new Date(ev.endDate).getTime() : null;
   const now = Date.now();
 
-  if (startMs !== null && startMs < now) {
-    return { eligible: false, reason: `past_start: ${ev.startDate}`, missingDate: false };
+  // If endDate exists and is in the future, always eligible (market still active)
+  if (endMs !== null && endMs > now) {
+    return { eligible: true, reason: "future_end", missingDate: false };
   }
-  if (startMs !== null) {
-    return { eligible: true, reason: "future_start", missingDate: false };
-  }
+
+  // If endDate exists and is in the past, reject
   if (endMs !== null && endMs < now) {
     return { eligible: false, reason: `past_end: ${ev.endDate}`, missingDate: false };
   }
+
+  // No endDate — check startDate
+  if (startMs !== null && startMs < now) {
+    // Only reject if the event is also closed/inactive
+    if (ev.closed === true || ev.active === false) {
+      return { eligible: false, reason: `past_start_and_inactive: ${ev.startDate}`, missingDate: false };
+    }
+    // startDate past but event still active — keep it (startDate may be creation date)
+    return { eligible: true, reason: "past_start_but_active", missingDate: false };
+  }
+
+  if (startMs !== null) {
+    return { eligible: true, reason: "future_start", missingDate: false };
+  }
+
   return { eligible: true, reason: "no_date_available", missingDate: true };
 }
 
@@ -720,7 +747,6 @@ Deno.serve(async (req) => {
       if (!parsed) return json({ error: "Could not parse URL. Supported formats: /event/{slug}, /sports/{league}/games, /sports/{league}/{event}" }, 400);
 
       let rawResults: GammaEvent[] = [];
-      let results: GammaEvent[] = [];
       let highlightSlug: string | null = null;
       const endpoints: string[] = [];
       let mode = parsed.type;
