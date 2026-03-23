@@ -103,35 +103,31 @@ function isAcceptableEvent(ev: GammaEvent): { accepted: boolean; reason: string 
 }
 
 function isDateEligible(ev: GammaEvent): { eligible: boolean; reason: string; missingDate: boolean } {
-  const startMs = ev.startDate ? new Date(ev.startDate).getTime() : null;
-  const endMs = ev.endDate ? new Date(ev.endDate).getTime() : null;
   const now = Date.now();
 
-  // If endDate exists and is in the future, always eligible (market still active)
-  if (endMs !== null && endMs > now) {
-    return { eligible: true, reason: "future_end", missingDate: false };
+  // Collect all available dates: event-level + market-level endDates
+  const candidates: number[] = [];
+  if (ev.endDate) { const ms = new Date(ev.endDate).getTime(); if (!isNaN(ms)) candidates.push(ms); }
+  if (ev.startDate) { const ms = new Date(ev.startDate).getTime(); if (!isNaN(ms)) candidates.push(ms); }
+  // Also check child market endDates (often the actual match time)
+  const markets: any[] = ev.markets || [];
+  for (const m of markets) {
+    if (m.endDate) { const ms = new Date(m.endDate).getTime(); if (!isNaN(ms)) candidates.push(ms); }
   }
 
-  // If endDate exists and is in the past, reject
-  if (endMs !== null && endMs < now) {
-    return { eligible: false, reason: `past_end: ${ev.endDate}`, missingDate: false };
+  if (candidates.length === 0) {
+    // No dates at all — keep with warning
+    return { eligible: true, reason: "no_date_available", missingDate: true };
   }
 
-  // No endDate — check startDate
-  if (startMs !== null && startMs < now) {
-    // Only reject if the event is also closed/inactive
-    if (ev.closed === true || ev.active === false) {
-      return { eligible: false, reason: `past_start_and_inactive: ${ev.startDate}`, missingDate: false };
-    }
-    // startDate past but event still active — keep it (startDate may be creation date)
-    return { eligible: true, reason: "past_start_but_active", missingDate: false };
+  // Use the latest (max) date as "best date" — if it's in the future, the event is eligible
+  const bestDate = Math.max(...candidates);
+  if (bestDate > now) {
+    return { eligible: true, reason: "future_date", missingDate: false };
   }
 
-  if (startMs !== null) {
-    return { eligible: true, reason: "future_start", missingDate: false };
-  }
-
-  return { eligible: true, reason: "no_date_available", missingDate: true };
+  // All dates are in the past — reject regardless of active flag
+  return { eligible: false, reason: `past_date: ${new Date(bestDate).toISOString()}`, missingDate: false };
 }
 
 // ── Curated league/category config ──
