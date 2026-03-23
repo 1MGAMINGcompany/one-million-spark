@@ -2265,6 +2265,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
   const [searchBusy, setSearchBusy] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[] | null>(null);
+  const [searchDiscoveryMethod, setSearchDiscoveryMethod] = useState<string | null>(null);
   const [lastSyncResult, setLastSyncResult] = useState<any>(null);
   const [selectedTag, setSelectedTag] = useState("sports");
   const [importingId, setImportingId] = useState<string | null>(null);
