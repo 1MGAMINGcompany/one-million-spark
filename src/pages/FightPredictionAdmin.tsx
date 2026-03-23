@@ -808,11 +808,12 @@ function AdminEventCard({
             )}
             <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
               event.status === 'draft' ? 'bg-muted text-muted-foreground' :
+              event.status === 'pending_review' ? 'bg-purple-500/20 text-purple-400' :
               event.status === 'approved' ? 'bg-green-500/20 text-green-400' :
               event.status === 'archived' ? 'bg-blue-500/20 text-blue-400' :
               event.status === 'dismissed' ? 'bg-orange-500/20 text-orange-400' :
               'bg-red-500/20 text-red-400'
-            }`}>{event.status.toUpperCase()}</span>
+            }`}>{event.status === 'pending_review' ? '📋 REVIEW' : event.status.toUpperCase()}</span>
             {event.source_provider && event.source_provider !== 'manual' && (
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-accent/30 text-accent-foreground uppercase">
                 {event.source_provider === 'api-football' ? '⚽ API-FOOTBALL' : event.source_provider}
