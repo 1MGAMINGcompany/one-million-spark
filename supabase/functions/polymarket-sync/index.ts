@@ -646,29 +646,69 @@ Deno.serve(async (req) => {
     }
 
     // ══════════════════════════════════════════════════
-    // ACTION: search — Search Polymarket events by query (with future-only filter)
-    // Falls back to tag-based discovery when /public-search returns nothing
+    // ACTION: search — Search Polymarket events by query
+    // Step 1: Try series-based discovery via /sports (best for leagues)
+    // Step 2: Try tag-based lookup
+    // Step 3: Fall back to /public-search (filtered for fixtures)
     // ══════════════════════════════════════════════════
     if (action === "search") {
       const { query } = body;
       if (!query) return json({ error: "Missing query" }, 400);
 
-      // Step 1: Try /public-search
-      const searchUrl = `${GAMMA_BASE}/public-search?q=${encodeURIComponent(query)}&limit=${limit}`;
-      console.log(`[polymarket-sync] Search: ${searchUrl}`);
-      const gammaRes = await fetch(searchUrl);
-      let rawResults: GammaEvent[] = [];
-      if (gammaRes.ok) {
-        const searchData = await gammaRes.json();
-        rawResults = searchData.events || [];
-      }
-      let results = rawResults.filter(isFutureEvent);
-      console.log(`[polymarket-sync] Search returned ${results.length} future events (${rawResults.length - results.length} past filtered) for "${query}"`);
+      let results: GammaEvent[] = [];
+      let discoveryMethod = "none";
+      const queryLower = query.toLowerCase().trim();
+      const querySlug = queryLower.replace(/\s+/g, "-");
 
-      // Step 2: If no results, try tag-based lookup
+      // ── Step 1: Series-based discovery via /sports ──
+      // This is the most reliable way to find league fixtures
+      try {
+        const allSeries = await fetchSportsSeries();
+        console.log(`[polymarket-sync] Search step 1: checking ${allSeries.length} series for "${query}"`);
+
+        // Split query into words for matching
+        const queryWords = queryLower.split(/[\s\-]+/).filter(w => w.length > 2);
+
+        // Find series where sport or label matches any query word
+        const matchedSeries = allSeries.filter(s => {
+          const sport = (s.sport || "").toLowerCase();
+          const label = (s.label || "").toLowerCase();
+          const series = (s.series || "").toLowerCase();
+          // Check if any query word appears in sport/label/series
+          return queryWords.some(w =>
+            sport.includes(w) || label.includes(w) || series.includes(w) ||
+            w.includes(sport) || w.includes(label)
+          );
+        });
+
+        if (matchedSeries.length > 0) {
+          console.log(`[polymarket-sync] Matched ${matchedSeries.length} series: ${matchedSeries.map(s => s.sport).join(", ")}`);
+          const seen = new Set<string>();
+          for (const s of matchedSeries) {
+            const events = await fetchSeriesEvents(s.series, 50);
+            for (const ev of events) {
+              if (!seen.has(String(ev.id))) {
+                seen.add(String(ev.id));
+                results.push(ev);
+              }
+            }
+          }
+          // Filter: future only + actual fixtures
+          results = results.filter(isFutureEvent);
+          results = results.filter(ev => isActualFixture(ev.title));
+          if (results.length > 0) {
+            discoveryMethod = "series";
+            console.log(`[polymarket-sync] Series discovery found ${results.length} fixtures`);
+          }
+        }
+      } catch (e) {
+        console.warn(`[polymarket-sync] Series discovery error:`, e);
+      }
+
+      // ── Step 2: Tag-based fallback ──
       if (results.length === 0) {
         const tagSlugs = buildTagVariations(query);
-        console.log(`[polymarket-sync] Search fallback: trying tags [${tagSlugs.join(", ")}]`);
+        console.log(`[polymarket-sync] Search step 2: trying tags [${tagSlugs.join(", ")}]`);
         for (const tagSlug of tagSlugs) {
           try {
             const tagUrl = `${GAMMA_BASE}/events?tag=${encodeURIComponent(tagSlug)}&active=true&closed=false&limit=${limit}`;
@@ -679,6 +719,7 @@ Deno.serve(async (req) => {
             const futureTagEvents = tagEvents.filter(isFutureEvent);
             if (futureTagEvents.length > 0) {
               results = futureTagEvents;
+              discoveryMethod = "tag";
               console.log(`[polymarket-sync] Tag fallback "${tagSlug}" found ${results.length} events`);
               break;
             }
@@ -686,7 +727,31 @@ Deno.serve(async (req) => {
         }
       }
 
+      // ── Step 3: /public-search as final fallback ──
+      if (results.length === 0) {
+        const searchUrl = `${GAMMA_BASE}/public-search?q=${encodeURIComponent(query)}&limit=${limit}`;
+        console.log(`[polymarket-sync] Search step 3: /public-search fallback`);
+        const gammaRes = await fetch(searchUrl);
+        let rawResults: GammaEvent[] = [];
+        if (gammaRes.ok) {
+          const searchData = await gammaRes.json();
+          rawResults = searchData.events || [];
+        }
+        // Filter to future events only
+        results = rawResults.filter(isFutureEvent);
+        // For sports-like queries, prefer fixtures with "vs"
+        const fixtureResults = results.filter(ev => isActualFixture(ev.title));
+        if (fixtureResults.length > 0) {
+          results = fixtureResults;
+          discoveryMethod = "search_filtered";
+        } else {
+          discoveryMethod = "search";
+        }
+        console.log(`[polymarket-sync] Public search returned ${results.length} results for "${query}"`);
+      }
+
       return json({
+        discovery_method: discoveryMethod,
         results: results.map(e => ({
           id: e.id,
           title: e.title,
