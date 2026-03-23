@@ -87,6 +87,10 @@ function isAcceptableEvent(ev: GammaEvent): { accepted: boolean; reason: string 
     return { accepted: true, reason: "combat_card_event" };
   }
 
+  // Reject futures/outright/prop markets before binary fallback
+  const FUTURES_RE = /\b(who will .* (fight|face) next|top scorer|mvp|most valuable|champion at|will .* win the)\b|winner$/i;
+  if (FUTURES_RE.test(title)) return { accepted: false, reason: `futures_market: "${title}"` };
+
   // Accept events with binary (2-outcome) markets — these are inherently matchup markets
   // on Polymarket (e.g., "Team A" vs "Team B" outcomes) even if title doesn't contain "vs"
   const hasBinaryMarket = markets.some(m => {
@@ -103,31 +107,27 @@ function isAcceptableEvent(ev: GammaEvent): { accepted: boolean; reason: string 
 }
 
 function isDateEligible(ev: GammaEvent): { eligible: boolean; reason: string; missingDate: boolean } {
-  const now = Date.now();
+  // Cutoff = tomorrow 00:00 UTC — only show events from tomorrow onward
+  const tomorrow = new Date();
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  tomorrow.setUTCHours(0, 0, 0, 0);
+  const cutoff = tomorrow.getTime();
 
-  // Collect all available dates: event-level + market-level endDates
-  const candidates: number[] = [];
-  if (ev.endDate) { const ms = new Date(ev.endDate).getTime(); if (!isNaN(ms)) candidates.push(ms); }
-  if (ev.startDate) { const ms = new Date(ev.startDate).getTime(); if (!isNaN(ms)) candidates.push(ms); }
-  // Also check child market endDates (often the actual match time)
-  const markets: any[] = ev.markets || [];
-  for (const m of markets) {
-    if (m.endDate) { const ms = new Date(m.endDate).getTime(); if (!isNaN(ms)) candidates.push(ms); }
+  // Only use event-level dates — child market endDates are market expiry, not match time
+  const eventDates = [ev.endDate, ev.startDate]
+    .map(d => d ? new Date(d).getTime() : null)
+    .filter((ms): ms is number => ms !== null && !isNaN(ms));
+
+  if (eventDates.length === 0) {
+    return { eligible: false, reason: "no_event_date", missingDate: true };
   }
 
-  if (candidates.length === 0) {
-    // No dates at all — keep with warning
-    return { eligible: true, reason: "no_date_available", missingDate: true };
+  const best = Math.max(...eventDates);
+  if (best >= cutoff) {
+    return { eligible: true, reason: "future_event", missingDate: false };
   }
 
-  // Use the latest (max) date as "best date" — if it's in the future, the event is eligible
-  const bestDate = Math.max(...candidates);
-  if (bestDate > now) {
-    return { eligible: true, reason: "future_date", missingDate: false };
-  }
-
-  // All dates are in the past — reject regardless of active flag
-  return { eligible: false, reason: `past_date: ${new Date(bestDate).toISOString()}`, missingDate: false };
+  return { eligible: false, reason: `past_or_today: ${new Date(best).toISOString()}`, missingDate: false };
 }
 
 // ── Curated league/category config ──
