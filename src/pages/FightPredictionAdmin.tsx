@@ -387,6 +387,16 @@ export default function FightPredictionAdmin() {
     if (["dismissed", "rejected"].includes(e.status)) return "dismissed";
     if (e.status === "archived") return "archived";
     if (e.status === "draft") return "pending";
+
+    // Auto-archive past events that are fully settled or have no fights
+    const eventMs = e.event_date ? new Date(e.event_date).getTime() : null;
+    const isPast = eventMs != null && (Date.now() - eventMs) > 48 * 60 * 60 * 1000;
+    if (isPast) {
+      const ef = eventFights(e.id);
+      const fullySettled = ef.length === 0 || ef.every(f => ["settled", "refunds_complete", "cancelled"].includes(f.status));
+      if (fullySettled) return "archived";
+    }
+
     // For approved events, check fight states
     const ef = eventFights(e.id);
     if (ef.some(f => f.status === "live")) return "live";
