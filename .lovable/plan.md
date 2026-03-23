@@ -1,64 +1,71 @@
 
 
-## Fix: Only Show Future Events (Tomorrow+) & Block Futures Markets
+## Fix: Past Events Still Showing — Root Cause Found
 
 ### Problem
-Two issues persist:
-1. **Past/today events still appear** — `isDateEligible` uses `Math.max()` across ALL dates including child market `endDate` values. Futures markets have far-future market expiry dates (Dec 2026+), so past events with long-tail sub-markets pass the filter.
-2. **Futures/prop markets pass** — Events like "Who will X fight next?" or "FIFA World Cup Winner" have binary markets, so `isAcceptableEvent` accepts them via the `binary_market_detected` fallback.
 
-### Changes
+The screenshot shows FIFA Friendlies events from **Feb 26–27** (a month ago) still appearing in admin browse results. Telemetry confirms: 55 out of 110 events pass the filter. The "tomorrow" cutoff is not working.
 
-**File: `supabase/functions/polymarket-sync/index.ts`**
+### Root Cause
 
-#### 1. Rewrite `isDateEligible` (lines 105–131)
-- Only use **event-level** dates (`ev.endDate`, `ev.startDate`) — ignore child market `endDate` (those are market expiry, not match time).
-- Compute "tomorrow midnight UTC" as the cutoff instead of `Date.now()`.
-- If no event-level date exists → **reject** (hide undated, per user preference).
-- If best event-level date is before tomorrow → **reject**.
+`isDateEligible` uses `Math.max(ev.endDate, ev.startDate)`. On Polymarket, the event-level `endDate` is the **market resolution window** (often weeks/months after the match), NOT the match date. For a FIFA Friendly on Feb 27, the `startDate` is Feb 27 (correct) but `endDate` might be April 2026 (market expiry). `Math.max` picks the future `endDate`, so the past match passes.
+
+**The previous fix removed child market dates but kept event-level `endDate` — which suffers the same problem at the event level.**
+
+### Fix
+
+**File: `supabase/functions/polymarket-sync/index.ts` — rewrite `isDateEligible`**
+
+Change the logic to **prioritize `startDate`** (the actual match date):
+1. If `startDate` exists → use it as the match date. If it's before tomorrow → reject.
+2. Only fall back to `endDate` if `startDate` is missing.
+3. If neither exists → reject (hide undated).
 
 ```typescript
 function isDateEligible(ev: GammaEvent) {
-  // Tomorrow 00:00 UTC
   const tomorrow = new Date();
   tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
   tomorrow.setUTCHours(0, 0, 0, 0);
   const cutoff = tomorrow.getTime();
 
-  const eventDates = [ev.endDate, ev.startDate]
-    .map(d => d ? new Date(d).getTime() : null)
-    .filter((ms): ms is number => ms !== null && !isNaN(ms));
+  // startDate = actual match/event time on Polymarket
+  // endDate = market resolution window (can be weeks/months later)
+  // Always prefer startDate when available
+  const startMs = ev.startDate ? new Date(ev.startDate).getTime() : null;
+  const endMs = ev.endDate ? new Date(ev.endDate).getTime() : null;
 
-  if (eventDates.length === 0)
-    return { eligible: false, reason: "no_event_date", missingDate: true };
+  if (startMs && !isNaN(startMs)) {
+    if (startMs >= cutoff) return { eligible: true, reason: "future_start", missingDate: false };
+    return { eligible: false, reason: `past_start: ${ev.startDate}`, missingDate: false };
+  }
 
-  const best = Math.max(...eventDates);
-  if (best >= cutoff)
-    return { eligible: true, reason: "future_event", missingDate: false };
+  // No startDate — fall back to endDate (less reliable)
+  if (endMs && !isNaN(endMs)) {
+    if (endMs >= cutoff) return { eligible: true, reason: "future_end_no_start", missingDate: false };
+    return { eligible: false, reason: `past_end: ${ev.endDate}`, missingDate: false };
+  }
 
-  return { eligible: false, reason: `past_or_today: ${new Date(best).toISOString()}`, missingDate: false };
+  return { eligible: false, reason: "no_event_date", missingDate: true };
 }
 ```
 
-#### 2. Add futures title rejection in `isAcceptableEvent` (before binary market fallback, ~line 90)
-Add a regex check to reject common futures/outright/prop patterns:
+### Database Cleanup
 
-```typescript
-const FUTURES_RE = /\b(who will .* (fight|face) next|winner$|top scorer|mvp|most valuable|champion at|will .* win the)\b/i;
-if (FUTURES_RE.test(title)) return { accepted: false, reason: `futures_market: "${title}"` };
-```
+Archive the 7 stale approved Polymarket events (all past) and cancel their remaining locked/open fights:
 
-This goes right before the binary market fallback (line 90), so real fixtures with "vs" patterns still pass at line 76.
+1. **Update** `prediction_events` → set `status = 'archived'` for the 6 past Polymarket events (all except Floyd Mayweather which is Sep 2026)
+2. **Update** `prediction_fights` → set `status = 'cancelled'` for any remaining `open` or `locked` fights under those archived events
 
-#### 3. Lower futures badge threshold in admin UI
+Events to archive:
+- Club Atlético de Madrid vs. Real Sociedad (Mar 22)
+- Real Sociedad B vs. Granada CF (Mar 22)
+- UFC Fight Night x3 (Mar 22)
+- MLS Cup Winner 2026 (Feb 17 — futures)
+- 2026 FIFA World Cup Winner (Jul 2025 — futures)
 
-**File: `src/pages/FightPredictionAdmin.tsx`**
-- Change the futures warning badge from `≥ 20` markets to `≥ 10` markets.
+Floyd Mayweather vs. Pacquiao 2 (Sep 2026) stays approved.
 
-### Impact
-- Only events dated **tomorrow or later** appear in browse/search results.
-- Today's and yesterday's matches are filtered out.
-- Futures/prop markets ("Who will X fight next?", "World Cup Winner") are rejected by title pattern before the binary fallback can accept them.
-- Undated events are hidden entirely.
-- Real match fixtures with "vs"/"v"/"at" patterns and future dates continue to pass normally.
+### Files Modified
+- `supabase/functions/polymarket-sync/index.ts` — rewrite `isDateEligible` to prioritize `startDate`
+- Database: archive 7 past events + cancel their stale fights
 
