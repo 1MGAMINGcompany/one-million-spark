@@ -536,6 +536,34 @@ Deno.serve(async (req) => {
       return json({ settings: data });
     }
 
+    // ── Update Event Status (for pending_review → draft promotion) ──
+    if (action === "updateEventStatus") {
+      const { event_id, status } = body;
+      if (!event_id) return json({ error: "Missing event_id" }, 400);
+      if (!status) return json({ error: "Missing status" }, 400);
+      const allowedStatuses = ["draft", "approved", "pending_review", "dismissed", "archived"];
+      if (!allowedStatuses.includes(status)) return json({ error: `Invalid status: ${status}` }, 400);
+
+      const { data, error } = await supabase
+        .from("prediction_events")
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq("id", event_id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      await supabase.from("automation_logs").insert({
+        action: "update_event_status",
+        event_id,
+        admin_wallet: wallet,
+        source: "admin_manual",
+        details: { event_name: data.event_name, new_status: status },
+      });
+
+      return json({ event: data });
+    }
+
     // ── Event Cleanup Actions ──
 
     if (action === "dismissEvent") {
