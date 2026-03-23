@@ -20,6 +20,15 @@ const HARD_EXCLUDE_KEYWORDS = [
   "spread",
   "moneyline alt",
 ];
+const PROP_KEYWORDS = [
+  "winning method",
+  "method of victory",
+  "total rounds",
+  "spread",
+  "moneyline alt",
+  "over/under",
+  "handicap",
+];
 const POLITICS_KEYWORDS = [
   "election", "president", "congress", "senate", "vote",
   "democrat", "republican", "political", "legislation",
