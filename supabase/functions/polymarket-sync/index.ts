@@ -793,13 +793,169 @@ Deno.serve(async (req) => {
       const { url } = body;
       if (!url || typeof url !== "string") return json({ error: "Missing url" }, 400);
 
-      let slug = url.trim();
-      slug = slug.split("?")[0].split("#")[0];
-      const eventMatch = slug.match(/polymarket\.com\/event\/([^/]+)/);
+      let rawUrl = url.trim();
+      rawUrl = rawUrl.split("?")[0].split("#")[0];
+
+      // ── Detect URL type ──
+      const eventMatch = rawUrl.match(/polymarket\.com\/event\/([^/]+)/);
+      const sportsMatch = rawUrl.match(/polymarket\.com\/sports\/([^/]+)/);
+
+      // ── Sports/league URL → bulk import via tag ──
+      if (sportsMatch) {
+        const sportSlug = sportsMatch[1];
+        console.log(`[polymarket-sync] import_by_url: sports URL detected, slug="${sportSlug}"`);
+
+        const tagSlugs = buildTagVariations(sportSlug);
+        let allEvents: GammaEvent[] = [];
+
+        // Try tag-based discovery
+        for (const tagSlug of tagSlugs) {
+          try {
+            const tagUrl = `${GAMMA_BASE}/events?tag=${encodeURIComponent(tagSlug)}&active=true&closed=false&limit=${limit}`;
+            console.log(`[polymarket-sync] Trying tag: ${tagSlug}`);
+            const tagRes = await fetch(tagUrl);
+            if (!tagRes.ok) continue;
+            const tagData = await tagRes.json();
+            const tagEvents: GammaEvent[] = Array.isArray(tagData) ? tagData : [];
+            if (tagEvents.length > 0) {
+              allEvents = tagEvents.filter(isFutureEvent);
+              console.log(`[polymarket-sync] Tag "${tagSlug}" returned ${allEvents.length} future events`);
+              break;
+            }
+          } catch { continue; }
+        }
+
+        // Also try series-based lookup via /sports endpoint
+        if (allEvents.length === 0) {
+          const allSeries = await fetchSportsSeries();
+          const matchedSeries = allSeries.filter(s =>
+            s.sport.toLowerCase().includes(sportSlug.replace(/-/g, "").toLowerCase()) ||
+            sportSlug.replace(/-/g, "").toLowerCase().includes(s.sport.toLowerCase())
+          );
+          for (const s of matchedSeries) {
+            const events = await fetchSeriesEvents(s.series, 100);
+            const future = events.filter(isFutureEvent);
+            allEvents.push(...future);
+          }
+          console.log(`[polymarket-sync] Series fallback found ${allEvents.length} events`);
+        }
+
+        if (allEvents.length === 0) {
+          return json({ error: `No active events found for sport "${sportSlug}". Try pasting a specific event URL instead.` }, 404);
+        }
+
+        // Bulk import all found events
+        let totalImported = 0;
+        let eventsProcessed = 0;
+        const seen = new Set<string>();
+
+        for (const gEvent of allEvents) {
+          if (seen.has(String(gEvent.id))) continue;
+          seen.add(String(gEvent.id));
+          if (!gEvent.markets || gEvent.markets.length === 0) continue;
+
+          // Upsert event
+          const { data: existingEvt } = await supabase
+            .from("prediction_events")
+            .select("id")
+            .eq("polymarket_event_id", String(gEvent.id))
+            .maybeSingle();
+
+          let eventId: string;
+          if (existingEvt) {
+            eventId = existingEvt.id;
+          } else {
+            const { data: newEvt, error } = await supabase
+              .from("prediction_events")
+              .insert({
+                event_name: gEvent.title,
+                polymarket_event_id: String(gEvent.id),
+                polymarket_slug: gEvent.slug,
+                event_date: gEvent.startDate || gEvent.endDate || null,
+                source: "polymarket",
+                source_provider: "polymarket",
+                source_event_id: `pm_${gEvent.id}`,
+                status: "draft",
+              })
+              .select("id")
+              .single();
+            if (error) continue;
+            eventId = newEvt!.id;
+          }
+
+          // Upsert markets
+          for (const market of gEvent.markets) {
+            let outcomes: string[], tokenIds: string[], outcomePrices: string[];
+            try {
+              outcomes = JSON.parse(market.outcomes || "[]");
+              outcomePrices = JSON.parse(market.outcomePrices || "[]");
+              tokenIds = JSON.parse(market.clobTokenIds || "[]");
+            } catch { continue; }
+            if (outcomes.length < 2 || tokenIds.length < 2) continue;
+
+            const { data: existingFight } = await supabase
+              .from("prediction_fights")
+              .select("id")
+              .eq("polymarket_market_id", market.id)
+              .maybeSingle();
+
+            if (existingFight) {
+              await supabase.from("prediction_fights").update({
+                price_a: parseFloat(outcomePrices[0] || "0"),
+                price_b: parseFloat(outcomePrices[1] || "0"),
+                polymarket_active: market.active && !market.closed,
+                polymarket_last_synced_at: new Date().toISOString(),
+              }).eq("id", existingFight.id);
+            } else {
+              await supabase.from("prediction_fights").insert({
+                title: market.groupItemTitle || market.question,
+                fighter_a_name: outcomes[0],
+                fighter_b_name: outcomes[1],
+                event_name: gEvent.title,
+                event_id: eventId,
+                source: "polymarket",
+                commission_bps: 200,
+                polymarket_market_id: market.id,
+                polymarket_condition_id: market.conditionId,
+                polymarket_slug: market.slug,
+                polymarket_outcome_a_token: tokenIds[0],
+                polymarket_outcome_b_token: tokenIds[1],
+                polymarket_active: market.active && !market.closed,
+                polymarket_end_date: market.endDate || null,
+                polymarket_question: market.question,
+                polymarket_last_synced_at: new Date().toISOString(),
+                price_a: parseFloat(outcomePrices[0] || "0"),
+                price_b: parseFloat(outcomePrices[1] || "0"),
+                status: "open",
+              });
+            }
+            totalImported++;
+          }
+          eventsProcessed++;
+        }
+
+        await supabase.from("automation_logs").insert({
+          action: "polymarket_import_by_url_sports",
+          source: "polymarket-sync",
+          admin_wallet: wallet || null,
+          details: { url, sport_slug: sportSlug, events_processed: eventsProcessed, markets_imported: totalImported },
+        });
+
+        return json({
+          success: true,
+          bulk: true,
+          sport_slug: sportSlug,
+          events_processed: eventsProcessed,
+          imported: totalImported,
+        });
+      }
+
+      // ── Single event URL (/event/{slug} or plain slug) ──
+      let slug: string;
       if (eventMatch) {
         slug = eventMatch[1];
       } else {
-        slug = slug.replace(/^\/+|\/+$/g, "");
+        slug = rawUrl.replace(/^\/+|\/+$/g, "");
       }
 
       if (!slug) return json({ error: "Could not parse event slug from URL" }, 400);
