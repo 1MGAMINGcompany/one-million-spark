@@ -2350,7 +2350,11 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      toast.success(`Imported "${title}" — ${data.imported} market(s)`);
+      if (data.warning) {
+        toast.warning(data.warning);
+      } else {
+        toast.success(`Imported "${title}" — ${data.imported} market(s)`);
+      }
       onComplete();
       setSearchResults(prev => prev?.map(r =>
         String(r.id) === String(pmEventId) ? { ...r, imported: true } : r
