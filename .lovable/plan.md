@@ -1,43 +1,45 @@
 
-1. Fix the blocker first: `supabase/functions/polymarket-sync/index.ts` is not booting at all. The edge logs show a compile-time failure:
-   - `Identifier 'results' has already been declared`
-   - This explains the UI error “Failed to send a request to the Edge Function” for every Polymarket admin button.
 
-2. Remove the duplicate `results` declarations in the Polymarket sync handler.
-   - In the URL preview branch, `let results: GammaEvent[] = []` is declared, then later `const { accepted: results, ... } = filterFixtures(...)` redeclares it in the same scope.
-   - Audit the other action branches too and standardize naming so preview state and filtered output never collide.
+## Two Issues to Fix
 
-3. Harden the edge function so admin actions fail gracefully instead of looking like transport failures.
-   - Keep CORS headers on every response path.
-   - Return explicit error payloads from `catch` using `err.message || err.toString() || JSON.stringify(err)`.
-   - This will make future failures visible in the admin UI instead of appearing as generic edge-function request errors.
+### Issue 1: Browse shows past events instead of future-only
 
-4. After the compile fix, correct the post-fetch filtering that is hiding valid FIFA Friendlies and other sports data.
-   - Keep tag/event-based retrieval as-is.
-   - Update fixture detection to inspect all relevant payload fields: event title, slug, question, and market question/title fields.
-   - Separate browse-mode filtering from exact-search filtering so league collections are not filtered with exact-match rules.
-   - Keep past-event rejection, but do not reject missing `startDate`; show those with a warning badge.
+**Root cause**: `isDateEligible()` in `polymarket-sync/index.ts` (line 121-127) keeps events with past `startDate` if Polymarket still marks them `active=true`. Polymarket doesn't flip `active` to `false` immediately after a match ends, so completed FIFA Friendlies from Feb/Mar still pass through.
 
-5. Relax browse-mode safety filters to match the actual Polymarket payload structure.
-   - Exclude only clear non-core items: `More Markets`, `Winning Method`, `method of victory`, `total rounds`, `spread`, `moneyline alt`.
-   - Do not reject a whole event just because the top-level title is not a clean `A vs B` string if child markets contain the matchup.
-   - Preserve sports-only scope so politics/economy items still never appear in this admin flow.
+**Fix in `polymarket-sync/index.ts`**:
+- For **browse_league** and **url_preview** modes, apply a strict date cutoff: if the event's best available date (`endDate` or `startDate`) is in the past, reject it regardless of `active` flag.
+- Remove the `past_start_but_active` loophole from `isDateEligible`. An event with a past date should only be kept if it has NO date at all (show with warning badge).
+- Updated logic:
+  - `endDate` exists and is in the past → reject
+  - `startDate` exists and is in the past AND no future `endDate` → reject
+  - No dates at all → keep with warning
+  - Future date → keep
 
-6. Improve debug visibility in the admin panel.
-   - Keep the temporary “Show raw results” toggle.
-   - When `raw_results > 0` and `filtered_results = 0`, always show:
-     - raw sample payloads
-     - rejection reasons summary
-     - the message: “Data found from Polymarket, but local filters rejected all results.”
-   - This will make FIFA Friendlies debugging straightforward.
+### Issue 2: 3 approved Polymarket events don't appear on the predictions page
 
-7. Verify all 3 admin modes after the fix.
-   - URL Import: `/event/{slug}`, `/sports/{league}/games`, `/sports/{league}/{event}`
-   - Browse League: especially FIFA Friendlies and Boxing
-   - Exact Search: exact matchup names only, with league/category queries redirected to Browse League
+**Root cause**: The 3 events you approved today have zero `open` fights:
+- **Club Atlético de Madrid vs. Real Sociedad** — 3 fights, all `cancelled` (event date was Mar 22, yesterday — auto-cancelled by the automation stack)
+- **2026 FIFA World Cup Winner** — 60 fights, all `cancelled` or `locked` (futures market, automation locked/cancelled sub-markets)
+- **MLS Cup Winner 2026** — 31 fights, all `cancelled` or `locked`
 
-8. Expected outcome after implementation:
-   - Buttons stop throwing edge-function request failures.
-   - FIFA Friendlies browse returns preview cards instead of zeroing out 110 raw results.
-   - Boxing and exact search return valid preview candidates when Polymarket has matching sports events.
-   - Imports continue landing in `pending_review` only.
+The predictions page groups fights by event. When ALL fights in a group are `cancelled`/`locked`, the group is classified as "past" (line 289-291 in `FightPredictions.tsx`) and goes into the collapsed Past Events section.
+
+**Fix**: This is a data issue, not a code bug. The events were correctly auto-managed:
+- Atletico Madrid match already happened yesterday — its fights should stay cancelled
+- FIFA World Cup Winner and MLS Cup Winner are **futures/outright** markets (60+ sub-markets like "will Brazil win?"), not individual match fixtures. The automation stack locked/cancelled them because they're not standard matchup markets
+
+**Action**: No code change needed for this. Instead:
+1. The admin should import **actual upcoming match fixtures** (e.g., a specific La Liga game next week) rather than futures markets
+2. For the FIFA World Cup and MLS Cup futures that were already approved — these can be cleaned up in the admin panel (dismiss/archive them)
+3. I'll add a visible note in the admin UI when importing futures/outright markets (60+ sub-markets) warning that these aren't standard fixtures
+
+### Implementation
+
+**File: `supabase/functions/polymarket-sync/index.ts`**
+- Rewrite `isDateEligible` to strictly reject past events: if the best date (endDate > startDate > market endDate) is before now, reject
+- Remove the `past_start_but_active` exception
+
+**File: `src/pages/FightPredictionAdmin.tsx`**
+- Add a warning badge on preview cards with 20+ markets: "⚠️ Futures market — not a single fixture"
+- Ensure the "Past" badge logic matches the stricter date filter so admins don't see events they can't usefully import
+
