@@ -167,34 +167,56 @@ const AppContent = () => {
   );
 };
 
-const App = () => (
-  <AppErrorBoundary>
-    <PrivyProviderWrapper>
-      <QueryClientProvider client={queryClient}>
-        <SolanaProvider>
-          <TxLockProvider>
-            <LoadingProvider>
-              <AudioProvider>
-                <SoundProvider>
-                  <TooltipProvider>
-                    <Toaster />
-                    <Sonner />
-                    <PyramidLoader />
-                    <GoldenParticles />
-                    <AgeConfirmation />
-                    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-                      <GlobalBackgroundMusic />
-                      <AppContent />
-                    </BrowserRouter>
-                  </TooltipProvider>
-                </SoundProvider>
-              </AudioProvider>
-            </LoadingProvider>
-          </TxLockProvider>
-        </SolanaProvider>
-      </QueryClientProvider>
-    </PrivyProviderWrapper>
-  </AppErrorBoundary>
-);
+const App = () => {
+  // 1mg.live platform or operator subdomain — lightweight shell (no Solana/audio/game providers)
+  if (domainContext.type === "platform" || domainContext.type === "operator") {
+    return (
+      <AppErrorBoundary>
+        <PrivyProviderWrapper>
+          <QueryClientProvider client={queryClient}>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                <PlatformApp context={domainContext} />
+              </BrowserRouter>
+            </TooltipProvider>
+          </QueryClientProvider>
+        </PrivyProviderWrapper>
+      </AppErrorBoundary>
+    );
+  }
+
+  // Flagship app (1mgaming.com / localhost / preview)
+  return (
+    <AppErrorBoundary>
+      <PrivyProviderWrapper>
+        <QueryClientProvider client={queryClient}>
+          <SolanaProvider>
+            <TxLockProvider>
+              <LoadingProvider>
+                <AudioProvider>
+                  <SoundProvider>
+                    <TooltipProvider>
+                      <Toaster />
+                      <Sonner />
+                      <PyramidLoader />
+                      <GoldenParticles />
+                      <AgeConfirmation />
+                      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                        <GlobalBackgroundMusic />
+                        <AppContent />
+                      </BrowserRouter>
+                    </TooltipProvider>
+                  </SoundProvider>
+                </AudioProvider>
+              </LoadingProvider>
+            </TxLockProvider>
+          </SolanaProvider>
+        </QueryClientProvider>
+      </PrivyProviderWrapper>
+    </AppErrorBoundary>
+  );
+};
 
 export default App;
