@@ -5,6 +5,7 @@ import LandingPage from "./LandingPage";
 import OperatorOnboarding from "./OperatorOnboarding";
 import OperatorDashboard from "./OperatorDashboard";
 import OperatorApp from "./OperatorApp";
+import PurchasePage from "./PurchasePage";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { ready, authenticated } = usePrivy();
@@ -25,6 +26,7 @@ export default function PlatformApp({ context }: PlatformAppProps) {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
+      <Route path="/purchase" element={<RequireAuth><PurchasePage /></RequireAuth>} />
       <Route path="/onboarding" element={<RequireAuth><OperatorOnboarding /></RequireAuth>} />
       <Route path="/dashboard" element={<RequireAuth><OperatorDashboard /></RequireAuth>} />
       <Route path="/terms-of-service" element={<LandingPage />} />
