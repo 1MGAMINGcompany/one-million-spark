@@ -8,6 +8,8 @@ import {
   Trophy,
   Star,
   ChevronRight,
+  LogOut,
+  Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
@@ -35,7 +37,15 @@ const STEPS = [
 
 export default function LandingPage() {
   const navigate = useNavigate();
-  const { login, authenticated } = usePrivy();
+  const { ready, authenticated, login, logout, user } = usePrivy();
+
+  const evmWallet = user?.linkedAccounts?.find(
+    (a: any) => a.type === "wallet" && a.chainType === "ethereum"
+  ) as any;
+  const walletAddress = evmWallet?.address;
+  const shortAddress = walletAddress
+    ? `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`
+    : null;
 
   const handleGetStarted = () => {
     if (authenticated) {
@@ -54,13 +64,41 @@ export default function LandingPage() {
             <span className="text-blue-400">1MG</span>
             <span className="text-white/60">.live</span>
           </div>
-          <Button
-            onClick={handleGetStarted}
-            size="sm"
-            className="bg-blue-600 hover:bg-blue-500 text-white border-0"
-          >
-            {authenticated ? "Dashboard" : "Get Started"}
-          </Button>
+          <div className="flex items-center gap-3">
+            {ready && authenticated && shortAddress ? (
+              <>
+                <Button
+                  onClick={() => navigate("/dashboard")}
+                  variant="ghost"
+                  size="sm"
+                  className="text-white/70 hover:text-white hover:bg-white/5"
+                >
+                  Dashboard
+                </Button>
+                <div className="flex items-center gap-1.5 text-sm text-white/70 bg-white/[0.05] px-3 py-1.5 rounded-lg border border-white/10">
+                  <Wallet size={14} className="text-blue-400" />
+                  <span className="font-mono text-xs">{shortAddress}</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={logout}
+                  className="h-8 w-8 text-white/40 hover:text-red-400"
+                  title="Sign Out"
+                >
+                  <LogOut size={16} />
+                </Button>
+              </>
+            ) : ready ? (
+              <Button
+                onClick={login}
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-500 text-white border-0"
+              >
+                Sign In
+              </Button>
+            ) : null}
+          </div>
         </div>
       </nav>
 

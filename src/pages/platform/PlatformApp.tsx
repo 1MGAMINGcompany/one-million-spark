@@ -1,29 +1,35 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
+import { usePrivy } from "@privy-io/react-auth";
 import type { DomainContext } from "@/lib/domainDetection";
 import LandingPage from "./LandingPage";
 import OperatorOnboarding from "./OperatorOnboarding";
 import OperatorDashboard from "./OperatorDashboard";
 import OperatorApp from "./OperatorApp";
 
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const { ready, authenticated } = usePrivy();
+  if (!ready) return null;
+  if (!authenticated) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
 interface PlatformAppProps {
   context: DomainContext;
 }
 
 export default function PlatformApp({ context }: PlatformAppProps) {
-  // Operator subdomain → branded app
   if (context.type === "operator") {
     return <OperatorApp subdomain={context.subdomain} />;
   }
 
-  // Platform landing + operator management routes
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
-      <Route path="/onboarding" element={<OperatorOnboarding />} />
-      <Route path="/dashboard" element={<OperatorDashboard />} />
+      <Route path="/onboarding" element={<RequireAuth><OperatorOnboarding /></RequireAuth>} />
+      <Route path="/dashboard" element={<RequireAuth><OperatorDashboard /></RequireAuth>} />
       <Route path="/terms-of-service" element={<LandingPage />} />
       <Route path="/privacy-policy" element={<LandingPage />} />
-      <Route path="*" element={<LandingPage />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
