@@ -55,9 +55,14 @@ import AIAgentHelperOverlay from "./components/AIAgentHelperOverlay";
 import { isDebugEnabled } from "@/lib/debugLog";
 import { useReferralCapture } from "@/hooks/useReferralCapture";
 import { useWallet } from "@/hooks/useWallet";
+import { detectDomain } from "@/lib/domainDetection";
+import PlatformApp from "@/pages/platform/PlatformApp";
 
 // DEV-ONLY: Import to auto-run config check on app load
 import "./lib/devConfigCheck";
+
+// Detect domain context once at module level
+const domainContext = detectDomain();
 
 // Create QueryClient instance outside component to prevent recreation on re-renders
 const queryClient = new QueryClient({
