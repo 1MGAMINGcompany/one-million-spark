@@ -646,6 +646,133 @@ export type Database = {
         }
         Relationships: []
       }
+      operator_events: {
+        Row: {
+          created_at: string
+          event_date: string | null
+          id: string
+          image_url: string | null
+          is_featured: boolean | null
+          operator_id: string
+          sport: string | null
+          status: string
+          team_a: string
+          team_b: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          event_date?: string | null
+          id?: string
+          image_url?: string | null
+          is_featured?: boolean | null
+          operator_id: string
+          sport?: string | null
+          status?: string
+          team_a: string
+          team_b: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          event_date?: string | null
+          id?: string
+          image_url?: string | null
+          is_featured?: boolean | null
+          operator_id?: string
+          sport?: string | null
+          status?: string
+          team_a?: string
+          team_b?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "operator_events_operator_id_fkey"
+            columns: ["operator_id"]
+            isOneToOne: false
+            referencedRelation: "operators"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      operator_settings: {
+        Row: {
+          allowed_sports: string[] | null
+          featured_event_ids: string[] | null
+          homepage_layout: string | null
+          id: string
+          operator_id: string
+          show_platform_events: boolean | null
+          show_polymarket_events: boolean | null
+        }
+        Insert: {
+          allowed_sports?: string[] | null
+          featured_event_ids?: string[] | null
+          homepage_layout?: string | null
+          id?: string
+          operator_id: string
+          show_platform_events?: boolean | null
+          show_polymarket_events?: boolean | null
+        }
+        Update: {
+          allowed_sports?: string[] | null
+          featured_event_ids?: string[] | null
+          homepage_layout?: string | null
+          id?: string
+          operator_id?: string
+          show_platform_events?: boolean | null
+          show_polymarket_events?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "operator_settings_operator_id_fkey"
+            columns: ["operator_id"]
+            isOneToOne: true
+            referencedRelation: "operators"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      operators: {
+        Row: {
+          brand_name: string
+          created_at: string
+          fee_percent: number
+          id: string
+          logo_url: string | null
+          subdomain: string
+          theme: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          brand_name: string
+          created_at?: string
+          fee_percent?: number
+          id?: string
+          logo_url?: string | null
+          subdomain: string
+          theme?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          brand_name?: string
+          created_at?: string
+          fee_percent?: number
+          id?: string
+          logo_url?: string | null
+          subdomain?: string
+          theme?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       page_visits: {
         Row: {
           entered_at: string
