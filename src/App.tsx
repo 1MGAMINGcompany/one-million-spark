@@ -55,9 +55,14 @@ import AIAgentHelperOverlay from "./components/AIAgentHelperOverlay";
 import { isDebugEnabled } from "@/lib/debugLog";
 import { useReferralCapture } from "@/hooks/useReferralCapture";
 import { useWallet } from "@/hooks/useWallet";
+import { detectDomain } from "@/lib/domainDetection";
+import PlatformApp from "@/pages/platform/PlatformApp";
 
 // DEV-ONLY: Import to auto-run config check on app load
 import "./lib/devConfigCheck";
+
+// Detect domain context once at module level
+const domainContext = detectDomain();
 
 // Create QueryClient instance outside component to prevent recreation on re-renders
 const queryClient = new QueryClient({
@@ -162,34 +167,56 @@ const AppContent = () => {
   );
 };
 
-const App = () => (
-  <AppErrorBoundary>
-    <PrivyProviderWrapper>
-      <QueryClientProvider client={queryClient}>
-        <SolanaProvider>
-          <TxLockProvider>
-            <LoadingProvider>
-              <AudioProvider>
-                <SoundProvider>
-                  <TooltipProvider>
-                    <Toaster />
-                    <Sonner />
-                    <PyramidLoader />
-                    <GoldenParticles />
-                    <AgeConfirmation />
-                    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-                      <GlobalBackgroundMusic />
-                      <AppContent />
-                    </BrowserRouter>
-                  </TooltipProvider>
-                </SoundProvider>
-              </AudioProvider>
-            </LoadingProvider>
-          </TxLockProvider>
-        </SolanaProvider>
-      </QueryClientProvider>
-    </PrivyProviderWrapper>
-  </AppErrorBoundary>
-);
+const App = () => {
+  // 1mg.live platform or operator subdomain — lightweight shell (no Solana/audio/game providers)
+  if (domainContext.type === "platform" || domainContext.type === "operator") {
+    return (
+      <AppErrorBoundary>
+        <PrivyProviderWrapper>
+          <QueryClientProvider client={queryClient}>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                <PlatformApp context={domainContext} />
+              </BrowserRouter>
+            </TooltipProvider>
+          </QueryClientProvider>
+        </PrivyProviderWrapper>
+      </AppErrorBoundary>
+    );
+  }
+
+  // Flagship app (1mgaming.com / localhost / preview)
+  return (
+    <AppErrorBoundary>
+      <PrivyProviderWrapper>
+        <QueryClientProvider client={queryClient}>
+          <SolanaProvider>
+            <TxLockProvider>
+              <LoadingProvider>
+                <AudioProvider>
+                  <SoundProvider>
+                    <TooltipProvider>
+                      <Toaster />
+                      <Sonner />
+                      <PyramidLoader />
+                      <GoldenParticles />
+                      <AgeConfirmation />
+                      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                        <GlobalBackgroundMusic />
+                        <AppContent />
+                      </BrowserRouter>
+                    </TooltipProvider>
+                  </SoundProvider>
+                </AudioProvider>
+              </LoadingProvider>
+            </TxLockProvider>
+          </SolanaProvider>
+        </QueryClientProvider>
+      </PrivyProviderWrapper>
+    </AppErrorBoundary>
+  );
+};
 
 export default App;
