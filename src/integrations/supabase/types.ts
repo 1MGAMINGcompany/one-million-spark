@@ -744,6 +744,7 @@ export type Database = {
           fee_percent: number
           id: string
           logo_url: string | null
+          status: string
           subdomain: string
           theme: string
           updated_at: string
@@ -755,6 +756,7 @@ export type Database = {
           fee_percent?: number
           id?: string
           logo_url?: string | null
+          status?: string
           subdomain: string
           theme?: string
           updated_at?: string
@@ -766,6 +768,7 @@ export type Database = {
           fee_percent?: number
           id?: string
           logo_url?: string | null
+          status?: string
           subdomain?: string
           theme?: string
           updated_at?: string
