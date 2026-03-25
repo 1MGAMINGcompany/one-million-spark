@@ -110,14 +110,14 @@ export function usePolymarketSession(): PolymarketSessionState {
       const siweMessage = `${SIWE_MESSAGE_PREFIX}\n\nWallet: ${walletAddress}\nTimestamp: ${timestamp}\nChain: Polygon (137)`;
 
       // Step 3: Sign the message with user's Privy wallet
-      // Using the Privy signMessage which works with embedded wallets
-      const { signature } = await signMessage(
+      const result = await signMessage(
         { message: siweMessage },
         { address: walletAddress as `0x${string}` },
       );
 
+      const signature = typeof result === "string" ? result : result?.signature;
       if (!signature) {
-        throw new Error("Signature was empty");
+        throw new Error("Signature was empty or user rejected");
       }
 
       // Step 4: Send to backend for full setup
