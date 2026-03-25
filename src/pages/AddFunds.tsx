@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { usePrivy, useFundWallet } from "@privy-io/react-auth";
+import { usePrivy, useFundWallet, useSendTransaction } from "@privy-io/react-auth";
 import { useLogin } from "@privy-io/react-auth";
+import { polygon } from "viem/chains";
 import {
   CreditCard,
   Shield,
