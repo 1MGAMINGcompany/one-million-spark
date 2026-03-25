@@ -441,6 +441,148 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ══════════════════════════════════════════════════
+    // ACTION: withdraw — Move USDC.e from derived wallet back to user
+    // ══════════════════════════════════════════════════
+    if (action === "withdraw") {
+      const { data: session } = await supabase
+        .from("polymarket_user_sessions")
+        .select("pm_trading_key, safe_address, pm_derived_address, status")
+        .eq("wallet", normalizedWallet)
+        .maybeSingle();
+
+      if (!session || !session.pm_trading_key) {
+        return json({ error: "No trading wallet found" }, 404);
+      }
+
+      const tradingAccount = privateKeyToAccount(session.pm_trading_key as `0x${string}`);
+      const sourceAddress = session.safe_address || tradingAccount.address;
+
+      // Read USDC.e balance of the derived wallet
+      const USDC_E_CONTRACT = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
+      const balanceSelector = "0x70a08231";
+      const paddedAddr = sourceAddress.slice(2).toLowerCase().padStart(64, "0");
+      const balCallData = balanceSelector + paddedAddr;
+
+      let balanceRaw = 0n;
+      const rpcs = [
+        "https://polygon-bor-rpc.publicnode.com",
+        "https://polygon.drpc.org",
+        "https://rpc.ankr.com/polygon",
+      ];
+
+      for (const rpc of rpcs) {
+        try {
+          const res = await fetch(rpc, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              jsonrpc: "2.0", id: 1,
+              method: "eth_call",
+              params: [{ to: USDC_E_CONTRACT, data: balCallData }, "latest"],
+            }),
+          });
+          if (!res.ok) continue;
+          const data = await res.json();
+          if (data.result) {
+            balanceRaw = BigInt(data.result);
+            break;
+          }
+        } catch { continue; }
+      }
+
+      if (balanceRaw <= 0n) {
+        return json({ success: true, withdrawn: 0, message: "No balance to withdraw" });
+      }
+
+      // Transfer USDC.e from derived EOA → user's Privy wallet
+      // The derived key signs this directly (no relayer needed)
+      try {
+        const transferAbi = parseAbi(["function transfer(address to, uint256 amount) returns (bool)"]);
+        const txData = encodeFunctionData({
+          abi: transferAbi,
+          functionName: "transfer",
+          args: [normalizedWallet as `0x${string}`, balanceRaw],
+        });
+
+        // Find working RPC
+        let workingRpc = rpcs[0];
+        let gasPrice = 30_000_000_000n;
+        let nonce = 0;
+
+        for (const rpc of rpcs) {
+          try {
+            const [gpRes, ncRes] = await Promise.all([
+              fetch(rpc, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_gasPrice", params: [] }),
+              }),
+              fetch(rpc, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "eth_getTransactionCount", params: [tradingAccount.address, "latest"] }),
+              }),
+            ]);
+            if (gpRes.ok && ncRes.ok) {
+              const gpData = await gpRes.json();
+              const ncData = await ncRes.json();
+              if (gpData.result && ncData.result) {
+                gasPrice = BigInt(gpData.result);
+                nonce = Number(BigInt(ncData.result));
+                workingRpc = rpc;
+                break;
+              }
+            }
+          } catch { continue; }
+        }
+
+        const walletClient = createWalletClient({
+          account: tradingAccount,
+          chain: polygon,
+          transport: http(workingRpc),
+        });
+
+        const txHash = await walletClient.sendTransaction({
+          to: USDC_E_CONTRACT as `0x${string}`,
+          data: txData,
+          gas: 100_000n,
+          gasPrice: gasPrice * 12n / 10n,
+          nonce,
+          value: 0n,
+        });
+
+        const withdrawnUsdc = Number(balanceRaw) / 1e6;
+
+        await supabase.from("automation_logs").insert({
+          action: "polymarket_withdraw",
+          source: "polymarket-user-setup",
+          details: {
+            wallet: normalizedWallet,
+            derived_address: sourceAddress,
+            amount_usdc: withdrawnUsdc,
+            tx_hash: txHash,
+          },
+        });
+
+        console.log(`[polymarket-user-setup] Withdrawal: ${withdrawnUsdc} USDC.e from ${sourceAddress} → ${normalizedWallet}, tx=${txHash}`);
+
+        return json({
+          success: true,
+          withdrawn_usdc: withdrawnUsdc,
+          tx_hash: txHash,
+          from: sourceAddress,
+          to: normalizedWallet,
+        });
+      } catch (err) {
+        console.error("[polymarket-user-setup] Withdrawal failed:", err);
+        return json({
+          error: "Withdrawal failed",
+          detail: err instanceof Error ? err.message : String(err),
+        }, 500);
+      }
+    }
+
     return json({ error: "Unknown action" }, 400);
   } catch (err) {
     console.error("[polymarket-user-setup] Error:", err);
