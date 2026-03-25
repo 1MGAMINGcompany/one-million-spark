@@ -1,9 +1,12 @@
 /**
- * swap-to-usdce — Uses 0x Swap API to convert Native USDC → USDC.e on Polygon.
+ * swap-to-usdce — Uses 0x Swap API v1 to convert Native USDC → USDC.e on Polygon.
  *
  * Actions:
- *   quote  — get a swap quote (price + calldata)
+ *   quote  — get a swap quote (price + calldata + allowanceTarget)
  *   price  — lighter price-only check
+ *
+ * Uses v1 endpoint (allowance-based) instead of permit2 for simplicity.
+ * Client must approve `allowanceTarget` for Native USDC before executing the swap tx.
  */
 
 const corsHeaders = {
@@ -16,10 +19,9 @@ const USDC_NATIVE = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359";
 const USDC_BRIDGED = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
 const CHAIN_ID = 137;
 
-/** Safely parse a fetch response as JSON, returning null + logging on failure */
 async function safeJsonParse(res: Response, label: string): Promise<{ data: any; raw: string } | null> {
   const raw = await res.text();
-  console.log(`[swap-to-usdce] ${label} response status:`, res.status, "body:", raw.slice(0, 200));
+  console.log(`[swap-to-usdce] ${label} response status:`, res.status, "body:", raw.slice(0, 300));
   try {
     return { data: JSON.parse(raw), raw };
   } catch {
@@ -63,47 +65,17 @@ Deno.serve(async (req) => {
         taker: wallet_address,
       });
 
-      // Try permit2 endpoint first
-      const permit2Url = `https://api.0x.org/swap/permit2/quote?${params}`;
-      console.log("[swap-to-usdce] 0x request:", permit2Url);
+      // Use v1 allowance-based endpoint (simpler, no permit2 needed)
+      const url = `https://api.0x.org/swap/allowance-holder/quote?${params}`;
+      console.log("[swap-to-usdce] 0x request:", url);
 
-      const res = await fetch(permit2Url, { headers: apiHeaders });
-      const parsed = await safeJsonParse(res, "permit2/quote");
+      const res = await fetch(url, { headers: apiHeaders });
+      const parsed = await safeJsonParse(res, "allowance-holder/quote");
 
       if (!parsed) {
-        // Non-JSON response — try v1 fallback for diagnostics
-        const v1Url = `https://api.0x.org/swap/v1/quote?${params}`;
-        console.log("[swap-to-usdce] Trying v1 fallback:", v1Url);
-        const v1Res = await fetch(v1Url, { headers: apiHeaders });
-        const v1Parsed = await safeJsonParse(v1Res, "v1/quote");
-
-        if (!v1Parsed) {
-          return new Response(
-            JSON.stringify({ error: "Swap service unavailable", details: "0x returned non-JSON on both endpoints" }),
-            { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-
-        if (!v1Res.ok) {
-          return new Response(
-            JSON.stringify({ error: v1Parsed.data?.reason || "Quote failed (v1 fallback)", details: v1Parsed.data }),
-            { status: v1Res.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-
-        // v1 succeeded — return its data
-        const d = v1Parsed.data;
         return new Response(
-          JSON.stringify({
-            buyAmount: d.buyAmount,
-            buyAmountFormatted: (Number(d.buyAmount) / 1e6).toFixed(2),
-            sellAmount: d.sellAmount,
-            sellAmountFormatted: (Number(d.sellAmount) / 1e6).toFixed(2),
-            transaction: { to: d.to, data: d.data, value: d.value, gas: d.gas, gasPrice: d.gasPrice },
-            allowanceTarget: d.allowanceTarget,
-            _endpoint: "v1-fallback",
-          }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "Swap service unavailable", details: "0x returned non-JSON" }),
+          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
@@ -117,15 +89,24 @@ Deno.serve(async (req) => {
         );
       }
 
+      // v2 allowance-holder response shape:
+      // data.transaction = { to, data, value, gas, gasPrice }
+      // data.issues.allowance = { actual, spender } if approval needed
+      const tx = data.transaction;
+      const allowanceIssue = data.issues?.allowance;
+
       return new Response(
         JSON.stringify({
           buyAmount: data.buyAmount,
           buyAmountFormatted: (Number(data.buyAmount) / 1e6).toFixed(2),
           sellAmount: data.sellAmount,
           sellAmountFormatted: (Number(data.sellAmount) / 1e6).toFixed(2),
-          transaction: data.transaction,
-          permit2: data.permit2,
-          allowanceTarget: data.issues?.allowance?.spender,
+          transaction: tx
+            ? { to: tx.to, data: tx.data, value: tx.value, gas: tx.gas, gasPrice: tx.gasPrice }
+            : null,
+          allowanceTarget: allowanceIssue?.spender || null,
+          needsApproval: !!allowanceIssue,
+          _endpoint: "allowance-holder",
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -140,11 +121,11 @@ Deno.serve(async (req) => {
         taker: wallet_address,
       });
 
-      const url = `https://api.0x.org/swap/permit2/price?${params}`;
+      const url = `https://api.0x.org/swap/allowance-holder/price?${params}`;
       console.log("[swap-to-usdce] 0x price request:", url);
 
       const res = await fetch(url, { headers: apiHeaders });
-      const parsed = await safeJsonParse(res, "permit2/price");
+      const parsed = await safeJsonParse(res, "allowance-holder/price");
 
       if (!parsed) {
         return new Response(
