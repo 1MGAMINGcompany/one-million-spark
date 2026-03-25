@@ -336,7 +336,7 @@ const AddFunds = () => {
               <ConvertBanner
                 nativeFormatted={nativeUsdcFormatted}
                 onConvert={handleConvert}
-                converting={converting || quoting}
+                converting={swapping || quoting}
               />
             )}
 
