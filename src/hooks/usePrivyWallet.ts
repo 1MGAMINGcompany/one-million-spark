@@ -29,6 +29,7 @@ export function usePrivyWallet(): PrivyWalletState {
   const noPrivy: PrivyWalletState = {
     isPrivyUser: false,
     walletAddress: null,
+    eoaAddress: null,
     balanceMatic: null,
     loading: false,
     shortAddress: null,
