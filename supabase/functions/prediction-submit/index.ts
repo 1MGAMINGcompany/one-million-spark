@@ -841,13 +841,14 @@ Deno.serve(async (req) => {
     // ═══════════════════════════════════════════════════
     // 6) EXPLICIT FEE MODEL
     // ═══════════════════════════════════════════════════
-    const systemFeeBps = controls
-      ? Number(controls.default_fee_bps)
-      : LEGACY_DEFAULT_FEE_BPS;
+    // Source-aware fee: match frontend logic exactly
+    const isPolymarketSource = fight.source === "polymarket";
     const effectiveFeeBps =
       fight.commission_bps != null
         ? Number(fight.commission_bps)
-        : systemFeeBps;
+        : isPolymarketSource
+          ? 200   // 2% for Polymarket-routed
+          : 500;  // 5% for native 1MGAMING events
     const fee_usd = Number(
       ((parsedAmount * effectiveFeeBps) / 10_000).toFixed(6),
     );
