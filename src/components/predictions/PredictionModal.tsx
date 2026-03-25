@@ -10,6 +10,7 @@ import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
 import PredictionSuccessScreen from "./PredictionSuccessScreen";
 import TradeTicket from "./TradeTicket";
 import type { TradeResult } from "./tradeResultTypes";
+import type { ApprovalStep } from "@/hooks/useAllowanceGate";
 
 const MIN_USD = 1.0;
 
