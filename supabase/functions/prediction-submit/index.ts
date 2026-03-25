@@ -1022,6 +1022,7 @@ Deno.serve(async (req) => {
           size: net_amount_usdc,
           fee_collected: feeCollected,
           fee_tx_hash: feeTxHash,
+          cred_source: credSource,
         });
 
         // ── EIP-712 signed CLOB order submission ──
