@@ -1,60 +1,59 @@
 
 
-## Plan: Fix the Two Blocking Issues in the Prediction Submission Pipeline
+## Plan: Harden swap-to-usdce Edge Function
 
-### Problem Summary
+### Problem
+The function crashes with `SyntaxError: Unexpected token 'U'` because `res.json()` is called on a non-JSON response from 0x. The response is likely plain text like "Unauthorized" or "Unrecognized request".
 
-All 5 test predictions failed because:
-1. Native USDC was never converted to USDC.e
-2. The USDC.e allowance for the fee relayer was never set (0 allowance)
+### Changes — single file: `supabase/functions/swap-to-usdce/index.ts`
 
-### Fix 1 — Enforce USDC.e Balance Gate in TradeTicket / PredictionModal
+**1. Safe JSON parsing (both `quote` and `price` actions)**
 
-**File:** `src/components/predictions/TradeTicket.tsx` and `src/components/predictions/PredictionModal.tsx`
+Replace every `const data = await res.json()` with:
+```typescript
+const raw = await res.text();
+let data: any;
+try {
+  data = JSON.parse(raw);
+} catch {
+  console.error("[swap-to-usdce] 0x non-JSON response:", raw.slice(0, 200));
+  return new Response(
+    JSON.stringify({ error: "Swap service unavailable", details: raw.slice(0, 200) }),
+    { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+```
 
-Currently `PredictionModal` reads balance from `usePolygonUSDC` (which reads USDC.e). But the user may have Native USDC only. The fix:
+**2. Request URL + response logging**
 
-- Import `usePolygonBalances` alongside `usePolygonUSDC`
-- When `fundingState === "wrong_token"`, show a "Convert to Trading Balance" button instead of the submit button
-- When `fundingState === "no_funds"`, show "Add Funds" link
-- Only show the prediction submit button when `fundingState === "funded"`
+Before each fetch, log the full URL:
+```typescript
+const url = `https://api.0x.org/swap/permit2/quote?${params}`;
+console.log("[swap-to-usdce] 0x request:", url);
+```
+After reading raw response:
+```typescript
+console.log("[swap-to-usdce] 0x response status:", res.status, "body:", raw.slice(0, 200));
+```
 
-### Fix 2 — Enforce Allowance Gate Before Submit
+**3. Correct headers (already correct, but remove `0x-version` noise)**
 
-**File:** `src/hooks/useAllowanceGate.ts`
+Current headers already use `"0x-api-key"` correctly. Will also add `"Content-Type": "application/json"` for completeness:
+```typescript
+headers: {
+  "0x-api-key": ZEROX_API_KEY,
+  "Content-Type": "application/json",
+}
+```
+No `Authorization` header. No `0x-version` header (not required by current v2 API and could cause issues).
 
-The allowance gate must check USDC.e allowance for the relayer and block submission until approved. Need to verify:
-- It checks the correct token (USDC.e `0x2791...4174`, not Native USDC)
-- It reads current allowance on mount
-- If allowance < trade amount, it prompts an `approve` tx via Privy `useSendTransaction`
-- The `approve` must target USDC.e contract with spender = relayer address
-- Only after on-chain confirmation does `approvalStep` advance to `"ready"`
+**4. Fallback endpoint for testing**
 
-**File:** `src/components/predictions/TradeTicket.tsx`
+If the permit2 endpoint returns a non-200, attempt `/swap/v1/quote` as fallback before returning error. This provides a diagnostic path if the permit2 endpoint is the issue.
 
-- Wire the allowance gate status into the submit button: disable until `approvalStep === "ready"`
-- Show a clear "Approve Trading" step indicator when approval is pending
+### Summary of locations changed
+- Lines 53-68 (quote fetch + parse) — safe parse + logging + fallback
+- Lines 98-112 (price fetch + parse) — safe parse + logging
 
-### Fix 3 — Wire Swap Prompt into Prediction Flow
-
-**File:** `src/pages/FightPredictions.tsx` or the modal open handler
-
-When a user clicks "Predict" and has `fundingState === "wrong_token"`:
-- Either redirect to `/add-funds` with a return URL
-- Or show an inline "Convert" action that calls `useSwapToUsdce.getQuote()` and executes the swap
-
-### Technical Details
-
-**Token contracts:**
-- Native USDC: `0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359`
-- USDC.e (required): `0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174`
-- Relayer (spender): `0x3b3bf64329CCf08a727e4fEd41821E8534685fAD`
-
-**Approve calldata:** Standard ERC-20 `approve(spender, amount)` on USDC.e contract. Use a large allowance (e.g. `MaxUint256`) so users only approve once.
-
-**Files to modify:**
-1. `src/components/predictions/PredictionModal.tsx` — add balance/funding state check
-2. `src/components/predictions/TradeTicket.tsx` — add funding gate UI + allowance gate enforcement
-3. `src/hooks/useAllowanceGate.ts` — verify correct token + working approval flow
-4. `src/pages/FightPredictions.tsx` — pass funding state to modal
+No database changes. Auto-deployed on save.
 
