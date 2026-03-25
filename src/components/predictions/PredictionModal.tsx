@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import type { Fight } from "./FightCard";
 import { useMyReferralCode } from "@/hooks/useMyReferralCode";
 import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
+import { usePolygonBalances, type FundingState } from "@/hooks/usePolygonBalances";
 import SocialShareModal from "@/components/SocialShareModal";
 import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
 import PredictionSuccessScreen from "./PredictionSuccessScreen";
@@ -70,6 +71,7 @@ export default function PredictionModal({
 }) {
   const referralCode = useMyReferralCode(wallet ?? null);
   const { usdc_balance, usdc_balance_formatted, is_loading: balanceLoading } = usePolygonUSDC();
+  const { fundingState, nativeUsdcBalance, nativeUsdcFormatted } = usePolygonBalances();
   const [amount, setAmount] = useState("");
   const amountNum = parseFloat(amount) || 0;
   const feeRate = getFeeRate(fight);
@@ -135,6 +137,8 @@ export default function PredictionModal({
           minUsd={MIN_USD}
           approvalStep={approvalStep}
           approvalError={approvalError}
+          fundingState={fundingState}
+          nativeUsdcFormatted={nativeUsdcFormatted}
         />
       </div>
     </div>
