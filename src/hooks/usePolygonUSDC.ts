@@ -1,18 +1,21 @@
 /**
- * usePolygonUSDC — Reads ERC-20 USDC balance AND relayer allowance on Polygon.
+ * usePolygonUSDC — Reads ERC-20 USDC.e (Bridged USDC) balance AND relayer allowance on Polygon.
  *
  * Uses the Privy embedded EVM wallet address and a public Polygon RPC.
  * Does NOT affect Solana skill-game balances.
  *
- * USDC on Polygon (PoS):
- *   Contract: 0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359
+ * USDC.e on Polygon (Bridged):
+ *   Contract: 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174
  *   Decimals: 6
+ *
+ * This is the "Trading Balance" token used for Polymarket trades.
+ * Native USDC (0x3c499c...) is only used in the AddFunds swap flow.
  */
 import { useState, useEffect, useCallback } from "react";
 import { usePrivyWallet } from "./usePrivyWallet";
 
-// Native USDC on Polygon (circle-issued, 6 decimals)
-const USDC_CONTRACT = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359";
+// Bridged USDC.e on Polygon — the trading token for Polymarket
+const USDC_CONTRACT = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
 const USDC_DECIMALS = 6;
 const POLYGON_RPCS = [
   "https://polygon-bor-rpc.publicnode.com",
