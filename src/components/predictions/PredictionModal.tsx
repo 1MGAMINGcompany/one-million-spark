@@ -137,6 +137,8 @@ export default function PredictionModal({
           minUsd={MIN_USD}
           approvalStep={approvalStep}
           approvalError={approvalError}
+          fundingState={fundingState}
+          nativeUsdcFormatted={nativeUsdcFormatted}
         />
       </div>
     </div>
