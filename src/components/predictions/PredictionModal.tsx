@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import type { Fight } from "./FightCard";
 import { useMyReferralCode } from "@/hooks/useMyReferralCode";
 import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
+import { usePolygonBalances, type FundingState } from "@/hooks/usePolygonBalances";
 import SocialShareModal from "@/components/SocialShareModal";
 import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
 import PredictionSuccessScreen from "./PredictionSuccessScreen";
