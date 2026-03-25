@@ -4,15 +4,17 @@ import { Swords, TrendingUp, ChevronDown, ChevronUp, Loader2, Radio, Clock, Trop
 import { supabase } from "@/integrations/supabase/client";
 import { usePrivy } from "@privy-io/react-auth";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
-import { usePrivyFeeTransfer } from "@/hooks/usePrivyFeeTransfer";
+import { useAllowanceGate } from "@/hooks/useAllowanceGate";
 import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
 import { usePolymarketSession } from "@/hooks/usePolymarketSession";
 import { toast } from "sonner";
+import { dbg } from "@/lib/debugLog";
 import Navbar from "@/components/Navbar";
 import EventSection, { parseSport } from "@/components/predictions/EventSection";
 import predictionsHero from "@/assets/predictions-hero.jpeg";
 import PredictionModal from "@/components/predictions/PredictionModal";
 import ComingSoonCard from "@/components/predictions/ComingSoonCard";
+import AllowanceDebugPanel from "@/components/predictions/AllowanceDebugPanel";
 
 import { WalletGateModal } from "@/components/WalletGateModal";
 import ONEFridayFightsHub from "@/components/predictions/ONEFridayFightsHub";
