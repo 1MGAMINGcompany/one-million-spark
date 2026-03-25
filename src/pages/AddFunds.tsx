@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { usePrivy, useFundWallet } from "@privy-io/react-auth";
+import { usePrivy, useFundWallet, useSendTransaction } from "@privy-io/react-auth";
 import { useLogin } from "@privy-io/react-auth";
+import { polygon } from "viem/chains";
 import {
   CreditCard,
   Shield,
@@ -219,9 +220,12 @@ const AddFunds = () => {
     refetch,
   } = usePolygonBalances();
   const { fundWallet } = useFundWallet();
+  const { sendTransaction } = useSendTransaction();
   const { getQuote, quoting } = useSwapToUsdce();
   const [funding, setFunding] = useState(false);
   const [converting, setConverting] = useState(false);
+
+  const USDC_BRIDGED = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
 
   const isLoggedIn = authenticated && isPrivyUser && !!walletAddress;
 
@@ -239,7 +243,14 @@ const AddFunds = () => {
     if (!walletAddress) return;
     setFunding(true);
     try {
-      await fundWallet({ address: walletAddress });
+      await fundWallet({
+        address: walletAddress,
+        options: {
+          chain: polygon,
+          asset: { erc20: USDC_BRIDGED as `0x${string}` },
+          amount: "10",
+        },
+      });
       // Refresh balances after funding modal closes
       setTimeout(refetch, 3000);
     } catch (e: any) {
@@ -260,37 +271,28 @@ const AddFunds = () => {
         toast.error("Could not get swap quote. Try again.");
         return;
       }
-      // The quote contains tx data — we need the user to sign via Privy
-      // For embedded wallets, we'll use window.ethereum or Privy's provider
       toast.info(`Converting $${quote.sellAmountFormatted} to Trading Balance…`);
-      
-      // Send transaction via the embedded wallet provider
-      const provider = (window as any).ethereum;
-      if (!provider) {
-        toast.error("Wallet not available. Please refresh.");
-        return;
-      }
 
-      const txHash = await provider.request({
-        method: "eth_sendTransaction",
-        params: [{
-          from: walletAddress,
-          to: quote.transaction.to,
-          data: quote.transaction.data,
-          value: quote.transaction.value || "0x0",
-          gas: quote.transaction.gas,
-        }],
-      });
+      // Use Privy's sendTransaction for embedded wallets
+      const txReceipt = await sendTransaction(
+        {
+          to: quote.transaction.to as `0x${string}`,
+          data: quote.transaction.data as `0x${string}`,
+          value: BigInt(quote.transaction.value || "0"),
+          chainId: 137,
+        },
+        { uiOptions: { description: `Swapping $${quote.sellAmountFormatted} USDC → USDC.e`, buttonText: "Convert" } }
+      );
 
       toast.success("Conversion submitted! Balance will update shortly.");
-      console.log("[AddFunds] swap tx:", txHash);
+      console.log("[AddFunds] swap tx:", txReceipt);
 
       // Poll for updated balance
       setTimeout(refetch, 5000);
       setTimeout(refetch, 15000);
     } catch (err: any) {
       console.error("[AddFunds] convert error:", err);
-      if (err?.code !== 4001) {
+      if (err?.code !== 4001 && err?.message !== "User rejected the request.") {
         toast.error(err?.message || "Conversion failed");
       }
     } finally {
