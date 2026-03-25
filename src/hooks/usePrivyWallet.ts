@@ -111,6 +111,7 @@ function usePrivyWalletInner(): PrivyWalletState {
   return {
     isPrivyUser,
     walletAddress,
+    eoaAddress,
     balanceMatic,
     loading,
     shortAddress,
