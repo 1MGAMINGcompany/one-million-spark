@@ -23,7 +23,7 @@ const corsHeaders = {
 
 const CLOB_BASE = "https://clob.polymarket.com";
 const MIN_PREDICTION_USD = 1.0;
-const LEGACY_DEFAULT_FEE_BPS = 500;
+// Fee defaults removed — source-aware logic below replaces legacy constant
 
 /** Only these statuses allow new trades */
 const TRADABLE_STATUSES = new Set(["open"]);
