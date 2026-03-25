@@ -13,8 +13,10 @@ const POLL_INTERVAL_MS = 15_000;
 interface PrivyWalletState {
   /** Whether user is authenticated via Privy with an EVM wallet */
   isPrivyUser: boolean;
-  /** EVM wallet address (0x...) */
+  /** EVM wallet address (0x...) — Smart Wallet preferred */
   walletAddress: string | null;
+  /** Embedded EOA address (0x...) — may differ from Smart Wallet */
+  eoaAddress: string | null;
   /** Native balance in MATIC (POL) */
   balanceMatic: number | null;
   /** Whether balance is currently loading */
