@@ -245,8 +245,11 @@ const AddFunds = () => {
     try {
       await fundWallet({
         address: walletAddress,
-        chain: polygon,
-        asset: { erc20: USDC_BRIDGED },
+        options: {
+          chain: polygon,
+          asset: { erc20: USDC_BRIDGED as `0x${string}` },
+          amount: "10",
+        },
       });
       // Refresh balances after funding modal closes
       setTimeout(refetch, 3000);
