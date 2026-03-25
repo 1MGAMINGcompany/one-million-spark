@@ -220,10 +220,8 @@ const AddFunds = () => {
     refetch,
   } = usePolygonBalances();
   const { fundWallet } = useFundWallet();
-  const { sendTransaction } = useSendTransaction();
-  const { getQuote, quoting } = useSwapToUsdce();
+  const { executeSwap, quoting, swapping } = useSwapToUsdce();
   const [funding, setFunding] = useState(false);
-  const [converting, setConverting] = useState(false);
 
   const USDC_BRIDGED = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
 
