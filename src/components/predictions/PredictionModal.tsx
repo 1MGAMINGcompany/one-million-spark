@@ -133,6 +133,8 @@ export default function PredictionModal({
           submitting={submitting}
           onSubmit={onSubmit}
           minUsd={MIN_USD}
+          approvalStep={approvalStep}
+          approvalError={approvalError}
         />
       </div>
     </div>
