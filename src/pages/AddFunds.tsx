@@ -268,37 +268,28 @@ const AddFunds = () => {
         toast.error("Could not get swap quote. Try again.");
         return;
       }
-      // The quote contains tx data — we need the user to sign via Privy
-      // For embedded wallets, we'll use window.ethereum or Privy's provider
       toast.info(`Converting $${quote.sellAmountFormatted} to Trading Balance…`);
-      
-      // Send transaction via the embedded wallet provider
-      const provider = (window as any).ethereum;
-      if (!provider) {
-        toast.error("Wallet not available. Please refresh.");
-        return;
-      }
 
-      const txHash = await provider.request({
-        method: "eth_sendTransaction",
-        params: [{
-          from: walletAddress,
-          to: quote.transaction.to,
-          data: quote.transaction.data,
-          value: quote.transaction.value || "0x0",
-          gas: quote.transaction.gas,
-        }],
-      });
+      // Use Privy's sendTransaction for embedded wallets
+      const txReceipt = await sendTransaction(
+        {
+          to: quote.transaction.to as `0x${string}`,
+          data: quote.transaction.data as `0x${string}`,
+          value: BigInt(quote.transaction.value || "0"),
+          chainId: 137,
+        },
+        { uiOptions: { header: "Convert to Trading Balance", description: `Swapping $${quote.sellAmountFormatted} USDC → USDC.e` } }
+      );
 
       toast.success("Conversion submitted! Balance will update shortly.");
-      console.log("[AddFunds] swap tx:", txHash);
+      console.log("[AddFunds] swap tx:", txReceipt);
 
       // Poll for updated balance
       setTimeout(refetch, 5000);
       setTimeout(refetch, 15000);
     } catch (err: any) {
       console.error("[AddFunds] convert error:", err);
-      if (err?.code !== 4001) {
+      if (err?.code !== 4001 && err?.message !== "User rejected the request.") {
         toast.error(err?.message || "Conversion failed");
       }
     } finally {
