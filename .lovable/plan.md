@@ -1,78 +1,60 @@
 
 
-## Plan: Fix Source-Aware Fee Logic in prediction-submit + Derived EOA Architecture Audit
+## Plan: Fix the Two Blocking Issues in the Prediction Submission Pipeline
 
-### Problem
+### Problem Summary
 
-The **frontend** computes fees with source-aware logic (lines 18-21 of PredictionModal.tsx, lines 424-426 of FightPredictions.tsx):
+All 5 test predictions failed because:
+1. Native USDC was never converted to USDC.e
+2. The USDC.e allowance for the fee relayer was never set (0 allowance)
 
-```
-if fight.commission_bps is set → use it
-else if source === "polymarket" → 200 bps (2%)
-else → 500 bps (5%)
-```
+### Fix 1 — Enforce USDC.e Balance Gate in TradeTicket / PredictionModal
 
-The **backend** (prediction-submit, lines 844-850) ignores the fight source entirely:
+**File:** `src/components/predictions/TradeTicket.tsx` and `src/components/predictions/PredictionModal.tsx`
 
-```
-effectiveFeeBps = fight.commission_bps ?? controls.default_fee_bps ?? 500
-```
+Currently `PredictionModal` reads balance from `usePolygonUSDC` (which reads USDC.e). But the user may have Native USDC only. The fix:
 
-Since `default_fee_bps` in `prediction_system_controls` is currently **200**, all fights without an explicit `commission_bps` override (including native 1MGAMING events) get charged only 2% instead of 5%. This is a revenue leak.
+- Import `usePolygonBalances` alongside `usePolygonUSDC`
+- When `fundingState === "wrong_token"`, show a "Convert to Trading Balance" button instead of the submit button
+- When `fundingState === "no_funds"`, show "Add Funds" link
+- Only show the prediction submit button when `fundingState === "funded"`
 
-### Part 1: Fee Logic Fix
+### Fix 2 — Enforce Allowance Gate Before Submit
 
-**File:** `supabase/functions/prediction-submit/index.ts`
+**File:** `src/hooks/useAllowanceGate.ts`
 
-Replace lines 844-850 with source-aware fee computation matching the frontend:
+The allowance gate must check USDC.e allowance for the relayer and block submission until approved. Need to verify:
+- It checks the correct token (USDC.e `0x2791...4174`, not Native USDC)
+- It reads current allowance on mount
+- If allowance < trade amount, it prompts an `approve` tx via Privy `useSendTransaction`
+- The `approve` must target USDC.e contract with spender = relayer address
+- Only after on-chain confirmation does `approvalStep` advance to `"ready"`
 
-```typescript
-// Source-aware fee: match frontend logic exactly
-const isPolymarketSource = fight.source === "polymarket";
-const effectiveFeeBps =
-  fight.commission_bps != null
-    ? Number(fight.commission_bps)
-    : isPolymarketSource
-      ? 200   // 2% for Polymarket-routed
-      : 500;  // 5% for native 1MGAMING events
-```
+**File:** `src/components/predictions/TradeTicket.tsx`
 
-This removes the dependency on `default_fee_bps` from system controls for fee computation (it stays available for other uses). The `LEGACY_DEFAULT_FEE_BPS` constant at line 26 can also be removed since it's no longer used.
+- Wire the allowance gate status into the submit button: disable until `approvalStep === "ready"`
+- Show a clear "Approve Trading" step indicator when approval is pending
 
-Additionally, ensure the API response (already at line 1457) returns `fee_bps: effectiveFeeBps` and the audit log at line 963 already logs it. Both are already in place — no changes needed there.
+### Fix 3 — Wire Swap Prompt into Prediction Flow
 
-### Part 2: Derived EOA Architecture Audit (Findings)
+**File:** `src/pages/FightPredictions.tsx` or the modal open handler
 
-Based on the code review, here are the confirmed answers:
+When a user clicks "Predict" and has `fundingState === "wrong_token"`:
+- Either redirect to `/add-funds` with a return URL
+- Or show an inline "Convert" action that calls `useSwapToUsdce.getQuote()` and executes the swap
 
-1. **pm_trading_key stored server-side:** Yes. The derived private key is stored in plaintext in `polymarket_user_sessions.pm_trading_key`. The backend reads it to sign EIP-712 orders (line 119 of prediction-submit, line 1092).
+### Technical Details
 
-2. **Derived EOA fully controlled by backend:** Yes. The `privateKeyToAccount(session.pm_trading_key)` call in prediction-submit means the server has full signing authority over the derived EOA. The user never holds this key after the initial SIWE derivation.
+**Token contracts:**
+- Native USDC: `0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359`
+- USDC.e (required): `0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174`
+- Relayer (spender): `0x3b3bf64329CCf08a727e4fEd41821E8534685fAD`
 
-3. **Winnings land in derived EOA first:** Yes. Polymarket settles positions to the order signer (the derived EOA). The `withdraw` action in `polymarket-user-setup` transfers USDC.e from derived EOA back to the user's Privy wallet.
+**Approve calldata:** Standard ERC-20 `approve(spender, amount)` on USDC.e contract. Use a large allowance (e.g. `MaxUint256`) so users only approve once.
 
-4. **1MGAMING has practical custody:** Yes. Since the server holds `pm_trading_key` and can sign transactions from the derived EOA at any time, 1MGAMING has de facto custodial control over routed positions and any funds in the derived wallet.
-
-5. **Recommended path forward:**
-
-   **Option A — Keep delegated model (short-term, lower effort):**
-   - Add clear terms of service disclaiming custody risk
-   - Encrypt `pm_trading_key` at rest using a per-user envelope key
-   - Implement automatic withdrawal of winnings back to user wallet after settlement
-   - Add a user-facing "Withdraw" button for manual recovery
-
-   **Option B — True user-wallet-owned model (long-term, production-grade):**
-   - Use Privy's server-side signing (Authorization Keys) to sign EIP-712 orders directly from the user's embedded EOA
-   - Remove the derived key entirely — the user's Privy wallet IS the Polymarket trading identity
-   - Requires Privy Authorization Keys setup and the `@privy-io/node` SDK
-   - Eliminates custody concern entirely since Privy holds the key, not 1MGAMING
-
-   **Recommendation:** Ship Option A now (encrypted storage + auto-withdraw) and plan Option B as the V2 migration.
-
-### Implementation Summary
-
-Only **one file changes** for the fee fix:
-- `supabase/functions/prediction-submit/index.ts` — 6-line replacement in the fee computation block
-
-No database changes required. The fix will be deployed automatically.
+**Files to modify:**
+1. `src/components/predictions/PredictionModal.tsx` — add balance/funding state check
+2. `src/components/predictions/TradeTicket.tsx` — add funding gate UI + allowance gate enforcement
+3. `src/hooks/useAllowanceGate.ts` — verify correct token + working approval flow
+4. `src/pages/FightPredictions.tsx` — pass funding state to modal
 
