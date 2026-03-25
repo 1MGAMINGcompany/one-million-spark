@@ -6,7 +6,7 @@
  * use these per-user credentials server-side.
  */
 import { useState, useEffect, useCallback } from "react";
-import { usePrivy } from "@privy-io/react-auth";
+import { usePrivy, useSignMessage } from "@privy-io/react-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
 
