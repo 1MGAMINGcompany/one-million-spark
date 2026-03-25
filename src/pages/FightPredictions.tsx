@@ -161,10 +161,10 @@ export default function FightPredictions() {
   // Use Privy EVM wallet for predictions (Polygon)
   const { walletAddress: address, isPrivyUser } = usePrivyWallet();
   const { authenticated, login, getAccessToken } = usePrivy();
-  const { approveFeeAllowance } = usePrivyFeeTransfer();
+  const { state: allowanceState, ensureAllowance, reset: resetAllowance } = useAllowanceGate();
   const { relayer_allowance } = usePolygonUSDC();
-  usePolymarketSession(); // kept for hook stability
-  usePolymarketPrices(); // live price + volume refresh (45s cycle)
+  usePolymarketSession();
+  usePolymarketPrices();
   const referralCode = useMyReferralCode(address ?? null);
   const { t } = useTranslation();
   const [fights, setFights] = useState<Fight[]>([]);
