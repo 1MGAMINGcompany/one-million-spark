@@ -9,7 +9,7 @@
  * wallet doesn't need native MATIC — gas is paid by the dashboard-configured
  * gas sponsorship policy.
  *
- * USDC on Polygon: 0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359 (6 decimals)
+ * USDC.e (Bridged) on Polygon: 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 (6 decimals)
  * Relayer/Spender: 0x3b3bf64329CCf08a727e4fEd41821E8534685fAD (derived from FEE_RELAYER_PRIVATE_KEY)
  * Treasury/Destination: 0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d (receives fees via transferFrom)
  */
@@ -19,7 +19,8 @@ import { encodeFunctionData, parseAbi } from "viem";
 import { FEE_RELAYER_ADDRESS } from "./usePolygonUSDC";
 import { usePrivyWallet } from "./usePrivyWallet";
 
-const USDC_CONTRACT = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359" as const;
+// Bridged USDC.e on Polygon — the trading token
+const USDC_CONTRACT = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174" as const;
 const USDC_DECIMALS = 6;
 
 /** Approval cap: 100 USDC — enough for ~100+ predictions before re-approval */

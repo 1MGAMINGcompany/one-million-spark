@@ -10,7 +10,8 @@ import { usePrivyFeeTransfer } from "./usePrivyFeeTransfer";
 import { usePrivyWallet } from "./usePrivyWallet";
 import { dbg } from "@/lib/debugLog";
 
-const USDC_CONTRACT = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359";
+// Bridged USDC.e on Polygon — the trading token
+const USDC_CONTRACT = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
 const USDC_DECIMALS = 6;
 const ALLOWANCE_SELECTOR = "0xdd62ed3e";
 

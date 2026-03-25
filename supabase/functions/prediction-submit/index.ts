@@ -41,7 +41,8 @@ const FALLBACK_MAX_ORDER_USDC = 25;
 const CTF_EXCHANGE = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E";
 const POLYGON_CHAIN_ID = 137;
 const TREASURY_WALLET = "0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d";
-const USDC_CONTRACT = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359";
+// Bridged USDC.e — the trading token for Polymarket
+const USDC_CONTRACT = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
 const USDC_DECIMALS = 6;
 
 /** EIP-712 domain for Polymarket CTF Exchange orders */
@@ -361,6 +362,101 @@ async function collectFeeViaRelayer(
       error: err instanceof Error ? err.message : String(err),
       error_code: "relayer_tx_failed",
     };
+  }
+}
+
+/**
+ * Transfer USDC.e from user's Privy wallet to their derived trading EOA/Safe.
+ * Uses the relayer to execute transferFrom (requires prior USDC.e approval from user).
+ */
+async function fundDerivedWallet(
+  userWallet: string,
+  derivedAddress: string,
+  amountUsdc: number,
+): Promise<{ success: boolean; txHash?: string; error?: string }> {
+  const relayerKey = Deno.env.get("FEE_RELAYER_PRIVATE_KEY");
+  if (!relayerKey) {
+    return { success: false, error: "relayer_not_configured" };
+  }
+
+  try {
+    const account = privateKeyToAccount(relayerKey as `0x${string}`);
+    const amountRaw = BigInt(Math.floor(amountUsdc * 10 ** USDC_DECIMALS));
+
+    // Check allowance
+    const allowanceCallData = encodeFunctionData({
+      abi: erc20TransferFromAbi,
+      functionName: "allowance",
+      args: [userWallet as `0x${string}`, account.address],
+    });
+
+    const allowanceRpc = await polygonRpcCall({
+      jsonrpc: "2.0", id: 1,
+      method: "eth_call",
+      params: [{ to: USDC_CONTRACT, data: allowanceCallData }, "latest"],
+    });
+
+    if (allowanceRpc.error || !allowanceRpc.result) {
+      return { success: false, error: "rpc_allowance_unavailable" };
+    }
+
+    const currentAllowance = BigInt(allowanceRpc.result);
+    if (currentAllowance < amountRaw) {
+      return { success: false, error: `insufficient_allowance_for_funding: have ${currentAllowance}, need ${amountRaw}` };
+    }
+
+    // Execute transferFrom: user → derived trading wallet
+    const txData = encodeFunctionData({
+      abi: erc20TransferFromAbi,
+      functionName: "transferFrom",
+      args: [
+        userWallet as `0x${string}`,
+        derivedAddress as `0x${string}`,
+        amountRaw,
+      ],
+    });
+
+    const nonceRpc = await polygonRpcCall({
+      jsonrpc: "2.0", id: 2,
+      method: "eth_getTransactionCount",
+      params: [account.address, "latest"],
+    });
+
+    if (nonceRpc.error || nonceRpc.result == null) {
+      return { success: false, error: "rpc_nonce_unavailable" };
+    }
+
+    const gasPriceRpc = await polygonRpcCall({
+      jsonrpc: "2.0", id: 3,
+      method: "eth_gasPrice",
+      params: [],
+    });
+
+    if (gasPriceRpc.error || gasPriceRpc.result == null) {
+      return { success: false, error: "rpc_gas_price_unavailable" };
+    }
+
+    const workingRpc = gasPriceRpc.rpc || POLYGON_RPCS[0];
+    const walletClient = createWalletClient({
+      account,
+      chain: polygon,
+      transport: http(workingRpc),
+    });
+
+    const txHash = await walletClient.sendTransaction({
+      to: USDC_CONTRACT as `0x${string}`,
+      data: txData,
+      gas: 100_000n,
+      gasPrice: BigInt(gasPriceRpc.result) * 12n / 10n,
+      nonce: Number(BigInt(nonceRpc.result)),
+      value: 0n,
+    });
+
+    console.log(`[prediction-submit] Funded derived wallet: ${txHash}, amount=$${amountUsdc}, from=${userWallet}, to=${derivedAddress}`);
+    return { success: true, txHash };
+  } catch (err) {
+    console.error("[prediction-submit] Fund derived wallet failed:", err);
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
 
@@ -1009,6 +1105,47 @@ Deno.serve(async (req) => {
       const isCredsValid = pmApiKey && pmApiSecret && pmPassphrase && pmTradingKey;
 
       if (isCredsValid && tokenId) {
+        // ── Fund derived trading wallet with USDC.e before order ──
+        if (credSource === "per_user" && userSession?.pm_trading_key) {
+          const derivedAccount = privateKeyToAccount(userSession.pm_trading_key as `0x${string}`);
+          const derivedAddr = userSession.safe_address || derivedAccount.address.toLowerCase();
+
+          await auditLog(supabase, tradeOrderId, normalizedWallet, "funding_derived_wallet", {
+            derived_address: derivedAddr,
+            amount_usdc: net_amount_usdc,
+          });
+
+          const fundResult = await fundDerivedWallet(normalizedWallet!, derivedAddr, net_amount_usdc);
+
+          if (!fundResult.success) {
+            await auditLog(supabase, tradeOrderId, normalizedWallet, "funding_derived_wallet_failed", null, {
+              error: fundResult.error,
+            });
+
+            await updateTradeOrder(supabase, tradeOrderId, {
+              status: "failed",
+              error_code: "funding_failed",
+              error_message: fundResult.error?.substring(0, 500),
+              finalized_at: new Date().toISOString(),
+            });
+
+            const isAllowanceErr = fundResult.error?.includes("insufficient_allowance");
+            return json({
+              error: isAllowanceErr
+                ? "USDC.e approval needed for trading. Please approve and try again."
+                : "Failed to fund trading wallet. Please try again.",
+              error_code: isAllowanceErr ? "insufficient_allowance" : "funding_failed",
+              trade_order_id: tradeOrderId,
+            }, isAllowanceErr ? 403 : 502);
+          }
+
+          await auditLog(supabase, tradeOrderId, normalizedWallet, "derived_wallet_funded", null, {
+            tx_hash: fundResult.txHash,
+            amount_usdc: net_amount_usdc,
+            derived_address: derivedAddr,
+          });
+        }
+
         // Mark as submitted
         await updateTradeOrder(supabase, tradeOrderId, {
           status: "submitted",
