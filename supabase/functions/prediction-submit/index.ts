@@ -365,6 +365,101 @@ async function collectFeeViaRelayer(
   }
 }
 
+/**
+ * Transfer USDC.e from user's Privy wallet to their derived trading EOA/Safe.
+ * Uses the relayer to execute transferFrom (requires prior USDC.e approval from user).
+ */
+async function fundDerivedWallet(
+  userWallet: string,
+  derivedAddress: string,
+  amountUsdc: number,
+): Promise<{ success: boolean; txHash?: string; error?: string }> {
+  const relayerKey = Deno.env.get("FEE_RELAYER_PRIVATE_KEY");
+  if (!relayerKey) {
+    return { success: false, error: "relayer_not_configured" };
+  }
+
+  try {
+    const account = privateKeyToAccount(relayerKey as `0x${string}`);
+    const amountRaw = BigInt(Math.floor(amountUsdc * 10 ** USDC_DECIMALS));
+
+    // Check allowance
+    const allowanceCallData = encodeFunctionData({
+      abi: erc20TransferFromAbi,
+      functionName: "allowance",
+      args: [userWallet as `0x${string}`, account.address],
+    });
+
+    const allowanceRpc = await polygonRpcCall({
+      jsonrpc: "2.0", id: 1,
+      method: "eth_call",
+      params: [{ to: USDC_CONTRACT, data: allowanceCallData }, "latest"],
+    });
+
+    if (allowanceRpc.error || !allowanceRpc.result) {
+      return { success: false, error: "rpc_allowance_unavailable" };
+    }
+
+    const currentAllowance = BigInt(allowanceRpc.result);
+    if (currentAllowance < amountRaw) {
+      return { success: false, error: `insufficient_allowance_for_funding: have ${currentAllowance}, need ${amountRaw}` };
+    }
+
+    // Execute transferFrom: user → derived trading wallet
+    const txData = encodeFunctionData({
+      abi: erc20TransferFromAbi,
+      functionName: "transferFrom",
+      args: [
+        userWallet as `0x${string}`,
+        derivedAddress as `0x${string}`,
+        amountRaw,
+      ],
+    });
+
+    const nonceRpc = await polygonRpcCall({
+      jsonrpc: "2.0", id: 2,
+      method: "eth_getTransactionCount",
+      params: [account.address, "latest"],
+    });
+
+    if (nonceRpc.error || nonceRpc.result == null) {
+      return { success: false, error: "rpc_nonce_unavailable" };
+    }
+
+    const gasPriceRpc = await polygonRpcCall({
+      jsonrpc: "2.0", id: 3,
+      method: "eth_gasPrice",
+      params: [],
+    });
+
+    if (gasPriceRpc.error || gasPriceRpc.result == null) {
+      return { success: false, error: "rpc_gas_price_unavailable" };
+    }
+
+    const workingRpc = gasPriceRpc.rpc || POLYGON_RPCS[0];
+    const walletClient = createWalletClient({
+      account,
+      chain: polygon,
+      transport: http(workingRpc),
+    });
+
+    const txHash = await walletClient.sendTransaction({
+      to: USDC_CONTRACT as `0x${string}`,
+      data: txData,
+      gas: 100_000n,
+      gasPrice: BigInt(gasPriceRpc.result) * 12n / 10n,
+      nonce: Number(BigInt(nonceRpc.result)),
+      value: 0n,
+    });
+
+    console.log(`[prediction-submit] Funded derived wallet: ${txHash}, amount=$${amountUsdc}, from=${userWallet}, to=${derivedAddress}`);
+    return { success: true, txHash };
+  } catch (err) {
+    console.error("[prediction-submit] Fund derived wallet failed:", err);
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 /** Compact audit log writer — never includes secrets */
 async function auditLog(
   supabase: any,
