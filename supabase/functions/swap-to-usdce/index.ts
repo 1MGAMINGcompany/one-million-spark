@@ -50,6 +50,7 @@ Deno.serve(async (req) => {
 
     const apiHeaders = {
       "0x-api-key": ZEROX_API_KEY,
+      "0x-version": "v2",
       "Content-Type": "application/json",
     };
 
