@@ -37,7 +37,8 @@ const SIWE_MESSAGE_PREFIX = "Sign to enable Polymarket trading on 1MGAMING";
 
 export function usePolymarketSession(): PolymarketSessionState {
   const { walletAddress, isPrivyUser } = usePrivyWallet();
-  const { signMessage, getAccessToken } = usePrivy();
+  const { getAccessToken } = usePrivy();
+  const { signMessage } = useSignMessage();
   const [hasSession, setHasSession] = useState(false);
   const [status, setStatus] = useState("not_setup");
   const [canTrade, setCanTrade] = useState(false);
