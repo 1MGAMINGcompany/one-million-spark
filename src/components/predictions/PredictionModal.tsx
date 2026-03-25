@@ -54,6 +54,8 @@ export default function PredictionModal({
   showSuccess,
   wallet,
   tradeResult,
+  approvalStep,
+  approvalError,
 }: {
   fight: Fight;
   pick: "fighter_a" | "fighter_b";
