@@ -1105,6 +1105,47 @@ Deno.serve(async (req) => {
       const isCredsValid = pmApiKey && pmApiSecret && pmPassphrase && pmTradingKey;
 
       if (isCredsValid && tokenId) {
+        // ── Fund derived trading wallet with USDC.e before order ──
+        if (credSource === "per_user" && userSession?.pm_trading_key) {
+          const derivedAccount = privateKeyToAccount(userSession.pm_trading_key as `0x${string}`);
+          const derivedAddr = userSession.safe_address || derivedAccount.address.toLowerCase();
+
+          await auditLog(supabase, tradeOrderId, normalizedWallet, "funding_derived_wallet", {
+            derived_address: derivedAddr,
+            amount_usdc: net_amount_usdc,
+          });
+
+          const fundResult = await fundDerivedWallet(normalizedWallet!, derivedAddr, net_amount_usdc);
+
+          if (!fundResult.success) {
+            await auditLog(supabase, tradeOrderId, normalizedWallet, "funding_derived_wallet_failed", null, {
+              error: fundResult.error,
+            });
+
+            await updateTradeOrder(supabase, tradeOrderId, {
+              status: "failed",
+              error_code: "funding_failed",
+              error_message: fundResult.error?.substring(0, 500),
+              finalized_at: new Date().toISOString(),
+            });
+
+            const isAllowanceErr = fundResult.error?.includes("insufficient_allowance");
+            return json({
+              error: isAllowanceErr
+                ? "USDC.e approval needed for trading. Please approve and try again."
+                : "Failed to fund trading wallet. Please try again.",
+              error_code: isAllowanceErr ? "insufficient_allowance" : "funding_failed",
+              trade_order_id: tradeOrderId,
+            }, isAllowanceErr ? 403 : 502);
+          }
+
+          await auditLog(supabase, tradeOrderId, normalizedWallet, "derived_wallet_funded", null, {
+            tx_hash: fundResult.txHash,
+            amount_usdc: net_amount_usdc,
+            derived_address: derivedAddr,
+          });
+        }
+
         // Mark as submitted
         await updateTradeOrder(supabase, tradeOrderId, {
           status: "submitted",
