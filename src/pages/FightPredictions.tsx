@@ -4,15 +4,17 @@ import { Swords, TrendingUp, ChevronDown, ChevronUp, Loader2, Radio, Clock, Trop
 import { supabase } from "@/integrations/supabase/client";
 import { usePrivy } from "@privy-io/react-auth";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
-import { usePrivyFeeTransfer } from "@/hooks/usePrivyFeeTransfer";
+import { useAllowanceGate } from "@/hooks/useAllowanceGate";
 import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
 import { usePolymarketSession } from "@/hooks/usePolymarketSession";
 import { toast } from "sonner";
+import { dbg } from "@/lib/debugLog";
 import Navbar from "@/components/Navbar";
 import EventSection, { parseSport } from "@/components/predictions/EventSection";
 import predictionsHero from "@/assets/predictions-hero.jpeg";
 import PredictionModal from "@/components/predictions/PredictionModal";
 import ComingSoonCard from "@/components/predictions/ComingSoonCard";
+import AllowanceDebugPanel from "@/components/predictions/AllowanceDebugPanel";
 
 import { WalletGateModal } from "@/components/WalletGateModal";
 import ONEFridayFightsHub from "@/components/predictions/ONEFridayFightsHub";
@@ -159,10 +161,10 @@ export default function FightPredictions() {
   // Use Privy EVM wallet for predictions (Polygon)
   const { walletAddress: address, isPrivyUser } = usePrivyWallet();
   const { authenticated, login, getAccessToken } = usePrivy();
-  const { approveFeeAllowance } = usePrivyFeeTransfer();
+  const { state: allowanceState, ensureAllowance, reset: resetAllowance } = useAllowanceGate();
   const { relayer_allowance } = usePolygonUSDC();
-  usePolymarketSession(); // kept for hook stability
-  usePolymarketPrices(); // live price + volume refresh (45s cycle)
+  usePolymarketSession();
+  usePolymarketPrices();
   const referralCode = useMyReferralCode(address ?? null);
   const { t } = useTranslation();
   const [fights, setFights] = useState<Fight[]>([]);
@@ -346,13 +348,12 @@ export default function FightPredictions() {
   const handleSubmit = async (amountUsd: number) => {
     if (!selectedFight || !selectedPick || !isConnected || !address) return;
     setSubmitting(true);
-    console.log("[Predict] handleSubmit start", { fightId: selectedFight.id, pick: selectedPick, amountUsd, wallet: address });
-    try {
-      // Polymarket credentials are now handled server-side (shared backend keys)
-      // No SIWE signing required from users
+    resetAllowance();
+    dbg("predict:start", { fightId: selectedFight.id, pick: selectedPick, amountUsd, wallet: address });
 
-      // Step 1: Get Privy access token FIRST (before any money moves)
-      console.log("[Predict] Step 1: Getting Privy access token...");
+    try {
+      // Step 1: Get Privy access token
+      dbg("predict:step1_token", {});
       let privyToken: string | null = null;
       try {
         privyToken = await getAccessToken();
@@ -360,7 +361,7 @@ export default function FightPredictions() {
         console.error("[Predict] getAccessToken threw:", tokenErr);
       }
       if (!privyToken) {
-        console.error("[Predict] Token is null — session likely expired");
+        dbg("predict:token_null", {});
         toast.error("Session expired", {
           description: "Please log in again to place predictions.",
           action: { label: "Log in", onClick: () => login() },
@@ -368,12 +369,9 @@ export default function FightPredictions() {
         setSubmitting(false);
         return;
       }
-      console.log("[Predict] Step 1 complete — token obtained");
 
-      // Step 2: Auth preflight — verify JWKS/JWT are working before fee transfer
-      // Preflight is a safety gate only; prediction-submit also verifies JWT independently.
-      // If preflight fails twice (transient JWKS), we skip it and let submit handle auth.
-      console.log("[Predict] Step 2: Running preflight...");
+      // Step 2: Auth preflight
+      dbg("predict:step2_preflight", {});
       let preflightPassed = false;
       for (let preflightAttempt = 0; preflightAttempt < 2; preflightAttempt++) {
         const { data: preflightData, error: preflightError } = await supabase.functions.invoke(
@@ -384,7 +382,6 @@ export default function FightPredictions() {
           preflightPassed = true;
           break;
         }
-        // Extract error detail for logging
         let detail = preflightData?.detail || preflightData?.error;
         if (!detail && preflightError) {
           try {
@@ -405,7 +402,6 @@ export default function FightPredictions() {
         );
 
         if (!isTransient) {
-          // Non-transient auth error (e.g. expired token) — don't retry or bypass
           toast.error("Authentication failed", {
             description: "Please log in again to place predictions.",
             action: { label: "Log in", onClick: () => login() },
@@ -415,7 +411,6 @@ export default function FightPredictions() {
         }
 
         if (preflightAttempt === 0) {
-          // Wait briefly before second attempt
           await new Promise((r) => setTimeout(r, 2000));
         }
       }
@@ -423,36 +418,29 @@ export default function FightPredictions() {
       if (!preflightPassed) {
         console.warn("[Predict] Preflight failed twice — bypassing (submit has its own JWT check)");
         toast.info("Auth check slow — proceeding directly", { duration: 3000 });
-      } else {
-        console.log("[Predict] Step 2 complete — preflight OK");
       }
 
-      console.log("[Predict] Step 3: Checking allowance...", { feeUsdc: amountUsd * (selectedFight.commission_bps != null ? selectedFight.commission_bps / 10_000 : 0.05), allowance: relayer_allowance });
+      // Step 3: STRICT ALLOWANCE GATE — blocks until on-chain confirmed
       const feeRate = selectedFight.commission_bps != null
         ? selectedFight.commission_bps / 10_000
         : (selectedFight.source === "polymarket" ? 0.02 : 0.05);
       const feeUsdc = amountUsd * feeRate;
 
+      dbg("predict:step3_allowance", { feeUsdc, feeRate, relayer_allowance });
+
       if (feeUsdc > 0.01) {
-        const currentAllowance = relayer_allowance ?? 0;
-        console.log("[Predict] Allowance check:", { currentAllowance, feeUsdc, walletAddress: address });
-        if (currentAllowance < feeUsdc) {
-          // One-time approval — this is the ONLY wallet modal the user ever sees
-          toast.info("One-time USDC approval", {
-            description: "You're approving a spending limit — you won't be charged now. Future predictions skip this step.",
-            duration: 6000,
-          });
-          const approveResult = await approveFeeAllowance();
-          if (!approveResult.success) {
-            throw new Error(approveResult.error || "USDC approval failed");
-          }
-          // The hook already confirmed allowance on-chain via polling — no extra wait needed
-          console.log("[Predict] Approval confirmed on-chain ✓");
+        const approved = await ensureAllowance(feeUsdc);
+        if (!approved) {
+          dbg("predict:allowance_gate_failed", { step: allowanceState.step, error: allowanceState.errorReason });
+          // Error is already shown via ApprovalStepIndicator in the UI
+          setSubmitting(false);
+          return;
         }
+        dbg("predict:allowance_gate_passed", { step: allowanceState.step });
       }
 
-      console.log("[Predict] Step 4: Submitting to backend...");
       // Step 4: Submit prediction — backend handles fee collection via relayer
+      dbg("predict:step4_submit", { fightId: selectedFight.id, amount: amountUsd });
       const { data, error } = await supabase.functions.invoke("prediction-submit", {
         body: {
           fight_id: selectedFight.id,
@@ -467,15 +455,16 @@ export default function FightPredictions() {
       if (error || data?.error) {
         const backendMsg = data?.error || error?.message || "Backend error";
         const errorCode = data?.error_code || "";
-        // Distinguish relayer/RPC failures from exchange failures
         const isRelayerError = errorCode.startsWith("rpc_") || errorCode === "relayer_not_configured" || errorCode === "relayer_tx_failed" || errorCode === "fee_collection_failed";
+        dbg("predict:backend_error", { backendMsg, errorCode, isRelayerError });
         if (isRelayerError) {
           throw new Error("fee_relay_failed:" + backendMsg);
         }
         throw new Error(backendMsg);
       }
 
-      // Capture backend result for the success screen
+      dbg("predict:success", { trade_order_id: data?.trade_order_id, status: data?.trade_status });
+
       setLastTradeResult({
         trade_order_id: data?.trade_order_id,
         trade_status: data?.trade_status,
@@ -495,6 +484,8 @@ export default function FightPredictions() {
     } catch (err: any) {
       console.error("Prediction failed:", err);
       const msg: string = err.message || "Unknown error";
+      dbg("predict:error", { message: msg });
+
       const isAuthError =
         msg.includes("token_expired") ||
         msg.includes("auth_failed") ||
@@ -797,14 +788,18 @@ export default function FightPredictions() {
         <PredictionModal
           fight={selectedFight}
           pick={selectedPick}
-          onClose={() => { setSelectedFight(null); setSelectedPick(null); setShowPredictionSuccess(false); setLastTradeResult(null); }}
+          onClose={() => { setSelectedFight(null); setSelectedPick(null); setShowPredictionSuccess(false); setLastTradeResult(null); resetAllowance(); }}
           onSubmit={handleSubmit}
           submitting={submitting}
           showSuccess={showPredictionSuccess}
           wallet={address || undefined}
           tradeResult={lastTradeResult}
+          approvalStep={allowanceState.step}
+          approvalError={allowanceState.errorReason}
         />
       )}
+
+      <AllowanceDebugPanel />
 
       <WalletGateModal
         isOpen={showWalletGate}

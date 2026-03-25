@@ -1,6 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Loader2, Coins, Wallet, AlertTriangle } from "lucide-react";
 import { Link } from "react-router-dom";
+import ApprovalStepIndicator from "./ApprovalStepIndicator";
+import type { ApprovalStep } from "@/hooks/useAllowanceGate";
 
 const MIN_USD = 1.0;
 
@@ -20,6 +22,8 @@ interface TradeTicketProps {
   submitting: boolean;
   onSubmit: (amount: number) => void;
   minUsd: number;
+  approvalStep?: ApprovalStep;
+  approvalError?: string | null;
 }
 
 export default function TradeTicket({
@@ -38,7 +42,20 @@ export default function TradeTicket({
   submitting,
   onSubmit,
   minUsd,
+  approvalStep = "idle",
+  approvalError = null,
 }: TradeTicketProps) {
+  const isApproving = ["checking_allowance", "approval_required", "waiting_wallet", "approval_submitted", "waiting_confirmation"].includes(approvalStep);
+
+  // Button label based on current step
+  const getButtonLabel = () => {
+    if (approvalStep === "checking_allowance") return "Checking approval…";
+    if (approvalStep === "waiting_wallet") return "Approve in wallet…";
+    if (approvalStep === "approval_submitted" || approvalStep === "waiting_confirmation") return "Confirming approval…";
+    if (submitting) return "Submitting…";
+    return "Submit Prediction";
+  };
+
   return (
     <div className="space-y-4">
       {/* Balance bar */}
@@ -122,6 +139,9 @@ export default function TradeTicket({
         </div>
       )}
 
+      {/* Approval step indicator */}
+      <ApprovalStepIndicator step={approvalStep} errorReason={approvalError} />
+
       {/* Insufficient funds warning */}
       {insufficientFunds && (
         <div className="flex items-center gap-2 bg-destructive/10 border border-destructive/30 rounded-lg px-3 py-2">
@@ -139,11 +159,11 @@ export default function TradeTicket({
       <Button
         className="w-full font-bold py-3"
         size="lg"
-        disabled={!canSubmit}
+        disabled={!canSubmit || isApproving}
         onClick={() => onSubmit(amountNum)}
       >
-        {submitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-        {submitting ? "Submitting..." : "Submit Prediction"}
+        {(submitting || isApproving) ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+        {getButtonLabel()}
       </Button>
 
       {amountNum > 0 && amountNum < minUsd && (
