@@ -43,49 +43,61 @@ function padAddress(address: string): string {
   return address.slice(2).toLowerCase().padStart(64, "0");
 }
 
-/**
- * Poll on-chain allowance until it's >= 1 USDC or timeout.
- * This works regardless of whether the tx hash is a UserOp hash or real tx hash.
- */
-async function waitForAllowance(
-  ownerAddress: string,
-  maxAttempts = 10,
-  intervalMs = 2000,
-): Promise<{ allowance: number; confirmed: boolean }> {
+/** Read on-chain allowance for a single owner address */
+async function readAllowanceForOwner(ownerAddress: string): Promise<number> {
   const callData =
     ALLOWANCE_SELECTOR +
     padAddress(ownerAddress) +
     padAddress(FEE_RELAYER_ADDRESS);
 
+  for (const rpc of POLYGON_RPCS) {
+    try {
+      const res = await fetch(rpc, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "eth_call",
+          params: [{ to: USDC_CONTRACT, data: callData }, "latest"],
+        }),
+      });
+      if (!res.ok) continue;
+      const json = await res.json();
+      if (json.result) {
+        return Number(BigInt(json.result)) / 10 ** USDC_DECIMALS;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return 0;
+}
+
+/**
+ * Poll on-chain allowance on BOTH Smart Wallet and EOA until >= 1 USDC or timeout.
+ */
+async function waitForAllowanceDual(
+  addresses: string[],
+  maxAttempts = 20,
+  intervalMs = 2000,
+): Promise<{ allowance: number; confirmed: boolean }> {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (attempt > 0) await new Promise((r) => setTimeout(r, intervalMs));
 
-    for (const rpc of POLYGON_RPCS) {
-      try {
-        const res = await fetch(rpc, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            jsonrpc: "2.0",
-            id: 1,
-            method: "eth_call",
-            params: [{ to: USDC_CONTRACT, data: callData }, "latest"],
-          }),
-        });
-        if (!res.ok) continue;
-        const json = await res.json();
-        if (json.result) {
-          const raw = Number(BigInt(json.result)) / 10 ** USDC_DECIMALS;
-          console.log(`[waitForAllowance] attempt ${attempt + 1}: allowance = ${raw} USDC (owner=${ownerAddress})`);
-          if (raw >= 1) {
-            return { allowance: raw, confirmed: true };
-          }
-          // Got a response but allowance still 0 — break to next attempt
-          break;
-        }
-      } catch {
-        continue;
-      }
+    // Check all addresses in parallel
+    const results = await Promise.all(
+      addresses.map((addr) => readAllowanceForOwner(addr))
+    );
+    const best = Math.max(...results);
+
+    console.log(
+      `[waitForAllowance] attempt ${attempt + 1}: allowances =`,
+      addresses.map((a, i) => `${a.slice(0, 8)}=${results[i]}`).join(", "),
+    );
+
+    if (best >= 1) {
+      return { allowance: best, confirmed: true };
     }
   }
   return { allowance: 0, confirmed: false };
@@ -99,12 +111,12 @@ interface ApproveResult {
 
 export function usePrivyFeeTransfer() {
   const { sendTransaction } = useSendTransaction();
-  const { walletAddress } = usePrivyWallet();
+  const { walletAddress, eoaAddress } = usePrivyWallet();
 
   /**
    * Request a one-time ERC-20 approve for the fee relayer.
    * Only call this when allowance is insufficient.
-   * Confirms by polling on-chain allowance (not tx receipt — UserOp hashes don't resolve).
+   * Confirms by polling on-chain allowance on both Smart Wallet and EOA.
    */
   const approveFeeAllowance = useCallback(
     async (): Promise<ApproveResult> => {
@@ -121,7 +133,7 @@ export function usePrivyFeeTransfer() {
 
         console.log(
           `[usePrivyFeeTransfer] Requesting sponsored USDC approval for $${APPROVAL_CAP_USDC} to relayer ${FEE_RELAYER_ADDRESS}`,
-          `| owner wallet: ${walletAddress}`,
+          `| smart wallet: ${walletAddress} | eoa: ${eoaAddress}`,
         );
 
         const receipt = await sendTransaction(
@@ -143,16 +155,20 @@ export function usePrivyFeeTransfer() {
               (receipt as any)?.hash ??
               "";
 
-        console.log("[usePrivyFeeTransfer] sendTransaction returned:", txHash || "(empty)", typeof receipt === "object" ? JSON.stringify(receipt).slice(0, 200) : "");
+        console.log("[usePrivyFeeTransfer] sendTransaction returned:", txHash || "(empty)");
 
-        // Instead of polling for a tx receipt (which fails for UserOp hashes),
-        // poll the on-chain allowance directly.
-        console.log("[usePrivyFeeTransfer] Polling on-chain allowance for confirmation...");
-        const result = await waitForAllowance(walletAddress);
+        // Poll both addresses for allowance confirmation (40s total)
+        const pollAddresses = [walletAddress];
+        if (eoaAddress && eoaAddress.toLowerCase() !== walletAddress.toLowerCase()) {
+          pollAddresses.push(eoaAddress);
+        }
+
+        console.log("[usePrivyFeeTransfer] Polling on-chain allowance for confirmation on", pollAddresses.length, "addresses...");
+        const result = await waitForAllowanceDual(pollAddresses);
 
         if (!result.confirmed) {
-          console.error("[usePrivyFeeTransfer] Allowance not detected after polling. May be an EOA/smart-wallet address mismatch.");
-          return { success: false, error: "allowance_not_confirmed_after_20s" };
+          console.error("[usePrivyFeeTransfer] Allowance not detected after 40s polling.");
+          return { success: false, error: "allowance_not_confirmed_after_40s", txHash: txHash || undefined };
         }
 
         console.log(`[usePrivyFeeTransfer] Approval confirmed on-chain ✓ allowance=${result.allowance} USDC`, txHash);
@@ -165,7 +181,7 @@ export function usePrivyFeeTransfer() {
         };
       }
     },
-    [sendTransaction, walletAddress],
+    [sendTransaction, walletAddress, eoaAddress],
   );
 
   return { approveFeeAllowance, approvalCapUsdc: APPROVAL_CAP_USDC };

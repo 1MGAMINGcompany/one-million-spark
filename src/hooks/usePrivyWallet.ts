@@ -13,8 +13,10 @@ const POLL_INTERVAL_MS = 15_000;
 interface PrivyWalletState {
   /** Whether user is authenticated via Privy with an EVM wallet */
   isPrivyUser: boolean;
-  /** EVM wallet address (0x...) */
+  /** EVM wallet address (0x...) — Smart Wallet preferred */
   walletAddress: string | null;
+  /** Embedded EOA address (0x...) — may differ from Smart Wallet */
+  eoaAddress: string | null;
   /** Native balance in MATIC (POL) */
   balanceMatic: number | null;
   /** Whether balance is currently loading */
@@ -27,6 +29,7 @@ export function usePrivyWallet(): PrivyWalletState {
   const noPrivy: PrivyWalletState = {
     isPrivyUser: false,
     walletAddress: null,
+    eoaAddress: null,
     balanceMatic: null,
     loading: false,
     shortAddress: null,
@@ -43,26 +46,26 @@ function usePrivyWalletInner(): PrivyWalletState {
   const [balanceMatic, setBalanceMatic] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Find EVM smart wallet first, then fall back to embedded EOA
-  const evmWallet = useMemo(() => {
-    // Prefer smart wallet address (ERC-4337 proxy) for prediction flows
+  // Find EVM smart wallet address
+  const smartWalletAddress = useMemo(() => {
     const smartWallet = user?.linkedAccounts?.find(
       (a: any) => a.type === "smart_wallet"
     ) as any;
-    if (smartWallet?.address) return smartWallet.address as string;
+    return (smartWallet?.address as string) ?? null;
+  }, [user]);
 
-    // Fallback: embedded EOA wallet
+  // Find embedded EOA address
+  const eoaAddress = useMemo(() => {
     const linked = user?.linkedAccounts?.find(
       (a: any) => a.type === "wallet" && a.chainType === "ethereum"
     ) as any;
     if (linked?.address) return linked.address as string;
-
-    // Fallback to wallets array
     const w = wallets.find((w) => w.walletClientType === "privy");
     return w?.address ?? null;
   }, [user, wallets]);
 
-  const walletAddress = evmWallet ?? null;
+  // Primary address: prefer smart wallet, fallback to EOA
+  const walletAddress = smartWalletAddress ?? eoaAddress ?? null;
 
   const shortAddress = useMemo(() => {
     if (!walletAddress) return null;
@@ -108,6 +111,7 @@ function usePrivyWalletInner(): PrivyWalletState {
   return {
     isPrivyUser,
     walletAddress,
+    eoaAddress,
     balanceMatic,
     loading,
     shortAddress,

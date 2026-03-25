@@ -3,6 +3,8 @@
  *
  * Reads USDC allowance from Polygon for the relayer, and manages the approval
  * flow with clear step-by-step states for UI rendering.
+ *
+ * Polls BOTH Smart Wallet and EOA addresses to handle ERC-4337 address mismatch.
  */
 import { useState, useCallback } from "react";
 import { usePolygonUSDC, FEE_RELAYER_ADDRESS } from "./usePolygonUSDC";
@@ -25,8 +27,8 @@ function padAddress(address: string): string {
   return address.slice(2).toLowerCase().padStart(64, "0");
 }
 
-/** Direct on-chain allowance read — bypasses cached state */
-async function readOnChainAllowance(ownerAddress: string): Promise<number | null> {
+/** Read on-chain allowance for a single owner address */
+async function readSingleAllowance(ownerAddress: string): Promise<number | null> {
   const callData =
     ALLOWANCE_SELECTOR +
     padAddress(ownerAddress) +
@@ -54,6 +56,14 @@ async function readOnChainAllowance(ownerAddress: string): Promise<number | null
     }
   }
   return null;
+}
+
+/** Read on-chain allowance checking both Smart Wallet and EOA, returning the best */
+async function readOnChainAllowance(addresses: string[]): Promise<number | null> {
+  const results = await Promise.all(addresses.map(readSingleAllowance));
+  const valid = results.filter((v): v is number => v !== null);
+  if (valid.length === 0) return null;
+  return Math.max(...valid);
 }
 
 export type ApprovalStep =
@@ -87,7 +97,7 @@ export interface AllowanceDebugInfo {
 }
 
 export function useAllowanceGate() {
-  const { walletAddress } = usePrivyWallet();
+  const { walletAddress, eoaAddress } = usePrivyWallet();
   const { relayer_allowance, usdc_balance } = usePolygonUSDC();
   const { approveFeeAllowance } = usePrivyFeeTransfer();
 
@@ -96,6 +106,16 @@ export function useAllowanceGate() {
   const [currentAllowance, setCurrentAllowance] = useState<number | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [requiredAmount, setRequiredAmount] = useState<number | null>(null);
+
+  /** Build list of unique addresses to poll */
+  const getPollAddresses = useCallback((): string[] => {
+    const addrs: string[] = [];
+    if (walletAddress) addrs.push(walletAddress);
+    if (eoaAddress && (!walletAddress || eoaAddress.toLowerCase() !== walletAddress.toLowerCase())) {
+      addrs.push(eoaAddress);
+    }
+    return addrs;
+  }, [walletAddress, eoaAddress]);
 
   /**
    * Ensure on-chain allowance >= requiredFee before proceeding.
@@ -107,7 +127,8 @@ export function useAllowanceGate() {
       setTxHash(null);
       setRequiredAmount(requiredFee);
 
-      if (!walletAddress) {
+      const addrs = getPollAddresses();
+      if (addrs.length === 0) {
         setStep("error");
         setErrorReason("No wallet connected");
         return false;
@@ -116,21 +137,16 @@ export function useAllowanceGate() {
       // Step 1: Check on-chain allowance (not cached)
       setStep("checking_allowance");
       dbg("allowance_gate:check_start", {
-        owner: walletAddress,
+        addresses: addrs,
         spender: FEE_RELAYER_ADDRESS,
-        token: USDC_CONTRACT,
         requiredFee,
         cachedAllowance: relayer_allowance,
       });
 
-      const onChainAllowance = await readOnChainAllowance(walletAddress);
+      const onChainAllowance = await readOnChainAllowance(addrs);
       setCurrentAllowance(onChainAllowance);
 
-      dbg("allowance_gate:on_chain_read", {
-        owner: walletAddress,
-        allowance: onChainAllowance,
-        requiredFee,
-      });
+      dbg("allowance_gate:on_chain_read", { allowance: onChainAllowance, requiredFee });
 
       if (onChainAllowance !== null && onChainAllowance >= requiredFee) {
         setStep("ready");
@@ -142,24 +158,15 @@ export function useAllowanceGate() {
       if (usdc_balance !== null && usdc_balance < requiredFee) {
         setStep("error");
         setErrorReason(`Insufficient USDC balance: $${usdc_balance.toFixed(2)} < $${requiredFee.toFixed(2)}`);
-        dbg("allowance_gate:insufficient_balance", { balance: usdc_balance, required: requiredFee });
         return false;
       }
 
       // Step 3: Need approval
       setStep("approval_required");
-      dbg("allowance_gate:approval_needed", {
-        currentAllowance: onChainAllowance,
-        requiredFee,
-      });
-
-      // Brief pause for UI
       await new Promise(r => setTimeout(r, 500));
 
       // Step 4: Request approval via Privy
       setStep("waiting_wallet");
-      dbg("allowance_gate:requesting_approval", { owner: walletAddress });
-
       const result = await approveFeeAllowance();
 
       if (!result.success) {
@@ -177,57 +184,20 @@ export function useAllowanceGate() {
         setStep("error");
         setErrorReason(friendlyReason);
         setTxHash(result.txHash || null);
-        dbg("allowance_gate:approval_failed", {
-          error: reason,
-          txHash: result.txHash,
-          owner: walletAddress,
-        });
+        dbg("allowance_gate:approval_failed", { error: reason, txHash: result.txHash });
         return false;
       }
 
+      // approveFeeAllowance already confirmed on-chain — skip redundant polling
       setTxHash(result.txHash || null);
-      setStep("approval_submitted");
+      setStep("approval_confirmed");
+      dbg("allowance_gate:confirmed_via_transfer_hook", { txHash: result.txHash });
 
-      dbg("allowance_gate:approval_tx_sent", {
-        txHash: result.txHash,
-        owner: walletAddress,
-      });
-
-      // Step 5: Verify on-chain allowance after approval
-      setStep("waiting_confirmation");
-
-      // Poll on-chain allowance up to 15 attempts (30 seconds)
-      for (let i = 0; i < 15; i++) {
-        await new Promise(r => setTimeout(r, 2000));
-        const confirmed = await readOnChainAllowance(walletAddress);
-        dbg("allowance_gate:confirmation_poll", { attempt: i + 1, allowance: confirmed });
-
-        if (confirmed !== null && confirmed >= requiredFee) {
-          setCurrentAllowance(confirmed);
-          setStep("approval_confirmed");
-          dbg("allowance_gate:confirmed", {
-            allowance: confirmed,
-            txHash: result.txHash,
-            owner: walletAddress,
-            afterAttempts: i + 1,
-          });
-          // Brief success flash
-          await new Promise(r => setTimeout(r, 800));
-          setStep("ready");
-          return true;
-        }
-      }
-
-      // Timed out
-      setStep("error");
-      setErrorReason("Approval confirmation timed out after 30s. The transaction may still be processing — try again in a moment.");
-      dbg("allowance_gate:confirmation_timeout", {
-        txHash: result.txHash,
-        owner: walletAddress,
-      });
-      return false;
+      await new Promise(r => setTimeout(r, 800));
+      setStep("ready");
+      return true;
     },
-    [walletAddress, relayer_allowance, usdc_balance, approveFeeAllowance],
+    [walletAddress, eoaAddress, relayer_allowance, usdc_balance, approveFeeAllowance, getPollAddresses],
   );
 
   /** Get debug info for the debug panel */
@@ -238,18 +208,19 @@ export function useAllowanceGate() {
       currentAllowance: relayer_allowance,
       requiredFee,
       approvalNeeded: (relayer_allowance ?? 0) < requiredFee,
-      isSmartWallet: true, // Privy smart wallets
+      isSmartWallet: true,
     }),
     [walletAddress, relayer_allowance],
   );
 
   /** Force-refresh allowance from chain */
   const refreshAllowance = useCallback(async () => {
-    if (!walletAddress) return null;
-    const val = await readOnChainAllowance(walletAddress);
+    const addrs = getPollAddresses();
+    if (addrs.length === 0) return null;
+    const val = await readOnChainAllowance(addrs);
     setCurrentAllowance(val);
     return val;
-  }, [walletAddress]);
+  }, [getPollAddresses]);
 
   const reset = useCallback(() => {
     setStep("idle");
