@@ -281,7 +281,7 @@ const AddFunds = () => {
           value: BigInt(quote.transaction.value || "0"),
           chainId: 137,
         },
-        { uiOptions: { header: "Convert to Trading Balance", description: `Swapping $${quote.sellAmountFormatted} USDC → USDC.e` } }
+        { uiOptions: { description: `Swapping $${quote.sellAmountFormatted} USDC → USDC.e`, buttonText: "Convert" } }
       );
 
       toast.success("Conversion submitted! Balance will update shortly.");
