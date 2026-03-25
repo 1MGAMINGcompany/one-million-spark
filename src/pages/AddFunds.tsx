@@ -243,7 +243,11 @@ const AddFunds = () => {
     if (!walletAddress) return;
     setFunding(true);
     try {
-      await fundWallet({ address: walletAddress });
+      await fundWallet({
+        address: walletAddress,
+        chain: polygon,
+        asset: { erc20: USDC_BRIDGED },
+      });
       // Refresh balances after funding modal closes
       setTimeout(refetch, 3000);
     } catch (e: any) {
