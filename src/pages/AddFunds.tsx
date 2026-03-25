@@ -262,39 +262,10 @@ const AddFunds = () => {
 
   const handleConvert = async () => {
     if (!walletAddress || !nativeUsdcBalance) return;
-    setConverting(true);
-    try {
-      const quote = await getQuote(nativeUsdcBalance);
-      if (!quote?.transaction) {
-        toast.error("Could not get swap quote. Try again.");
-        return;
-      }
-      toast.info(`Converting $${quote.sellAmountFormatted} to Trading Balance…`);
-
-      // Use Privy's sendTransaction for embedded wallets
-      const txReceipt = await sendTransaction(
-        {
-          to: quote.transaction.to as `0x${string}`,
-          data: quote.transaction.data as `0x${string}`,
-          value: BigInt(quote.transaction.value || "0"),
-          chainId: 137,
-        },
-        { uiOptions: { description: `Swapping $${quote.sellAmountFormatted} USDC → USDC.e`, buttonText: "Convert" } }
-      );
-
-      toast.success("Conversion submitted! Balance will update shortly.");
-      console.log("[AddFunds] swap tx:", txReceipt);
-
-      // Poll for updated balance
+    const success = await executeSwap(nativeUsdcBalance);
+    if (success) {
       setTimeout(refetch, 5000);
       setTimeout(refetch, 15000);
-    } catch (err: any) {
-      console.error("[AddFunds] convert error:", err);
-      if (err?.code !== 4001 && err?.message !== "User rejected the request.") {
-        toast.error(err?.message || "Conversion failed");
-      }
-    } finally {
-      setConverting(false);
     }
   };
 
