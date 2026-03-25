@@ -1,0 +1,1 @@
+UPDATE prediction_fights SET trading_allowed = true WHERE event_id = '75e6324e-55e9-4f8b-a4d6-106ffca0b28b';
