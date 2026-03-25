@@ -1,59 +1,36 @@
 
 
-## Plan: Harden swap-to-usdce Edge Function
+# Fix: Prediction Approval Timeout on Polymarket Events
 
-### Problem
-The function crashes with `SyntaxError: Unexpected token 'U'` because `res.json()` is called on a non-JSON response from 0x. The response is likely plain text like "Unauthorized" or "Unrecognized request".
+## Problem
+When placing a prediction on the Polymarket-connected boxing event, the USDC.e approval step times out with "Approval confirmation timed out — try again". The swap worked fine, so the user has $2.44 USDC.e but cannot proceed to submit.
 
-### Changes — single file: `supabase/functions/swap-to-usdce/index.ts`
+## Root Cause
+Two issues in the approval confirmation flow:
 
-**1. Safe JSON parsing (both `quote` and `price` actions)**
+1. **Smart Wallet vs EOA address mismatch**: `usePrivyWallet` returns the Smart Wallet address (ERC-4337 proxy), but `useSendTransaction` may execute from either the Smart Wallet or the embedded EOA. The polling only checks ONE address, missing the approval if it lands on the other.
 
-Replace every `const data = await res.json()` with:
-```typescript
-const raw = await res.text();
-let data: any;
-try {
-  data = JSON.parse(raw);
-} catch {
-  console.error("[swap-to-usdce] 0x non-JSON response:", raw.slice(0, 200));
-  return new Response(
-    JSON.stringify({ error: "Swap service unavailable", details: raw.slice(0, 200) }),
-    { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-  );
-}
-```
+2. **Double-polling with insufficient timeout**: `usePrivyFeeTransfer.approveFeeAllowance()` polls for 20s (10×2s). If it doesn't detect the allowance, it returns `success: false` with error `allowance_not_confirmed_after_20s`. The `useAllowanceGate` then shows "Approval confirmation timed out" immediately — it never gets to its own 30s polling phase. Smart Wallet UserOperations on Polygon can take 30-60s to confirm.
 
-**2. Request URL + response logging**
+## Plan
 
-Before each fetch, log the full URL:
-```typescript
-const url = `https://api.0x.org/swap/permit2/quote?${params}`;
-console.log("[swap-to-usdce] 0x request:", url);
-```
-After reading raw response:
-```typescript
-console.log("[swap-to-usdce] 0x response status:", res.status, "body:", raw.slice(0, 200));
-```
+### 1. Fix `usePrivyFeeTransfer` — dual-address polling + longer timeout
+- Get both Smart Wallet and EOA addresses from Privy's `useWallets` and `usePrivy`
+- Poll allowance on BOTH addresses in each attempt
+- Increase from 10 to 20 attempts (40s total) to accommodate slow bundler inclusion
 
-**3. Correct headers (already correct, but remove `0x-version` noise)**
+### 2. Fix `useAllowanceGate` — dual-address check + skip redundant polling
+- Read both Smart Wallet and EOA addresses
+- In `readOnChainAllowance`, check both and return the higher value
+- When `approveFeeAllowance()` returns success (already confirmed), skip the second polling loop entirely
+- Increase polling to 20 attempts for the fallback path
 
-Current headers already use `"0x-api-key"` correctly. Will also add `"Content-Type": "application/json"` for completeness:
-```typescript
-headers: {
-  "0x-api-key": ZEROX_API_KEY,
-  "Content-Type": "application/json",
-}
-```
-No `Authorization` header. No `0x-version` header (not required by current v2 API and could cause issues).
+### 3. Fix `usePrivyWallet` — expose both addresses
+- Add an `eoaAddress` field alongside `walletAddress` (which is the Smart Wallet)
+- This allows the allowance hooks to poll both addresses without duplicating Privy hook logic
 
-**4. Fallback endpoint for testing**
-
-If the permit2 endpoint returns a non-200, attempt `/swap/v1/quote` as fallback before returning error. This provides a diagnostic path if the permit2 endpoint is the issue.
-
-### Summary of locations changed
-- Lines 53-68 (quote fetch + parse) — safe parse + logging + fallback
-- Lines 98-112 (price fetch + parse) — safe parse + logging
-
-No database changes. Auto-deployed on save.
+## Files Changed
+- `src/hooks/usePrivyWallet.ts` — expose `eoaAddress`
+- `src/hooks/usePrivyFeeTransfer.ts` — dual-address polling, longer timeout
+- `src/hooks/useAllowanceGate.ts` — dual-address check, skip redundant polling
 
