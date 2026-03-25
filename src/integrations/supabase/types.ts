@@ -993,6 +993,7 @@ export type Database = {
       }
       polymarket_user_sessions: {
         Row: {
+          approvals_set: boolean
           authenticated_at: string | null
           created_at: string
           ctf_allowance_set: boolean
@@ -1003,11 +1004,15 @@ export type Database = {
           pm_derived_address: string | null
           pm_passphrase: string | null
           pm_trading_key: string | null
+          privy_wallet_id: string | null
+          safe_address: string | null
+          safe_deployed: boolean
           status: string
           updated_at: string
           wallet: string
         }
         Insert: {
+          approvals_set?: boolean
           authenticated_at?: string | null
           created_at?: string
           ctf_allowance_set?: boolean
@@ -1018,11 +1023,15 @@ export type Database = {
           pm_derived_address?: string | null
           pm_passphrase?: string | null
           pm_trading_key?: string | null
+          privy_wallet_id?: string | null
+          safe_address?: string | null
+          safe_deployed?: boolean
           status?: string
           updated_at?: string
           wallet: string
         }
         Update: {
+          approvals_set?: boolean
           authenticated_at?: string | null
           created_at?: string
           ctf_allowance_set?: boolean
@@ -1033,6 +1042,9 @@ export type Database = {
           pm_derived_address?: string | null
           pm_passphrase?: string | null
           pm_trading_key?: string | null
+          privy_wallet_id?: string | null
+          safe_address?: string | null
+          safe_deployed?: boolean
           status?: string
           updated_at?: string
           wallet?: string
