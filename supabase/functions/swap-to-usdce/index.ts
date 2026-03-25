@@ -3,10 +3,7 @@
  *
  * Actions:
  *   quote  — get a swap quote (price + calldata)
- *   swap   — execute the swap via Privy server-side signing
- *
- * The user's Privy embedded wallet is the taker; the function fetches
- * a quote from 0x and returns the transaction for client-side execution.
+ *   price  — lighter price-only check
  */
 
 const corsHeaders = {
@@ -18,6 +15,18 @@ const corsHeaders = {
 const USDC_NATIVE = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359";
 const USDC_BRIDGED = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
 const CHAIN_ID = 137;
+
+/** Safely parse a fetch response as JSON, returning null + logging on failure */
+async function safeJsonParse(res: Response, label: string): Promise<{ data: any; raw: string } | null> {
+  const raw = await res.text();
+  console.log(`[swap-to-usdce] ${label} response status:`, res.status, "body:", raw.slice(0, 200));
+  try {
+    return { data: JSON.parse(raw), raw };
+  } catch {
+    console.error(`[swap-to-usdce] ${label} returned non-JSON:`, raw.slice(0, 200));
+    return null;
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -37,11 +46,14 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Convert human-readable USDC amount to raw units (6 decimals)
     const sellAmount = BigInt(Math.floor(amount_usdc * 1e6)).toString();
 
+    const apiHeaders = {
+      "0x-api-key": ZEROX_API_KEY,
+      "Content-Type": "application/json",
+    };
+
     if (action === "quote") {
-      // Get a price quote from 0x
       const params = new URLSearchParams({
         chainId: String(CHAIN_ID),
         sellToken: USDC_NATIVE,
@@ -50,14 +62,51 @@ Deno.serve(async (req) => {
         taker: wallet_address,
       });
 
-      const res = await fetch(`https://api.0x.org/swap/permit2/quote?${params}`, {
-        headers: {
-          "0x-api-key": ZEROX_API_KEY,
-          "0x-version": "2",
-        },
-      });
+      // Try permit2 endpoint first
+      const permit2Url = `https://api.0x.org/swap/permit2/quote?${params}`;
+      console.log("[swap-to-usdce] 0x request:", permit2Url);
 
-      const data = await res.json();
+      const res = await fetch(permit2Url, { headers: apiHeaders });
+      const parsed = await safeJsonParse(res, "permit2/quote");
+
+      if (!parsed) {
+        // Non-JSON response — try v1 fallback for diagnostics
+        const v1Url = `https://api.0x.org/swap/v1/quote?${params}`;
+        console.log("[swap-to-usdce] Trying v1 fallback:", v1Url);
+        const v1Res = await fetch(v1Url, { headers: apiHeaders });
+        const v1Parsed = await safeJsonParse(v1Res, "v1/quote");
+
+        if (!v1Parsed) {
+          return new Response(
+            JSON.stringify({ error: "Swap service unavailable", details: "0x returned non-JSON on both endpoints" }),
+            { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        if (!v1Res.ok) {
+          return new Response(
+            JSON.stringify({ error: v1Parsed.data?.reason || "Quote failed (v1 fallback)", details: v1Parsed.data }),
+            { status: v1Res.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // v1 succeeded — return its data
+        const d = v1Parsed.data;
+        return new Response(
+          JSON.stringify({
+            buyAmount: d.buyAmount,
+            buyAmountFormatted: (Number(d.buyAmount) / 1e6).toFixed(2),
+            sellAmount: d.sellAmount,
+            sellAmountFormatted: (Number(d.sellAmount) / 1e6).toFixed(2),
+            transaction: { to: d.to, data: d.data, value: d.value, gas: d.gas, gasPrice: d.gasPrice },
+            allowanceTarget: d.allowanceTarget,
+            _endpoint: "v1-fallback",
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const data = parsed.data;
 
       if (!res.ok) {
         console.error("[swap-to-usdce] 0x quote error:", JSON.stringify(data));
@@ -67,18 +116,14 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Return quote info for the frontend
       return new Response(
         JSON.stringify({
           buyAmount: data.buyAmount,
           buyAmountFormatted: (Number(data.buyAmount) / 1e6).toFixed(2),
           sellAmount: data.sellAmount,
           sellAmountFormatted: (Number(data.sellAmount) / 1e6).toFixed(2),
-          // Transaction data for client-side execution
           transaction: data.transaction,
-          // Permit2 data if needed
           permit2: data.permit2,
-          // Allowance target for approval
           allowanceTarget: data.issues?.allowance?.spender,
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -86,7 +131,6 @@ Deno.serve(async (req) => {
     }
 
     if (action === "price") {
-      // Lighter price-only endpoint (no calldata)
       const params = new URLSearchParams({
         chainId: String(CHAIN_ID),
         sellToken: USDC_NATIVE,
@@ -95,14 +139,20 @@ Deno.serve(async (req) => {
         taker: wallet_address,
       });
 
-      const res = await fetch(`https://api.0x.org/swap/permit2/price?${params}`, {
-        headers: {
-          "0x-api-key": ZEROX_API_KEY,
-          "0x-version": "2",
-        },
-      });
+      const url = `https://api.0x.org/swap/permit2/price?${params}`;
+      console.log("[swap-to-usdce] 0x price request:", url);
 
-      const data = await res.json();
+      const res = await fetch(url, { headers: apiHeaders });
+      const parsed = await safeJsonParse(res, "permit2/price");
+
+      if (!parsed) {
+        return new Response(
+          JSON.stringify({ error: "Swap service unavailable", details: "0x returned non-JSON for price" }),
+          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const data = parsed.data;
 
       if (!res.ok) {
         return new Response(
