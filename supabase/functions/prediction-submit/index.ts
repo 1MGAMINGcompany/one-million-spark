@@ -974,11 +974,37 @@ Deno.serve(async (req) => {
     let tradeStatus = "requested";
 
     if (isPolymarketBacked) {
-      // ── Shared backend CLOB credentials (no per-user sessions) ──
-      const pmApiKey = Deno.env.get("PM_API_KEY");
-      const pmApiSecret = Deno.env.get("PM_API_SECRET");
-      const pmPassphrase = Deno.env.get("PM_PASSPHRASE");
-      const pmTradingKey = Deno.env.get("PM_TRADING_KEY");
+      // ── Per-user CLOB credentials (Model A) with shared fallback ──
+      let pmApiKey: string | null = null;
+      let pmApiSecret: string | null = null;
+      let pmPassphrase: string | null = null;
+      let pmTradingKey: string | null = null;
+      let credSource = "none";
+
+      // Try per-user credentials first
+      const { data: userSession } = await supabase
+        .from("polymarket_user_sessions")
+        .select("pm_api_key, pm_api_secret, pm_passphrase, pm_trading_key, status, safe_address, safe_deployed")
+        .eq("wallet", normalizedWallet)
+        .eq("status", "active")
+        .maybeSingle();
+
+      if (userSession?.pm_api_key && userSession?.pm_api_secret && userSession?.pm_passphrase && userSession?.pm_trading_key) {
+        pmApiKey = userSession.pm_api_key;
+        pmApiSecret = userSession.pm_api_secret;
+        pmPassphrase = userSession.pm_passphrase;
+        pmTradingKey = userSession.pm_trading_key;
+        credSource = "per_user";
+        console.log(`[prediction-submit] Using per-user CLOB creds for ${normalizedWallet}`);
+      } else {
+        // Fallback to shared backend credentials (legacy broker model)
+        pmApiKey = Deno.env.get("PM_API_KEY") || null;
+        pmApiSecret = Deno.env.get("PM_API_SECRET") || null;
+        pmPassphrase = Deno.env.get("PM_PASSPHRASE") || null;
+        pmTradingKey = Deno.env.get("PM_TRADING_KEY") || null;
+        credSource = "shared_backend";
+        console.log(`[prediction-submit] Using shared backend CLOB creds (user has no per-user session)`);
+      }
 
       const isCredsValid = pmApiKey && pmApiSecret && pmPassphrase && pmTradingKey;
 
@@ -996,6 +1022,7 @@ Deno.serve(async (req) => {
           size: net_amount_usdc,
           fee_collected: feeCollected,
           fee_tx_hash: feeTxHash,
+          cred_source: credSource,
         });
 
         // ── EIP-712 signed CLOB order submission ──
