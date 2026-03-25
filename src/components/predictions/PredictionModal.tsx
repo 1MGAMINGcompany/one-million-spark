@@ -63,6 +63,8 @@ export default function PredictionModal({
   showSuccess?: boolean;
   wallet?: string;
   tradeResult?: TradeResult | null;
+  approvalStep?: ApprovalStep;
+  approvalError?: string | null;
 }) {
   const referralCode = useMyReferralCode(wallet ?? null);
   const { usdc_balance, usdc_balance_formatted, is_loading: balanceLoading } = usePolygonUSDC();
