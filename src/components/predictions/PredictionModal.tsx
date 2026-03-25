@@ -71,6 +71,7 @@ export default function PredictionModal({
 }) {
   const referralCode = useMyReferralCode(wallet ?? null);
   const { usdc_balance, usdc_balance_formatted, is_loading: balanceLoading } = usePolygonUSDC();
+  const { fundingState, nativeUsdcBalance, nativeUsdcFormatted } = usePolygonBalances();
   const [amount, setAmount] = useState("");
   const amountNum = parseFloat(amount) || 0;
   const feeRate = getFeeRate(fight);
