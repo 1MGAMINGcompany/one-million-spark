@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { usePrivyWallet } from '@/hooks/usePrivyWallet';
 import { ArrowLeft, Flame, Trophy, Target, Coins, Zap, Gamepad2, TrendingUp, Loader2, Palette, Share2, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -181,7 +182,8 @@ export default function PlayerProfile() {
   const { wallet } = useParams<{ wallet: string }>();
   const navigate = useNavigate();
   const { publicKey } = useWallet();
-  const isOwnProfile = publicKey && wallet === publicKey.toBase58();
+  const { walletAddress: privyEvmAddress } = usePrivyWallet();
+  const isOwnProfile = (publicKey && wallet === publicKey.toBase58()) || (privyEvmAddress && wallet?.toLowerCase() === privyEvmAddress.toLowerCase());
 
   const [profile, setProfile] = useState<PlayerProfileData | null>(null);
   const [recentGames, setRecentGames] = useState<RecentGame[]>([]);
@@ -204,9 +206,31 @@ export default function PlayerProfile() {
           .from('player_profiles').select('*').eq('wallet', wallet).maybeSingle();
 
         if (profileError) { setError('Failed to load profile'); setLoading(false); return; }
-        if (!profileData) { setError('Player not found'); setLoading(false); return; }
 
-        setProfile(profileData);
+        if (!profileData) {
+          // No Solana profile — check if this wallet has prediction entries (EVM user)
+          const { count } = await supabase
+            .from('prediction_entries')
+            .select('id', { count: 'exact', head: true })
+            .eq('wallet', wallet);
+
+          if (count && count > 0) {
+            // Shell profile so the page renders with predictions section
+            setProfile({
+              wallet,
+              games_played: 0, wins: 0, losses: 0, win_rate: 0,
+              total_sol_won: 0, biggest_pot_won: 0,
+              current_streak: 0, longest_streak: 0,
+              favorite_game: null, last_game_at: null,
+            });
+          } else {
+            setError('Player not found');
+            setLoading(false);
+            return;
+          }
+        } else {
+          setProfile(profileData);
+        }
 
         // Fetch recent games, ratings, and predictions in parallel
         const [matchesRes, ratingsRes, predictionsRes] = await Promise.all([
