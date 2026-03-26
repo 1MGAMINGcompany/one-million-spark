@@ -73,6 +73,13 @@ function parseSport(eventName: string, sourceProvider?: string | null, category?
   if (upper.includes("BOXING") || upper.includes("MAYWEATHER")) return "BOXING";
   if (upper.includes("MUAY THAI")) return "MUAY THAI";
   if (upper.includes("BARE KNUCKLE") || upper.includes("BKFC")) return "BARE KNUCKLE";
+  if (upper.includes("NFL") || upper.includes("SUPER BOWL")) return "NFL";
+  if (upper.includes("NBA") || upper.includes("WNBA")) return "NBA";
+  if (upper.includes("NCAA") || upper.includes("MARCH MADNESS") || upper.includes("COLLEGE FOOTBALL")) return "NCAA";
+  if (upper.includes("NHL") || upper.includes("STANLEY CUP")) return "NHL";
+  if (upper.includes("MLB") || upper.includes("WORLD SERIES")) return "MLB";
+  if (upper.includes("ATP") || upper.includes("WTA") || upper.includes("TENNIS") || upper.includes("WIMBLEDON") || upper.includes("US OPEN TENNIS") || upper.includes("ROLAND GARROS") || upper.includes("AUSTRALIAN OPEN")) return "TENNIS";
+  if (upper.includes("PGA") || upper.includes("GOLF") || upper.includes("MASTERS GOLF") || upper.includes("RYDER CUP")) return "GOLF";
   const parts = eventName.split(' — ');
   return parts[0] || "OTHER";
 }
