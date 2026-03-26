@@ -200,10 +200,12 @@ export default function PlayerProfile() {
   useEffect(() => {
     const fetchProfile = async () => {
       if (!wallet) { setError('No wallet specified'); setLoading(false); return; }
+      // Normalize EVM addresses to lowercase (DB stores lowercase, URLs have checksummed case)
+      const queryWallet = wallet.startsWith('0x') ? wallet.toLowerCase() : wallet;
 
       try {
         const { data: profileData, error: profileError } = await supabase
-          .from('player_profiles').select('*').eq('wallet', wallet).maybeSingle();
+          .from('player_profiles').select('*').eq('wallet', queryWallet).maybeSingle();
 
         if (profileError) { setError('Failed to load profile'); setLoading(false); return; }
 
