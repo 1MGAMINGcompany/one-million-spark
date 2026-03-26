@@ -415,8 +415,8 @@ export default function PlayerProfile() {
               <p className="text-2xl font-bold text-foreground">{(profile.win_rate * 100).toFixed(1)}%</p>
             </div>
             <div className="bg-muted/30 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-muted-foreground mb-1"><Coins className="h-4 w-4" /><span className="text-xs uppercase tracking-wide">SOL Won</span></div>
-              <p className="text-2xl font-bold text-primary">{formatSol(Number(profile.total_sol_won))}</p>
+              <div className="flex items-center gap-2 text-muted-foreground mb-1"><Coins className="h-4 w-4" /><span className="text-xs uppercase tracking-wide">USDC Won</span></div>
+              <p className="text-2xl font-bold text-primary">{formatUsdc(Number(profile.total_sol_won))}</p>
             </div>
             <div className="bg-muted/30 rounded-lg p-4">
               <div className="flex items-center gap-2 text-muted-foreground mb-1"><Trophy className="h-4 w-4" /><span className="text-xs uppercase tracking-wide">Biggest Pot</span></div>
