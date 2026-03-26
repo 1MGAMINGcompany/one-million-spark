@@ -214,7 +214,7 @@ export default function PlayerProfile() {
           const { count } = await supabase
             .from('prediction_entries')
             .select('id', { count: 'exact', head: true })
-            .eq('wallet', wallet);
+            .eq('wallet', queryWallet);
 
           if (count && count > 0) {
             // Shell profile so the page renders with predictions section
