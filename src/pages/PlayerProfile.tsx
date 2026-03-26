@@ -520,7 +520,7 @@ export default function PlayerProfile() {
                       <span className={`text-xs font-semibold uppercase px-2 py-0.5 rounded ${game.isWin ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>{game.isWin ? 'W' : 'L'}</span>
                       <span className="text-foreground font-medium">{capitalize(game.game_type)}</span>
                     </div>
-                    <span className="font-mono text-sm text-muted-foreground">{formatSol(game.pot)} SOL</span>
+                    <span className="font-mono text-sm text-muted-foreground">{formatUsdc(game.pot)}</span>
                   </div>
                 ))}
               </div>
