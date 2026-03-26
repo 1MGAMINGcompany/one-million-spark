@@ -239,14 +239,14 @@ export default function PlayerProfile() {
           supabase.from('matches')
             .select('game_type, winner_wallet, stake_lamports, max_players, finalized_at')
             .eq('status', 'finalized')
-            .or(`creator_wallet.eq.${wallet},winner_wallet.eq.${wallet}`)
+            .or(`creator_wallet.eq.${queryWallet},winner_wallet.eq.${queryWallet}`)
             .order('finalized_at', { ascending: false }).limit(5),
           supabase.from('ratings')
             .select('game_type, rating, games, wins, losses')
-            .eq('wallet', wallet).order('games', { ascending: false }),
+            .eq('wallet', queryWallet).order('games', { ascending: false }),
           supabase.from('prediction_entries')
             .select('id, fight_id, fighter_pick, amount_usd, reward_usd, claimed, created_at, prediction_fights(title, fighter_a_name, fighter_b_name, status, winner, event_name)')
-            .eq('wallet', wallet).order('created_at', { ascending: false }).limit(20),
+            .eq('wallet', queryWallet).order('created_at', { ascending: false }).limit(20),
         ]);
 
         if (matchesRes.data) {
