@@ -463,6 +463,12 @@ export default function FightPredictions() {
         const isRelayerError = errorCode.startsWith("rpc_") || errorCode === "relayer_not_configured" || errorCode === "relayer_tx_failed" || errorCode === "fee_collection_failed";
         const isSetupRequired = errorCode === "trading_wallet_setup_required";
         dbg("predict:backend_error", { backendMsg, errorCode, isRelayerError, isSetupRequired });
+        const isGeoBlocked = errorCode === "geo_blocked" || backendMsg.toLowerCase().includes("region") || backendMsg.toLowerCase().includes("restricted") || backendMsg.toLowerCase().includes("geo");
+        if (isGeoBlocked) {
+          setGeoBlocked(true);
+          setSubmitting(false);
+          return;
+        }
         if (isSetupRequired) {
           toast.error("Trading wallet setup needed", {
             description: "Setting up your trading wallet. Please try again after setup completes.",
