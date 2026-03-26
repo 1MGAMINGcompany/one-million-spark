@@ -107,11 +107,8 @@ function isAcceptableEvent(ev: GammaEvent): { accepted: boolean; reason: string 
 }
 
 function isDateEligible(ev: GammaEvent): { eligible: boolean; reason: string; missingDate: boolean } {
-  // Cutoff = tomorrow 00:00 UTC — only show events from tomorrow onward
-  const tomorrow = new Date();
-  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-  tomorrow.setUTCHours(0, 0, 0, 0);
-  const cutoff = tomorrow.getTime();
+  // Cutoff = 2 hours ago — allow today's upcoming + recently started games
+  const cutoff = Date.now() - 2 * 60 * 60 * 1000;
 
   // startDate = actual match/event time on Polymarket
   // endDate = market resolution window (can be weeks/months later — unreliable for match timing)
