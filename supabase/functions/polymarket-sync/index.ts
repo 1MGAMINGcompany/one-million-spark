@@ -381,8 +381,9 @@ interface FilterResult {
   rawSample: any[];
 }
 
-/** Apply payload-aware safety filters with full rejection logging */
-function filterFixtures(events: GammaEvent[]): FilterResult {
+/** Apply payload-aware safety filters with full rejection logging.
+ *  When adminMode=true, skip date and closed checks (admin browse/search/preview). */
+function filterFixtures(events: GammaEvent[], adminMode = false): FilterResult {
   const accepted: GammaEvent[] = [];
   const rejected: FilterResult["rejected"] = [];
 
