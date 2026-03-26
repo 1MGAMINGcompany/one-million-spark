@@ -679,6 +679,14 @@ export default function FightPredictions() {
 
       {/* Content — organized by status sections */}
       <div className="max-w-4xl mx-auto px-4 pb-8 space-y-6">
+        {/* Geo-block banner */}
+        {geoBlocked && !geoBlockDismissed && (
+          <GeoBlockScreen
+            wallet={address || undefined}
+            onDismiss={() => setGeoBlockDismissed(true)}
+            onExploreReadOnly={() => setGeoBlockDismissed(true)}
+          />
+        )}
         {activeSport === "MUAY THAI" && (
           <ONEFridayFightsHub hasFights={hasContent} />
         )}
