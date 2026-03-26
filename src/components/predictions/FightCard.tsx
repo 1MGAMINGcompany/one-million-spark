@@ -300,6 +300,7 @@ export default function FightCard({
   onWalletRequired,
   isSoccerEvent,
   eventHasStarted,
+  readOnly,
 }: {
   fight: Fight;
   onPredict: (fight: Fight, pick: "fighter_a" | "fighter_b") => void;
@@ -311,6 +312,7 @@ export default function FightCard({
   onWalletRequired?: () => void;
   isSoccerEvent?: boolean;
   eventHasStarted?: boolean;
+  readOnly?: boolean;
 }) {
   const { poolA, poolB } = getPoolUsd(fight);
   const { oddsA, oddsB, noData, resolving } = calcOdds(poolA, poolB, fight.price_a, fight.price_b, fight.source);
@@ -331,7 +333,7 @@ export default function FightCard({
 
   const displayStatus = (eventHasStarted && fight.status === "open") ? "locked" : fight.status;
   const badge = STATUS_BADGE[displayStatus] || STATUS_BADGE.open;
-  const canPredict = displayStatus === "open" && !resolving;
+  const canPredict = displayStatus === "open" && !resolving && !readOnly;
 
   const sport = detectSport(fight);
   const isSoccer = isSoccerEvent || sport === "soccer";

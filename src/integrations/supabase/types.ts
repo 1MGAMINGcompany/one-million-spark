@@ -418,6 +418,30 @@ export type Database = {
         }
         Relationships: []
       }
+      geo_waitlist: {
+        Row: {
+          created_at: string | null
+          detected_region: string | null
+          email: string
+          id: string
+          wallet: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          detected_region?: string | null
+          email: string
+          id?: string
+          wallet?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          detected_region?: string | null
+          email?: string
+          id?: string
+          wallet?: string | null
+        }
+        Relationships: []
+      }
       h2h: {
         Row: {
           a_wins: number

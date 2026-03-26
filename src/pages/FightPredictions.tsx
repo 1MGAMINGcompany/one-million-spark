@@ -12,6 +12,7 @@ import { dbg } from "@/lib/debugLog";
 import Navbar from "@/components/Navbar";
 import EventSection, { parseSport } from "@/components/predictions/EventSection";
 import predictionsHero from "@/assets/predictions-hero.jpeg";
+import GeoBlockScreen from "@/components/predictions/GeoBlockScreen";
 import PredictionModal from "@/components/predictions/PredictionModal";
 import ComingSoonCard from "@/components/predictions/ComingSoonCard";
 import AllowanceDebugPanel from "@/components/predictions/AllowanceDebugPanel";
@@ -182,6 +183,9 @@ export default function FightPredictions() {
   const [showPredictionSuccess, setShowPredictionSuccess] = useState(false);
   const [lastTradeResult, setLastTradeResult] = useState<TradeResult | null>(null);
   const [claimShareData, setClaimShareData] = useState<{ eventTitle: string; amountWon: number; fighterName?: string; sport?: string } | null>(null);
+  const [geoBlocked, setGeoBlocked] = useState(false);
+  const [geoBlockDismissed, setGeoBlockDismissed] = useState(false);
+  const readOnly = geoBlocked && geoBlockDismissed;
 
   const isConnected = authenticated && isPrivyUser;
 
@@ -459,6 +463,12 @@ export default function FightPredictions() {
         const isRelayerError = errorCode.startsWith("rpc_") || errorCode === "relayer_not_configured" || errorCode === "relayer_tx_failed" || errorCode === "fee_collection_failed";
         const isSetupRequired = errorCode === "trading_wallet_setup_required";
         dbg("predict:backend_error", { backendMsg, errorCode, isRelayerError, isSetupRequired });
+        const isGeoBlocked = errorCode === "geo_blocked" || backendMsg.toLowerCase().includes("region") || backendMsg.toLowerCase().includes("restricted") || backendMsg.toLowerCase().includes("geo");
+        if (isGeoBlocked) {
+          setGeoBlocked(true);
+          setSubmitting(false);
+          return;
+        }
         if (isSetupRequired) {
           toast.error("Trading wallet setup needed", {
             description: "Setting up your trading wallet. Please try again after setup completes.",
@@ -608,6 +618,7 @@ export default function FightPredictions() {
         }}
         event={group.event}
         isStaleLive={staleLiveKeys.has(eventName)}
+        readOnly={readOnly}
       />
     ));
 
@@ -668,6 +679,14 @@ export default function FightPredictions() {
 
       {/* Content — organized by status sections */}
       <div className="max-w-4xl mx-auto px-4 pb-8 space-y-6">
+        {/* Geo-block banner */}
+        {geoBlocked && !geoBlockDismissed && (
+          <GeoBlockScreen
+            wallet={address || undefined}
+            onDismiss={() => setGeoBlockDismissed(true)}
+            onExploreReadOnly={() => setGeoBlockDismissed(true)}
+          />
+        )}
         {activeSport === "MUAY THAI" && (
           <ONEFridayFightsHub hasFights={hasContent} />
         )}

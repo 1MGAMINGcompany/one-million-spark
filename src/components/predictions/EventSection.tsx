@@ -124,6 +124,7 @@ export default function EventSection({
   onWalletRequired,
   event,
   isStaleLive,
+  readOnly,
 }: {
   eventName: string;
   fights: Fight[];
@@ -136,6 +137,7 @@ export default function EventSection({
   onWalletRequired?: () => void;
   event?: PredictionEvent;
   isStaleLive?: boolean;
+  readOnly?: boolean;
 }) {
   const isDatePast = event?.event_date ? new Date(event.event_date).getTime() <= Date.now() : false;
   const hasSiblingLocked = fights.some(f => f.status === "locked" || f.status === "live");
@@ -255,6 +257,7 @@ export default function EventSection({
                   onWalletRequired={onWalletRequired}
                   isSoccerEvent={sport === "FUTBOL"}
                   eventHasStarted={eventHasStarted}
+                  readOnly={readOnly}
                 />
               ))}
             </div>
@@ -279,6 +282,7 @@ export default function EventSection({
                     onWalletRequired={onWalletRequired}
                     isSoccerEvent={sport === "FUTBOL"}
                     eventHasStarted={eventHasStarted}
+                    readOnly={readOnly}
                   />
                 ))}
               </div>
