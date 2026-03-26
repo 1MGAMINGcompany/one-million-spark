@@ -16,6 +16,7 @@ import ReferralSection from '@/components/ReferralSection';
 import { CHESS_SKINS } from '@/lib/chessSkins';
 import SocialShareModal from '@/components/SocialShareModal';
 import type { ShareVariant } from '@/components/SocialShareModal';
+import profileBanner from '@/assets/profile-banner.jpg';
 
 interface PlayerProfileData {
   wallet: string;
@@ -70,11 +71,11 @@ function shortenWallet(address: string): string {
   return `${address.slice(0, 4)}…${address.slice(-4)}`;
 }
 
-// Format SOL with max 4 decimals
-function formatSol(value: number): string {
-  if (value === 0) return '0';
-  if (value < 0.0001) return '<0.0001';
-  return value.toFixed(4).replace(/\.?0+$/, '');
+// Format USDC with max 2 decimals
+function formatUsdc(value: number): string {
+  if (value === 0) return '$0';
+  if (value < 0.01) return '<$0.01';
+  return `$${value.toFixed(2)}`;
 }
 
 // Capitalize first letter
@@ -82,8 +83,8 @@ function capitalize(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-// High Roller threshold in SOL
-const HIGH_ROLLER_THRESHOLD = 0.5;
+// High Roller threshold in USDC
+const HIGH_ROLLER_THRESHOLD = 50;
 
 // Get player title (highest priority wins)
 function getPlayerTitle(profile: PlayerProfileData): { title: string; color: string } | null {
@@ -163,7 +164,7 @@ interface Badge { id: string; label: string; icon: string; color: string; }
 function getPlayerBadges(profile: PlayerProfileData): Badge[] {
   const badges: Badge[] = [];
   if (profile.current_streak >= 3) badges.push({ id: 'hot-streak', label: 'Hot Streak', icon: '🔥', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' });
-  if (Number(profile.total_sol_won) >= 1) badges.push({ id: 'big-winner', label: 'Big Winner', icon: '💰', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' });
+  if (Number(profile.total_sol_won) >= 100) badges.push({ id: 'big-winner', label: 'Big Winner', icon: '💰', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' });
   if (profile.win_rate >= 0.65 && profile.games_played >= 10) badges.push({ id: 'strategy-master', label: 'Strategy Master', icon: '🧠', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' });
   return badges.slice(0, 3);
 }
@@ -334,6 +335,11 @@ export default function PlayerProfile() {
         </Button>
       </div>
 
+      {/* Banner */}
+      <div className="mb-4 rounded-xl overflow-hidden">
+        <img src={profileBanner} alt="1M Gaming — Who Wins?" className="w-full h-auto object-cover" />
+      </div>
+
       <Card className="border-border/50 bg-card/80 backdrop-blur overflow-hidden">
         {/* Header - Fighter Record Style */}
         <div className="bg-gradient-to-br from-primary/20 via-primary/10 to-transparent p-6 border-b border-border/30">
@@ -409,12 +415,12 @@ export default function PlayerProfile() {
               <p className="text-2xl font-bold text-foreground">{(profile.win_rate * 100).toFixed(1)}%</p>
             </div>
             <div className="bg-muted/30 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-muted-foreground mb-1"><Coins className="h-4 w-4" /><span className="text-xs uppercase tracking-wide">SOL Won</span></div>
-              <p className="text-2xl font-bold text-primary">{formatSol(Number(profile.total_sol_won))}</p>
+              <div className="flex items-center gap-2 text-muted-foreground mb-1"><Coins className="h-4 w-4" /><span className="text-xs uppercase tracking-wide">USDC Won</span></div>
+              <p className="text-2xl font-bold text-primary">{formatUsdc(Number(profile.total_sol_won))}</p>
             </div>
             <div className="bg-muted/30 rounded-lg p-4">
               <div className="flex items-center gap-2 text-muted-foreground mb-1"><Trophy className="h-4 w-4" /><span className="text-xs uppercase tracking-wide">Biggest Pot</span></div>
-              <p className="text-2xl font-bold text-foreground">{formatSol(Number(profile.biggest_pot_won))}</p>
+              <p className="text-2xl font-bold text-foreground">{formatUsdc(Number(profile.biggest_pot_won))}</p>
             </div>
             <div className="bg-muted/30 rounded-lg p-4">
               <div className="flex items-center gap-2 text-muted-foreground mb-1"><Zap className="h-4 w-4" /><span className="text-xs uppercase tracking-wide">Streak</span></div>
@@ -514,7 +520,7 @@ export default function PlayerProfile() {
                       <span className={`text-xs font-semibold uppercase px-2 py-0.5 rounded ${game.isWin ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>{game.isWin ? 'W' : 'L'}</span>
                       <span className="text-foreground font-medium">{capitalize(game.game_type)}</span>
                     </div>
-                    <span className="font-mono text-sm text-muted-foreground">{formatSol(game.pot)} SOL</span>
+                    <span className="font-mono text-sm text-muted-foreground">{formatUsdc(game.pot)}</span>
                   </div>
                 ))}
               </div>
