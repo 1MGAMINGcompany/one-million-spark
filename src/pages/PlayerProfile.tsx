@@ -83,8 +83,8 @@ function capitalize(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-// High Roller threshold in SOL
-const HIGH_ROLLER_THRESHOLD = 0.5;
+// High Roller threshold in USDC
+const HIGH_ROLLER_THRESHOLD = 50;
 
 // Get player title (highest priority wins)
 function getPlayerTitle(profile: PlayerProfileData): { title: string; color: string } | null {
