@@ -335,6 +335,11 @@ export default function PlayerProfile() {
         </Button>
       </div>
 
+      {/* Banner */}
+      <div className="mb-4 rounded-xl overflow-hidden">
+        <img src={profileBanner} alt="1M Gaming — Who Wins?" className="w-full h-auto object-cover" />
+      </div>
+
       <Card className="border-border/50 bg-card/80 backdrop-blur overflow-hidden">
         {/* Header - Fighter Record Style */}
         <div className="bg-gradient-to-br from-primary/20 via-primary/10 to-transparent p-6 border-b border-border/30">
