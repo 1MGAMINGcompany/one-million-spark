@@ -2334,6 +2334,11 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
     { key: "soccer", label: "⚽ Soccer" },
     { key: "mma", label: "🥊 UFC / MMA" },
     { key: "boxing", label: "🥊 Boxing" },
+    { key: "nfl", label: "🏈 NFL" },
+    { key: "nba", label: "🏀 NBA" },
+    { key: "nhl", label: "🏒 NHL" },
+    { key: "tennis", label: "🎾 Tennis" },
+    { key: "golf", label: "⛳ Golf" },
   ];
 
   const SOCCER_LEAGUES = [
@@ -2365,6 +2370,22 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
     { key: "mma", label: "MMA" },
     { key: "boxing", label: "Boxing" },
     { key: "bkfc", label: "BKFC" },
+  ];
+
+  const US_SPORTS_LEAGUES = [
+    { key: "nfl", label: "NFL" },
+    { key: "nba", label: "NBA" },
+    { key: "wnba", label: "WNBA" },
+    { key: "mlb", label: "MLB" },
+    { key: "nhl", label: "NHL" },
+    { key: "ncaab", label: "NCAA Basketball" },
+    { key: "cfb", label: "NCAA Football" },
+  ];
+
+  const OTHER_SPORTS_LEAGUES = [
+    { key: "atp", label: "ATP Tennis" },
+    { key: "wta", label: "WTA Tennis" },
+    { key: "golf", label: "Golf / PGA" },
   ];
 
   const resetResults = () => {
