@@ -137,17 +137,31 @@ function PhoneMockup() {
 
 /* ── Scrolling Sports Ticker ── */
 const TICKER_SPORTS = [
-  "🏈 NFL", "🏀 NBA", "🏒 NHL", "⚽ Soccer", "🥊 Boxing", "🥋 MMA",
-  "⚾ MLB", "🎾 Tennis", "🏎️ F1", "🏏 Cricket", "⛳ Golf", "🏆 UFC",
-  "🏈 NFL", "🏀 NBA", "🏒 NHL", "⚽ Soccer", "🥊 Boxing", "🥋 MMA",
+  { src: footballImg, label: "NFL" },
+  { src: basketballImg, label: "NBA" },
+  { src: hockeyImg, label: "NHL" },
+  { src: soccerballImg, label: "Soccer" },
+  { src: boxingImg, label: "Boxing" },
+  { src: mmaImg, label: "MMA" },
+  { src: golfImg, label: "Golf" },
+  { src: footballImg, label: "NFL" },
+  { src: basketballImg, label: "NBA" },
+  { src: hockeyImg, label: "NHL" },
+  { src: soccerballImg, label: "Soccer" },
+  { src: boxingImg, label: "Boxing" },
+  { src: mmaImg, label: "MMA" },
+  { src: golfImg, label: "Golf" },
 ];
 
 function SportsTicker() {
   return (
     <div className="overflow-hidden py-6 border-y border-white/5 bg-white/[0.01]">
-      <div className="flex animate-ticker whitespace-nowrap gap-8">
+      <div className="flex animate-ticker whitespace-nowrap gap-8 items-center">
         {TICKER_SPORTS.map((s, i) => (
-          <span key={i} className="text-white/30 text-sm font-medium shrink-0">{s}</span>
+          <span key={i} className="flex items-center gap-2 text-white/30 text-sm font-medium shrink-0">
+            <img src={s.src} alt={s.label} className="w-5 h-5 object-contain opacity-60" />
+            {s.label}
+          </span>
         ))}
       </div>
     </div>
