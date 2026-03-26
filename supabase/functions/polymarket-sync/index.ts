@@ -900,7 +900,7 @@ Deno.serve(async (req) => {
       if (leagueKey) {
         const cfg = LEAGUE_SOURCES[leagueKey];
         const { events: rawEvents, endpoints } = await fetchByLeagueSource(cfg);
-        const { accepted: results, rejected, rawSample } = filterFixtures(rawEvents);
+        const { accepted: results, rejected, rawSample } = filterFixtures(rawEvents, true);
 
         const tel = buildTelemetry({
           mode: "search_redirected_to_browse",
