@@ -12,6 +12,7 @@ import { dbg } from "@/lib/debugLog";
 import Navbar from "@/components/Navbar";
 import EventSection, { parseSport } from "@/components/predictions/EventSection";
 import predictionsHero from "@/assets/predictions-hero.jpeg";
+import GeoBlockScreen from "@/components/predictions/GeoBlockScreen";
 import PredictionModal from "@/components/predictions/PredictionModal";
 import ComingSoonCard from "@/components/predictions/ComingSoonCard";
 import AllowanceDebugPanel from "@/components/predictions/AllowanceDebugPanel";
