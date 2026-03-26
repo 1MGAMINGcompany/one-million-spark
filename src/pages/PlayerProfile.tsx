@@ -16,6 +16,7 @@ import ReferralSection from '@/components/ReferralSection';
 import { CHESS_SKINS } from '@/lib/chessSkins';
 import SocialShareModal from '@/components/SocialShareModal';
 import type { ShareVariant } from '@/components/SocialShareModal';
+import profileBanner from '@/assets/profile-banner.jpg';
 
 interface PlayerProfileData {
   wallet: string;
