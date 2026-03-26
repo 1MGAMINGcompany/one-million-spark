@@ -2,7 +2,7 @@ import { useRef, useState, useCallback } from "react";
 import { X, Download, Copy, Check, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import predictionsHero from "@/assets/predictions-hero.jpeg";
+import whoWinsBanner from "@/assets/who-wins-banner.jpeg";
 import pyramidLogo from "@/assets/1m-pyramid-logo-hd.png";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -28,31 +28,17 @@ function sportEmoji(sport?: string): string {
   return "🎯";
 }
 
-function sportLabel(sport?: string): string {
-  if (!sport) return "Prediction";
-  const s = sport.toUpperCase();
-  if (s.includes("FUTBOL") || s.includes("SOCCER") || s.includes("FOOTBALL")) return "Futbol Prediction";
-  if (s.includes("MMA")) return "MMA Prediction";
-  if (s.includes("BOXING")) return "Boxing Prediction";
-  if (s.includes("MUAY")) return "Muay Thai Prediction";
-  return "Prediction";
-}
-
 export type ShareVariant = "prediction" | "claim_win" | "victory";
 
 export interface ShareModalProps {
   open: boolean;
   onClose: () => void;
   variant: ShareVariant;
-  /** Prediction-specific */
   eventTitle?: string;
   sport?: string;
   fighterPick?: string;
-  /** USD amount for predictions */
   amountUsd?: number;
-  /** USD pool total */
   poolUsd?: number;
-  /** Win / Victory — USD won */
   gameTitle?: string;
   amountWon?: number;
   /** @deprecated — use amountWon for predictions, kept for skill-game backward compat */
@@ -91,18 +77,14 @@ export default function SocialShareModal(props: ShareModalProps) {
     gameTitle, amountWon, solWon, wallet, referralCode, opponentType, streak, gameName,
   } = props;
 
-  // Unified win amount: prefer amountWon (USD), fall back to solWon for skill games
   const winAmount = amountWon ?? solWon;
   const isSolWin = amountWon == null && solWon != null;
-  const winUnit = isSolWin ? "SOL" : "USD";
 
   const cardRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
 
   const shareUrl = buildShareUrl(referralCode);
   const caption = buildCaption(props, shareUrl);
-  const emoji = sportEmoji(sport);
-  const label = sportLabel(sport);
 
   const handleCopyLink = useCallback(() => {
     navigator.clipboard.writeText(shareUrl).then(() => {
@@ -166,15 +148,15 @@ export default function SocialShareModal(props: ShareModalProps) {
             className="relative overflow-hidden rounded-2xl border border-primary/30 shadow-2xl"
             style={{ background: "hsl(var(--card))" }}
           >
-            {/* Hero image top strip */}
-            <div className="relative h-28 w-full overflow-hidden">
+            {/* Hero image — WHO WINS? banner */}
+            <div className="relative w-full overflow-hidden">
               <img
-                src={predictionsHero}
-                alt=""
-                className="w-full h-full object-cover object-[center_24%]"
+                src={whoWinsBanner}
+                alt="WHO WINS?"
+                className="w-full h-auto object-cover"
                 crossOrigin="anonymous"
               />
-              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/40 to-[hsl(var(--card))]" />
+              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[hsl(var(--card))]" />
               <div className="absolute top-3 left-3 flex items-center gap-2">
                 <img src={pyramidLogo} alt="1MGAMING" className="w-7 h-7" crossOrigin="anonymous" />
                 <span className="text-[11px] font-bold text-white/90 tracking-wider font-['Cinzel']">1MGAMING</span>
@@ -194,9 +176,6 @@ export default function SocialShareModal(props: ShareModalProps) {
             <div className="px-5 pb-5 pt-2 space-y-3">
               {variant === "prediction" && (
                 <>
-                  <p className="text-[10px] uppercase tracking-widest text-primary font-bold">
-                    {emoji} {label}
-                  </p>
                   <h3 className="text-base font-bold text-foreground font-['Cinzel'] leading-tight">{eventTitle}</h3>
                   <div className="flex items-center justify-between bg-secondary/40 rounded-lg px-3 py-2">
                     <span className="text-xs text-muted-foreground">I Picked</span>
@@ -214,14 +193,16 @@ export default function SocialShareModal(props: ShareModalProps) {
                       <span className="text-sm font-bold text-muted-foreground">${poolUsd.toFixed(2)}</span>
                     </div>
                   )}
+                  {/* Hype tagline */}
+                  <p className="text-[10px] text-center text-muted-foreground tracking-wide">
+                    Fight Predictions (BKFC · Muay Thai · MMA · Futbol)<br />
+                    Players vs Players • Winners take the pot
+                  </p>
                 </>
               )}
 
               {variant === "claim_win" && (
                 <>
-                  <p className="text-[10px] uppercase tracking-widest text-primary font-bold">
-                    {emoji} {label}
-                  </p>
                   <h3 className="text-base font-bold text-foreground font-['Cinzel'] leading-tight">{gameTitle || eventTitle}</h3>
                   {winAmount != null && (
                     <div className="text-center py-2">
@@ -316,7 +297,7 @@ export default function SocialShareModal(props: ShareModalProps) {
 function buildCaption(p: ShareModalProps, url: string): string {
   const emoji = sportEmoji(p.sport);
   if (p.variant === "prediction") {
-    return `${emoji} My pick: ${p.fighterPick}${p.amountUsd ? ` | $${p.amountUsd.toFixed(2)}` : ""} on @1MGaming\n${p.eventTitle || ""}`;
+    return `WHO WINS? 👊\n${emoji} My pick: ${p.fighterPick}${p.amountUsd ? ` | $${p.amountUsd.toFixed(2)}` : ""}\nFight Predictions (BKFC · Muay Thai · MMA · Futbol)\nPlayers vs Players • Winners take the pot\n👇 Make your pick\n🌐 ${url}`;
   }
   if (p.variant === "claim_win") {
     const won = p.amountWon ?? p.solWon;
