@@ -851,7 +851,7 @@ Deno.serve(async (req) => {
       }
       const cfg = LEAGUE_SOURCES[league_key];
       const { events: rawEvents, endpoints } = await fetchByLeagueSource(cfg);
-      const { accepted: results, rejected, rawSample } = filterFixtures(rawEvents);
+      const { accepted: results, rejected, rawSample } = filterFixtures(rawEvents, true);
 
       const rejectionSummary = rejected.length > 0
         ? rejected.slice(0, 5).map(r => ({ title: r.event.title, dateReason: r.dateReason, fixtureReason: r.fixtureReason }))
