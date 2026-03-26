@@ -107,11 +107,8 @@ function isAcceptableEvent(ev: GammaEvent): { accepted: boolean; reason: string 
 }
 
 function isDateEligible(ev: GammaEvent): { eligible: boolean; reason: string; missingDate: boolean } {
-  // Cutoff = tomorrow 00:00 UTC — only show events from tomorrow onward
-  const tomorrow = new Date();
-  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-  tomorrow.setUTCHours(0, 0, 0, 0);
-  const cutoff = tomorrow.getTime();
+  // Cutoff = 2 hours ago — allow today's upcoming + recently started games
+  const cutoff = Date.now() - 2 * 60 * 60 * 1000;
 
   // startDate = actual match/event time on Polymarket
   // endDate = market resolution window (can be weeks/months later — unreliable for match timing)
@@ -384,8 +381,9 @@ interface FilterResult {
   rawSample: any[];
 }
 
-/** Apply payload-aware safety filters with full rejection logging */
-function filterFixtures(events: GammaEvent[]): FilterResult {
+/** Apply payload-aware safety filters with full rejection logging.
+ *  When adminMode=true, skip date and closed checks (admin browse/search/preview). */
+function filterFixtures(events: GammaEvent[], adminMode = false): FilterResult {
   const accepted: GammaEvent[] = [];
   const rejected: FilterResult["rejected"] = [];
 
@@ -411,15 +409,17 @@ function filterFixtures(events: GammaEvent[]): FilterResult {
   }));
 
   for (const ev of events) {
-    // Date check
-    const dateCheck = isDateEligible(ev);
-    if (!dateCheck.eligible) {
-      rejected.push({ event: ev, dateReason: dateCheck.reason });
-      continue;
+    // Date check — skip in admin mode
+    if (!adminMode) {
+      const dateCheck = isDateEligible(ev);
+      if (!dateCheck.eligible) {
+        rejected.push({ event: ev, dateReason: dateCheck.reason });
+        continue;
+      }
     }
 
-    // Also skip if closed===true or active===false
-    if (ev.closed === true) {
+    // Also skip if closed===true — skip in admin mode
+    if (!adminMode && ev.closed === true) {
       rejected.push({ event: ev, fixtureReason: "closed=true" });
       continue;
     }
@@ -808,7 +808,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      const { accepted: results, rejected, rawSample } = filterFixtures(rawResults);
+      const { accepted: results, rejected, rawSample } = filterFixtures(rawResults, true);
 
       const rejectionSummary = rejected.length > 0
         ? rejected.slice(0, 5).map(r => ({ title: r.event.title, dateReason: r.dateReason, fixtureReason: r.fixtureReason }))
@@ -851,7 +851,7 @@ Deno.serve(async (req) => {
       }
       const cfg = LEAGUE_SOURCES[league_key];
       const { events: rawEvents, endpoints } = await fetchByLeagueSource(cfg);
-      const { accepted: results, rejected, rawSample } = filterFixtures(rawEvents);
+      const { accepted: results, rejected, rawSample } = filterFixtures(rawEvents, true);
 
       const rejectionSummary = rejected.length > 0
         ? rejected.slice(0, 5).map(r => ({ title: r.event.title, dateReason: r.dateReason, fixtureReason: r.fixtureReason }))
@@ -900,7 +900,7 @@ Deno.serve(async (req) => {
       if (leagueKey) {
         const cfg = LEAGUE_SOURCES[leagueKey];
         const { events: rawEvents, endpoints } = await fetchByLeagueSource(cfg);
-        const { accepted: results, rejected, rawSample } = filterFixtures(rawEvents);
+        const { accepted: results, rejected, rawSample } = filterFixtures(rawEvents, true);
 
         const tel = buildTelemetry({
           mode: "search_redirected_to_browse",
@@ -949,7 +949,7 @@ Deno.serve(async (req) => {
       const endpoints = searchQueries.map(q => `public-search?q=${q}`);
       const rawResults = await fetchSearchEvents(searchQueries);
 
-      const { accepted, rejected, rawSample } = filterFixtures(rawResults);
+      const { accepted, rejected, rawSample } = filterFixtures(rawResults, true);
 
       // Apply sport_filter category matching on accepted results
       let results = accepted;
