@@ -1,17 +1,28 @@
 
 
-# Geo-Block Screen — Dismissible Banner with VPN Hint
+# Fix: EVM Wallet Case Mismatch in Player Profile
 
-## What We Are Building
+## Problem
+The URL contains a checksummed EVM address (mixed case like `0x3eD68845CF...`), but `prediction_entries.wallet` stores addresses in lowercase. The `.eq('wallet', wallet)` query is case-sensitive, so it returns 0 results and shows "Player not found".
 
-A dismissible geo-block notification that appears when a user is detected in a restricted region. The user can close it and continue browsing predictions in read-only mode. Includes a supported regions list, waitlist signup, and a legal VPN suggestion.
+## Solution
+Normalize the wallet param to lowercase for all EVM address queries (addresses starting with `0x`). This affects both the `prediction_entries` head-check and all three parallel data fetches.
 
-## Changes
+## Changes: `src/pages/PlayerProfile.tsx`
 
-### 1. New component: `src/components/predictions/GeoBlockScreen.tsx`
-- **Dismissible card** (not a blocking overlay) — user can close via X button
-- Title: "Service Not Available in Your Region"
-- Message: "We're not yet available in your location due to local regulations."
-- Supported regions displayed as badges: US (most states), UK, EU, Canada, Australia, Japan, Brazil
-- "Join Waitlist" button with email input — saves to `geo_waitlist` table
-- VPN notice (legally framed): "Many users access global services using a VPN. Using a VPN to access this service is your personal choice and responsibility." — small muted text, not a direct
+1. After extracting `wallet` from params, create a normalized query key:
+```typescript
+const queryWallet = wallet?.startsWith('0x') ? wallet.toLowerCase() : wallet;
+```
+
+2. Use `queryWallet` instead of `wallet` in all database queries:
+   - `player_profiles` select
+   - `prediction_entries` count check
+   - `matches` select
+   - `ratings` select
+   - `prediction_entries` full select
+
+3. Keep `wallet` (original case) for display purposes and URL generation.
+
+This is a single-line addition plus find-replace of `wallet` → `queryWallet` in the query calls inside `fetchProfile`.
+
