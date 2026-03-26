@@ -164,7 +164,7 @@ interface Badge { id: string; label: string; icon: string; color: string; }
 function getPlayerBadges(profile: PlayerProfileData): Badge[] {
   const badges: Badge[] = [];
   if (profile.current_streak >= 3) badges.push({ id: 'hot-streak', label: 'Hot Streak', icon: '🔥', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' });
-  if (Number(profile.total_sol_won) >= 1) badges.push({ id: 'big-winner', label: 'Big Winner', icon: '💰', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' });
+  if (Number(profile.total_sol_won) >= 100) badges.push({ id: 'big-winner', label: 'Big Winner', icon: '💰', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' });
   if (profile.win_rate >= 0.65 && profile.games_played >= 10) badges.push({ id: 'strategy-master', label: 'Strategy Master', icon: '🧠', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' });
   return badges.slice(0, 3);
 }
