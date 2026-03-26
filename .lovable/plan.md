@@ -1,34 +1,44 @@
 
 
-# Replace Generic Emojis with HD Sport Images on 1mg.live
+# Fix: Backend Allowance Check Must Poll Both Smart Wallet and EOA
 
 ## Problem
-The 1mg.live landing page uses generic emoji icons (🏈, 🏀, ⚽, 🥊, etc.) for floating background icons and the sports ticker. This looks cheap and not premium.
+Every prediction attempt fails with `insufficient_allowance: have 0, need 20000`. The approval transaction is confirmed on-chain, but the backend checks the wrong address.
 
-## Plan
+## Root Cause
+1. Privy's `useSendTransaction` executes the `approve()` call FROM the embedded EOA (not the Smart Wallet)
+2. The frontend correctly polls both addresses and proceeds when the EOA has allowance
+3. The backend `collectFeeViaRelayer()` only checks allowance for the wallet address sent in the request body (the Smart Wallet address `0x3eD68845...`)
+4. The Smart Wallet has 0 allowance because the approval was set by the EOA
 
-### 1. Copy uploaded images to `src/assets/`
-Copy all 7 uploaded images into `src/assets/`:
-- `mmagloves-1mg.png` (MMA)
-- `boxinggloves-1mg.png` (Boxing)
-- `soccerball-1mg.png` (Soccer/Futbol)
-- `basketball-1mg.png` (Basketball/NBA)
-- `football-1mg.png` (Football/NFL)
-- `hockeystick-1mg.png` (Hockey/NHL)
-- `golfclub-1mg.png` (Golf)
+## Fix
 
-### 2. Update `LandingPage.tsx` — Floating Icons
-Replace the `FLOAT_ICONS` array (line 23-31) from emoji objects to image-based objects. Update `FloatingIcons` component to render `<img>` tags instead of emoji `<span>` tags, with the same floating animation but using the HD images (sized ~40-50px, with opacity and object-contain).
+### 1. Send both addresses from frontend to backend
+Update `FightPredictions.tsx` to include the EOA address in the prediction-submit request body alongside the Smart Wallet address.
 
-### 3. Update `LandingPage.tsx` — Sports Ticker
-Replace the `TICKER_SPORTS` array (line 131-135) from emoji strings to image+label pairs. Update `SportsTicker` component to render small HD images (~20px) next to each sport name instead of emojis.
+### 2. Update `prediction-submit` to check allowance on both addresses
+In `collectFeeViaRelayer()`, check allowance for both the Smart Wallet and EOA. Execute `transferFrom` using whichever address actually has the allowance.
 
-### 4. Update `ComingSoonCard.tsx` — Replace old MMA gloves image
-Update the MMA entry in `ComingSoonCard.tsx` and `EventSection.tsx` to use the new `mmagloves-1mg.png` instead of the old `mma-gloves.png`. Also update boxing to use `boxinggloves-1mg.png` instead of `boxing-glove.png`.
+### Technical Detail
+
+**Frontend change** (`src/pages/FightPredictions.tsx`):
+```typescript
+body: {
+  fight_id: selectedFight.id,
+  wallet: address,        // Smart Wallet
+  wallet_eoa: eoaAddress, // EOA — new field
+  fighter_pick: selectedPick,
+  amount_usd: amountUsd,
+}
+```
+
+**Backend change** (`supabase/functions/prediction-submit/index.ts`):
+- Accept `wallet_eoa` from request body
+- In `collectFeeViaRelayer`, check allowance on both `userWallet` and `walletEoa`
+- Use the address that has sufficient allowance as the `from` in `transferFrom`
+- Log which address was used for audit transparency
 
 ## Files Changed
-- `src/pages/platform/LandingPage.tsx` — floating icons + ticker use HD images
-- `src/components/predictions/ComingSoonCard.tsx` — swap old sport images for new HD ones
-- `src/components/predictions/EventSection.tsx` — swap old sport images for new HD ones
-- 7 new image files copied to `src/assets/`
+- `src/pages/FightPredictions.tsx` — send `wallet_eoa` in submit body
+- `supabase/functions/prediction-submit/index.ts` — dual-address allowance check + transferFrom from correct address
 
