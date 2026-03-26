@@ -71,11 +71,11 @@ function shortenWallet(address: string): string {
   return `${address.slice(0, 4)}…${address.slice(-4)}`;
 }
 
-// Format SOL with max 4 decimals
-function formatSol(value: number): string {
-  if (value === 0) return '0';
-  if (value < 0.0001) return '<0.0001';
-  return value.toFixed(4).replace(/\.?0+$/, '');
+// Format USDC with max 2 decimals
+function formatUsdc(value: number): string {
+  if (value === 0) return '$0';
+  if (value < 0.01) return '<$0.01';
+  return `$${value.toFixed(2)}`;
 }
 
 // Capitalize first letter
