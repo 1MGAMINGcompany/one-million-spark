@@ -124,7 +124,7 @@ interface Fight {
   explainer_card: string | null;
 }
 
-const SPORT_CATEGORIES = ["MMA", "BOXING", "MUAY THAI", "BARE KNUCKLE", "FUTBOL", "BASKETBALL", "OTHER"];
+const SPORT_CATEGORIES = ["MMA", "BOXING", "MUAY THAI", "BARE KNUCKLE", "FUTBOL", "NFL", "NBA", "NCAA", "NHL", "MLB", "TENNIS", "GOLF", "BASKETBALL", "OTHER"];
 
 /** Return total pool in USD. Falls back to legacy lamports→SOL conversion for old data. */
 function getFightPoolUsd(fight: Fight): number {
