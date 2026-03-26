@@ -1025,7 +1025,8 @@ Deno.serve(async (req) => {
         treasury: TREASURY_WALLET,
       });
 
-      const collectResult = await collectFeeViaRelayer(normalizedWallet!, fee_usd);
+      const normalizedEoa = wallet_eoa ? String(wallet_eoa).trim().toLowerCase() : undefined;
+      const collectResult = await collectFeeViaRelayer(normalizedWallet!, fee_usd, normalizedEoa);
 
       if (collectResult.success && collectResult.txHash) {
         feeCollected = true;
