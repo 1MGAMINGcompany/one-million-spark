@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { usePrivyWallet } from '@/hooks/usePrivyWallet';
 import { ArrowLeft, Flame, Trophy, Target, Coins, Zap, Gamepad2, TrendingUp, Loader2, Palette, Share2, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
