@@ -409,15 +409,17 @@ function filterFixtures(events: GammaEvent[], adminMode = false): FilterResult {
   }));
 
   for (const ev of events) {
-    // Date check
-    const dateCheck = isDateEligible(ev);
-    if (!dateCheck.eligible) {
-      rejected.push({ event: ev, dateReason: dateCheck.reason });
-      continue;
+    // Date check — skip in admin mode
+    if (!adminMode) {
+      const dateCheck = isDateEligible(ev);
+      if (!dateCheck.eligible) {
+        rejected.push({ event: ev, dateReason: dateCheck.reason });
+        continue;
+      }
     }
 
-    // Also skip if closed===true or active===false
-    if (ev.closed === true) {
+    // Also skip if closed===true — skip in admin mode
+    if (!adminMode && ev.closed === true) {
       rejected.push({ event: ev, fixtureReason: "closed=true" });
       continue;
     }
