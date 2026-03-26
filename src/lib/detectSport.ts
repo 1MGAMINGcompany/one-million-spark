@@ -20,9 +20,18 @@ export function detectSport(fight: {
   // API-Football source is always soccer
   if (fight.source === "api-football") return "soccer";
 
-  // Check event name for soccer keywords
+  // Check event name for sport keywords
   const upper = (fight.event_name || "").toUpperCase();
   if (SOCCER_KEYWORDS.some((k) => upper.includes(k))) return "soccer";
+
+  // US Sports & Others
+  if (upper.includes("NFL") || upper.includes("SUPER BOWL")) return "nfl";
+  if (upper.includes("NBA") || upper.includes("WNBA")) return "nba";
+  if (upper.includes("NCAA") || upper.includes("MARCH MADNESS") || upper.includes("COLLEGE FOOTBALL")) return "ncaa";
+  if (upper.includes("NHL") || upper.includes("STANLEY CUP")) return "nhl";
+  if (upper.includes("MLB") || upper.includes("WORLD SERIES")) return "mlb";
+  if (upper.includes("ATP") || upper.includes("WTA") || upper.includes("TENNIS") || upper.includes("WIMBLEDON")) return "tennis";
+  if (upper.includes("PGA") || upper.includes("GOLF") || upper.includes("MASTERS GOLF")) return "golf";
 
   // Over/Under detection
   const nameA = (fight.fighter_a_name || "").toLowerCase().trim();
