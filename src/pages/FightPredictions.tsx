@@ -159,7 +159,7 @@ function PastEventsSection({
 
 export default function FightPredictions() {
   // Use Privy EVM wallet for predictions (Polygon)
-  const { walletAddress: address, isPrivyUser } = usePrivyWallet();
+  const { walletAddress: address, eoaAddress, isPrivyUser } = usePrivyWallet();
   const { authenticated, login, getAccessToken } = usePrivy();
   const { state: allowanceState, ensureAllowance, reset: resetAllowance } = useAllowanceGate();
   const { relayer_allowance } = usePolygonUSDC();
