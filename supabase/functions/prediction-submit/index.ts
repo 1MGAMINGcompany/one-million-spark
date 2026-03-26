@@ -1142,7 +1142,7 @@ Deno.serve(async (req) => {
             amount_usdc: net_amount_usdc,
           });
 
-          const fundResult = await fundDerivedWallet(normalizedWallet!, derivedAddr, net_amount_usdc);
+          const fundResult = await fundDerivedWallet(normalizedWallet!, derivedAddr, net_amount_usdc, normalizedEoa);
 
           if (!fundResult.success) {
             await auditLog(supabase, tradeOrderId, normalizedWallet, "funding_derived_wallet_failed", null, {
