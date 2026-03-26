@@ -1,51 +1,54 @@
 
 
-# Fix: "Player not found" on My Profile for Privy Users
+# Geo-Block Screen — Dismissible Banner with VPN Hint
 
-## Problem
-The Navbar's "My Profile" button navigates to `/player/${walletAddress}` where `walletAddress` is the EVM smart wallet address (e.g. `0x3ed...`). But `PlayerProfile` queries `player_profiles` which only contains Solana wallet addresses. Privy-only users have no row there, so they get "Player not found".
+## What We Are Building
 
-## Solution
-Make the profile page work for EVM wallet users by checking both `player_profiles` (Solana games) and `prediction_entries` (predictions). If no Solana profile exists but prediction entries do, show a predictions-focused profile instead of an error.
+A dismissible geo-block notification that appears when a user is detected in a restricted region. The user can close it and continue browsing predictions in read-only mode. Includes a supported regions list, waitlist signup, and a legal VPN suggestion.
 
 ## Changes
 
-### `src/pages/PlayerProfile.tsx`
-1. Import `usePrivyWallet` to detect own EVM profile (in addition to Solana `useWallet`)
-2. Update `isOwnProfile` check to also match when `wallet` param equals the Privy EVM address
-3. In `fetchProfile`: if `player_profiles` returns no row, instead of showing "Player not found", check `prediction_entries` for that wallet. If entries exist, set profile to a default empty profile object (0 games, 0 wins, etc.) so the page renders with just the predictions section
-4. If neither profile nor predictions exist, then show "Player not found"
+### 1. New component: `src/components/predictions/GeoBlockScreen.tsx`
+- **Dismissible card** (not a blocking overlay) — user can close via X button
+- Title: "Service Not Available in Your Region"
+- Message: "We're not yet available in your location due to local regulations."
+- Supported regions displayed as badges: US (most states), UK, EU, Canada, Australia, Japan, Brazil
+- "Join Waitlist" button with email input — saves to `geo_waitlist` table
+- VPN notice (legally framed): "Many users access global services using a VPN. Using a VPN to access this service is your personal choice and responsibility." — small muted text, not a direct instruction
+- "Explore Predictions" button that dismisses the banner and enables read-only mode
 
-### `src/components/Navbar.tsx`
-No changes needed — it already correctly links to the EVM wallet address. The fix is entirely in how `PlayerProfile` handles missing Solana profiles.
-
-## Technical Detail
-```typescript
-// In fetchProfile, after player_profiles returns null:
-if (!profileData) {
-  // Check if this wallet has prediction entries
-  const { count } = await supabase
-    .from('prediction_entries')
-    .select('id', { count: 'exact', head: true })
-    .eq('wallet', wallet);
-  
-  if (count && count > 0) {
-    // Create a shell profile so the page renders with predictions
-    setProfile({
-      wallet,
-      games_played: 0, wins: 0, losses: 0, win_rate: 0,
-      total_sol_won: 0, biggest_pot_won: 0,
-      current_streak: 0, longest_streak: 0,
-      favorite_game: null, last_game_at: null,
-    });
-    // Continue to fetch predictions below
-  } else {
-    setError('Player not found');
-    setLoading(false);
-    return;
-  }
-}
+### 2. Database migration: `geo_waitlist` table
+```sql
+CREATE TABLE public.geo_waitlist (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  email text NOT NULL,
+  wallet text,
+  detected_region text,
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE public.geo_waitlist ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Anyone can join waitlist" ON public.geo_waitlist FOR INSERT WITH CHECK (true);
 ```
 
-The predictions fetch already uses the `wallet` param, so it will work with EVM addresses that exist in `prediction_entries`.
+### 3. Update `src/pages/FightPredictions.tsx`
+- Add `geoBlocked` and `geoBlockDismissed` state variables
+- In the error handler (around line 456), detect geo-block: if `error_code === "geo_blocked"` or message contains "region" or "restricted"
+- When `geoBlocked && !geoBlockDismissed`: render `GeoBlockScreen` at top of page
+- When dismissed: set `geoBlockDismissed = true`, set `readOnly = true`
+- Pass `readOnly` prop to `EventSection` → `FightCard`
+
+### 4. Update `src/components/predictions/FightCard.tsx`
+- Accept optional `readOnly?: boolean` prop
+- When `readOnly`, disable all predict/bet buttons with tooltip "Not available in your region"
+- All fight data (odds, pools, fighters) still visible
+
+### 5. Update `src/components/predictions/EventSection.tsx`
+- Pass through `readOnly` prop to `FightCard`
+
+## Files
+- `src/components/predictions/GeoBlockScreen.tsx` — **new**
+- `src/pages/FightPredictions.tsx` — geo-block state + error detection
+- `src/components/predictions/FightCard.tsx` — readOnly prop
+- `src/components/predictions/EventSection.tsx` — pass readOnly
+- Database migration — `geo_waitlist` table
 
