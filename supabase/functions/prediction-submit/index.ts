@@ -1097,12 +1097,13 @@ Deno.serve(async (req) => {
     let tradeStatus = "requested";
 
     if (isPolymarketBacked) {
-      // ── Per-user CLOB credentials (Model A) with shared fallback ──
+      // ── Per-user CLOB credentials (Model A) — NO shared fallback ──
       let pmApiKey: string | null = null;
       let pmApiSecret: string | null = null;
       let pmPassphrase: string | null = null;
       let pmTradingKey: string | null = null;
       let credSource = "none";
+      let useNativePool = false;
 
       // Try per-user credentials first
       const { data: userSession } = await supabase
@@ -1120,18 +1121,21 @@ Deno.serve(async (req) => {
         credSource = "per_user";
         console.log(`[prediction-submit] Using per-user CLOB creds for ${normalizedWallet}`);
       } else {
-        // Fallback to shared backend credentials (legacy broker model)
-        pmApiKey = Deno.env.get("PM_API_KEY") || null;
-        pmApiSecret = Deno.env.get("PM_API_SECRET") || null;
-        pmPassphrase = Deno.env.get("PM_PASSPHRASE") || null;
-        pmTradingKey = Deno.env.get("PM_TRADING_KEY") || null;
-        credSource = "shared_backend";
-        console.log(`[prediction-submit] Using shared backend CLOB creds (user has no per-user session)`);
+        // No per-user session — skip CLOB, use native pool accounting
+        // (shared backend creds are removed to prevent silent geo-block failures)
+        credSource = "none";
+        useNativePool = true;
+        console.log(`[prediction-submit] No per-user CLOB session for ${normalizedWallet} — using native pool accounting`);
+
+        await auditLog(supabase, tradeOrderId, normalizedWallet, "clob_skipped_no_session", null, {
+          reason: "no_per_user_session",
+          note: "shared_backend_fallback_removed",
+        });
       }
 
       const isCredsValid = pmApiKey && pmApiSecret && pmPassphrase && pmTradingKey;
 
-      if (isCredsValid && tokenId) {
+      if (isCredsValid && tokenId && !useNativePool) {
         // ── Fund derived trading wallet with USDC.e before order ──
         if (credSource === "per_user" && userSession?.pm_trading_key) {
           const derivedAccount = privateKeyToAccount(userSession.pm_trading_key as `0x${string}`);
@@ -1142,7 +1146,8 @@ Deno.serve(async (req) => {
             amount_usdc: net_amount_usdc,
           });
 
-          const fundResult = await fundDerivedWallet(normalizedWallet!, derivedAddr, net_amount_usdc, normalizedEoa);
+          const normalizedEoaForFund = wallet_eoa ? String(wallet_eoa).trim().toLowerCase() : undefined;
+          const fundResult = await fundDerivedWallet(normalizedWallet!, derivedAddr, net_amount_usdc, normalizedEoaForFund);
 
           if (!fundResult.success) {
             await auditLog(supabase, tradeOrderId, normalizedWallet, "funding_derived_wallet_failed", null, {
@@ -1215,9 +1220,6 @@ Deno.serve(async (req) => {
 
         if (orderResult.orderId) {
           polymarket_status = "submitted";
-          // Do NOT mark as "filled" yet — order accepted ≠ order filled.
-          // Keep in "submitted" state; reconciliation below (or background worker)
-          // will upgrade to "filled" only when the CLOB confirms execution.
           tradeStatus = "submitted";
           filledAmountUsdc = 0;
           filledShares = 0;
@@ -1226,7 +1228,6 @@ Deno.serve(async (req) => {
           await updateTradeOrder(supabase, tradeOrderId, {
             status: "submitted",
             polymarket_order_id: orderResult.orderId,
-            // Optimistic fill fields left at 0 — updated by reconciliation
             expected_price: expectedPrice,
             expected_shares: shares,
           });
@@ -1294,7 +1295,6 @@ Deno.serve(async (req) => {
                   filledAmountUsdc = Number(reconUpdates.filled_amount_usdc);
                   if (reconPrice > 0) avgFillPrice = reconPrice;
                 }
-                // Set finalized_at only when we have confirmed fill data
                 if (newStatus === "filled") {
                   reconUpdates.finalized_at = new Date().toISOString();
                 }
@@ -1340,60 +1340,75 @@ Deno.serve(async (req) => {
             });
           }
         } else {
-          // CLOB rejection
-          polymarket_status = orderResult.status;
-          tradeStatus = "failed";
+          // CLOB rejection — detect geo-block and fall through to native pool
+          const isGeoBlock = orderResult.error?.includes("restricted in your region") ||
+            orderResult.error?.includes("403") ||
+            orderResult.status === "clob_error";
 
-          await updateTradeOrder(supabase, tradeOrderId, {
-            status: "failed",
-            error_code: "clob_rejected",
-            error_message: orderResult.error
-              ? orderResult.error.substring(0, 500)
-              : "CLOB order rejected",
-            finalized_at: new Date().toISOString(),
-          });
+          if (isGeoBlock) {
+            // Geo-blocked: fall through to native pool accounting instead of failing
+            useNativePool = true;
+            polymarket_status = "clob_geo_blocked";
 
-          await auditLog(supabase, tradeOrderId, normalizedWallet, "trade_failed", null, {
-            reason: "clob_rejected",
-            clob_status: orderResult.status,
-          });
+            await auditLog(supabase, tradeOrderId, normalizedWallet, "clob_geo_blocked_fallback", null, {
+              clob_error: orderResult.error?.substring(0, 200),
+              fallback: "native_pool",
+            });
 
-          return json(
-            {
-              error: "Order was rejected by the exchange",
-              trade_order_id: tradeOrderId,
-              trade_status: "failed",
-            },
-            502,
-          );
+            console.log(`[prediction-submit] CLOB geo-blocked for ${normalizedWallet} — falling through to native pool`);
+          } else {
+            // Non-geo-block CLOB rejection — still fall to native pool for now
+            useNativePool = true;
+            polymarket_status = orderResult.status;
+
+            await updateTradeOrder(supabase, tradeOrderId, {
+              error_code: "clob_rejected",
+              error_message: orderResult.error
+                ? orderResult.error.substring(0, 500)
+                : "CLOB order rejected",
+            });
+
+            await auditLog(supabase, tradeOrderId, normalizedWallet, "clob_rejected_native_fallback", null, {
+              reason: "clob_rejected",
+              clob_status: orderResult.status,
+              clob_error: orderResult.error?.substring(0, 200),
+            });
+
+            console.log(`[prediction-submit] CLOB rejected for ${normalizedWallet} — falling through to native pool`);
+          }
         }
 
-        console.log(
-          `[prediction-submit] Polymarket order: user=${normalizedWallet}, token=${tokenId}, amount=$${net_amount_usdc}, price=${expectedPrice}, status=${polymarket_status}, fee_collected=${feeCollected}`,
-        );
-      } else {
-        // Deferred: user needs PM auth or trading key
-        polymarket_status = "awaiting_user_auth";
-        tradeStatus = "requested";
+        if (!useNativePool) {
+          console.log(
+            `[prediction-submit] Polymarket order: user=${normalizedWallet}, token=${tokenId}, amount=$${net_amount_usdc}, price=${expectedPrice}, status=${polymarket_status}, fee_collected=${feeCollected}`,
+          );
+        }
+      }
 
-        const missingField = !pmApiKey
-          ? "no_api_key"
-          : !pmTradingKey
-            ? "no_trading_key"
-            : "session_invalid";
+      // If we need native pool fallback (no creds, geo-blocked, or CLOB rejected)
+      if (useNativePool) {
+        tradeStatus = "filled";
+        filledAmountUsdc = net_amount_usdc;
+        filledShares = shares;
+        polymarket_status = polymarket_status || "native_pool_fallback";
 
         await updateTradeOrder(supabase, tradeOrderId, {
-          status: "requested",
-          error_code: "awaiting_user_auth",
+          status: "filled",
+          filled_amount_usdc: filledAmountUsdc,
+          filled_shares: filledShares,
+          finalized_at: new Date().toISOString(),
+          error_code: null,
+          error_message: null,
         });
 
-        await auditLog(supabase, tradeOrderId, normalizedWallet, "deferred_awaiting_auth", null, {
-          missing: missingField,
+        await auditLog(supabase, tradeOrderId, normalizedWallet, "native_pool_fallback_filled", null, {
+          reason: credSource === "none" ? "no_clob_session" : "clob_unavailable",
+          amount_usdc: net_amount_usdc,
+          shares,
+          polymarket_price_used: expectedPrice,
         });
 
-        console.log(
-          `[prediction-submit] Polymarket deferred: user=${normalizedWallet} needs PM auth (${missingField})`,
-        );
+        console.log(`[prediction-submit] Native pool fill: user=${normalizedWallet}, amount=$${net_amount_usdc}, shares=${shares}, reason=${credSource === "none" ? "no_session" : "clob_fallback"}`);
       }
     } else {
       // Native 1MGAMING event — mark as filled immediately (local pool)

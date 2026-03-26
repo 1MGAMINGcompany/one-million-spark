@@ -163,7 +163,7 @@ export default function FightPredictions() {
   const { authenticated, login, getAccessToken } = usePrivy();
   const { state: allowanceState, ensureAllowance, reset: resetAllowance } = useAllowanceGate();
   const { relayer_allowance } = usePolygonUSDC();
-  usePolymarketSession();
+  const { hasSession, canTrade, loading: pmSessionLoading, setupTradingWallet } = usePolymarketSession();
   usePolymarketPrices();
   const referralCode = useMyReferralCode(address ?? null);
   const { t } = useTranslation();
@@ -457,7 +457,17 @@ export default function FightPredictions() {
         const backendMsg = data?.error || error?.message || "Backend error";
         const errorCode = data?.error_code || "";
         const isRelayerError = errorCode.startsWith("rpc_") || errorCode === "relayer_not_configured" || errorCode === "relayer_tx_failed" || errorCode === "fee_collection_failed";
-        dbg("predict:backend_error", { backendMsg, errorCode, isRelayerError });
+        const isSetupRequired = errorCode === "trading_wallet_setup_required";
+        dbg("predict:backend_error", { backendMsg, errorCode, isRelayerError, isSetupRequired });
+        if (isSetupRequired) {
+          toast.error("Trading wallet setup needed", {
+            description: "Setting up your trading wallet. Please try again after setup completes.",
+            duration: 6000,
+          });
+          setupTradingWallet().catch(() => {});
+          setSubmitting(false);
+          return;
+        }
         if (isRelayerError) {
           throw new Error("fee_relay_failed:" + backendMsg);
         }
