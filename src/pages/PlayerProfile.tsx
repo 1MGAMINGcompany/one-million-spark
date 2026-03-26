@@ -420,7 +420,7 @@ export default function PlayerProfile() {
             </div>
             <div className="bg-muted/30 rounded-lg p-4">
               <div className="flex items-center gap-2 text-muted-foreground mb-1"><Trophy className="h-4 w-4" /><span className="text-xs uppercase tracking-wide">Biggest Pot</span></div>
-              <p className="text-2xl font-bold text-foreground">{formatSol(Number(profile.biggest_pot_won))}</p>
+              <p className="text-2xl font-bold text-foreground">{formatUsdc(Number(profile.biggest_pot_won))}</p>
             </div>
             <div className="bg-muted/30 rounded-lg p-4">
               <div className="flex items-center gap-2 text-muted-foreground mb-1"><Zap className="h-4 w-4" /><span className="text-xs uppercase tracking-wide">Streak</span></div>
