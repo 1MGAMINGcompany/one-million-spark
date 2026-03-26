@@ -24,6 +24,13 @@ const SPORT_CONFIG: Record<string, SportConfig> = {
   "MMA": { image: mmaGlovesImg, color: "text-green-400", bgColor: "bg-green-500/10", borderColor: "border-green-500/30" },
   "FUTBOL": { image: futbolImg, color: "text-yellow-400", bgColor: "bg-yellow-500/10", borderColor: "border-yellow-500/30" },
   "BARE KNUCKLE": { image: bareKnuckleImg, color: "text-orange-400", bgColor: "bg-orange-500/10", borderColor: "border-orange-500/30" },
+  "NFL": { icon: "🏈", color: "text-amber-400", bgColor: "bg-amber-500/10", borderColor: "border-amber-500/30" },
+  "NBA": { icon: "🏀", color: "text-orange-400", bgColor: "bg-orange-500/10", borderColor: "border-orange-500/30" },
+  "NCAA": { icon: "🎓", color: "text-sky-400", bgColor: "bg-sky-500/10", borderColor: "border-sky-500/30" },
+  "NHL": { icon: "🏒", color: "text-cyan-400", bgColor: "bg-cyan-500/10", borderColor: "border-cyan-500/30" },
+  "MLB": { icon: "⚾", color: "text-red-400", bgColor: "bg-red-500/10", borderColor: "border-red-500/30" },
+  "TENNIS": { icon: "🎾", color: "text-lime-400", bgColor: "bg-lime-500/10", borderColor: "border-lime-500/30" },
+  "GOLF": { icon: "⛳", color: "text-emerald-400", bgColor: "bg-emerald-500/10", borderColor: "border-emerald-500/30" },
 };
 
 interface PredictionEvent {
@@ -59,7 +66,7 @@ const SOCCER_KEYWORDS = [
   "COPA", "EURO", "FIFA", "WORLD CUP",
 ];
 
-const VALID_CATEGORIES = ["MMA", "BOXING", "MUAY THAI", "BARE KNUCKLE", "FUTBOL", "BASKETBALL"];
+const VALID_CATEGORIES = ["MMA", "BOXING", "MUAY THAI", "BARE KNUCKLE", "FUTBOL", "NFL", "NBA", "NCAA", "NHL", "MLB", "TENNIS", "GOLF", "BASKETBALL"];
 
 function parseSport(eventName: string, sourceProvider?: string | null, category?: string | null): string {
   // Admin manual override takes priority
@@ -73,6 +80,13 @@ function parseSport(eventName: string, sourceProvider?: string | null, category?
   if (upper.includes("BOXING") || upper.includes("MAYWEATHER")) return "BOXING";
   if (upper.includes("MUAY THAI")) return "MUAY THAI";
   if (upper.includes("BARE KNUCKLE") || upper.includes("BKFC")) return "BARE KNUCKLE";
+  if (upper.includes("NFL") || upper.includes("SUPER BOWL")) return "NFL";
+  if (upper.includes("NBA") || upper.includes("WNBA")) return "NBA";
+  if (upper.includes("NCAA") || upper.includes("MARCH MADNESS") || upper.includes("COLLEGE FOOTBALL")) return "NCAA";
+  if (upper.includes("NHL") || upper.includes("STANLEY CUP")) return "NHL";
+  if (upper.includes("MLB") || upper.includes("WORLD SERIES")) return "MLB";
+  if (upper.includes("ATP") || upper.includes("WTA") || upper.includes("TENNIS") || upper.includes("WIMBLEDON") || upper.includes("US OPEN TENNIS") || upper.includes("ROLAND GARROS") || upper.includes("AUSTRALIAN OPEN")) return "TENNIS";
+  if (upper.includes("PGA") || upper.includes("GOLF") || upper.includes("MASTERS GOLF") || upper.includes("RYDER CUP")) return "GOLF";
   const parts = eventName.split(' — ');
   return parts[0] || "OTHER";
 }

@@ -124,7 +124,7 @@ interface Fight {
   explainer_card: string | null;
 }
 
-const SPORT_CATEGORIES = ["MMA", "BOXING", "MUAY THAI", "BARE KNUCKLE", "FUTBOL", "BASKETBALL", "OTHER"];
+const SPORT_CATEGORIES = ["MMA", "BOXING", "MUAY THAI", "BARE KNUCKLE", "FUTBOL", "NFL", "NBA", "NCAA", "NHL", "MLB", "TENNIS", "GOLF", "BASKETBALL", "OTHER"];
 
 /** Return total pool in USD. Falls back to legacy lamports→SOL conversion for old data. */
 function getFightPoolUsd(fight: Fight): number {
@@ -2334,6 +2334,11 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
     { key: "soccer", label: "⚽ Soccer" },
     { key: "mma", label: "🥊 UFC / MMA" },
     { key: "boxing", label: "🥊 Boxing" },
+    { key: "nfl", label: "🏈 NFL" },
+    { key: "nba", label: "🏀 NBA" },
+    { key: "nhl", label: "🏒 NHL" },
+    { key: "tennis", label: "🎾 Tennis" },
+    { key: "golf", label: "⛳ Golf" },
   ];
 
   const SOCCER_LEAGUES = [
@@ -2365,6 +2370,22 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
     { key: "mma", label: "MMA" },
     { key: "boxing", label: "Boxing" },
     { key: "bkfc", label: "BKFC" },
+  ];
+
+  const US_SPORTS_LEAGUES = [
+    { key: "nfl", label: "NFL" },
+    { key: "nba", label: "NBA" },
+    { key: "wnba", label: "WNBA" },
+    { key: "mlb", label: "MLB" },
+    { key: "nhl", label: "NHL" },
+    { key: "ncaab", label: "NCAA Basketball" },
+    { key: "cfb", label: "NCAA Football" },
+  ];
+
+  const OTHER_SPORTS_LEAGUES = [
+    { key: "atp", label: "ATP Tennis" },
+    { key: "wta", label: "WTA Tennis" },
+    { key: "golf", label: "Golf / PGA" },
   ];
 
   const resetResults = () => {
@@ -2603,6 +2624,38 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
           <p className="text-[10px] text-muted-foreground font-medium mt-2">🥊 Combat</p>
           <div className="flex flex-wrap gap-1.5">
             {COMBAT_LEAGUES.map(l => (
+              <button
+                key={l.key}
+                onClick={() => { setSelectedLeague(l.key); handleBrowseLeague(l.key); }}
+                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                  selectedLeague === l.key
+                    ? "bg-purple-500/20 text-purple-400 border-purple-500/40"
+                    : "bg-muted/30 text-muted-foreground border-border/30 hover:border-border"
+                }`}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted-foreground font-medium mt-2">🏈 US Sports</p>
+          <div className="flex flex-wrap gap-1.5">
+            {US_SPORTS_LEAGUES.map(l => (
+              <button
+                key={l.key}
+                onClick={() => { setSelectedLeague(l.key); handleBrowseLeague(l.key); }}
+                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                  selectedLeague === l.key
+                    ? "bg-purple-500/20 text-purple-400 border-purple-500/40"
+                    : "bg-muted/30 text-muted-foreground border-border/30 hover:border-border"
+                }`}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted-foreground font-medium mt-2">🎾 Other Sports</p>
+          <div className="flex flex-wrap gap-1.5">
+            {OTHER_SPORTS_LEAGUES.map(l => (
               <button
                 key={l.key}
                 onClick={() => { setSelectedLeague(l.key); handleBrowseLeague(l.key); }}

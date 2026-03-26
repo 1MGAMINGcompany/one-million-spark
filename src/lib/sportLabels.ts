@@ -9,8 +9,11 @@ export function getSportItemLabel(sport: string, count: number): string {
   if (["MMA", "BOXING", "MUAY THAI", "BARE KNUCKLE"].includes(s)) {
     return count === 1 ? "Fight" : "Fights";
   }
-  if (["FUTBOL", "SOCCER"].includes(s)) {
+  if (["FUTBOL", "SOCCER", "TENNIS", "NFL", "NBA", "NCAA", "NHL", "MLB"].includes(s)) {
     return count === 1 ? "Match" : "Matches";
+  }
+  if (["GOLF"].includes(s)) {
+    return count === 1 ? "Tournament" : "Tournaments";
   }
   return count === 1 ? "Game" : "Games";
 }

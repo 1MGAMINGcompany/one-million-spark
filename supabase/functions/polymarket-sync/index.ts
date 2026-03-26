@@ -140,7 +140,7 @@ type FetchStrategy = "tag" | "series" | "search";
 interface LeagueSource {
   key: string;
   label: string;
-  sportType: "soccer" | "mma" | "boxing" | "bkfc";
+  sportType: "soccer" | "mma" | "boxing" | "bkfc" | "nfl" | "nba" | "nhl" | "ncaa" | "mlb" | "tennis" | "golf";
   fetchStrategy: FetchStrategy;
   tagId?: string;
   tagSlug?: string;
@@ -177,6 +177,19 @@ const LEAGUE_SOURCES: Record<string, LeagueSource> = {
   "mma":    { key: "mma",    label: "MMA",    sportType: "mma",    fetchStrategy: "search", searchSeed: ["MMA", "MMA fight", "UFC"] },
   "boxing": { key: "boxing", label: "Boxing", sportType: "boxing", fetchStrategy: "search", searchSeed: ["boxing", "boxing fight", "boxing match"] },
   "bkfc":   { key: "bkfc",   label: "BKFC",   sportType: "bkfc",   fetchStrategy: "search", searchSeed: ["BKFC", "bare knuckle"] },
+  // ─── American Sports ───
+  "nfl":    { key: "nfl",    label: "NFL",    sportType: "nfl",    fetchStrategy: "tag", tagId: "450" },
+  "nba":    { key: "nba",    label: "NBA",    sportType: "nba",    fetchStrategy: "tag", tagId: "745" },
+  "ncaab":  { key: "ncaab",  label: "NCAA Basketball", sportType: "ncaa", fetchStrategy: "tag", tagId: "100149" },
+  "cfb":    { key: "cfb",    label: "NCAA Football",   sportType: "ncaa", fetchStrategy: "tag", tagId: "100351" },
+  "nhl":    { key: "nhl",    label: "NHL",    sportType: "nhl",    fetchStrategy: "tag", tagId: "899" },
+  "mlb":    { key: "mlb",    label: "MLB",    sportType: "mlb",    fetchStrategy: "tag", tagId: "100381" },
+  "wnba":   { key: "wnba",   label: "WNBA",   sportType: "nba",    fetchStrategy: "tag", tagId: "100254" },
+  // ─── Tennis ───
+  "atp":    { key: "atp",    label: "ATP",    sportType: "tennis", fetchStrategy: "tag", tagId: "101232" },
+  "wta":    { key: "wta",    label: "WTA",    sportType: "tennis", fetchStrategy: "tag", tagId: "102123" },
+  // ─── Golf ───
+  "golf":   { key: "golf",   label: "Golf",   sportType: "golf",   fetchStrategy: "search", searchSeed: ["PGA", "golf", "PGA Tour", "Masters golf"] },
 };
 
 // Slug → league key mapping for URL parsing
@@ -189,6 +202,9 @@ for (const [key, cfg] of Object.entries(LEAGUE_SOURCES)) {
 SPORTS_SLUG_MAP["premier-league"] = "epl";
 SPORTS_SLUG_MAP["champions-league"] = "ucl";
 SPORTS_SLUG_MAP["europa-league"] = "uel";
+SPORTS_SLUG_MAP["ncaa-basketball"] = "ncaab";
+SPORTS_SLUG_MAP["college-football"] = "cfb";
+SPORTS_SLUG_MAP["pga"] = "golf";
 
 // ── API helpers ──
 
