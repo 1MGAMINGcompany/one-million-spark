@@ -258,7 +258,8 @@ async function polygonRpcCall(
 async function collectFeeViaRelayer(
   userWallet: string,
   feeUsdc: number,
-): Promise<{ success: boolean; txHash?: string; error?: string; error_code?: string }> {
+  walletEoa?: string,
+): Promise<{ success: boolean; txHash?: string; error?: string; error_code?: string; from_address?: string }> {
   const relayerKey = Deno.env.get("FEE_RELAYER_PRIVATE_KEY");
   if (!relayerKey) {
     return { success: false, error: "relayer_not_configured", error_code: "relayer_not_configured" };
@@ -268,45 +269,58 @@ async function collectFeeViaRelayer(
     const account = privateKeyToAccount(relayerKey as `0x${string}`);
     const feeRaw = BigInt(Math.floor(feeUsdc * 10 ** USDC_DECIMALS));
 
-    // Step 1: Check allowance first
-    const allowanceCallData = encodeFunctionData({
-      abi: erc20TransferFromAbi,
-      functionName: "allowance",
-      args: [userWallet as `0x${string}`, account.address],
-    });
-
-    const allowanceRpc = await polygonRpcCall({
-      jsonrpc: "2.0", id: 1,
-      method: "eth_call",
-      params: [{ to: USDC_CONTRACT, data: allowanceCallData }, "latest"],
-    });
-
-    if (allowanceRpc.error || !allowanceRpc.result) {
-      console.error("[prediction-submit] Allowance RPC failed:", allowanceRpc.error);
-      return { success: false, error: "rpc_allowance_unavailable", error_code: "rpc_allowance_unavailable" };
+    // Build list of candidate addresses to check allowance (Smart Wallet + EOA)
+    const candidates: string[] = [userWallet];
+    if (walletEoa && walletEoa.toLowerCase() !== userWallet.toLowerCase()) {
+      candidates.push(walletEoa);
     }
 
-    const currentAllowance = BigInt(allowanceRpc.result);
-    if (currentAllowance < feeRaw) {
+    let fromAddress: string | null = null;
+
+    for (const candidate of candidates) {
+      const allowanceCallData = encodeFunctionData({
+        abi: erc20TransferFromAbi,
+        functionName: "allowance",
+        args: [candidate as `0x${string}`, account.address],
+      });
+
+      const allowanceRpc = await polygonRpcCall({
+        jsonrpc: "2.0", id: 1,
+        method: "eth_call",
+        params: [{ to: USDC_CONTRACT, data: allowanceCallData }, "latest"],
+      });
+
+      if (allowanceRpc.error || !allowanceRpc.result) continue;
+
+      const currentAllowance = BigInt(allowanceRpc.result);
+      if (currentAllowance >= feeRaw) {
+        fromAddress = candidate;
+        console.log(`[prediction-submit] Allowance found on ${candidate}: ${currentAllowance} >= ${feeRaw}`);
+        break;
+      } else {
+        console.log(`[prediction-submit] Allowance insufficient on ${candidate}: ${currentAllowance} < ${feeRaw}`);
+      }
+    }
+
+    if (!fromAddress) {
       return {
         success: false,
-        error: `insufficient_allowance: have ${currentAllowance}, need ${feeRaw}`,
+        error: `insufficient_allowance on all addresses: ${candidates.join(", ")}`,
         error_code: "insufficient_allowance",
       };
     }
 
-    // Step 2: Execute transferFrom via raw RPC
+    // Execute transferFrom from the address that has allowance
     const txData = encodeFunctionData({
       abi: erc20TransferFromAbi,
       functionName: "transferFrom",
       args: [
-        userWallet as `0x${string}`,
+        fromAddress as `0x${string}`,
         TREASURY_WALLET as `0x${string}`,
         feeRaw,
       ],
     });
 
-    // Get nonce
     const nonceRpc = await polygonRpcCall({
       jsonrpc: "2.0", id: 2,
       method: "eth_getTransactionCount",
@@ -320,7 +334,6 @@ async function collectFeeViaRelayer(
 
     const nonce = Number(BigInt(nonceRpc.result));
 
-    // Get gas price
     const gasPriceRpc = await polygonRpcCall({
       jsonrpc: "2.0", id: 3,
       method: "eth_gasPrice",
@@ -333,11 +346,8 @@ async function collectFeeViaRelayer(
     }
 
     const gasPrice = BigInt(gasPriceRpc.result);
-
-    // Pick the RPC that worked for gas price for the wallet client
     const workingRpc = gasPriceRpc.rpc || POLYGON_RPCS[0];
 
-    // Sign tx using viem
     const walletClient = createWalletClient({
       account,
       chain: polygon,
@@ -348,13 +358,13 @@ async function collectFeeViaRelayer(
       to: USDC_CONTRACT as `0x${string}`,
       data: txData,
       gas: 100_000n,
-      gasPrice: gasPrice * 12n / 10n, // 20% buffer
+      gasPrice: gasPrice * 12n / 10n,
       nonce,
       value: 0n,
     });
 
-    console.log(`[prediction-submit] Fee collected via relayer: ${txHash}, fee=$${feeUsdc}, rpc=${workingRpc}`);
-    return { success: true, txHash };
+    console.log(`[prediction-submit] Fee collected via relayer: ${txHash}, fee=$${feeUsdc}, from=${fromAddress}, rpc=${workingRpc}`);
+    return { success: true, txHash, from_address: fromAddress };
   } catch (err) {
     console.error("[prediction-submit] Relayer transferFrom failed:", err);
     return {
@@ -373,6 +383,7 @@ async function fundDerivedWallet(
   userWallet: string,
   derivedAddress: string,
   amountUsdc: number,
+  walletEoa?: string,
 ): Promise<{ success: boolean; txHash?: string; error?: string }> {
   const relayerKey = Deno.env.get("FEE_RELAYER_PRIVATE_KEY");
   if (!relayerKey) {
@@ -383,34 +394,47 @@ async function fundDerivedWallet(
     const account = privateKeyToAccount(relayerKey as `0x${string}`);
     const amountRaw = BigInt(Math.floor(amountUsdc * 10 ** USDC_DECIMALS));
 
-    // Check allowance
-    const allowanceCallData = encodeFunctionData({
-      abi: erc20TransferFromAbi,
-      functionName: "allowance",
-      args: [userWallet as `0x${string}`, account.address],
-    });
-
-    const allowanceRpc = await polygonRpcCall({
-      jsonrpc: "2.0", id: 1,
-      method: "eth_call",
-      params: [{ to: USDC_CONTRACT, data: allowanceCallData }, "latest"],
-    });
-
-    if (allowanceRpc.error || !allowanceRpc.result) {
-      return { success: false, error: "rpc_allowance_unavailable" };
+    // Check allowance on both Smart Wallet and EOA
+    const candidates: string[] = [userWallet];
+    if (walletEoa && walletEoa.toLowerCase() !== userWallet.toLowerCase()) {
+      candidates.push(walletEoa);
     }
 
-    const currentAllowance = BigInt(allowanceRpc.result);
-    if (currentAllowance < amountRaw) {
-      return { success: false, error: `insufficient_allowance_for_funding: have ${currentAllowance}, need ${amountRaw}` };
+    let fromAddress: string | null = null;
+
+    for (const candidate of candidates) {
+      const allowanceCallData = encodeFunctionData({
+        abi: erc20TransferFromAbi,
+        functionName: "allowance",
+        args: [candidate as `0x${string}`, account.address],
+      });
+
+      const allowanceRpc = await polygonRpcCall({
+        jsonrpc: "2.0", id: 1,
+        method: "eth_call",
+        params: [{ to: USDC_CONTRACT, data: allowanceCallData }, "latest"],
+      });
+
+      if (allowanceRpc.error || !allowanceRpc.result) continue;
+
+      const currentAllowance = BigInt(allowanceRpc.result);
+      if (currentAllowance >= amountRaw) {
+        fromAddress = candidate;
+        console.log(`[prediction-submit] Fund allowance found on ${candidate}: ${currentAllowance} >= ${amountRaw}`);
+        break;
+      }
     }
 
-    // Execute transferFrom: user → derived trading wallet
+    if (!fromAddress) {
+      return { success: false, error: `insufficient_allowance_for_funding on all addresses: ${candidates.join(", ")}` };
+    }
+
+    // Execute transferFrom: from address with allowance → derived trading wallet
     const txData = encodeFunctionData({
       abi: erc20TransferFromAbi,
       functionName: "transferFrom",
       args: [
-        userWallet as `0x${string}`,
+        fromAddress as `0x${string}`,
         derivedAddress as `0x${string}`,
         amountRaw,
       ],
@@ -452,7 +476,7 @@ async function fundDerivedWallet(
       value: 0n,
     });
 
-    console.log(`[prediction-submit] Funded derived wallet: ${txHash}, amount=$${amountUsdc}, from=${userWallet}, to=${derivedAddress}`);
+    console.log(`[prediction-submit] Funded derived wallet: ${txHash}, amount=$${amountUsdc}, from=${fromAddress}, to=${derivedAddress}`);
     return { success: true, txHash };
   } catch (err) {
     console.error("[prediction-submit] Fund derived wallet failed:", err);
@@ -554,6 +578,7 @@ Deno.serve(async (req) => {
     const {
       fight_id,
       wallet,
+      wallet_eoa,
       fighter_pick,
       amount_usd,
       slippage_bps: clientSlippage,
@@ -1014,7 +1039,8 @@ Deno.serve(async (req) => {
         treasury: TREASURY_WALLET,
       });
 
-      const collectResult = await collectFeeViaRelayer(normalizedWallet!, fee_usd);
+      const normalizedEoa = wallet_eoa ? String(wallet_eoa).trim().toLowerCase() : undefined;
+      const collectResult = await collectFeeViaRelayer(normalizedWallet!, fee_usd, normalizedEoa);
 
       if (collectResult.success && collectResult.txHash) {
         feeCollected = true;
@@ -1116,7 +1142,7 @@ Deno.serve(async (req) => {
             amount_usdc: net_amount_usdc,
           });
 
-          const fundResult = await fundDerivedWallet(normalizedWallet!, derivedAddr, net_amount_usdc);
+          const fundResult = await fundDerivedWallet(normalizedWallet!, derivedAddr, net_amount_usdc, normalizedEoa);
 
           if (!fundResult.success) {
             await auditLog(supabase, tradeOrderId, normalizedWallet, "funding_derived_wallet_failed", null, {
