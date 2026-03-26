@@ -1,36 +1,34 @@
 
 
-# Fix: Prediction Approval Timeout on Polymarket Events
+# Replace Generic Emojis with HD Sport Images on 1mg.live
 
 ## Problem
-When placing a prediction on the Polymarket-connected boxing event, the USDC.e approval step times out with "Approval confirmation timed out — try again". The swap worked fine, so the user has $2.44 USDC.e but cannot proceed to submit.
-
-## Root Cause
-Two issues in the approval confirmation flow:
-
-1. **Smart Wallet vs EOA address mismatch**: `usePrivyWallet` returns the Smart Wallet address (ERC-4337 proxy), but `useSendTransaction` may execute from either the Smart Wallet or the embedded EOA. The polling only checks ONE address, missing the approval if it lands on the other.
-
-2. **Double-polling with insufficient timeout**: `usePrivyFeeTransfer.approveFeeAllowance()` polls for 20s (10×2s). If it doesn't detect the allowance, it returns `success: false` with error `allowance_not_confirmed_after_20s`. The `useAllowanceGate` then shows "Approval confirmation timed out" immediately — it never gets to its own 30s polling phase. Smart Wallet UserOperations on Polygon can take 30-60s to confirm.
+The 1mg.live landing page uses generic emoji icons (🏈, 🏀, ⚽, 🥊, etc.) for floating background icons and the sports ticker. This looks cheap and not premium.
 
 ## Plan
 
-### 1. Fix `usePrivyFeeTransfer` — dual-address polling + longer timeout
-- Get both Smart Wallet and EOA addresses from Privy's `useWallets` and `usePrivy`
-- Poll allowance on BOTH addresses in each attempt
-- Increase from 10 to 20 attempts (40s total) to accommodate slow bundler inclusion
+### 1. Copy uploaded images to `src/assets/`
+Copy all 7 uploaded images into `src/assets/`:
+- `mmagloves-1mg.png` (MMA)
+- `boxinggloves-1mg.png` (Boxing)
+- `soccerball-1mg.png` (Soccer/Futbol)
+- `basketball-1mg.png` (Basketball/NBA)
+- `football-1mg.png` (Football/NFL)
+- `hockeystick-1mg.png` (Hockey/NHL)
+- `golfclub-1mg.png` (Golf)
 
-### 2. Fix `useAllowanceGate` — dual-address check + skip redundant polling
-- Read both Smart Wallet and EOA addresses
-- In `readOnChainAllowance`, check both and return the higher value
-- When `approveFeeAllowance()` returns success (already confirmed), skip the second polling loop entirely
-- Increase polling to 20 attempts for the fallback path
+### 2. Update `LandingPage.tsx` — Floating Icons
+Replace the `FLOAT_ICONS` array (line 23-31) from emoji objects to image-based objects. Update `FloatingIcons` component to render `<img>` tags instead of emoji `<span>` tags, with the same floating animation but using the HD images (sized ~40-50px, with opacity and object-contain).
 
-### 3. Fix `usePrivyWallet` — expose both addresses
-- Add an `eoaAddress` field alongside `walletAddress` (which is the Smart Wallet)
-- This allows the allowance hooks to poll both addresses without duplicating Privy hook logic
+### 3. Update `LandingPage.tsx` — Sports Ticker
+Replace the `TICKER_SPORTS` array (line 131-135) from emoji strings to image+label pairs. Update `SportsTicker` component to render small HD images (~20px) next to each sport name instead of emojis.
+
+### 4. Update `ComingSoonCard.tsx` — Replace old MMA gloves image
+Update the MMA entry in `ComingSoonCard.tsx` and `EventSection.tsx` to use the new `mmagloves-1mg.png` instead of the old `mma-gloves.png`. Also update boxing to use `boxinggloves-1mg.png` instead of `boxing-glove.png`.
 
 ## Files Changed
-- `src/hooks/usePrivyWallet.ts` — expose `eoaAddress`
-- `src/hooks/usePrivyFeeTransfer.ts` — dual-address polling, longer timeout
-- `src/hooks/useAllowanceGate.ts` — dual-address check, skip redundant polling
+- `src/pages/platform/LandingPage.tsx` — floating icons + ticker use HD images
+- `src/components/predictions/ComingSoonCard.tsx` — swap old sport images for new HD ones
+- `src/components/predictions/EventSection.tsx` — swap old sport images for new HD ones
+- 7 new image files copied to `src/assets/`
 
