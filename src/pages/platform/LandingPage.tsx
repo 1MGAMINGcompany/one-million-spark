@@ -19,34 +19,42 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { usePrivy } from "@privy-io/react-auth";
 
+import footballImg from "@/assets/football-1mg.png";
+import basketballImg from "@/assets/basketball-1mg.png";
+import soccerballImg from "@/assets/soccerball-1mg.png";
+import boxingImg from "@/assets/boxinggloves-1mg.png";
+import hockeyImg from "@/assets/hockeystick-1mg.png";
+import mmaImg from "@/assets/mmagloves-1mg.png";
+import golfImg from "@/assets/golfclub-1mg.png";
+
 /* ── Floating Sport Icons ── */
 const FLOAT_ICONS = [
-  { emoji: "🏈", size: 40, x: 8, y: 20, delay: 0, duration: 18 },
-  { emoji: "🏀", size: 36, x: 85, y: 15, delay: 2, duration: 20 },
-  { emoji: "⚽", size: 44, x: 15, y: 70, delay: 4, duration: 16 },
-  { emoji: "🥊", size: 38, x: 90, y: 65, delay: 1, duration: 22 },
-  { emoji: "🏒", size: 32, x: 75, y: 40, delay: 3, duration: 19 },
-  { emoji: "⚾", size: 30, x: 5, y: 45, delay: 5, duration: 17 },
-  { emoji: "🎾", size: 28, x: 50, y: 10, delay: 2.5, duration: 21 },
-  { emoji: "🏎️", size: 34, x: 35, y: 80, delay: 1.5, duration: 18 },
+  { src: footballImg, alt: "Football", size: 48, x: 8, y: 20, delay: 0, duration: 18 },
+  { src: basketballImg, alt: "Basketball", size: 44, x: 85, y: 15, delay: 2, duration: 20 },
+  { src: soccerballImg, alt: "Soccer", size: 52, x: 15, y: 70, delay: 4, duration: 16 },
+  { src: boxingImg, alt: "Boxing", size: 46, x: 90, y: 65, delay: 1, duration: 22 },
+  { src: hockeyImg, alt: "Hockey", size: 40, x: 75, y: 40, delay: 3, duration: 19 },
+  { src: mmaImg, alt: "MMA", size: 42, x: 5, y: 45, delay: 5, duration: 17 },
+  { src: golfImg, alt: "Golf", size: 38, x: 50, y: 10, delay: 2.5, duration: 21 },
 ];
 
 function FloatingIcons() {
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden>
       {FLOAT_ICONS.map((ic, i) => (
-        <span
+        <img
           key={i}
-          className="absolute opacity-[0.12] select-none"
+          src={ic.src}
+          alt={ic.alt}
+          className="absolute opacity-[0.18] select-none object-contain"
           style={{
             left: `${ic.x}%`,
             top: `${ic.y}%`,
-            fontSize: ic.size,
+            width: ic.size,
+            height: ic.size,
             animation: `floatOrbit ${ic.duration}s ease-in-out ${ic.delay}s infinite alternate`,
           }}
-        >
-          {ic.emoji}
-        </span>
+        />
       ))}
     </div>
   );
