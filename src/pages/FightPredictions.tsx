@@ -445,6 +445,7 @@ export default function FightPredictions() {
         body: {
           fight_id: selectedFight.id,
           wallet: address,
+          wallet_eoa: eoaAddress ?? undefined,
           fighter_pick: selectedPick,
           amount_usd: amountUsd,
           chain: "polygon",

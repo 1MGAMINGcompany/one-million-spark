@@ -554,6 +554,7 @@ Deno.serve(async (req) => {
     const {
       fight_id,
       wallet,
+      wallet_eoa,
       fighter_pick,
       amount_usd,
       slippage_bps: clientSlippage,
