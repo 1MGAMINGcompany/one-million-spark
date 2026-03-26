@@ -202,6 +202,9 @@ for (const [key, cfg] of Object.entries(LEAGUE_SOURCES)) {
 SPORTS_SLUG_MAP["premier-league"] = "epl";
 SPORTS_SLUG_MAP["champions-league"] = "ucl";
 SPORTS_SLUG_MAP["europa-league"] = "uel";
+SPORTS_SLUG_MAP["ncaa-basketball"] = "ncaab";
+SPORTS_SLUG_MAP["college-football"] = "cfb";
+SPORTS_SLUG_MAP["pga"] = "golf";
 
 // ── API helpers ──
 
