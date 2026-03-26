@@ -182,7 +182,8 @@ export default function PlayerProfile() {
   const { wallet } = useParams<{ wallet: string }>();
   const navigate = useNavigate();
   const { publicKey } = useWallet();
-  const isOwnProfile = publicKey && wallet === publicKey.toBase58();
+  const { walletAddress: privyEvmAddress } = usePrivyWallet();
+  const isOwnProfile = (publicKey && wallet === publicKey.toBase58()) || (privyEvmAddress && wallet?.toLowerCase() === privyEvmAddress.toLowerCase());
 
   const [profile, setProfile] = useState<PlayerProfileData | null>(null);
   const [recentGames, setRecentGames] = useState<RecentGame[]>([]);
