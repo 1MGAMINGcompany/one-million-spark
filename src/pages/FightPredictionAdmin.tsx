@@ -2637,6 +2637,38 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
               </button>
             ))}
           </div>
+          <p className="text-[10px] text-muted-foreground font-medium mt-2">🏈 US Sports</p>
+          <div className="flex flex-wrap gap-1.5">
+            {US_SPORTS_LEAGUES.map(l => (
+              <button
+                key={l.key}
+                onClick={() => { setSelectedLeague(l.key); handleBrowseLeague(l.key); }}
+                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                  selectedLeague === l.key
+                    ? "bg-purple-500/20 text-purple-400 border-purple-500/40"
+                    : "bg-muted/30 text-muted-foreground border-border/30 hover:border-border"
+                }`}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted-foreground font-medium mt-2">🎾 Other Sports</p>
+          <div className="flex flex-wrap gap-1.5">
+            {OTHER_SPORTS_LEAGUES.map(l => (
+              <button
+                key={l.key}
+                onClick={() => { setSelectedLeague(l.key); handleBrowseLeague(l.key); }}
+                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                  selectedLeague === l.key
+                    ? "bg-purple-500/20 text-purple-400 border-purple-500/40"
+                    : "bg-muted/30 text-muted-foreground border-border/30 hover:border-border"
+                }`}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
           {busy && <div className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" /> Loading fixtures...</div>}
         </div>
       )}

@@ -24,6 +24,13 @@ const SPORT_CONFIG: Record<string, SportConfig> = {
   "MMA": { image: mmaGlovesImg, color: "text-green-400", bgColor: "bg-green-500/10", borderColor: "border-green-500/30" },
   "FUTBOL": { image: futbolImg, color: "text-yellow-400", bgColor: "bg-yellow-500/10", borderColor: "border-yellow-500/30" },
   "BARE KNUCKLE": { image: bareKnuckleImg, color: "text-orange-400", bgColor: "bg-orange-500/10", borderColor: "border-orange-500/30" },
+  "NFL": { icon: "🏈", color: "text-amber-400", bgColor: "bg-amber-500/10", borderColor: "border-amber-500/30" },
+  "NBA": { icon: "🏀", color: "text-orange-400", bgColor: "bg-orange-500/10", borderColor: "border-orange-500/30" },
+  "NCAA": { icon: "🎓", color: "text-sky-400", bgColor: "bg-sky-500/10", borderColor: "border-sky-500/30" },
+  "NHL": { icon: "🏒", color: "text-cyan-400", bgColor: "bg-cyan-500/10", borderColor: "border-cyan-500/30" },
+  "MLB": { icon: "⚾", color: "text-red-400", bgColor: "bg-red-500/10", borderColor: "border-red-500/30" },
+  "TENNIS": { icon: "🎾", color: "text-lime-400", bgColor: "bg-lime-500/10", borderColor: "border-lime-500/30" },
+  "GOLF": { icon: "⛳", color: "text-emerald-400", bgColor: "bg-emerald-500/10", borderColor: "border-emerald-500/30" },
 };
 
 interface PredictionEvent {
