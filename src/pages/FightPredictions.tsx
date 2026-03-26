@@ -183,6 +183,9 @@ export default function FightPredictions() {
   const [showPredictionSuccess, setShowPredictionSuccess] = useState(false);
   const [lastTradeResult, setLastTradeResult] = useState<TradeResult | null>(null);
   const [claimShareData, setClaimShareData] = useState<{ eventTitle: string; amountWon: number; fighterName?: string; sport?: string } | null>(null);
+  const [geoBlocked, setGeoBlocked] = useState(false);
+  const [geoBlockDismissed, setGeoBlockDismissed] = useState(false);
+  const readOnly = geoBlocked && geoBlockDismissed;
 
   const isConnected = authenticated && isPrivyUser;
 
