@@ -383,6 +383,7 @@ async function fundDerivedWallet(
   userWallet: string,
   derivedAddress: string,
   amountUsdc: number,
+  walletEoa?: string,
 ): Promise<{ success: boolean; txHash?: string; error?: string }> {
   const relayerKey = Deno.env.get("FEE_RELAYER_PRIVATE_KEY");
   if (!relayerKey) {
@@ -393,34 +394,47 @@ async function fundDerivedWallet(
     const account = privateKeyToAccount(relayerKey as `0x${string}`);
     const amountRaw = BigInt(Math.floor(amountUsdc * 10 ** USDC_DECIMALS));
 
-    // Check allowance
-    const allowanceCallData = encodeFunctionData({
-      abi: erc20TransferFromAbi,
-      functionName: "allowance",
-      args: [userWallet as `0x${string}`, account.address],
-    });
-
-    const allowanceRpc = await polygonRpcCall({
-      jsonrpc: "2.0", id: 1,
-      method: "eth_call",
-      params: [{ to: USDC_CONTRACT, data: allowanceCallData }, "latest"],
-    });
-
-    if (allowanceRpc.error || !allowanceRpc.result) {
-      return { success: false, error: "rpc_allowance_unavailable" };
+    // Check allowance on both Smart Wallet and EOA
+    const candidates: string[] = [userWallet];
+    if (walletEoa && walletEoa.toLowerCase() !== userWallet.toLowerCase()) {
+      candidates.push(walletEoa);
     }
 
-    const currentAllowance = BigInt(allowanceRpc.result);
-    if (currentAllowance < amountRaw) {
-      return { success: false, error: `insufficient_allowance_for_funding: have ${currentAllowance}, need ${amountRaw}` };
+    let fromAddress: string | null = null;
+
+    for (const candidate of candidates) {
+      const allowanceCallData = encodeFunctionData({
+        abi: erc20TransferFromAbi,
+        functionName: "allowance",
+        args: [candidate as `0x${string}`, account.address],
+      });
+
+      const allowanceRpc = await polygonRpcCall({
+        jsonrpc: "2.0", id: 1,
+        method: "eth_call",
+        params: [{ to: USDC_CONTRACT, data: allowanceCallData }, "latest"],
+      });
+
+      if (allowanceRpc.error || !allowanceRpc.result) continue;
+
+      const currentAllowance = BigInt(allowanceRpc.result);
+      if (currentAllowance >= amountRaw) {
+        fromAddress = candidate;
+        console.log(`[prediction-submit] Fund allowance found on ${candidate}: ${currentAllowance} >= ${amountRaw}`);
+        break;
+      }
     }
 
-    // Execute transferFrom: user → derived trading wallet
+    if (!fromAddress) {
+      return { success: false, error: `insufficient_allowance_for_funding on all addresses: ${candidates.join(", ")}` };
+    }
+
+    // Execute transferFrom: from address with allowance → derived trading wallet
     const txData = encodeFunctionData({
       abi: erc20TransferFromAbi,
       functionName: "transferFrom",
       args: [
-        userWallet as `0x${string}`,
+        fromAddress as `0x${string}`,
         derivedAddress as `0x${string}`,
         amountRaw,
       ],
@@ -462,7 +476,7 @@ async function fundDerivedWallet(
       value: 0n,
     });
 
-    console.log(`[prediction-submit] Funded derived wallet: ${txHash}, amount=$${amountUsdc}, from=${userWallet}, to=${derivedAddress}`);
+    console.log(`[prediction-submit] Funded derived wallet: ${txHash}, amount=$${amountUsdc}, from=${fromAddress}, to=${derivedAddress}`);
     return { success: true, txHash };
   } catch (err) {
     console.error("[prediction-submit] Fund derived wallet failed:", err);
