@@ -8,7 +8,7 @@ const SOCCER_KEYWORDS = [
   "LIGA MX", "EPL", "COPA", "EURO", "FIFA", "WORLD CUP",
 ];
 
-export type SportType = "soccer" | "over_under" | "combat";
+export type SportType = "soccer" | "over_under" | "combat" | "nfl" | "nba" | "ncaa" | "nhl" | "mlb" | "tennis" | "golf";
 
 export function detectSport(fight: {
   source?: string | null;
