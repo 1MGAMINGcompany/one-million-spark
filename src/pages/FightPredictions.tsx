@@ -163,7 +163,7 @@ export default function FightPredictions() {
   const { authenticated, login, getAccessToken } = usePrivy();
   const { state: allowanceState, ensureAllowance, reset: resetAllowance } = useAllowanceGate();
   const { relayer_allowance } = usePolygonUSDC();
-  usePolymarketSession();
+  const { hasSession, canTrade, loading: pmSessionLoading, setupTradingWallet } = usePolymarketSession();
   usePolymarketPrices();
   const referralCode = useMyReferralCode(address ?? null);
   const { t } = useTranslation();
