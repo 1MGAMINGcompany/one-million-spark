@@ -1,52 +1,51 @@
 
 
-# My Predictions Tab + Shareable Prediction Cards
+# Fix: "Player not found" on My Profile for Privy Users
 
-## What We Are Building
+## Problem
+The Navbar's "My Profile" button navigates to `/player/${walletAddress}` where `walletAddress` is the EVM smart wallet address (e.g. `0x3ed...`). But `PlayerProfile` queries `player_profiles` which only contains Solana wallet addresses. Privy-only users have no row there, so they get "Player not found".
 
-1. **"My Predictions" section on the Player Profile page** — A new tab/section showing all open and past predictions for the logged-in user, with fight name, pick, amount, status (open/won/lost), and claim state.
+## Solution
+Make the profile page work for EVM wallet users by checking both `player_profiles` (Solana games) and `prediction_entries` (predictions). If no Solana profile exists but prediction entries do, show a predictions-focused profile instead of an error.
 
-2. **Upgraded share card for predictions** — Replace the current `predictions-hero.jpeg` hero image in `SocialShareModal` with the uploaded "WHO WINS?" banner image. Update the share caption text to match the 1MGAMING branding from the third image: "WHO WINS? 👊 / Fight Predictions (BKFC · Muay Thai · MMA · Futbol) / Players vs Players / Winners take the pot / 👇 Make your pick / 🌐 1MGaming.com"
+## Changes
 
-3. **Share button on PredictionSuccessScreen** — Already exists (`Share Pick`). Will ensure it is prominent and always visible (not gated behind feature flag check that could hide it).
+### `src/pages/PlayerProfile.tsx`
+1. Import `usePrivyWallet` to detect own EVM profile (in addition to Solana `useWallet`)
+2. Update `isOwnProfile` check to also match when `wallet` param equals the Privy EVM address
+3. In `fetchProfile`: if `player_profiles` returns no row, instead of showing "Player not found", check `prediction_entries` for that wallet. If entries exist, set profile to a default empty profile object (0 games, 0 wins, etc.) so the page renders with just the predictions section
+4. If neither profile nor predictions exist, then show "Player not found"
 
-## Plan
+### `src/components/Navbar.tsx`
+No changes needed — it already correctly links to the EVM wallet address. The fix is entirely in how `PlayerProfile` handles missing Solana profiles.
 
-### 1. Copy the "WHO WINS?" banner image to assets
-Copy `user-uploads://WhatsApp_Image_2026-03-26_at_4.33.45_PM.jpeg` to `src/assets/who-wins-banner.jpeg`. This replaces `predictions-hero.jpeg` as the share card hero.
+## Technical Detail
+```typescript
+// In fetchProfile, after player_profiles returns null:
+if (!profileData) {
+  // Check if this wallet has prediction entries
+  const { count } = await supabase
+    .from('prediction_entries')
+    .select('id', { count: 'exact', head: true })
+    .eq('wallet', wallet);
+  
+  if (count && count > 0) {
+    // Create a shell profile so the page renders with predictions
+    setProfile({
+      wallet,
+      games_played: 0, wins: 0, losses: 0, win_rate: 0,
+      total_sol_won: 0, biggest_pot_won: 0,
+      current_streak: 0, longest_streak: 0,
+      favorite_game: null, last_game_at: null,
+    });
+    // Continue to fetch predictions below
+  } else {
+    setError('Player not found');
+    setLoading(false);
+    return;
+  }
+}
+```
 
-### 2. Update `SocialShareModal.tsx` — new hero image + hype captions
-- Replace `predictions-hero` import with the new `who-wins-banner` image
-- Update `buildCaption()` for prediction variant to use the hype text:
-  ```
-  WHO WINS? 👊
-  My pick: {fighterName} | ${amount}
-  Fight Predictions (BKFC · Muay Thai · MMA · Futbol)
-  Players vs Players • Winners take the pot
-  👇 Make your pick
-  🌐 1MGaming.com/predictions?ref={code}
-  ```
-- Update the card body to show "WHO WINS? 👊" as a bold header above the pick details
-
-### 3. Add "My Predictions" section to `PlayerProfile.tsx`
-- Fetch `prediction_entries` joined with `prediction_fights` for the profile wallet
-- Show a new section after stats grid: "My Predictions"
-- Each entry card shows: fight title, picked fighter, amount ($USD), status badge (Open/Won/Lost), claim status
-- Won entries show reward amount in green
-- Add a "Share" button on each prediction entry that opens `SocialShareModal` with variant="prediction"
-- Only visible when viewing own profile (isOwnProfile) or when entries exist for any profile
-
-### 4. Make profile shareable
-- Add a "Share Profile" button at the top of the profile card that uses native share / copy link
-
-## Files Changed
-- `src/assets/who-wins-banner.jpeg` — new image (copied from upload)
-- `src/components/SocialShareModal.tsx` — new hero image, updated captions and card layout
-- `src/pages/PlayerProfile.tsx` — add My Predictions section with share buttons
-
-## Technical Details
-- Profile predictions query: `supabase.from("prediction_entries").select("*, prediction_fights(*)").eq("wallet", wallet).order("created_at", { ascending: false })`
-- The `prediction_entries` table has: `fight_id`, `fighter_pick`, `amount_usd`, `claimed`, `reward_usd`, `shares`, `polymarket_status`
-- The `prediction_fights` FK gives us: `title`, `fighter_a_name`, `fighter_b_name`, `status`, `winner`
-- Status logic: fight.status === "settled" && fight.winner === entry.fighter_pick → "Won"; fight.status === "settled" && fight.winner !== entry.fighter_pick → "Lost"; else → "Open"
+The predictions fetch already uses the `wallet` param, so it will work with EVM addresses that exist in `prediction_entries`.
 
