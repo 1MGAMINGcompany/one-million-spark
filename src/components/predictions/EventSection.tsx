@@ -282,6 +282,7 @@ export default function EventSection({
                     onWalletRequired={onWalletRequired}
                     isSoccerEvent={sport === "FUTBOL"}
                     eventHasStarted={eventHasStarted}
+                    readOnly={readOnly}
                   />
                 ))}
               </div>
