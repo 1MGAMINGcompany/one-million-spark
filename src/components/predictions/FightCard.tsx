@@ -300,6 +300,7 @@ export default function FightCard({
   onWalletRequired,
   isSoccerEvent,
   eventHasStarted,
+  readOnly,
 }: {
   fight: Fight;
   onPredict: (fight: Fight, pick: "fighter_a" | "fighter_b") => void;
@@ -311,6 +312,7 @@ export default function FightCard({
   onWalletRequired?: () => void;
   isSoccerEvent?: boolean;
   eventHasStarted?: boolean;
+  readOnly?: boolean;
 }) {
   const { poolA, poolB } = getPoolUsd(fight);
   const { oddsA, oddsB, noData, resolving } = calcOdds(poolA, poolB, fight.price_a, fight.price_b, fight.source);
