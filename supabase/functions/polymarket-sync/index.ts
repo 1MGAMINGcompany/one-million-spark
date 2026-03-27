@@ -1044,6 +1044,7 @@ Deno.serve(async (req) => {
         const leagueKey = SPORTS_SLUG_MAP[parsed.leagueSlug!] || parsed.leagueSlug!;
         const cfg = LEAGUE_SOURCES[leagueKey];
         if (cfg) {
+          detectedSportType = cfg.sportType;
           const fetched = await fetchByLeagueSource(cfg);
           rawResults = fetched.events;
           endpoints.push(...fetched.endpoints);
