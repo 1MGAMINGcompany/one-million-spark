@@ -2453,6 +2453,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
       if (data?.error) throw new Error(data.error);
       setResults(data.results || []);
       setResultSource(`League: ${data.league || leagueKey} (${data.fetchStrategy || "tag"})`);
+      setLastSportType(data.sportType || null);
       setTelemetry(data.telemetry || null);
       setRawSample(data.raw_sample || null);
       setRejectionSample(data.rejection_sample || null);
