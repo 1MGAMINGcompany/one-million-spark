@@ -744,7 +744,48 @@ const SPORT_TYPE_TO_CATEGORY: Record<string, string> = {
   golf: "GOLF",
 };
 
-async function importSingleEvent(
+/** Country name → ISO 3166-1 alpha-2 code for flag CDN */
+const COUNTRY_CODE_MAP: Record<string, string> = {
+  "south africa": "za", "panama": "pa", "brazil": "br", "argentina": "ar",
+  "mexico": "mx", "united states": "us", "usa": "us", "canada": "ca",
+  "england": "gb-eng", "france": "fr", "germany": "de", "spain": "es",
+  "italy": "it", "portugal": "pt", "netherlands": "nl", "belgium": "be",
+  "croatia": "hr", "denmark": "dk", "sweden": "se", "norway": "no",
+  "switzerland": "ch", "austria": "at", "poland": "pl", "czech republic": "cz",
+  "czechia": "cz", "turkey": "tr", "greece": "gr", "scotland": "gb-sct",
+  "wales": "gb-wls", "ireland": "ie", "japan": "jp", "south korea": "kr",
+  "korea republic": "kr", "australia": "au", "new zealand": "nz",
+  "china": "cn", "india": "in", "saudi arabia": "sa", "qatar": "qa",
+  "uae": "ae", "united arab emirates": "ae", "iran": "ir", "iraq": "iq",
+  "egypt": "eg", "morocco": "ma", "nigeria": "ng", "ghana": "gh",
+  "cameroon": "cm", "senegal": "sn", "tunisia": "tn", "algeria": "dz",
+  "colombia": "co", "chile": "cl", "uruguay": "uy", "peru": "pe",
+  "ecuador": "ec", "venezuela": "ve", "paraguay": "py", "bolivia": "bo",
+  "costa rica": "cr", "honduras": "hn", "jamaica": "jm", "trinidad and tobago": "tt",
+  "guatemala": "gt", "el salvador": "sv", "cuba": "cu",
+  "russia": "ru", "ukraine": "ua", "romania": "ro", "serbia": "rs",
+  "hungary": "hu", "bulgaria": "bg", "slovakia": "sk", "slovenia": "si",
+  "bosnia and herzegovina": "ba", "north macedonia": "mk", "montenegro": "me",
+  "albania": "al", "iceland": "is", "finland": "fi", "latvia": "lv",
+  "lithuania": "lt", "estonia": "ee", "georgia": "ge", "armenia": "am",
+  "uzbekistan": "uz", "thailand": "th", "vietnam": "vn", "indonesia": "id",
+  "malaysia": "my", "philippines": "ph", "singapore": "sg",
+  "ivory coast": "ci", "cote d'ivoire": "ci", "dr congo": "cd",
+  "congo": "cg", "mali": "ml", "burkina faso": "bf", "zimbabwe": "zw",
+  "zambia": "zm", "kenya": "ke", "tanzania": "tz", "mozambique": "mz",
+  "angola": "ao", "ethiopia": "et", "uganda": "ug", "cape verde": "cv",
+  "haiti": "ht", "dominican republic": "do", "curacao": "cw",
+  "bermuda": "bm", "suriname": "sr", "guyana": "gy",
+  "wales": "gb-wls", "northern ireland": "gb-nir",
+};
+
+function resolveCountryFlag(name: string): string | null {
+  const code = COUNTRY_CODE_MAP[name.toLowerCase().trim()];
+  if (!code) return null;
+  return `https://flagcdn.com/w80/${code}.png`;
+}
+
+
   supabase: any,
   gEvent: GammaEvent,
   wallet: string | null,
