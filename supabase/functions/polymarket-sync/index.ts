@@ -1097,6 +1097,7 @@ Deno.serve(async (req) => {
       return json({
         mode,
         highlightSlug,
+        sportType: detectedSportType,
         results: results.map(e => toPreview(e, "url_import")),
         raw_sample: rawSample,
         debug_report: debugReport,
