@@ -259,6 +259,11 @@ interface GammaMarket {
   enableOrderBook: boolean;
 }
 
+interface GammaMarketExt extends GammaMarket {
+  eventStartTime?: string | null;
+  gameStartTime?: string | null;
+}
+
 interface GammaEvent {
   id: string;
   title: string;
@@ -267,11 +272,40 @@ interface GammaEvent {
   description: string;
   startDate: string | null;
   endDate: string | null;
+  startTime?: string | null;
+  eventDate?: string | null;
   closed?: boolean;
   active?: boolean;
-  markets: GammaMarket[];
+  live?: boolean;
+  ended?: boolean;
+  markets: GammaMarketExt[];
   tags?: { label: string; slug: string }[];
   series?: any;
+}
+
+/** 
+ * Choose the best sports display timestamp in priority order:
+ * 1) event.startTime  2) event.eventDate  3) first market.eventStartTime  4) event.startDate
+ */
+function chooseSportsDisplayTime(ev: GammaEvent): { chosen: string | null; field: string; all: Record<string, string | null> } {
+  const firstMarketEventStart = (ev.markets || []).find(m => (m as any).eventStartTime)?.eventStartTime || null;
+  const firstMarketGameStart = (ev.markets || []).find(m => (m as any).gameStartTime)?.gameStartTime || null;
+  
+  const all: Record<string, string | null> = {
+    startTime: (ev as any).startTime || null,
+    eventDate: (ev as any).eventDate || null,
+    "market.eventStartTime": firstMarketEventStart,
+    "market.gameStartTime": firstMarketGameStart,
+    startDate: ev.startDate,
+    endDate: ev.endDate,
+  };
+  
+  if (all.startTime) return { chosen: all.startTime, field: "startTime", all };
+  if (all.eventDate) return { chosen: all.eventDate, field: "eventDate", all };
+  if (firstMarketEventStart) return { chosen: firstMarketEventStart, field: "market.eventStartTime", all };
+  if (firstMarketGameStart) return { chosen: firstMarketGameStart, field: "market.gameStartTime", all };
+  if (ev.startDate) return { chosen: ev.startDate, field: "startDate", all };
+  return { chosen: null, field: "none", all };
 }
 
 // ── Telemetry ──
