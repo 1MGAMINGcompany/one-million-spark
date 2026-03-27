@@ -858,6 +858,27 @@ async function importSingleEvent(
     imported++;
   }
 
+  // Resolve country flags for soccer events
+  if (sportType === "soccer" || category === "FUTBOL") {
+    try {
+      const vsMatch = gEvent.title.match(/^(.+?)\s+vs\.?\s+(.+)$/i);
+      if (vsMatch) {
+        const homeFlag = resolveCountryFlag(vsMatch[1].trim());
+        const awayFlag = resolveCountryFlag(vsMatch[2].trim());
+        if (homeFlag || awayFlag) {
+          const logoUpdate: Record<string, string> = {};
+          if (homeFlag) logoUpdate.home_logo = homeFlag;
+          if (awayFlag) logoUpdate.away_logo = awayFlag;
+          // Update all fights for this event with team logos
+          await supabase.from("prediction_fights")
+            .update(logoUpdate)
+            .eq("event_id", eventId)
+            .is("home_logo", null);
+        }
+      }
+    } catch { /* non-fatal flag resolution */ }
+  }
+
   await supabase.from("automation_logs").insert({
     action: `polymarket_import_${importSource}`,
     source: "polymarket-sync",
