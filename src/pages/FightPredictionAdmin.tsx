@@ -2860,6 +2860,39 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
         </div>
       )}
 
+      {/* Raw Time Fields Toggle */}
+      <div className="flex items-center gap-2">
+        <Switch checked={showRawTimeFields} onCheckedChange={setShowRawTimeFields} className="scale-75" />
+        <span className="text-[10px] text-muted-foreground">Use raw Polymarket sports time fields</span>
+      </div>
+
+      {/* Debug Report */}
+      {debugReport && debugReport.length > 0 && (
+        <details className="text-[10px]">
+          <summary className="text-primary cursor-pointer hover:underline font-bold">
+            📊 Debug Report ({debugReport.length} events)
+          </summary>
+          <div className="mt-1 bg-muted/20 border border-border/30 rounded p-2 max-h-[400px] overflow-y-auto space-y-2">
+            {debugReport.map((d: any, i: number) => (
+              <div key={i} className={`border rounded p-2 ${d.accepted ? 'border-green-500/30 bg-green-500/5' : 'border-destructive/30 bg-destructive/5'}`}>
+                <p className="font-bold text-foreground">{d.accepted ? '✅' : '❌'} {d.title}</p>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mt-1">
+                  <span className="text-muted-foreground">Chosen field</span>
+                  <span className="text-primary font-medium">{d.chosen_field}</span>
+                  <span className="text-muted-foreground">Chosen value</span>
+                  <span className="text-foreground font-medium">{d.chosen_value || '—'}</span>
+                  {d.all_timestamps && Object.entries(d.all_timestamps).map(([k, v]: [string, any]) => (
+                    <><span key={`k-${k}`} className="text-muted-foreground">{k}</span><span key={`v-${k}`} className="text-foreground">{v || '—'}</span></>
+                  ))}
+                  <span className="text-muted-foreground">Reason</span>
+                  <span className={`font-medium ${d.accepted ? 'text-green-400' : 'text-destructive'}`}>{d.reason}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+
       {/* Divider */}
       <div className="border-t border-border/30" />
 
