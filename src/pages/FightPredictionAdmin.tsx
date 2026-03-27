@@ -2683,6 +2683,136 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
         </div>
       )}
 
+      {/* MODE: Browse All */}
+      {activeMode === "browse_all" && (
+        <div className="space-y-3">
+          <p className="text-[10px] text-muted-foreground">
+            Browse ALL active Polymarket events sorted by start date. Use this to see everything available across all sports.
+          </p>
+          <div className="flex gap-2">
+            <Button
+              className="bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 border border-purple-500/30"
+              onClick={async () => {
+                setBusy(true);
+                resetResults();
+                setBrowseAllOffset(0);
+                try {
+                  const { data, error } = await supabase.functions.invoke("polymarket-sync", {
+                    body: { wallet, action: "browse_all", offset: 0, limit: 100 },
+                  });
+                  if (error) throw error;
+                  if (data?.error) throw new Error(data.error);
+                  setResults(data.results || []);
+                  setResultSource("Browse All Upcoming");
+                  setTelemetry(data.telemetry || null);
+                  setRawSample(data.raw_sample || null);
+                  setRejectionSample(data.rejection_sample || null);
+                  setFilterMessage(data.filter_message || null);
+                  setBrowseAllHasMore(data.has_more || false);
+                } catch (err: any) {
+                  toast.error(err.message);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+              disabled={busy}
+            >
+              {busy ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Download className="w-4 h-4 mr-2" />}
+              Load All Upcoming Events
+            </Button>
+          </div>
+          {browseAllHasMore && results && results.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-purple-500/30 text-purple-400"
+              onClick={async () => {
+                const newOffset = browseAllOffset + 100;
+                setBusy(true);
+                try {
+                  const { data, error } = await supabase.functions.invoke("polymarket-sync", {
+                    body: { wallet, action: "browse_all", offset: newOffset, limit: 100 },
+                  });
+                  if (error) throw error;
+                  if (data?.error) throw new Error(data.error);
+                  setResults(prev => [...(prev || []), ...(data.results || [])]);
+                  setBrowseAllOffset(newOffset);
+                  setBrowseAllHasMore(data.has_more || false);
+                  setTelemetry(data.telemetry || null);
+                } catch (err: any) {
+                  toast.error(err.message);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+              disabled={busy}
+            >
+              {busy ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <ArrowDown className="w-3 h-3 mr-1" />}
+              Load More (offset {browseAllOffset + 100})
+            </Button>
+          )}
+          {busy && <div className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" /> Loading all events...</div>}
+        </div>
+      )}
+
+      {/* MODE: Discover Sports */}
+      {activeMode === "discover" && (
+        <div className="space-y-3">
+          <p className="text-[10px] text-muted-foreground">
+            Discover all sports and their tag IDs from Polymarket's Gamma API. Useful for finding new leagues to add.
+          </p>
+          <Button
+            className="bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 border border-purple-500/30"
+            onClick={async () => {
+              setSportsLoading(true);
+              try {
+                const { data, error } = await supabase.functions.invoke("polymarket-sync", {
+                  body: { wallet, action: "discover_sports" },
+                });
+                if (error) throw error;
+                if (data?.error) throw new Error(data.error);
+                setSportsData(data.sports || []);
+                toast.success(`Found ${data.count || 0} sports`);
+              } catch (err: any) {
+                toast.error(err.message);
+              } finally {
+                setSportsLoading(false);
+              }
+            }}
+            disabled={sportsLoading}
+          >
+            {sportsLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+            Discover Sports
+          </Button>
+          {sportsData && (
+            <div className="max-h-[500px] overflow-y-auto space-y-2">
+              <p className="text-xs text-foreground font-bold">{sportsData.length} sport(s) found</p>
+              {sportsData.map((sport: any, i: number) => (
+                <div key={i} className="bg-background/60 border border-border/30 rounded-lg p-3 text-xs">
+                  <div className="flex items-center gap-2">
+                    {sport.image && <img src={sport.image} className="w-6 h-6 rounded" alt="" />}
+                    <span className="font-bold text-foreground">{sport.label || sport.name || sport.slug || `Sport ${i}`}</span>
+                  </div>
+                  {sport.tags && sport.tags.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {sport.tags.map((tag: any, j: number) => (
+                        <span key={j} className="text-[9px] bg-muted/50 text-muted-foreground px-1.5 py-0.5 rounded-full">
+                          {tag.label || tag.slug} (ID: {tag.id})
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {sport.series && (
+                    <p className="text-[9px] text-muted-foreground mt-1">Series: {JSON.stringify(sport.series).slice(0, 100)}</p>
+                  )}
+                  <pre className="text-[8px] text-muted-foreground/60 mt-1 max-h-20 overflow-hidden">{JSON.stringify(sport, null, 2)}</pre>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* MODE 3: Exact Search */}
       {activeMode === "search" && (
         <div className="space-y-3">
