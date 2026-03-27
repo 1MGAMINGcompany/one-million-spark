@@ -1063,6 +1063,7 @@ Deno.serve(async (req) => {
         if (exactEv) {
           rawResults = [exactEv];
         } else if (cfg) {
+          detectedSportType = cfg.sportType;
           const fetched = await fetchByLeagueSource(cfg);
           rawResults = fetched.events;
           endpoints.push(...fetched.endpoints);
