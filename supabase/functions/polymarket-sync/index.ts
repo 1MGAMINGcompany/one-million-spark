@@ -439,10 +439,14 @@ interface FilterResult {
 }
 
 /** Apply payload-aware safety filters with full rejection logging.
- *  When adminMode=true, skip date and closed checks (admin browse/search/preview). */
-function filterFixtures(events: GammaEvent[], adminMode = false): FilterResult {
+ *  Date filtering is ALWAYS applied. hasTagFilter controls whether binary markets are accepted. */
+function filterFixtures(events: GammaEvent[], hasTagFilter = false): FilterResult {
   const accepted: GammaEvent[] = [];
   const rejected: FilterResult["rejected"] = [];
+
+  // Debug: log raw input
+  console.log(`[filterFixtures] raw_count=${events.length}, hasTagFilter=${hasTagFilter}`);
+  console.log(`[filterFixtures] first 5 startDates:`, events.slice(0, 5).map(e => `${e.title?.slice(0,40)} → ${e.startDate}`));
 
   // Build raw sample: first 10 events with key fields for debug
   const rawSample = events.slice(0, 10).map(ev => ({
@@ -466,23 +470,21 @@ function filterFixtures(events: GammaEvent[], adminMode = false): FilterResult {
   }));
 
   for (const ev of events) {
-    // Date check — skip in admin mode
-    if (!adminMode) {
-      const dateCheck = isDateEligible(ev);
-      if (!dateCheck.eligible) {
-        rejected.push({ event: ev, dateReason: dateCheck.reason });
-        continue;
-      }
+    // Date check — ALWAYS applied
+    const dateCheck = isDateEligible(ev);
+    if (!dateCheck.eligible) {
+      rejected.push({ event: ev, dateReason: dateCheck.reason });
+      continue;
     }
 
-    // Also skip if closed===true — skip in admin mode
-    if (!adminMode && ev.closed === true) {
+    // Skip closed events
+    if (ev.closed === true) {
       rejected.push({ event: ev, fixtureReason: "closed=true" });
       continue;
     }
 
-    // Fixture/matchup check
-    const fixtureCheck = isAcceptableEvent(ev);
+    // Fixture/matchup check — pass hasTagFilter so browse_league can accept binary markets
+    const fixtureCheck = isAcceptableEvent(ev, hasTagFilter);
     if (!fixtureCheck.accepted) {
       rejected.push({ event: ev, fixtureReason: fixtureCheck.reason });
       continue;
@@ -490,6 +492,15 @@ function filterFixtures(events: GammaEvent[], adminMode = false): FilterResult {
 
     accepted.push(ev);
   }
+
+  // Debug: log filter results
+  const rejReasons: Record<string, number> = {};
+  for (const r of rejected) {
+    const reason = r.dateReason || r.fixtureReason || "unknown";
+    const key = reason.split(":")[0];
+    rejReasons[key] = (rejReasons[key] || 0) + 1;
+  }
+  console.log(`[filterFixtures] accepted=${accepted.length}, rejected=${rejected.length}, reasons:`, JSON.stringify(rejReasons));
 
   return { accepted, rejected, rawSample };
 }
