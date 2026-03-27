@@ -2299,7 +2299,7 @@ function IngestPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string;
 
 // ── Polymarket Sync Panel: 3-Mode Import ──
 function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet: string; busy: boolean; onComplete: () => void }) {
-  const [activeMode, setActiveMode] = useState<"url" | "browse" | "search">("url");
+  const [activeMode, setActiveMode] = useState<"url" | "browse" | "search" | "browse_all" | "discover">("url");
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<any[] | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
