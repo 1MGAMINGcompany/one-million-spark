@@ -1263,13 +1263,13 @@ Deno.serve(async (req) => {
     // ACTION: import_single
     // ══════════════════════════════════════════════════
     if (action === "import_single") {
-      const { polymarket_event_id, import_source } = body;
+      const { polymarket_event_id, import_source, sport_type } = body;
       if (!polymarket_event_id) return json({ error: "Missing polymarket_event_id" }, 400);
 
       const gEvent = await fetchEventById(polymarket_event_id);
       if (!gEvent) return json({ error: `Event not found (${polymarket_event_id})` }, 404);
 
-      const result = await importSingleEvent(supabase, gEvent, wallet, import_source || "manual");
+      const result = await importSingleEvent(supabase, gEvent, wallet, import_source || "manual", sport_type || null);
       return json({ success: true, ...result });
     }
 
