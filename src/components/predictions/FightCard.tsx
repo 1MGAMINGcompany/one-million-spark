@@ -405,7 +405,6 @@ export default function FightCard({
               </div>
             );
           })()}
-          </div>
         </div>
 
         {/* Pool strip */}
