@@ -2412,6 +2412,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
     setFilterMessage(null);
     setShowRawDebug(false);
     setDebugReport(null);
+    setLastSportType(null);
   };
 
   // MODE 1: URL Preview
