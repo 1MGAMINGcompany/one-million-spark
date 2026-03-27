@@ -832,9 +832,9 @@ Deno.serve(async (req) => {
     if (action === "browse_all") {
       const startTime = Date.now();
       const offset = body.offset || 0;
-      const limit = Math.min(body.limit || 100, 200);
+      const limit = Math.min(body.limit || 50, 200);
       const rawEvents = await fetchAllActiveEvents(limit, offset);
-      const { accepted: results, rejected, rawSample } = filterFixtures(rawEvents, true);
+      const { accepted: results, rejected, rawSample } = filterFixtures(rawEvents, false);
 
       const tel = buildTelemetry({
         mode: "browse_all",
