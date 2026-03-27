@@ -65,12 +65,34 @@ function isPolitics(text: string): boolean {
  * Checks event title, slug, AND child market questions for matchup patterns.
  * Only hard-excludes explicit prop keywords and politics.
  */
-function isAcceptableEvent(ev: GammaEvent): { accepted: boolean; reason: string } {
+function isNonSport(text: string): boolean {
+  const lower = text.toLowerCase();
+  return NON_SPORT_KEYWORDS.some(kw => lower.includes(kw));
+}
+
+/**
+ * Check if startDate is more than 30 days in the future (long-term market).
+ */
+function isTooFarOut(ev: GammaEvent): boolean {
+  const startMs = ev.startDate ? new Date(ev.startDate).getTime() : null;
+  if (!startMs || isNaN(startMs)) return false;
+  const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+  return startMs > Date.now() + thirtyDaysMs;
+}
+
+/**
+ * Payload-aware fixture detection.
+ * Checks event title, slug, AND child market questions for matchup patterns.
+ * Rejects politics, non-sport keywords, and long-term futures.
+ */
+function isAcceptableEvent(ev: GammaEvent, hasTagFilter: boolean = false): { accepted: boolean; reason: string } {
   const title = ev.title || "";
 
   if (isHardExcluded(title)) return { accepted: false, reason: `hard_exclude_title: "${title}"` };
   if (MORE_MARKETS_RE.test(title)) return { accepted: false, reason: `more_markets: "${title}"` };
   if (isPolitics(title)) return { accepted: false, reason: `politics: "${title}"` };
+  if (isNonSport(title)) return { accepted: false, reason: `non_sport: "${title}"` };
+  if (isTooFarOut(ev)) return { accepted: false, reason: `too_far_out (>30d): startDate=${ev.startDate}` };
 
   const textsToCheck = [title, (ev.slug || "").replace(/-/g, " ")];
   const markets = ev.markets || [];
@@ -97,8 +119,12 @@ function isAcceptableEvent(ev: GammaEvent): { accepted: boolean; reason: string 
   const FUTURES_RE = /\b(who will .* (fight|face) next|top scorer|mvp|most valuable|champion at|will .* win the)\b|winner$/i;
   if (FUTURES_RE.test(title)) return { accepted: false, reason: `futures_market: "${title}"` };
 
-  // Accept events with binary (2-outcome) markets — these are inherently matchup markets
-  // on Polymarket (e.g., "Team A" vs "Team B" outcomes) even if title doesn't contain "vs"
+  // If no tag filter is provided (browse_all/search), require matchup pattern — don't accept random binary markets
+  if (!hasTagFilter) {
+    return { accepted: false, reason: `no_matchup_no_tag: "${title}"` };
+  }
+
+  // Accept events with binary (2-outcome) markets when browsing within a known sport tag
   const hasBinaryMarket = markets.some(m => {
     try {
       const outcomes = JSON.parse(m.outcomes || "[]");
