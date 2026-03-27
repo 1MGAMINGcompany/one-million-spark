@@ -239,9 +239,24 @@ function PolymarketPoolStrip({ fight }: { fight: Fight }) {
   const { poolA, poolB } = getPoolUsd(fight);
   const hasPool = poolA > 0 || poolB > 0;
   const volume = fight.polymarket_volume_usd ?? 0;
+  const liquidity = (fight as any).polymarket_liquidity ?? 0;
 
   const nameA = displayName(fight.fighter_a_name, fight, "a");
   const nameB = displayName(fight.fighter_b_name, fight, "b");
+
+  // For Polymarket fights with no local pool, show liquidity or volume
+  const sideADisplay = hasPool
+    ? `$${poolA.toFixed(2)}`
+    : probs ? `${formatProb(probs.probA)}` : "—";
+  const sideBDisplay = hasPool
+    ? `$${poolB.toFixed(2)}`
+    : probs ? `${formatProb(probs.probB)}` : "—";
+
+  const centerLabel = volume > 0
+    ? `${formatVolume(volume)} Vol.`
+    : liquidity > 0
+      ? `${formatLiquidity(liquidity)} Liquidity`
+      : null;
 
   return (
     <div className="w-full space-y-2">
@@ -250,23 +265,16 @@ function PolymarketPoolStrip({ fight }: { fight: Fight }) {
       )}
       <div className="flex items-center justify-between text-[10px]">
         <div className="text-center">
-          <span className="block font-bold text-foreground text-xs">
-            {hasPool ? `$${poolA.toFixed(2)}` : probs ? `${formatProb(probs.probA)}` : "—"}
-          </span>
+          <span className="block font-bold text-foreground text-xs">{sideADisplay}</span>
           <span className="text-muted-foreground">{nameA.split(" ").pop()}</span>
         </div>
-        <div className="flex flex-col items-center gap-0.5">
-          <PolymarketBadge />
-          {volume > 0 && (
-            <span className="text-[10px] font-semibold text-primary/70">
-              {formatVolume(volume)} Vol.
-            </span>
-          )}
-        </div>
+        {centerLabel && (
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-[10px] font-semibold text-primary/70">{centerLabel}</span>
+          </div>
+        )}
         <div className="text-center">
-          <span className="block font-bold text-foreground text-xs">
-            {hasPool ? `$${poolB.toFixed(2)}` : probs ? `${formatProb(probs.probB)}` : "—"}
-          </span>
+          <span className="block font-bold text-foreground text-xs">{sideBDisplay}</span>
           <span className="text-muted-foreground">{nameB.split(" ").pop()}</span>
         </div>
       </div>
