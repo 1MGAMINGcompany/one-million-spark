@@ -82,9 +82,14 @@ export default function SoccerMatchCard({
   const awayPrice = awayFight.price_a;
   const drawPrice = drawFight?.price_a;
 
-  // Logos
-  const homeLogo = homeFight.home_logo || homeFight.fighter_a_photo;
-  const awayLogo = awayFight.home_logo || awayFight.fighter_a_photo;
+  // Logos — all sibling fights share the same home_logo/away_logo (event-level).
+  // Determine which fight represents the "home" team from the event name (e.g. "Mexico vs. Belgium")
+  const eventName = homeFight.event_name || awayFight.event_name;
+  const [eventHome] = eventName.split(/\s+vs\.?\s+/i);
+  const homeIsEventHome = homeFight.title.toLowerCase().includes((eventHome || "").toLowerCase().trim());
+  const anyFight = allFights[0]; // all share same logos
+  const homeLogo = homeIsEventHome ? anyFight.home_logo : anyFight.away_logo;
+  const awayLogo = homeIsEventHome ? anyFight.away_logo : anyFight.home_logo;
 
   // Volume
   const totalVolume = allFights.reduce((sum, f) => sum + (f.polymarket_volume_usd ?? 0), 0);
