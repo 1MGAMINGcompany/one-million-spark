@@ -74,7 +74,8 @@ function isNonSport(text: string): boolean {
  * Check if startDate is more than 30 days in the future (long-term market).
  */
 function isTooFarOut(ev: GammaEvent): boolean {
-  const startMs = ev.startDate ? new Date(ev.startDate).getTime() : null;
+  const timeInfo = chooseSportsDisplayTime(ev);
+  const startMs = timeInfo.chosen ? new Date(timeInfo.chosen).getTime() : null;
   if (!startMs || isNaN(startMs)) return false;
   const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
   return startMs > Date.now() + thirtyDaysMs;
