@@ -979,6 +979,7 @@ Deno.serve(async (req) => {
       return json({
         results: results.map(e => toPreview(e, "browse_all")),
         raw_sample: rawSample,
+        debug_report: debugReport,
         rejection_sample: rejected.slice(0, 5).map(r => ({ title: r.event.title, dateReason: r.dateReason, fixtureReason: r.fixtureReason })),
         filter_message: results.length === 0 && rawEvents.length > 0
           ? `Data found from Polymarket (${rawEvents.length} events), but local filters rejected all results.`
@@ -1072,6 +1073,7 @@ Deno.serve(async (req) => {
         highlightSlug,
         results: results.map(e => toPreview(e, "url_import")),
         raw_sample: rawSample,
+        debug_report: debugReport,
         rejection_sample: rejectionSummary,
         filter_message: results.length === 0 && rawResults.length > 0
           ? `Data found from Polymarket (${rawResults.length} events), but local filters rejected all results.`
@@ -1119,6 +1121,7 @@ Deno.serve(async (req) => {
         fetchStrategy: cfg.fetchStrategy,
         results: results.map(e => toPreview(e, "league_browse")),
         raw_sample: rawSample,
+        debug_report: debugReport,
         rejection_sample: rejectionSummary,
         filter_message: results.length === 0 && rawEvents.length > 0
           ? `Data found from Polymarket (${rawEvents.length} events), but local filters rejected all results.`
@@ -1164,6 +1167,7 @@ Deno.serve(async (req) => {
           league: cfg.label,
           results: results.map(e => toPreview(e, "league_browse")),
           raw_sample: rawSample,
+        debug_report: debugReport,
           rejection_sample: rejected.slice(0, 5).map(r => ({ title: r.event.title, dateReason: r.dateReason, fixtureReason: r.fixtureReason })),
           filter_message: results.length === 0 && rawEvents.length > 0
             ? `Data found from Polymarket (${rawEvents.length} events), but local filters rejected all results.`
@@ -1223,6 +1227,7 @@ Deno.serve(async (req) => {
       return json({
         results: results.map(e => toPreview(e, "exact_search")),
         raw_sample: rawSample,
+        debug_report: debugReport,
         rejection_sample: rejectionSummary,
         filter_message: results.length === 0 && rawResults.length > 0
           ? `Data found from Polymarket (${rawResults.length} events), but local filters rejected all results.`
