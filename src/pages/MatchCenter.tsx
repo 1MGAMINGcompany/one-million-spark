@@ -671,7 +671,7 @@ function ProfileCard({
       ) : (
         <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-muted/40 flex items-center justify-center mx-auto mb-2 ring-2 ${colorClass}`}>
           {isSoccer ? (
-            <span className="text-lg sm:text-xl font-bold text-foreground">{initials || "⚽"}</span>
+            <span className="text-2xl">⚽</span>
           ) : isOU ? (
             isOverSide(name) ? <ArrowUp className="w-8 h-8 text-green-400" /> : <ArrowDown className="w-8 h-8 text-red-400" />
           ) : (
