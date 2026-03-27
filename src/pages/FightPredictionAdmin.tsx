@@ -2323,10 +2323,20 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
   const [searchQuery, setSearchQuery] = useState("");
   const [sportFilter, setSportFilter] = useState<string>("all");
 
+  // Browse All state
+  const [browseAllOffset, setBrowseAllOffset] = useState(0);
+  const [browseAllHasMore, setBrowseAllHasMore] = useState(false);
+
+  // Discover Sports state
+  const [sportsData, setSportsData] = useState<any[] | null>(null);
+  const [sportsLoading, setSportsLoading] = useState(false);
+
   const MODES = [
     { key: "url" as const, label: "📋 URL Import" },
     { key: "browse" as const, label: "📂 Browse League" },
+    { key: "browse_all" as const, label: "🌐 Browse All" },
     { key: "search" as const, label: "🔍 Exact Search" },
+    { key: "discover" as const, label: "🏟️ Discover Sports" },
   ];
 
   const SPORT_FILTERS = [
