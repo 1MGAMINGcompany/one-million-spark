@@ -2431,6 +2431,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
       setRawSample(data.raw_sample || null);
       setRejectionSample(data.rejection_sample || null);
       setFilterMessage(data.filter_message || null);
+      setDebugReport(data.debug_report || null);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -2455,6 +2456,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
       setRawSample(data.raw_sample || null);
       setRejectionSample(data.rejection_sample || null);
       setFilterMessage(data.filter_message || null);
+      setDebugReport(data.debug_report || null);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -2485,6 +2487,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
       setRawSample(data.raw_sample || null);
       setRejectionSample(data.rejection_sample || null);
       setFilterMessage(data.filter_message || null);
+      setDebugReport(data.debug_report || null);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -2711,6 +2714,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
                   setRawSample(data.raw_sample || null);
                   setRejectionSample(data.rejection_sample || null);
                   setFilterMessage(data.filter_message || null);
+      setDebugReport(data.debug_report || null);
                   setBrowseAllHasMore(data.has_more || false);
                 } catch (err: any) {
                   toast.error(err.message);
