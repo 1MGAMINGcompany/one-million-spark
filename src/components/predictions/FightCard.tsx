@@ -724,13 +724,17 @@ function FighterColumn({
 }
 
 function SoccerTeamColumn({
-  name, odds, poolAmount, canPredict, onPredict, logo, isWinner,
+  name, odds, poolAmount, canPredict, onPredict, logo, isWinner, isBinaryMarket,
 }: {
   name: string; odds: number; poolAmount: number; canPredict: boolean; onPredict: () => void;
-  logo?: string | null; isWinner: boolean;
+  logo?: string | null; isWinner: boolean; isBinaryMarket?: boolean;
 }) {
   const [logoError, setLogoError] = useState(false);
   const showLogo = logo && !logoError;
+
+  // For binary Yes/No markets, the "name" is the team derived from title
+  // Show "Yes" / "No" as the predict button labels
+  const displayLabel = isBinaryMarket ? (name === "No" ? "No" : name) : name;
 
   return (
     <div className="text-center flex flex-col items-center gap-1">
@@ -747,7 +751,7 @@ function SoccerTeamColumn({
           ⚽
         </div>
       )}
-      <p className="font-bold text-foreground text-sm sm:text-base leading-tight mt-0.5">{name}</p>
+      <p className="font-bold text-foreground text-sm sm:text-base leading-tight mt-0.5">{displayLabel}</p>
       <p className="text-[10px] text-muted-foreground">
         {poolAmount > 0 ? `$${poolAmount.toFixed(2)} USDC` : "Market-backed"}
       </p>
@@ -758,7 +762,7 @@ function SoccerTeamColumn({
           className="mt-1.5 w-full bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.97] transition-all text-sm py-2.5 font-bold"
           onClick={onPredict}
         >
-          Predict
+          {isBinaryMarket ? (name === "No" ? "Predict No" : "Predict Yes") : "Predict"}
         </Button>
       ) : !isWinner && (
         <p className="mt-1.5 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wide">Predictions Closed</p>
