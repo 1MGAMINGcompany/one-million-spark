@@ -140,22 +140,19 @@ function isAcceptableEvent(ev: GammaEvent, hasTagFilter: boolean = false): { acc
 }
 
 function isDateEligible(ev: GammaEvent): { eligible: boolean; reason: string; missingDate: boolean } {
-  // Cutoff = 24 hours ago — Polymarket startDate is market listing time (not game time),
-  // so today's games may have been listed 6-12 hours ago. 24h window is safe.
+  // Use sports-aware timestamp priority
+  const timeInfo = chooseSportsDisplayTime(ev);
   const cutoff = Date.now() - 24 * 60 * 60 * 1000;
 
-  // startDate = actual match/event time on Polymarket
-  // endDate = market resolution window (can be weeks/months later — unreliable for match timing)
-  // Always prefer startDate when available
-  const startMs = ev.startDate ? new Date(ev.startDate).getTime() : null;
-  const endMs = ev.endDate ? new Date(ev.endDate).getTime() : null;
+  const chosenMs = timeInfo.chosen ? new Date(timeInfo.chosen).getTime() : null;
 
-  if (startMs && !isNaN(startMs)) {
-    if (startMs >= cutoff) return { eligible: true, reason: "future_start", missingDate: false };
-    return { eligible: false, reason: `past_start: ${ev.startDate}`, missingDate: false };
+  if (chosenMs && !isNaN(chosenMs)) {
+    if (chosenMs >= cutoff) return { eligible: true, reason: `future_${timeInfo.field}`, missingDate: false };
+    return { eligible: false, reason: `past_${timeInfo.field}: ${timeInfo.chosen}`, missingDate: false };
   }
 
-  // No startDate — fall back to endDate (less reliable)
+  // No usable date at all — fall back to endDate
+  const endMs = ev.endDate ? new Date(ev.endDate).getTime() : null;
   if (endMs && !isNaN(endMs)) {
     if (endMs >= cutoff) return { eligible: true, reason: "future_end_no_start", missingDate: false };
     return { eligible: false, reason: `past_end: ${ev.endDate}`, missingDate: false };
