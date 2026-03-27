@@ -489,50 +489,93 @@ interface FilterResult {
   accepted: GammaEvent[];
   rejected: { event: GammaEvent; dateReason?: string; fixtureReason?: string }[];
   rawSample: any[];
+  debugReport: any[];
 }
 
 /** Apply payload-aware safety filters with full rejection logging.
- *  Date filtering is ALWAYS applied. hasTagFilter controls whether binary markets are accepted. */
+ *  Date filtering is ALWAYS applied. hasTagFilter controls whether binary markets are accepted.
+ *  Also includes live events (active=true, closed=false, ended!=true). */
 function filterFixtures(events: GammaEvent[], hasTagFilter = false): FilterResult {
   const accepted: GammaEvent[] = [];
   const rejected: FilterResult["rejected"] = [];
+  const debugReport: any[] = [];
 
   // Debug: log raw input
   console.log(`[filterFixtures] raw_count=${events.length}, hasTagFilter=${hasTagFilter}`);
-  console.log(`[filterFixtures] first 5 startDates:`, events.slice(0, 5).map(e => `${e.title?.slice(0,40)} → ${e.startDate}`));
-
-  // Build raw sample: first 10 events with key fields for debug
-  const rawSample = events.slice(0, 10).map(ev => ({
-    id: ev.id,
-    title: ev.title,
-    slug: ev.slug,
-    ticker: ev.ticker,
-    startDate: ev.startDate,
-    endDate: ev.endDate,
-    closed: ev.closed,
-    active: ev.active,
-    tags: ev.tags?.slice(0, 5),
-    series: ev.series,
-    market_count: (ev.markets || []).length,
-    first_3_markets: (ev.markets || []).slice(0, 3).map(m => ({
-      question: m.question,
-      groupItemTitle: m.groupItemTitle,
-      active: m.active,
-      closed: m.closed,
-    })),
+  console.log(`[filterFixtures] first 5 chosen times:`, events.slice(0, 5).map(e => {
+    const t = chooseSportsDisplayTime(e);
+    return `${e.title?.slice(0,40)} → ${t.field}=${t.chosen}`;
   }));
 
+  // Build raw sample: first 10 events with key fields for debug
+  const rawSample = events.slice(0, 10).map(ev => {
+    const timeInfo = chooseSportsDisplayTime(ev);
+    return {
+      id: ev.id,
+      title: ev.title,
+      slug: ev.slug,
+      ticker: ev.ticker,
+      chosen_display_time: timeInfo.chosen,
+      chosen_field: timeInfo.field,
+      raw_startTime: (ev as any).startTime || null,
+      raw_eventDate: (ev as any).eventDate || null,
+      raw_market_eventStartTime: timeInfo.all["market.eventStartTime"],
+      raw_market_gameStartTime: timeInfo.all["market.gameStartTime"],
+      raw_startDate: ev.startDate,
+      raw_endDate: ev.endDate,
+      active: ev.active,
+      closed: ev.closed,
+      live: (ev as any).live,
+      ended: (ev as any).ended,
+      tags: ev.tags?.slice(0, 5),
+      series: ev.series,
+      market_count: (ev.markets || []).length,
+      first_3_markets: (ev.markets || []).slice(0, 3).map(m => ({
+        question: m.question,
+        groupItemTitle: m.groupItemTitle,
+        active: m.active,
+        closed: m.closed,
+        eventStartTime: (m as any).eventStartTime || null,
+        gameStartTime: (m as any).gameStartTime || null,
+      })),
+    };
+  });
+
   for (const ev of events) {
-    // Date check — ALWAYS applied
+    const timeInfo = chooseSportsDisplayTime(ev);
+    const isLiveEvent = ev.active === true && ev.closed !== true && (ev as any).ended !== true;
+
+    // Date check — ALWAYS applied, but live events bypass date filter
     const dateCheck = isDateEligible(ev);
-    if (!dateCheck.eligible) {
+    if (!dateCheck.eligible && !isLiveEvent) {
       rejected.push({ event: ev, dateReason: dateCheck.reason });
+      // Add to debug report (first 10 only)
+      if (debugReport.length < 10) {
+        debugReport.push({
+          title: ev.title,
+          chosen_field: timeInfo.field,
+          chosen_value: timeInfo.chosen,
+          all_timestamps: timeInfo.all,
+          accepted: false,
+          reason: `date_rejected: ${dateCheck.reason}`,
+        });
+      }
       continue;
     }
 
-    // Skip closed events
-    if (ev.closed === true) {
+    // Skip closed events (but not live ones)
+    if (ev.closed === true && !isLiveEvent) {
       rejected.push({ event: ev, fixtureReason: "closed=true" });
+      if (debugReport.length < 10) {
+        debugReport.push({
+          title: ev.title,
+          chosen_field: timeInfo.field,
+          chosen_value: timeInfo.chosen,
+          all_timestamps: timeInfo.all,
+          accepted: false,
+          reason: "closed=true",
+        });
+      }
       continue;
     }
 
@@ -540,10 +583,30 @@ function filterFixtures(events: GammaEvent[], hasTagFilter = false): FilterResul
     const fixtureCheck = isAcceptableEvent(ev, hasTagFilter);
     if (!fixtureCheck.accepted) {
       rejected.push({ event: ev, fixtureReason: fixtureCheck.reason });
+      if (debugReport.length < 10) {
+        debugReport.push({
+          title: ev.title,
+          chosen_field: timeInfo.field,
+          chosen_value: timeInfo.chosen,
+          all_timestamps: timeInfo.all,
+          accepted: false,
+          reason: `fixture_rejected: ${fixtureCheck.reason}`,
+        });
+      }
       continue;
     }
 
     accepted.push(ev);
+    if (debugReport.length < 10) {
+      debugReport.push({
+        title: ev.title,
+        chosen_field: timeInfo.field,
+        chosen_value: timeInfo.chosen,
+        all_timestamps: timeInfo.all,
+        accepted: true,
+        reason: isLiveEvent ? `live_event + ${fixtureCheck.reason}` : fixtureCheck.reason,
+      });
+    }
   }
 
   // Debug: log filter results
@@ -555,12 +618,13 @@ function filterFixtures(events: GammaEvent[], hasTagFilter = false): FilterResul
   }
   console.log(`[filterFixtures] accepted=${accepted.length}, rejected=${rejected.length}, reasons:`, JSON.stringify(rejReasons));
 
-  return { accepted, rejected, rawSample };
+  return { accepted, rejected, rawSample, debugReport };
 }
 
 /** Format event for preview response (no DB writes) */
 function toPreview(ev: GammaEvent, source: string) {
   const dateInfo = isDateEligible(ev);
+  const timeInfo = chooseSportsDisplayTime(ev);
   return {
     id: ev.id,
     title: ev.title,
@@ -570,8 +634,17 @@ function toPreview(ev: GammaEvent, source: string) {
     endDate: ev.endDate,
     closed: ev.closed,
     active: ev.active,
+    live: (ev as any).live,
+    ended: (ev as any).ended,
     source,
     missingDate: dateInfo.missingDate,
+    // Sports timestamp debug fields
+    chosen_display_time: timeInfo.chosen,
+    chosen_field: timeInfo.field,
+    raw_startTime: (ev as any).startTime || null,
+    raw_eventDate: (ev as any).eventDate || null,
+    raw_market_eventStartTime: timeInfo.all["market.eventStartTime"],
+    raw_startDate: ev.startDate,
     markets: (ev.markets || []).map(m => ({
       id: m.id,
       question: m.question,
@@ -582,6 +655,7 @@ function toPreview(ev: GammaEvent, source: string) {
       active: m.active,
       closed: m.closed,
       volume: m.volume,
+      eventStartTime: (m as any).eventStartTime || null,
     })),
   };
 }
