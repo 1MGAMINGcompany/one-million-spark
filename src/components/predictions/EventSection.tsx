@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import FightCard from "./FightCard";
 import type { Fight } from "./FightCard";
+import SoccerMatchCard from "./SoccerMatchCard";
 import muayThaiImg from "@/assets/muay-thai.png";
 import boxingGloveImg from "@/assets/boxinggloves-1mg.png";
 import mmaGlovesImg from "@/assets/mmagloves-1mg.png";
