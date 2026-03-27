@@ -274,8 +274,33 @@ function buildTelemetry(partial: Partial<QueryTelemetry>): QueryTelemetry {
 /** Fetch events by tag_id — reliable for soccer league discovery */
 async function fetchEventsByTagId(tagId: string, limit = 200): Promise<GammaEvent[]> {
   try {
-    const url = `${GAMMA_BASE}/events?tag_id=${tagId}&active=true&closed=false&limit=${limit}`;
+    const url = `${GAMMA_BASE}/events?tag_id=${tagId}&active=true&closed=false&limit=${limit}&order=startDate&ascending=true`;
     const res = await fetch(url);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Fetch ALL active events from Gamma (no tag filter) with pagination */
+async function fetchAllActiveEvents(limit = 100, offset = 0): Promise<GammaEvent[]> {
+  try {
+    const url = `${GAMMA_BASE}/events?active=true&closed=false&limit=${limit}&offset=${offset}&order=startDate&ascending=true`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Fetch sports metadata from Gamma */
+async function fetchSports(): Promise<any[]> {
+  try {
+    const res = await fetch(`${GAMMA_BASE}/sports`);
     if (!res.ok) return [];
     const data = await res.json();
     return Array.isArray(data) ? data : [];
@@ -748,6 +773,51 @@ Deno.serve(async (req) => {
         fetchStrategy: v.fetchStrategy,
       }));
       return json({ leagues });
+    }
+
+    // ══════════════════════════════════════════════════
+    // ACTION: discover_sports — Fetch sport metadata from Gamma API
+    // ══════════════════════════════════════════════════
+    if (action === "discover_sports") {
+      const sports = await fetchSports();
+      return json({ sports, count: sports.length });
+    }
+
+    // ══════════════════════════════════════════════════
+    // ACTION: browse_all — Fetch ALL active events chronologically
+    // ══════════════════════════════════════════════════
+    if (action === "browse_all") {
+      const startTime = Date.now();
+      const offset = body.offset || 0;
+      const limit = Math.min(body.limit || 100, 200);
+      const rawEvents = await fetchAllActiveEvents(limit, offset);
+      const { accepted: results, rejected, rawSample } = filterFixtures(rawEvents, true);
+
+      const tel = buildTelemetry({
+        mode: "browse_all",
+        strategy: "events_feed",
+        endpoints_called: [`events?active=true&closed=false&limit=${limit}&offset=${offset}`],
+        raw_count: rawEvents.length,
+        filtered_count: results.length,
+        zero_reason: results.length === 0
+          ? rawEvents.length === 0 ? "no_events_returned" : `all_${rawEvents.length}_rejected_by_filters`
+          : undefined,
+        duration_ms: Date.now() - startTime,
+      });
+      await logTelemetry(supabase, wallet, tel);
+
+      return json({
+        results: results.map(e => toPreview(e, "browse_all")),
+        raw_sample: rawSample,
+        rejection_sample: rejected.slice(0, 5).map(r => ({ title: r.event.title, dateReason: r.dateReason, fixtureReason: r.fixtureReason })),
+        filter_message: results.length === 0 && rawEvents.length > 0
+          ? `Data found from Polymarket (${rawEvents.length} events), but local filters rejected all results.`
+          : undefined,
+        has_more: rawEvents.length >= limit,
+        offset,
+        limit,
+        telemetry: tel,
+      });
     }
 
     // ══════════════════════════════════════════════════
