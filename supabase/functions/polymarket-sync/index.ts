@@ -1027,6 +1027,7 @@ Deno.serve(async (req) => {
 
       let rawResults: GammaEvent[] = [];
       let highlightSlug: string | null = null;
+      let detectedSportType: string | null = null;
       const endpoints: string[] = [];
       let mode = parsed.type;
 
