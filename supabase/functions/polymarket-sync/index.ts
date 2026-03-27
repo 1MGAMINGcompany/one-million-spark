@@ -921,7 +921,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      const { accepted: results, rejected, rawSample } = filterFixtures(rawResults, true);
+      const { accepted: results, rejected, rawSample } = filterFixtures(rawResults, false);
 
       const rejectionSummary = rejected.length > 0
         ? rejected.slice(0, 5).map(r => ({ title: r.event.title, dateReason: r.dateReason, fixtureReason: r.fixtureReason }))
