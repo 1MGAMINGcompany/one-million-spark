@@ -34,6 +34,12 @@ const POLITICS_KEYWORDS = [
   "democrat", "republican", "political", "legislation",
   "governor", "mayor", "biden", "trump", "politics",
 ];
+const NON_SPORT_KEYWORDS = [
+  "champion", "season", "winner of", "year",
+  "ipo", "bitcoin", "ethereum", "crypto",
+  "stock", "recession", "inflation", "gdp",
+  "fed rate", "interest rate",
+];
 
 const MATCHUP_RE = /\bvs\.?\b|\sv\s|\bat\b/i;
 
@@ -59,12 +65,34 @@ function isPolitics(text: string): boolean {
  * Checks event title, slug, AND child market questions for matchup patterns.
  * Only hard-excludes explicit prop keywords and politics.
  */
-function isAcceptableEvent(ev: GammaEvent): { accepted: boolean; reason: string } {
+function isNonSport(text: string): boolean {
+  const lower = text.toLowerCase();
+  return NON_SPORT_KEYWORDS.some(kw => lower.includes(kw));
+}
+
+/**
+ * Check if startDate is more than 30 days in the future (long-term market).
+ */
+function isTooFarOut(ev: GammaEvent): boolean {
+  const startMs = ev.startDate ? new Date(ev.startDate).getTime() : null;
+  if (!startMs || isNaN(startMs)) return false;
+  const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+  return startMs > Date.now() + thirtyDaysMs;
+}
+
+/**
+ * Payload-aware fixture detection.
+ * Checks event title, slug, AND child market questions for matchup patterns.
+ * Rejects politics, non-sport keywords, and long-term futures.
+ */
+function isAcceptableEvent(ev: GammaEvent, hasTagFilter: boolean = false): { accepted: boolean; reason: string } {
   const title = ev.title || "";
 
   if (isHardExcluded(title)) return { accepted: false, reason: `hard_exclude_title: "${title}"` };
   if (MORE_MARKETS_RE.test(title)) return { accepted: false, reason: `more_markets: "${title}"` };
   if (isPolitics(title)) return { accepted: false, reason: `politics: "${title}"` };
+  if (isNonSport(title)) return { accepted: false, reason: `non_sport: "${title}"` };
+  if (isTooFarOut(ev)) return { accepted: false, reason: `too_far_out (>30d): startDate=${ev.startDate}` };
 
   const textsToCheck = [title, (ev.slug || "").replace(/-/g, " ")];
   const markets = ev.markets || [];
@@ -91,8 +119,12 @@ function isAcceptableEvent(ev: GammaEvent): { accepted: boolean; reason: string 
   const FUTURES_RE = /\b(who will .* (fight|face) next|top scorer|mvp|most valuable|champion at|will .* win the)\b|winner$/i;
   if (FUTURES_RE.test(title)) return { accepted: false, reason: `futures_market: "${title}"` };
 
-  // Accept events with binary (2-outcome) markets — these are inherently matchup markets
-  // on Polymarket (e.g., "Team A" vs "Team B" outcomes) even if title doesn't contain "vs"
+  // If no tag filter is provided (browse_all/search), require matchup pattern — don't accept random binary markets
+  if (!hasTagFilter) {
+    return { accepted: false, reason: `no_matchup_no_tag: "${title}"` };
+  }
+
+  // Accept events with binary (2-outcome) markets when browsing within a known sport tag
   const hasBinaryMarket = markets.some(m => {
     try {
       const outcomes = JSON.parse(m.outcomes || "[]");
@@ -107,8 +139,9 @@ function isAcceptableEvent(ev: GammaEvent): { accepted: boolean; reason: string 
 }
 
 function isDateEligible(ev: GammaEvent): { eligible: boolean; reason: string; missingDate: boolean } {
-  // Cutoff = 2 hours ago — allow today's upcoming + recently started games
-  const cutoff = Date.now() - 2 * 60 * 60 * 1000;
+  // Cutoff = 24 hours ago — Polymarket startDate is market listing time (not game time),
+  // so today's games may have been listed 6-12 hours ago. 24h window is safe.
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
 
   // startDate = actual match/event time on Polymarket
   // endDate = market resolution window (can be weeks/months later — unreliable for match timing)
@@ -272,9 +305,9 @@ function buildTelemetry(partial: Partial<QueryTelemetry>): QueryTelemetry {
 // ── Fetch functions ──
 
 /** Fetch events by tag_id — reliable for soccer league discovery */
-async function fetchEventsByTagId(tagId: string, limit = 200): Promise<GammaEvent[]> {
+async function fetchEventsByTagId(tagId: string, limit = 50): Promise<GammaEvent[]> {
   try {
-    const url = `${GAMMA_BASE}/events?tag_id=${tagId}&active=true&closed=false&limit=${limit}&order=startDate&ascending=true`;
+    const url = `${GAMMA_BASE}/events?tag_id=${tagId}&active=true&closed=false&limit=${limit}&order=startDate&ascending=false`;
     const res = await fetch(url);
     if (!res.ok) return [];
     const data = await res.json();
@@ -285,9 +318,9 @@ async function fetchEventsByTagId(tagId: string, limit = 200): Promise<GammaEven
 }
 
 /** Fetch ALL active events from Gamma (no tag filter) with pagination */
-async function fetchAllActiveEvents(limit = 100, offset = 0): Promise<GammaEvent[]> {
+async function fetchAllActiveEvents(limit = 50, offset = 0): Promise<GammaEvent[]> {
   try {
-    const url = `${GAMMA_BASE}/events?active=true&closed=false&limit=${limit}&offset=${offset}&order=startDate&ascending=true`;
+    const url = `${GAMMA_BASE}/events?active=true&closed=false&limit=${limit}&offset=${offset}&order=startDate&ascending=false`;
     const res = await fetch(url);
     if (!res.ok) return [];
     const data = await res.json();
@@ -407,10 +440,14 @@ interface FilterResult {
 }
 
 /** Apply payload-aware safety filters with full rejection logging.
- *  When adminMode=true, skip date and closed checks (admin browse/search/preview). */
-function filterFixtures(events: GammaEvent[], adminMode = false): FilterResult {
+ *  Date filtering is ALWAYS applied. hasTagFilter controls whether binary markets are accepted. */
+function filterFixtures(events: GammaEvent[], hasTagFilter = false): FilterResult {
   const accepted: GammaEvent[] = [];
   const rejected: FilterResult["rejected"] = [];
+
+  // Debug: log raw input
+  console.log(`[filterFixtures] raw_count=${events.length}, hasTagFilter=${hasTagFilter}`);
+  console.log(`[filterFixtures] first 5 startDates:`, events.slice(0, 5).map(e => `${e.title?.slice(0,40)} → ${e.startDate}`));
 
   // Build raw sample: first 10 events with key fields for debug
   const rawSample = events.slice(0, 10).map(ev => ({
@@ -434,23 +471,21 @@ function filterFixtures(events: GammaEvent[], adminMode = false): FilterResult {
   }));
 
   for (const ev of events) {
-    // Date check — skip in admin mode
-    if (!adminMode) {
-      const dateCheck = isDateEligible(ev);
-      if (!dateCheck.eligible) {
-        rejected.push({ event: ev, dateReason: dateCheck.reason });
-        continue;
-      }
+    // Date check — ALWAYS applied
+    const dateCheck = isDateEligible(ev);
+    if (!dateCheck.eligible) {
+      rejected.push({ event: ev, dateReason: dateCheck.reason });
+      continue;
     }
 
-    // Also skip if closed===true — skip in admin mode
-    if (!adminMode && ev.closed === true) {
+    // Skip closed events
+    if (ev.closed === true) {
       rejected.push({ event: ev, fixtureReason: "closed=true" });
       continue;
     }
 
-    // Fixture/matchup check
-    const fixtureCheck = isAcceptableEvent(ev);
+    // Fixture/matchup check — pass hasTagFilter so browse_league can accept binary markets
+    const fixtureCheck = isAcceptableEvent(ev, hasTagFilter);
     if (!fixtureCheck.accepted) {
       rejected.push({ event: ev, fixtureReason: fixtureCheck.reason });
       continue;
@@ -458,6 +493,15 @@ function filterFixtures(events: GammaEvent[], adminMode = false): FilterResult {
 
     accepted.push(ev);
   }
+
+  // Debug: log filter results
+  const rejReasons: Record<string, number> = {};
+  for (const r of rejected) {
+    const reason = r.dateReason || r.fixtureReason || "unknown";
+    const key = reason.split(":")[0];
+    rejReasons[key] = (rejReasons[key] || 0) + 1;
+  }
+  console.log(`[filterFixtures] accepted=${accepted.length}, rejected=${rejected.length}, reasons:`, JSON.stringify(rejReasons));
 
   return { accepted, rejected, rawSample };
 }
@@ -789,9 +833,9 @@ Deno.serve(async (req) => {
     if (action === "browse_all") {
       const startTime = Date.now();
       const offset = body.offset || 0;
-      const limit = Math.min(body.limit || 100, 200);
+      const limit = Math.min(body.limit || 50, 200);
       const rawEvents = await fetchAllActiveEvents(limit, offset);
-      const { accepted: results, rejected, rawSample } = filterFixtures(rawEvents, true);
+      const { accepted: results, rejected, rawSample } = filterFixtures(rawEvents, false);
 
       const tel = buildTelemetry({
         mode: "browse_all",
@@ -878,7 +922,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      const { accepted: results, rejected, rawSample } = filterFixtures(rawResults, true);
+      const { accepted: results, rejected, rawSample } = filterFixtures(rawResults, false);
 
       const rejectionSummary = rejected.length > 0
         ? rejected.slice(0, 5).map(r => ({ title: r.event.title, dateReason: r.dateReason, fixtureReason: r.fixtureReason }))
@@ -1019,7 +1063,7 @@ Deno.serve(async (req) => {
       const endpoints = searchQueries.map(q => `public-search?q=${q}`);
       const rawResults = await fetchSearchEvents(searchQueries);
 
-      const { accepted, rejected, rawSample } = filterFixtures(rawResults, true);
+      const { accepted, rejected, rawSample } = filterFixtures(rawResults, false);
 
       // Apply sport_filter category matching on accepted results
       let results = accepted;
