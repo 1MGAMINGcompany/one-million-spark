@@ -961,7 +961,7 @@ Deno.serve(async (req) => {
       const offset = body.offset || 0;
       const limit = Math.min(body.limit || 50, 200);
       const rawEvents = await fetchAllActiveEvents(limit, offset);
-      const { accepted: results, rejected, rawSample } = filterFixtures(rawEvents, false);
+      const { accepted: results, rejected, rawSample, debugReport } = filterFixtures(rawEvents, false);
 
       const tel = buildTelemetry({
         mode: "browse_all",
@@ -1048,7 +1048,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      const { accepted: results, rejected, rawSample } = filterFixtures(rawResults, false);
+      const { accepted: results, rejected, rawSample, debugReport } = filterFixtures(rawResults, false);
 
       const rejectionSummary = rejected.length > 0
         ? rejected.slice(0, 5).map(r => ({ title: r.event.title, dateReason: r.dateReason, fixtureReason: r.fixtureReason }))
@@ -1091,7 +1091,7 @@ Deno.serve(async (req) => {
       }
       const cfg = LEAGUE_SOURCES[league_key];
       const { events: rawEvents, endpoints } = await fetchByLeagueSource(cfg);
-      const { accepted: results, rejected, rawSample } = filterFixtures(rawEvents, true);
+      const { accepted: results, rejected, rawSample, debugReport } = filterFixtures(rawEvents, true);
 
       const rejectionSummary = rejected.length > 0
         ? rejected.slice(0, 5).map(r => ({ title: r.event.title, dateReason: r.dateReason, fixtureReason: r.fixtureReason }))
@@ -1140,7 +1140,7 @@ Deno.serve(async (req) => {
       if (leagueKey) {
         const cfg = LEAGUE_SOURCES[leagueKey];
         const { events: rawEvents, endpoints } = await fetchByLeagueSource(cfg);
-        const { accepted: results, rejected, rawSample } = filterFixtures(rawEvents, true);
+        const { accepted: results, rejected, rawSample, debugReport } = filterFixtures(rawEvents, true);
 
         const tel = buildTelemetry({
           mode: "search_redirected_to_browse",
@@ -1189,7 +1189,7 @@ Deno.serve(async (req) => {
       const endpoints = searchQueries.map(q => `public-search?q=${q}`);
       const rawResults = await fetchSearchEvents(searchQueries);
 
-      const { accepted, rejected, rawSample } = filterFixtures(rawResults, false);
+      const { accepted, rejected, rawSample, debugReport } = filterFixtures(rawResults, false);
 
       // Apply sport_filter category matching on accepted results
       let results = accepted;
