@@ -736,8 +736,9 @@ async function importSingleEvent(
   wallet: string | null,
   importSource: string,
 ): Promise<{ event_id: string; imported: number; is_past: boolean; warning?: string }> {
-  const startMs = gEvent.startDate ? new Date(gEvent.startDate).getTime() : null;
-  const isPastEvent = startMs !== null && startMs < Date.now();
+  const timeInfo = chooseSportsDisplayTime(gEvent);
+  const chosenMs = timeInfo.chosen ? new Date(timeInfo.chosen).getTime() : null;
+  const isPastEvent = chosenMs !== null && chosenMs < Date.now();
 
   const { data: existingEvt } = await supabase
     .from("prediction_events")
