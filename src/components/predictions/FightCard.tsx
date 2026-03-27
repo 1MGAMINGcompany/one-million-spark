@@ -57,6 +57,12 @@ function buildQuestion(fight: Fight, isSoccer: boolean): string {
   if (fight.source === "polymarket" && fight.title && fight.title.includes("?")) {
     return fight.title;
   }
+  // For binary soccer markets (Yes/No outcomes), use polymarket_question or derive
+  if (isSoccer && fight.fighter_a_name === "Yes" && fight.fighter_b_name === "No") {
+    const q = (fight as any).polymarket_question;
+    if (q) return q;
+    return `Will ${fight.title} win?`;
+  }
   const nameA = resolveOutcomeName(fight.fighter_a_name, "a", fight);
   const nameB = resolveOutcomeName(fight.fighter_b_name, "b", fight);
   if (isSoccer) {
