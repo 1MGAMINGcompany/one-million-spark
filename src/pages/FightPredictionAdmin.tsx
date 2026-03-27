@@ -3009,7 +3009,8 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
               const isHighlighted = highlightSlug && event.slug === highlightSlug;
               const endDate = event.endDate ? new Date(event.endDate) : null;
               const startDate = event.startDate ? new Date(event.startDate) : null;
-              const bestDate = endDate || startDate;
+              const chosenDate = event.chosen_display_time ? new Date(event.chosen_display_time) : null;
+              const bestDate = chosenDate || endDate || startDate;
               const now = new Date();
               const diffMs = bestDate ? bestDate.getTime() - now.getTime() : null;
               const diffHours = diffMs ? Math.round(diffMs / (1000 * 60 * 60)) : null;
