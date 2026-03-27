@@ -2312,6 +2312,8 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
   const [rejectionSample, setRejectionSample] = useState<any[] | null>(null);
   const [filterMessage, setFilterMessage] = useState<string | null>(null);
   const [showRawDebug, setShowRawDebug] = useState(false);
+  const [showRawTimeFields, setShowRawTimeFields] = useState(false);
+  const [debugReport, setDebugReport] = useState<any[] | null>(null);
 
   // Mode 1 state
   const [urlInput, setUrlInput] = useState("");
@@ -2408,6 +2410,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
     setRejectionSample(null);
     setFilterMessage(null);
     setShowRawDebug(false);
+    setDebugReport(null);
   };
 
   // MODE 1: URL Preview
@@ -2428,6 +2431,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
       setRawSample(data.raw_sample || null);
       setRejectionSample(data.rejection_sample || null);
       setFilterMessage(data.filter_message || null);
+      setDebugReport(data.debug_report || null);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -2452,6 +2456,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
       setRawSample(data.raw_sample || null);
       setRejectionSample(data.rejection_sample || null);
       setFilterMessage(data.filter_message || null);
+      setDebugReport(data.debug_report || null);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -2482,6 +2487,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
       setRawSample(data.raw_sample || null);
       setRejectionSample(data.rejection_sample || null);
       setFilterMessage(data.filter_message || null);
+      setDebugReport(data.debug_report || null);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -2708,6 +2714,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
                   setRawSample(data.raw_sample || null);
                   setRejectionSample(data.rejection_sample || null);
                   setFilterMessage(data.filter_message || null);
+      setDebugReport(data.debug_report || null);
                   setBrowseAllHasMore(data.has_more || false);
                 } catch (err: any) {
                   toast.error(err.message);
@@ -2853,6 +2860,39 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
         </div>
       )}
 
+      {/* Raw Time Fields Toggle */}
+      <div className="flex items-center gap-2">
+        <Switch checked={showRawTimeFields} onCheckedChange={setShowRawTimeFields} className="scale-75" />
+        <span className="text-[10px] text-muted-foreground">Use raw Polymarket sports time fields</span>
+      </div>
+
+      {/* Debug Report */}
+      {debugReport && debugReport.length > 0 && (
+        <details className="text-[10px]">
+          <summary className="text-primary cursor-pointer hover:underline font-bold">
+            📊 Debug Report ({debugReport.length} events)
+          </summary>
+          <div className="mt-1 bg-muted/20 border border-border/30 rounded p-2 max-h-[400px] overflow-y-auto space-y-2">
+            {debugReport.map((d: any, i: number) => (
+              <div key={i} className={`border rounded p-2 ${d.accepted ? 'border-green-500/30 bg-green-500/5' : 'border-destructive/30 bg-destructive/5'}`}>
+                <p className="font-bold text-foreground">{d.accepted ? '✅' : '❌'} {d.title}</p>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mt-1">
+                  <span className="text-muted-foreground">Chosen field</span>
+                  <span className="text-primary font-medium">{d.chosen_field}</span>
+                  <span className="text-muted-foreground">Chosen value</span>
+                  <span className="text-foreground font-medium">{d.chosen_value || '—'}</span>
+                  {d.all_timestamps && Object.entries(d.all_timestamps).map(([k, v]: [string, any]) => (
+                    <><span key={`k-${k}`} className="text-muted-foreground">{k}</span><span key={`v-${k}`} className="text-foreground">{v || '—'}</span></>
+                  ))}
+                  <span className="text-muted-foreground">Reason</span>
+                  <span className={`font-medium ${d.accepted ? 'text-green-400' : 'text-destructive'}`}>{d.reason}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+
       {/* Divider */}
       <div className="border-t border-border/30" />
 
@@ -2969,7 +3009,8 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
               const isHighlighted = highlightSlug && event.slug === highlightSlug;
               const endDate = event.endDate ? new Date(event.endDate) : null;
               const startDate = event.startDate ? new Date(event.startDate) : null;
-              const bestDate = endDate || startDate;
+              const chosenDate = event.chosen_display_time ? new Date(event.chosen_display_time) : null;
+              const bestDate = chosenDate || endDate || startDate;
               const now = new Date();
               const diffMs = bestDate ? bestDate.getTime() - now.getTime() : null;
               const diffHours = diffMs ? Math.round(diffMs / (1000 * 60 * 60)) : null;
@@ -3052,8 +3093,21 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
                       </div>
                       <p className="text-muted-foreground text-[10px] mt-0.5">
                         {event.markets?.length || 0} market(s)
-                        {startDate && <span className="ml-1.5">· {startDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span>}
+                        {event.chosen_display_time && <span className="ml-1.5">· ⏰ {new Date(event.chosen_display_time).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })} <span className="text-primary/60">({event.chosen_field})</span></span>}
+                        {!event.chosen_display_time && startDate && <span className="ml-1.5">· {startDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span>}
                       </p>
+                      {/* Raw time fields debug */}
+                      {showRawTimeFields && (
+                        <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[9px] bg-muted/20 rounded p-1.5">
+                          <span className="text-muted-foreground">chosen</span><span className="text-primary font-medium">{event.chosen_field}: {event.chosen_display_time || '—'}</span>
+                          <span className="text-muted-foreground">startTime</span><span className="text-foreground">{event.raw_startTime || '—'}</span>
+                          <span className="text-muted-foreground">eventDate</span><span className="text-foreground">{event.raw_eventDate || '—'}</span>
+                          <span className="text-muted-foreground">mkt.eventStartTime</span><span className="text-foreground">{event.raw_market_eventStartTime || '—'}</span>
+                          <span className="text-muted-foreground">startDate</span><span className="text-foreground">{event.raw_startDate || '—'}</span>
+                          <span className="text-muted-foreground">active/closed/live/ended</span><span className="text-foreground">{String(event.active)}/{String(event.closed)}/{String(event.live)}/{String(event.ended)}</span>
+                          <span className="text-muted-foreground">PM Event ID</span><span className="text-foreground font-mono">{event.id}</span>
+                        </div>
+                      )}
                       {/* Show base market only */}
                       {baseMarket && (
                         <div className="mt-1 text-[10px] text-muted-foreground">

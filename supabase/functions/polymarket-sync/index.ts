@@ -74,7 +74,8 @@ function isNonSport(text: string): boolean {
  * Check if startDate is more than 30 days in the future (long-term market).
  */
 function isTooFarOut(ev: GammaEvent): boolean {
-  const startMs = ev.startDate ? new Date(ev.startDate).getTime() : null;
+  const timeInfo = chooseSportsDisplayTime(ev);
+  const startMs = timeInfo.chosen ? new Date(timeInfo.chosen).getTime() : null;
   if (!startMs || isNaN(startMs)) return false;
   const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
   return startMs > Date.now() + thirtyDaysMs;
@@ -139,22 +140,19 @@ function isAcceptableEvent(ev: GammaEvent, hasTagFilter: boolean = false): { acc
 }
 
 function isDateEligible(ev: GammaEvent): { eligible: boolean; reason: string; missingDate: boolean } {
-  // Cutoff = 24 hours ago — Polymarket startDate is market listing time (not game time),
-  // so today's games may have been listed 6-12 hours ago. 24h window is safe.
+  // Use sports-aware timestamp priority
+  const timeInfo = chooseSportsDisplayTime(ev);
   const cutoff = Date.now() - 24 * 60 * 60 * 1000;
 
-  // startDate = actual match/event time on Polymarket
-  // endDate = market resolution window (can be weeks/months later — unreliable for match timing)
-  // Always prefer startDate when available
-  const startMs = ev.startDate ? new Date(ev.startDate).getTime() : null;
-  const endMs = ev.endDate ? new Date(ev.endDate).getTime() : null;
+  const chosenMs = timeInfo.chosen ? new Date(timeInfo.chosen).getTime() : null;
 
-  if (startMs && !isNaN(startMs)) {
-    if (startMs >= cutoff) return { eligible: true, reason: "future_start", missingDate: false };
-    return { eligible: false, reason: `past_start: ${ev.startDate}`, missingDate: false };
+  if (chosenMs && !isNaN(chosenMs)) {
+    if (chosenMs >= cutoff) return { eligible: true, reason: `future_${timeInfo.field}`, missingDate: false };
+    return { eligible: false, reason: `past_${timeInfo.field}: ${timeInfo.chosen}`, missingDate: false };
   }
 
-  // No startDate — fall back to endDate (less reliable)
+  // No usable date at all — fall back to endDate
+  const endMs = ev.endDate ? new Date(ev.endDate).getTime() : null;
   if (endMs && !isNaN(endMs)) {
     if (endMs >= cutoff) return { eligible: true, reason: "future_end_no_start", missingDate: false };
     return { eligible: false, reason: `past_end: ${ev.endDate}`, missingDate: false };
@@ -259,6 +257,11 @@ interface GammaMarket {
   enableOrderBook: boolean;
 }
 
+interface GammaMarketExt extends GammaMarket {
+  eventStartTime?: string | null;
+  gameStartTime?: string | null;
+}
+
 interface GammaEvent {
   id: string;
   title: string;
@@ -267,11 +270,40 @@ interface GammaEvent {
   description: string;
   startDate: string | null;
   endDate: string | null;
+  startTime?: string | null;
+  eventDate?: string | null;
   closed?: boolean;
   active?: boolean;
-  markets: GammaMarket[];
+  live?: boolean;
+  ended?: boolean;
+  markets: GammaMarketExt[];
   tags?: { label: string; slug: string }[];
   series?: any;
+}
+
+/** 
+ * Choose the best sports display timestamp in priority order:
+ * 1) event.startTime  2) event.eventDate  3) first market.eventStartTime  4) event.startDate
+ */
+function chooseSportsDisplayTime(ev: GammaEvent): { chosen: string | null; field: string; all: Record<string, string | null> } {
+  const firstMarketEventStart = (ev.markets || []).find(m => (m as any).eventStartTime)?.eventStartTime || null;
+  const firstMarketGameStart = (ev.markets || []).find(m => (m as any).gameStartTime)?.gameStartTime || null;
+  
+  const all: Record<string, string | null> = {
+    startTime: (ev as any).startTime || null,
+    eventDate: (ev as any).eventDate || null,
+    "market.eventStartTime": firstMarketEventStart,
+    "market.gameStartTime": firstMarketGameStart,
+    startDate: ev.startDate,
+    endDate: ev.endDate,
+  };
+  
+  if (all.startTime) return { chosen: all.startTime, field: "startTime", all };
+  if (all.eventDate) return { chosen: all.eventDate, field: "eventDate", all };
+  if (firstMarketEventStart) return { chosen: firstMarketEventStart, field: "market.eventStartTime", all };
+  if (firstMarketGameStart) return { chosen: firstMarketGameStart, field: "market.gameStartTime", all };
+  if (ev.startDate) return { chosen: ev.startDate, field: "startDate", all };
+  return { chosen: null, field: "none", all };
 }
 
 // ── Telemetry ──
@@ -304,17 +336,37 @@ function buildTelemetry(partial: Partial<QueryTelemetry>): QueryTelemetry {
 
 // ── Fetch functions ──
 
-/** Fetch events by tag_id — reliable for soccer league discovery */
-async function fetchEventsByTagId(tagId: string, limit = 50): Promise<GammaEvent[]> {
-  try {
-    const url = `${GAMMA_BASE}/events?tag_id=${tagId}&active=true&closed=false&limit=${limit}&order=startDate&ascending=false`;
-    const res = await fetch(url);
-    if (!res.ok) return [];
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return [];
+/** Fetch events by tag_id — reliable for soccer league discovery. Supports pagination. */
+async function fetchEventsByTagId(tagId: string, limit = 100): Promise<GammaEvent[]> {
+  const allEvents: GammaEvent[] = [];
+  const seen = new Set<string>();
+  let offset = 0;
+  const maxPages = 5; // up to 500 events
+  
+  for (let page = 0; page < maxPages; page++) {
+    try {
+      const url = `${GAMMA_BASE}/events?tag_id=${tagId}&active=true&closed=false&limit=${limit}&offset=${offset}&order=startDate&ascending=false`;
+      const res = await fetch(url);
+      if (!res.ok) break;
+      const data = await res.json();
+      const events: GammaEvent[] = Array.isArray(data) ? data : [];
+      if (events.length === 0) break;
+      
+      for (const ev of events) {
+        if (!seen.has(String(ev.id))) {
+          seen.add(String(ev.id));
+          allEvents.push(ev);
+        }
+      }
+      
+      if (events.length < limit) break; // no more pages
+      offset += limit;
+    } catch {
+      break;
+    }
   }
+  
+  return allEvents;
 }
 
 /** Fetch ALL active events from Gamma (no tag filter) with pagination */
@@ -437,50 +489,93 @@ interface FilterResult {
   accepted: GammaEvent[];
   rejected: { event: GammaEvent; dateReason?: string; fixtureReason?: string }[];
   rawSample: any[];
+  debugReport: any[];
 }
 
 /** Apply payload-aware safety filters with full rejection logging.
- *  Date filtering is ALWAYS applied. hasTagFilter controls whether binary markets are accepted. */
+ *  Date filtering is ALWAYS applied. hasTagFilter controls whether binary markets are accepted.
+ *  Also includes live events (active=true, closed=false, ended!=true). */
 function filterFixtures(events: GammaEvent[], hasTagFilter = false): FilterResult {
   const accepted: GammaEvent[] = [];
   const rejected: FilterResult["rejected"] = [];
+  const debugReport: any[] = [];
 
   // Debug: log raw input
   console.log(`[filterFixtures] raw_count=${events.length}, hasTagFilter=${hasTagFilter}`);
-  console.log(`[filterFixtures] first 5 startDates:`, events.slice(0, 5).map(e => `${e.title?.slice(0,40)} → ${e.startDate}`));
-
-  // Build raw sample: first 10 events with key fields for debug
-  const rawSample = events.slice(0, 10).map(ev => ({
-    id: ev.id,
-    title: ev.title,
-    slug: ev.slug,
-    ticker: ev.ticker,
-    startDate: ev.startDate,
-    endDate: ev.endDate,
-    closed: ev.closed,
-    active: ev.active,
-    tags: ev.tags?.slice(0, 5),
-    series: ev.series,
-    market_count: (ev.markets || []).length,
-    first_3_markets: (ev.markets || []).slice(0, 3).map(m => ({
-      question: m.question,
-      groupItemTitle: m.groupItemTitle,
-      active: m.active,
-      closed: m.closed,
-    })),
+  console.log(`[filterFixtures] first 5 chosen times:`, events.slice(0, 5).map(e => {
+    const t = chooseSportsDisplayTime(e);
+    return `${e.title?.slice(0,40)} → ${t.field}=${t.chosen}`;
   }));
 
+  // Build raw sample: first 10 events with key fields for debug
+  const rawSample = events.slice(0, 10).map(ev => {
+    const timeInfo = chooseSportsDisplayTime(ev);
+    return {
+      id: ev.id,
+      title: ev.title,
+      slug: ev.slug,
+      ticker: ev.ticker,
+      chosen_display_time: timeInfo.chosen,
+      chosen_field: timeInfo.field,
+      raw_startTime: (ev as any).startTime || null,
+      raw_eventDate: (ev as any).eventDate || null,
+      raw_market_eventStartTime: timeInfo.all["market.eventStartTime"],
+      raw_market_gameStartTime: timeInfo.all["market.gameStartTime"],
+      raw_startDate: ev.startDate,
+      raw_endDate: ev.endDate,
+      active: ev.active,
+      closed: ev.closed,
+      live: (ev as any).live,
+      ended: (ev as any).ended,
+      tags: ev.tags?.slice(0, 5),
+      series: ev.series,
+      market_count: (ev.markets || []).length,
+      first_3_markets: (ev.markets || []).slice(0, 3).map(m => ({
+        question: m.question,
+        groupItemTitle: m.groupItemTitle,
+        active: m.active,
+        closed: m.closed,
+        eventStartTime: (m as any).eventStartTime || null,
+        gameStartTime: (m as any).gameStartTime || null,
+      })),
+    };
+  });
+
   for (const ev of events) {
-    // Date check — ALWAYS applied
+    const timeInfo = chooseSportsDisplayTime(ev);
+    const isLiveEvent = ev.active === true && ev.closed !== true && (ev as any).ended !== true;
+
+    // Date check — ALWAYS applied, but live events bypass date filter
     const dateCheck = isDateEligible(ev);
-    if (!dateCheck.eligible) {
+    if (!dateCheck.eligible && !isLiveEvent) {
       rejected.push({ event: ev, dateReason: dateCheck.reason });
+      // Add to debug report (first 10 only)
+      if (debugReport.length < 10) {
+        debugReport.push({
+          title: ev.title,
+          chosen_field: timeInfo.field,
+          chosen_value: timeInfo.chosen,
+          all_timestamps: timeInfo.all,
+          accepted: false,
+          reason: `date_rejected: ${dateCheck.reason}`,
+        });
+      }
       continue;
     }
 
-    // Skip closed events
-    if (ev.closed === true) {
+    // Skip closed events (but not live ones)
+    if (ev.closed === true && !isLiveEvent) {
       rejected.push({ event: ev, fixtureReason: "closed=true" });
+      if (debugReport.length < 10) {
+        debugReport.push({
+          title: ev.title,
+          chosen_field: timeInfo.field,
+          chosen_value: timeInfo.chosen,
+          all_timestamps: timeInfo.all,
+          accepted: false,
+          reason: "closed=true",
+        });
+      }
       continue;
     }
 
@@ -488,10 +583,30 @@ function filterFixtures(events: GammaEvent[], hasTagFilter = false): FilterResul
     const fixtureCheck = isAcceptableEvent(ev, hasTagFilter);
     if (!fixtureCheck.accepted) {
       rejected.push({ event: ev, fixtureReason: fixtureCheck.reason });
+      if (debugReport.length < 10) {
+        debugReport.push({
+          title: ev.title,
+          chosen_field: timeInfo.field,
+          chosen_value: timeInfo.chosen,
+          all_timestamps: timeInfo.all,
+          accepted: false,
+          reason: `fixture_rejected: ${fixtureCheck.reason}`,
+        });
+      }
       continue;
     }
 
     accepted.push(ev);
+    if (debugReport.length < 10) {
+      debugReport.push({
+        title: ev.title,
+        chosen_field: timeInfo.field,
+        chosen_value: timeInfo.chosen,
+        all_timestamps: timeInfo.all,
+        accepted: true,
+        reason: isLiveEvent ? `live_event + ${fixtureCheck.reason}` : fixtureCheck.reason,
+      });
+    }
   }
 
   // Debug: log filter results
@@ -503,12 +618,13 @@ function filterFixtures(events: GammaEvent[], hasTagFilter = false): FilterResul
   }
   console.log(`[filterFixtures] accepted=${accepted.length}, rejected=${rejected.length}, reasons:`, JSON.stringify(rejReasons));
 
-  return { accepted, rejected, rawSample };
+  return { accepted, rejected, rawSample, debugReport };
 }
 
 /** Format event for preview response (no DB writes) */
 function toPreview(ev: GammaEvent, source: string) {
   const dateInfo = isDateEligible(ev);
+  const timeInfo = chooseSportsDisplayTime(ev);
   return {
     id: ev.id,
     title: ev.title,
@@ -518,8 +634,17 @@ function toPreview(ev: GammaEvent, source: string) {
     endDate: ev.endDate,
     closed: ev.closed,
     active: ev.active,
+    live: (ev as any).live,
+    ended: (ev as any).ended,
     source,
     missingDate: dateInfo.missingDate,
+    // Sports timestamp debug fields
+    chosen_display_time: timeInfo.chosen,
+    chosen_field: timeInfo.field,
+    raw_startTime: (ev as any).startTime || null,
+    raw_eventDate: (ev as any).eventDate || null,
+    raw_market_eventStartTime: timeInfo.all["market.eventStartTime"],
+    raw_startDate: ev.startDate,
     markets: (ev.markets || []).map(m => ({
       id: m.id,
       question: m.question,
@@ -530,6 +655,7 @@ function toPreview(ev: GammaEvent, source: string) {
       active: m.active,
       closed: m.closed,
       volume: m.volume,
+      eventStartTime: (m as any).eventStartTime || null,
     })),
   };
 }
@@ -610,8 +736,9 @@ async function importSingleEvent(
   wallet: string | null,
   importSource: string,
 ): Promise<{ event_id: string; imported: number; is_past: boolean; warning?: string }> {
-  const startMs = gEvent.startDate ? new Date(gEvent.startDate).getTime() : null;
-  const isPastEvent = startMs !== null && startMs < Date.now();
+  const timeInfo = chooseSportsDisplayTime(gEvent);
+  const chosenMs = timeInfo.chosen ? new Date(timeInfo.chosen).getTime() : null;
+  const isPastEvent = chosenMs !== null && chosenMs < Date.now();
 
   const { data: existingEvt } = await supabase
     .from("prediction_events")
@@ -629,7 +756,7 @@ async function importSingleEvent(
         event_name: gEvent.title,
         polymarket_event_id: String(gEvent.id),
         polymarket_slug: gEvent.slug,
-        event_date: gEvent.startDate || gEvent.endDate || null,
+        event_date: timeInfo.chosen || gEvent.startDate || gEvent.endDate || null,
         source: "polymarket",
         source_provider: "polymarket",
         source_event_id: `pm_${gEvent.id}`,
@@ -835,7 +962,7 @@ Deno.serve(async (req) => {
       const offset = body.offset || 0;
       const limit = Math.min(body.limit || 50, 200);
       const rawEvents = await fetchAllActiveEvents(limit, offset);
-      const { accepted: results, rejected, rawSample } = filterFixtures(rawEvents, false);
+      const { accepted: results, rejected, rawSample, debugReport } = filterFixtures(rawEvents, false);
 
       const tel = buildTelemetry({
         mode: "browse_all",
@@ -853,6 +980,7 @@ Deno.serve(async (req) => {
       return json({
         results: results.map(e => toPreview(e, "browse_all")),
         raw_sample: rawSample,
+        debug_report: debugReport,
         rejection_sample: rejected.slice(0, 5).map(r => ({ title: r.event.title, dateReason: r.dateReason, fixtureReason: r.fixtureReason })),
         filter_message: results.length === 0 && rawEvents.length > 0
           ? `Data found from Polymarket (${rawEvents.length} events), but local filters rejected all results.`
@@ -922,7 +1050,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      const { accepted: results, rejected, rawSample } = filterFixtures(rawResults, false);
+      const { accepted: results, rejected, rawSample, debugReport } = filterFixtures(rawResults, false);
 
       const rejectionSummary = rejected.length > 0
         ? rejected.slice(0, 5).map(r => ({ title: r.event.title, dateReason: r.dateReason, fixtureReason: r.fixtureReason }))
@@ -946,6 +1074,7 @@ Deno.serve(async (req) => {
         highlightSlug,
         results: results.map(e => toPreview(e, "url_import")),
         raw_sample: rawSample,
+        debug_report: debugReport,
         rejection_sample: rejectionSummary,
         filter_message: results.length === 0 && rawResults.length > 0
           ? `Data found from Polymarket (${rawResults.length} events), but local filters rejected all results.`
@@ -965,7 +1094,7 @@ Deno.serve(async (req) => {
       }
       const cfg = LEAGUE_SOURCES[league_key];
       const { events: rawEvents, endpoints } = await fetchByLeagueSource(cfg);
-      const { accepted: results, rejected, rawSample } = filterFixtures(rawEvents, true);
+      const { accepted: results, rejected, rawSample, debugReport } = filterFixtures(rawEvents, true);
 
       const rejectionSummary = rejected.length > 0
         ? rejected.slice(0, 5).map(r => ({ title: r.event.title, dateReason: r.dateReason, fixtureReason: r.fixtureReason }))
@@ -993,6 +1122,7 @@ Deno.serve(async (req) => {
         fetchStrategy: cfg.fetchStrategy,
         results: results.map(e => toPreview(e, "league_browse")),
         raw_sample: rawSample,
+        debug_report: debugReport,
         rejection_sample: rejectionSummary,
         filter_message: results.length === 0 && rawEvents.length > 0
           ? `Data found from Polymarket (${rawEvents.length} events), but local filters rejected all results.`
@@ -1014,7 +1144,7 @@ Deno.serve(async (req) => {
       if (leagueKey) {
         const cfg = LEAGUE_SOURCES[leagueKey];
         const { events: rawEvents, endpoints } = await fetchByLeagueSource(cfg);
-        const { accepted: results, rejected, rawSample } = filterFixtures(rawEvents, true);
+        const { accepted: results, rejected, rawSample, debugReport } = filterFixtures(rawEvents, true);
 
         const tel = buildTelemetry({
           mode: "search_redirected_to_browse",
@@ -1038,6 +1168,7 @@ Deno.serve(async (req) => {
           league: cfg.label,
           results: results.map(e => toPreview(e, "league_browse")),
           raw_sample: rawSample,
+        debug_report: debugReport,
           rejection_sample: rejected.slice(0, 5).map(r => ({ title: r.event.title, dateReason: r.dateReason, fixtureReason: r.fixtureReason })),
           filter_message: results.length === 0 && rawEvents.length > 0
             ? `Data found from Polymarket (${rawEvents.length} events), but local filters rejected all results.`
@@ -1063,7 +1194,7 @@ Deno.serve(async (req) => {
       const endpoints = searchQueries.map(q => `public-search?q=${q}`);
       const rawResults = await fetchSearchEvents(searchQueries);
 
-      const { accepted, rejected, rawSample } = filterFixtures(rawResults, false);
+      const { accepted, rejected, rawSample, debugReport } = filterFixtures(rawResults, false);
 
       // Apply sport_filter category matching on accepted results
       let results = accepted;
@@ -1097,6 +1228,7 @@ Deno.serve(async (req) => {
       return json({
         results: results.map(e => toPreview(e, "exact_search")),
         raw_sample: rawSample,
+        debug_report: debugReport,
         rejection_sample: rejectionSummary,
         filter_message: results.length === 0 && rawResults.length > 0
           ? `Data found from Polymarket (${rawResults.length} events), but local filters rejected all results.`
