@@ -2410,6 +2410,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
     setRejectionSample(null);
     setFilterMessage(null);
     setShowRawDebug(false);
+    setDebugReport(null);
   };
 
   // MODE 1: URL Preview
