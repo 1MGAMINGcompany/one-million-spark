@@ -1062,7 +1062,7 @@ Deno.serve(async (req) => {
       const endpoints = searchQueries.map(q => `public-search?q=${q}`);
       const rawResults = await fetchSearchEvents(searchQueries);
 
-      const { accepted, rejected, rawSample } = filterFixtures(rawResults, true);
+      const { accepted, rejected, rawSample } = filterFixtures(rawResults, false);
 
       // Apply sport_filter category matching on accepted results
       let results = accepted;
