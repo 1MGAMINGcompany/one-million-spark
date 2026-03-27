@@ -57,6 +57,12 @@ function buildQuestion(fight: Fight, isSoccer: boolean): string {
   if (fight.source === "polymarket" && fight.title && fight.title.includes("?")) {
     return fight.title;
   }
+  // For binary soccer markets (Yes/No outcomes), use polymarket_question or derive
+  if (isSoccer && fight.fighter_a_name === "Yes" && fight.fighter_b_name === "No") {
+    const q = (fight as any).polymarket_question;
+    if (q) return q;
+    return `Will ${fight.title} win?`;
+  }
   const nameA = resolveOutcomeName(fight.fighter_a_name, "a", fight);
   const nameB = resolveOutcomeName(fight.fighter_b_name, "b", fight);
   if (isSoccer) {
@@ -369,29 +375,36 @@ export default function FightCard({
         </div>
 
         <div className="px-4 pt-3 pb-3 sm:px-6">
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-5" dir="ltr">
-            <SoccerTeamColumn
-              name={resolveOutcomeName(fight.fighter_a_name, "a", fight)}
-              odds={oddsA}
-              poolAmount={poolA}
-              canPredict={canPredict}
-              onPredict={() => onPredict(fight, "fighter_a")}
-              logo={hasLogos ? fight.home_logo : undefined}
-              isWinner={fight.winner === "fighter_a" && isClaimable}
-            />
-            <div className="flex flex-col items-center gap-1">
-              <span className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">vs</span>
-            </div>
-            <SoccerTeamColumn
-              name={resolveOutcomeName(fight.fighter_b_name, "b", fight)}
-              odds={oddsB}
-              poolAmount={poolB}
-              canPredict={canPredict}
-              onPredict={() => onPredict(fight, "fighter_b")}
-              logo={hasLogos ? fight.away_logo : undefined}
-              isWinner={fight.winner === "fighter_b" && isClaimable}
-            />
-          </div>
+          {(() => {
+            const isBinary = fight.fighter_a_name === "Yes" && fight.fighter_b_name === "No";
+            return (
+              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-5" dir="ltr">
+                <SoccerTeamColumn
+                  name={resolveOutcomeName(fight.fighter_a_name, "a", fight)}
+                  odds={oddsA}
+                  poolAmount={poolA}
+                  canPredict={canPredict}
+                  onPredict={() => onPredict(fight, "fighter_a")}
+                  logo={hasLogos ? fight.home_logo : undefined}
+                  isWinner={fight.winner === "fighter_a" && isClaimable}
+                  isBinaryMarket={isBinary}
+                />
+                <div className="flex flex-col items-center gap-1">
+                  <span className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">vs</span>
+                </div>
+                <SoccerTeamColumn
+                  name={resolveOutcomeName(fight.fighter_b_name, "b", fight)}
+                  odds={oddsB}
+                  poolAmount={poolB}
+                  canPredict={canPredict}
+                  onPredict={() => onPredict(fight, "fighter_b")}
+                  logo={hasLogos ? fight.away_logo : undefined}
+                  isWinner={fight.winner === "fighter_b" && isClaimable}
+                  isBinaryMarket={isBinary}
+                />
+              </div>
+            );
+          })()}
         </div>
 
         {/* Pool strip */}
@@ -718,13 +731,17 @@ function FighterColumn({
 }
 
 function SoccerTeamColumn({
-  name, odds, poolAmount, canPredict, onPredict, logo, isWinner,
+  name, odds, poolAmount, canPredict, onPredict, logo, isWinner, isBinaryMarket,
 }: {
   name: string; odds: number; poolAmount: number; canPredict: boolean; onPredict: () => void;
-  logo?: string | null; isWinner: boolean;
+  logo?: string | null; isWinner: boolean; isBinaryMarket?: boolean;
 }) {
   const [logoError, setLogoError] = useState(false);
   const showLogo = logo && !logoError;
+
+  // For binary Yes/No markets, the "name" is the team derived from title
+  // Show "Yes" / "No" as the predict button labels
+  const displayLabel = isBinaryMarket ? (name === "No" ? "No" : name) : name;
 
   return (
     <div className="text-center flex flex-col items-center gap-1">
@@ -741,7 +758,7 @@ function SoccerTeamColumn({
           ⚽
         </div>
       )}
-      <p className="font-bold text-foreground text-sm sm:text-base leading-tight mt-0.5">{name}</p>
+      <p className="font-bold text-foreground text-sm sm:text-base leading-tight mt-0.5">{displayLabel}</p>
       <p className="text-[10px] text-muted-foreground">
         {poolAmount > 0 ? `$${poolAmount.toFixed(2)} USDC` : "Market-backed"}
       </p>
@@ -752,7 +769,7 @@ function SoccerTeamColumn({
           className="mt-1.5 w-full bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.97] transition-all text-sm py-2.5 font-bold"
           onClick={onPredict}
         >
-          Predict
+          {isBinaryMarket ? (name === "No" ? "Predict No" : "Predict Yes") : "Predict"}
         </Button>
       ) : !isWinner && (
         <p className="mt-1.5 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wide">Predictions Closed</p>

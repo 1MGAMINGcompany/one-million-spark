@@ -52,7 +52,8 @@ export function resolveOutcomeName(
       .replace(/\s+win\??$/i, "")
       .trim();
     if (cleaned) {
-      return side === "a" ? cleaned : `Not ${cleaned}`;
+      // For binary Yes/No soccer markets, show "Yes"/"No" instead of "Not TeamName"
+      return side === "a" ? cleaned : "No";
     }
   }
 
