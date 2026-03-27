@@ -785,7 +785,7 @@ function resolveCountryFlag(name: string): string | null {
   return `https://flagcdn.com/w80/${code}.png`;
 }
 
-
+async function importSingleEvent(
   supabase: any,
   gEvent: GammaEvent,
   wallet: string | null,
