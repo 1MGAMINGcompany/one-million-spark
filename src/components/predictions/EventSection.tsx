@@ -258,24 +258,19 @@ export default function EventSection({
       {expanded && (
         <div className="p-3 sm:p-4 space-y-3 bg-background/50">
           {sortedMain.length > 0 && (
-            <div className={`grid gap-3 ${sport === "FUTBOL" && sortedMain.length === 1 ? "grid-cols-1 max-w-2xl mx-auto" : "sm:grid-cols-2"}`}>
-              {sortedMain.map((fight) => (
-                <FightCard
-                  key={fight.id}
-                  fight={fight}
-                  wallet={wallet}
-                  onPredict={onPredict}
-                  userEntries={userEntries.filter((e) => e.fight_id === fight.id)}
-                  onClaim={onClaim}
-                  claiming={claiming}
-                  isHot={hotFightIds.has(fight.id)}
-                  onWalletRequired={onWalletRequired}
-                  isSoccerEvent={sport === "FUTBOL"}
-                  eventHasStarted={eventHasStarted}
-                  readOnly={readOnly}
-                />
-              ))}
-            </div>
+            <SoccerAwareGrid
+              fights={sortedMain}
+              sport={sport}
+              wallet={wallet}
+              onPredict={onPredict}
+              userEntries={userEntries}
+              onClaim={onClaim}
+              claiming={claiming}
+              hotFightIds={hotFightIds}
+              onWalletRequired={onWalletRequired}
+              eventHasStarted={eventHasStarted}
+              readOnly={readOnly}
+            />
           )}
           {sortedTournament.length > 0 && (
             <div>
