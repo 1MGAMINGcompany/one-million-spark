@@ -139,8 +139,9 @@ function isAcceptableEvent(ev: GammaEvent, hasTagFilter: boolean = false): { acc
 }
 
 function isDateEligible(ev: GammaEvent): { eligible: boolean; reason: string; missingDate: boolean } {
-  // Cutoff = 2 hours ago — allow today's upcoming + recently started games
-  const cutoff = Date.now() - 2 * 60 * 60 * 1000;
+  // Cutoff = 24 hours ago — Polymarket startDate is market listing time (not game time),
+  // so today's games may have been listed 6-12 hours ago. 24h window is safe.
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
 
   // startDate = actual match/event time on Polymarket
   // endDate = market resolution window (can be weeks/months later — unreliable for match timing)
