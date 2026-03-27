@@ -242,9 +242,18 @@ function OutcomeButton({
       <span className="text-[11px] font-semibold text-foreground text-center leading-tight line-clamp-2">
         {teamName}
       </span>
-      <span className={`text-sm font-bold ${priceColor}`}>
-        {loading ? "..." : formatCents(price)}
-      </span>
+      <TooltipProvider delayDuration={200}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className={`text-sm font-bold ${priceColor}`}>
+              {loading ? "..." : formatPercent(price)}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="text-xs">
+            Represents current market probability
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </button>
   );
 }
