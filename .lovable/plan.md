@@ -1,69 +1,69 @@
 
 
-# Fix: Show Polymarket Liquidity & Remove Polymarket Branding
+# Unified 3-Way Soccer Card (Like Polymarket)
 
-## Summary
-Three changes across 3 files:
-1. Show Polymarket liquidity/volume instead of empty "$0.00" pools
-2. Remove all "Powered by Polymarket" text and links
-3. Also fix the previous plan items (backfill category, fix "Not Team" labels, add flags)
+## Problem
+Soccer events from Polymarket are imported as 3 separate binary markets ("Will USA win? Yes/No", "Will Portugal win? Yes/No", "Draw? Yes/No"). Currently each renders as its own card with independent Yes/No columns. Polymarket combines them into a single 3-way card: **USA | DRAW | PRT** with correct prices. We need to do the same.
+
+## Approach
+Group sibling soccer fights sharing the same `event_name` into a single unified card with 3 outcome buttons (Home / Draw / Away), using each binary market's `price_a` (the "Yes" price) as the probability for that outcome.
 
 ## Changes
 
-### 1. `src/components/predictions/FightCard.tsx`
+### 1. `src/components/predictions/EventSection.tsx`
+- Before rendering FUTBOL fights, group them by `event_name` pattern
+- For groups of 2-3 sibling binary markets (same event, Yes/No outcomes), pass them as a bundle to a new `SoccerMatchCard` component instead of rendering 3 separate `FightCard`s
+- Solo fights or non-binary markets render as before
 
-**Remove PolymarketBadge component** (lines 217-227) — delete entirely.
+### 2. `src/components/predictions/SoccerMatchCard.tsx` (new file)
+A unified 3-way card component that:
+- Accepts `homeFight`, `awayFight`, and optional `drawFight`
+- Shows 3 columns: Home flag + team name + price, Draw + price, Away flag + team name + price
+- Prices come from each fight's `price_a` (the "Yes" probability in cents, like Polymarket: "39¢")
+- Volume: sum of all sibling `polymarket_volume_usd`
+- Single status badge, single pool strip
+- 3 predict buttons that each call `onPredict(respectiveFight, "fighter_a")` (betting "Yes" on that outcome)
+- Design mirrors Polymarket: compact row with flag, team name, and colored price button
 
-**Update `PolymarketPoolStrip`** (lines 243-280):
-- Remove the `<PolymarketBadge />` call
-- When `hasPool` is false (local pools are $0), show Polymarket liquidity/volume instead of "$0.00"
-- Add `polymarket_liquidity` to the `Fight` interface
-- Per-side amounts: show probability-weighted liquidity (e.g., if liquidity=$10K and probA=26%, show ~$2.6K for side A)
-- Center section: show total volume instead of "Powered by Polymarket"
+### 3. `src/components/predictions/FightCard.tsx`
+- No structural changes; individual binary cards still work for non-grouped fights
+- Export `calcOdds`, `getPoolUsd`, `getProbabilities` so `SoccerMatchCard` can reuse them
 
-**Update `SoccerTeamColumn`** (line 763):
-- Change `$0.00 USDC` / `Market-backed` to show Polymarket liquidity when available
-- Pass liquidity and probability data to the column
-
-### 2. `src/pages/MatchCenter.tsx`
-
-**Remove "Powered by Polymarket" badge and link** (lines 382-396):
-- Delete the entire block that shows "Powered by Polymarket" and the "View on Polymarket" link
-
-### 3. `src/components/predictions/PredictionHighlights.tsx`
-
-**Update pool display** (lines 199-205):
-- When pool is $0 for Polymarket fights, show liquidity from `polymarket_volume_usd` or formatted volume instead of just "Polymarket"
-- Add `polymarket_volume_usd` and `polymarket_liquidity` to the HighlightCard's Fight usage
-
-### 4. `src/lib/resolveOutcomeName.ts`
-
-**Fix the vsMatch branch** (lines 38-45):
-- Lines 41 and 44 still return `Not ${team}` — change to return `"No"` when `fighter_a_name === "Yes"` and `fighter_b_name === "No"` (binary market detection)
-
-### 5. DB backfill (via insert tool)
-- `UPDATE prediction_events SET category = 'FUTBOL' WHERE source_provider = 'polymarket' AND category IS NULL AND event_name ILIKE '%vs.%'` — for known soccer events
-- `UPDATE prediction_fights SET home_logo = '...flagcdn...', away_logo = '...'` for South Africa vs Panama fights
-
-### 6. `supabase/functions/polymarket-sync/index.ts`
-- In the existing-fight update path, also set `home_logo`/`away_logo` if currently null and flags can be resolved
-
-## Pool Display Logic (key change)
-```
-For Polymarket fights where local pool = $0:
-  - Per-side: show probability % (e.g. "26%" / "74%") 
-  - Total: show Polymarket volume (e.g. "$12.5K Vol.")
-  - If liquidity available: show "$X Liquidity"
-  
-For fights with local pool > $0:
-  - Show actual pool amounts as before
+## Grouping Logic (EventSection)
+```text
+For FUTBOL events:
+  1. Collect all fights with fighter_a_name === "Yes" && fighter_b_name === "No"
+  2. Group by event_name (the "vs." match name)
+  3. Within each group, identify:
+     - Home fight: title contains home team name (parsed from event_name)
+     - Away fight: title contains away team name
+     - Draw fight: title contains "draw" (case-insensitive)
+  4. Render one SoccerMatchCard per group
+  5. Any ungrouped fights render as regular FightCard
 ```
 
-## Files Changed
-- `src/components/predictions/FightCard.tsx` — remove Polymarket branding, show liquidity
-- `src/pages/MatchCenter.tsx` — remove "Powered by Polymarket" block  
-- `src/components/predictions/PredictionHighlights.tsx` — show volume/liquidity for Polymarket
-- `src/lib/resolveOutcomeName.ts` — fix "Not Team" → "No" in vsMatch branch
-- `supabase/functions/polymarket-sync/index.ts` — backfill logos on re-sync
-- DB updates — backfill category and flags
+## Card Layout (SoccerMatchCard)
+```text
+┌──────────────────────────────────────────────┐
+│ MATCH PREDICTION                       OPEN  │
+│                                              │
+│  🇺🇸              ⚽              🇵🇹          │
+│ United States    DRAW          Portugal      │
+│   [USA 39¢]    [DRAW 42¢]     [PRT 58¢]    │
+│                                              │
+│  31% ████████░░░░░░░░░ 69%                   │
+│            $342 Vol.                         │
+│                 View Details & Odds >        │
+└──────────────────────────────────────────────┘
+```
+
+- Price buttons are colored: blue for home, gray for draw, red for away
+- Prices shown in cents (price_a * 100, rounded) like Polymarket
+- Volume is the sum across all sibling markets
+- "View Details & Odds" links to the home team's fight detail page
+
+## Files
+- `src/components/predictions/SoccerMatchCard.tsx` — new unified 3-way card
+- `src/components/predictions/EventSection.tsx` — group soccer fights before rendering
+- `src/components/predictions/FightCard.tsx` — export shared utility functions
 
