@@ -3092,8 +3092,21 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
                       </div>
                       <p className="text-muted-foreground text-[10px] mt-0.5">
                         {event.markets?.length || 0} market(s)
-                        {startDate && <span className="ml-1.5">· {startDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span>}
+                        {event.chosen_display_time && <span className="ml-1.5">· ⏰ {new Date(event.chosen_display_time).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })} <span className="text-primary/60">({event.chosen_field})</span></span>}
+                        {!event.chosen_display_time && startDate && <span className="ml-1.5">· {startDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span>}
                       </p>
+                      {/* Raw time fields debug */}
+                      {showRawTimeFields && (
+                        <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[9px] bg-muted/20 rounded p-1.5">
+                          <span className="text-muted-foreground">chosen</span><span className="text-primary font-medium">{event.chosen_field}: {event.chosen_display_time || '—'}</span>
+                          <span className="text-muted-foreground">startTime</span><span className="text-foreground">{event.raw_startTime || '—'}</span>
+                          <span className="text-muted-foreground">eventDate</span><span className="text-foreground">{event.raw_eventDate || '—'}</span>
+                          <span className="text-muted-foreground">mkt.eventStartTime</span><span className="text-foreground">{event.raw_market_eventStartTime || '—'}</span>
+                          <span className="text-muted-foreground">startDate</span><span className="text-foreground">{event.raw_startDate || '—'}</span>
+                          <span className="text-muted-foreground">active/closed/live/ended</span><span className="text-foreground">{String(event.active)}/{String(event.closed)}/{String(event.live)}/{String(event.ended)}</span>
+                          <span className="text-muted-foreground">PM Event ID</span><span className="text-foreground font-mono">{event.id}</span>
+                        </div>
+                      )}
                       {/* Show base market only */}
                       {baseMarket && (
                         <div className="mt-1 text-[10px] text-muted-foreground">
