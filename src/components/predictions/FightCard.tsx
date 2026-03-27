@@ -375,28 +375,36 @@ export default function FightCard({
         </div>
 
         <div className="px-4 pt-3 pb-3 sm:px-6">
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-5" dir="ltr">
-            <SoccerTeamColumn
-              name={resolveOutcomeName(fight.fighter_a_name, "a", fight)}
-              odds={oddsA}
-              poolAmount={poolA}
-              canPredict={canPredict}
-              onPredict={() => onPredict(fight, "fighter_a")}
-              logo={hasLogos ? fight.home_logo : undefined}
-              isWinner={fight.winner === "fighter_a" && isClaimable}
-            />
-            <div className="flex flex-col items-center gap-1">
-              <span className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">vs</span>
-            </div>
-            <SoccerTeamColumn
-              name={resolveOutcomeName(fight.fighter_b_name, "b", fight)}
-              odds={oddsB}
-              poolAmount={poolB}
-              canPredict={canPredict}
-              onPredict={() => onPredict(fight, "fighter_b")}
-              logo={hasLogos ? fight.away_logo : undefined}
-              isWinner={fight.winner === "fighter_b" && isClaimable}
-            />
+          {(() => {
+            const isBinary = fight.fighter_a_name === "Yes" && fight.fighter_b_name === "No";
+            return (
+              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-5" dir="ltr">
+                <SoccerTeamColumn
+                  name={resolveOutcomeName(fight.fighter_a_name, "a", fight)}
+                  odds={oddsA}
+                  poolAmount={poolA}
+                  canPredict={canPredict}
+                  onPredict={() => onPredict(fight, "fighter_a")}
+                  logo={hasLogos ? fight.home_logo : undefined}
+                  isWinner={fight.winner === "fighter_a" && isClaimable}
+                  isBinaryMarket={isBinary}
+                />
+                <div className="flex flex-col items-center gap-1">
+                  <span className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">vs</span>
+                </div>
+                <SoccerTeamColumn
+                  name={resolveOutcomeName(fight.fighter_b_name, "b", fight)}
+                  odds={oddsB}
+                  poolAmount={poolB}
+                  canPredict={canPredict}
+                  onPredict={() => onPredict(fight, "fighter_b")}
+                  logo={hasLogos ? fight.away_logo : undefined}
+                  isWinner={fight.winner === "fighter_b" && isClaimable}
+                  isBinaryMarket={isBinary}
+                />
+              </div>
+            );
+          })()}
           </div>
         </div>
 
