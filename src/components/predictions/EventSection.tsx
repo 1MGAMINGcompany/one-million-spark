@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import FightCard from "./FightCard";
 import type { Fight } from "./FightCard";
+import SoccerMatchCard from "./SoccerMatchCard";
 import muayThaiImg from "@/assets/muay-thai.png";
 import boxingGloveImg from "@/assets/boxinggloves-1mg.png";
 import mmaGlovesImg from "@/assets/mmagloves-1mg.png";
@@ -124,6 +125,118 @@ function getTotalPoolUsd(fights: Fight[]): number {
     return fights.reduce((sum, f) => sum + (f.pool_a_usd ?? 0) + (f.pool_b_usd ?? 0), 0);
   }
   return fights.reduce((sum, f) => sum + f.pool_a_lamports + f.pool_b_lamports, 0) / 1_000_000_000;
+}
+
+/** Group binary soccer fights into 3-way match cards */
+function groupSoccerBinaryFights(fights: Fight[]): { grouped: { home: Fight; away: Fight; draw?: Fight }[]; ungrouped: Fight[] } {
+  const binary = fights.filter(f => f.fighter_a_name === "Yes" && f.fighter_b_name === "No");
+  const nonBinary = fights.filter(f => !(f.fighter_a_name === "Yes" && f.fighter_b_name === "No"));
+
+  // Group binary fights by event_name
+  const byEvent = new Map<string, Fight[]>();
+  for (const f of binary) {
+    const key = f.event_name;
+    if (!byEvent.has(key)) byEvent.set(key, []);
+    byEvent.get(key)!.push(f);
+  }
+
+  const grouped: { home: Fight; away: Fight; draw?: Fight }[] = [];
+  const ungrouped: Fight[] = [...nonBinary];
+
+  for (const [, siblings] of byEvent) {
+    if (siblings.length < 2) {
+      ungrouped.push(...siblings);
+      continue;
+    }
+    const drawFight = siblings.find(f => f.title.toLowerCase().includes("draw"));
+    const teamFights = siblings.filter(f => !f.title.toLowerCase().includes("draw"));
+    if (teamFights.length >= 2) {
+      grouped.push({ home: teamFights[0], away: teamFights[1], draw: drawFight });
+      // Any extra beyond 2 teams go ungrouped
+      ungrouped.push(...teamFights.slice(2));
+    } else {
+      ungrouped.push(...siblings);
+    }
+  }
+
+  return { grouped, ungrouped };
+}
+
+function SoccerAwareGrid({ fights, sport, wallet, onPredict, userEntries, onClaim, claiming, hotFightIds, onWalletRequired, eventHasStarted, readOnly }: {
+  fights: Fight[];
+  sport: string;
+  wallet: string | null;
+  onPredict: (fight: Fight, pick: "fighter_a" | "fighter_b") => void;
+  userEntries: any[];
+  onClaim: (fightId: string) => void;
+  claiming: boolean;
+  hotFightIds: Set<string>;
+  onWalletRequired?: () => void;
+  eventHasStarted?: boolean;
+  readOnly?: boolean;
+}) {
+  if (sport === "FUTBOL") {
+    const { grouped, ungrouped } = groupSoccerBinaryFights(fights);
+    return (
+      <div className="space-y-3">
+        {grouped.map(g => (
+          <SoccerMatchCard
+            key={g.home.id}
+            homeFight={g.home}
+            awayFight={g.away}
+            drawFight={g.draw}
+            wallet={wallet}
+            onPredict={onPredict}
+            userEntries={userEntries}
+            onWalletRequired={onWalletRequired}
+            eventHasStarted={eventHasStarted}
+            readOnly={readOnly}
+          />
+        ))}
+        {ungrouped.length > 0 && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {ungrouped.map(fight => (
+              <FightCard
+                key={fight.id}
+                fight={fight}
+                wallet={wallet}
+                onPredict={onPredict}
+                userEntries={userEntries.filter(e => e.fight_id === fight.id)}
+                onClaim={onClaim}
+                claiming={claiming}
+                isHot={hotFightIds.has(fight.id)}
+                onWalletRequired={onWalletRequired}
+                isSoccerEvent
+                eventHasStarted={eventHasStarted}
+                readOnly={readOnly}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className={`grid gap-3 sm:grid-cols-2`}>
+      {fights.map(fight => (
+        <FightCard
+          key={fight.id}
+          fight={fight}
+          wallet={wallet}
+          onPredict={onPredict}
+          userEntries={userEntries.filter(e => e.fight_id === fight.id)}
+          onClaim={onClaim}
+          claiming={claiming}
+          isHot={hotFightIds.has(fight.id)}
+          onWalletRequired={onWalletRequired}
+          isSoccerEvent={sport === "FUTBOL"}
+          eventHasStarted={eventHasStarted}
+          readOnly={readOnly}
+        />
+      ))}
+    </div>
+  );
 }
 
 export default function EventSection({
@@ -257,24 +370,19 @@ export default function EventSection({
       {expanded && (
         <div className="p-3 sm:p-4 space-y-3 bg-background/50">
           {sortedMain.length > 0 && (
-            <div className={`grid gap-3 ${sport === "FUTBOL" && sortedMain.length === 1 ? "grid-cols-1 max-w-2xl mx-auto" : "sm:grid-cols-2"}`}>
-              {sortedMain.map((fight) => (
-                <FightCard
-                  key={fight.id}
-                  fight={fight}
-                  wallet={wallet}
-                  onPredict={onPredict}
-                  userEntries={userEntries.filter((e) => e.fight_id === fight.id)}
-                  onClaim={onClaim}
-                  claiming={claiming}
-                  isHot={hotFightIds.has(fight.id)}
-                  onWalletRequired={onWalletRequired}
-                  isSoccerEvent={sport === "FUTBOL"}
-                  eventHasStarted={eventHasStarted}
-                  readOnly={readOnly}
-                />
-              ))}
-            </div>
+            <SoccerAwareGrid
+              fights={sortedMain}
+              sport={sport}
+              wallet={wallet}
+              onPredict={onPredict}
+              userEntries={userEntries}
+              onClaim={onClaim}
+              claiming={claiming}
+              hotFightIds={hotFightIds}
+              onWalletRequired={onWalletRequired}
+              eventHasStarted={eventHasStarted}
+              readOnly={readOnly}
+            />
           )}
           {sortedTournament.length > 0 && (
             <div>
