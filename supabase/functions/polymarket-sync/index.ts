@@ -730,25 +730,46 @@ const json = (data: unknown, status = 200) =>
 
 // ── Import helper (shared by all modes) ──
 
+const SPORT_TYPE_TO_CATEGORY: Record<string, string> = {
+  soccer: "FUTBOL",
+  mma: "MMA",
+  boxing: "BOXING",
+  bkfc: "BARE KNUCKLE",
+  nfl: "NFL",
+  nba: "NBA",
+  ncaa: "NCAA",
+  nhl: "NHL",
+  mlb: "MLB",
+  tennis: "TENNIS",
+  golf: "GOLF",
+};
+
 async function importSingleEvent(
   supabase: any,
   gEvent: GammaEvent,
   wallet: string | null,
   importSource: string,
+  sportType?: string | null,
 ): Promise<{ event_id: string; imported: number; is_past: boolean; warning?: string }> {
   const timeInfo = chooseSportsDisplayTime(gEvent);
   const chosenMs = timeInfo.chosen ? new Date(timeInfo.chosen).getTime() : null;
   const isPastEvent = chosenMs !== null && chosenMs < Date.now();
 
+  const category = sportType ? (SPORT_TYPE_TO_CATEGORY[sportType] || null) : null;
+
   const { data: existingEvt } = await supabase
     .from("prediction_events")
-    .select("id")
+    .select("id, category")
     .eq("polymarket_event_id", String(gEvent.id))
     .maybeSingle();
 
   let eventId: string;
   if (existingEvt) {
     eventId = existingEvt.id;
+    // Backfill category if currently null
+    if (category && !existingEvt.category) {
+      await supabase.from("prediction_events").update({ category }).eq("id", existingEvt.id);
+    }
   } else {
     const { data: newEvt, error } = await supabase
       .from("prediction_events")
@@ -761,6 +782,7 @@ async function importSingleEvent(
         source_provider: "polymarket",
         source_event_id: `pm_${gEvent.id}`,
         status: "pending_review",
+        ...(category ? { category } : {}),
       })
       .select("id")
       .single();
