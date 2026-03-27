@@ -2312,6 +2312,8 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
   const [rejectionSample, setRejectionSample] = useState<any[] | null>(null);
   const [filterMessage, setFilterMessage] = useState<string | null>(null);
   const [showRawDebug, setShowRawDebug] = useState(false);
+  const [showRawTimeFields, setShowRawTimeFields] = useState(false);
+  const [debugReport, setDebugReport] = useState<any[] | null>(null);
 
   // Mode 1 state
   const [urlInput, setUrlInput] = useState("");
