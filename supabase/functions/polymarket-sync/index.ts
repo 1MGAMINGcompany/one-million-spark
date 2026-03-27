@@ -858,12 +858,47 @@ async function importSingleEvent(
       .maybeSingle();
 
     if (existingFight) {
-      await supabase.from("prediction_fights").update({
+      const updatePayload: Record<string, unknown> = {
         price_a: parseFloat(outcomePrices[0] || "0"),
         price_b: parseFloat(outcomePrices[1] || "0"),
         polymarket_active: market.active && !market.closed,
         polymarket_last_synced_at: new Date().toISOString(),
-      }).eq("id", existingFight.id);
+      };
+      // Backfill volume + liquidity on re-sync
+      const volUsd = parseFloat(market.volume || "0");
+      if (volUsd > 0) updatePayload.polymarket_volume_usd = volUsd;
+      const liq = parseFloat(market.liquidity || "0");
+      if (liq > 0) updatePayload.polymarket_liquidity = liq;
+      // Backfill logos if missing — resolve country flags for soccer events
+      if (sportType === "FUTBOL" || (gEvent.title && /vs\.?\s/i.test(gEvent.title))) {
+        const flagMatch = gEvent.title.match(/^(.+?)\s+vs\.?\s+(.+)$/i);
+        if (flagMatch) {
+          const COUNTRY_FLAGS: Record<string, string> = {
+            "south africa": "za", "panama": "pa", "mexico": "mx", "usa": "us",
+            "united states": "us", "brazil": "br", "argentina": "ar", "germany": "de",
+            "france": "fr", "spain": "es", "england": "gb-eng", "italy": "it",
+            "portugal": "pt", "netherlands": "nl", "belgium": "be", "colombia": "co",
+            "uruguay": "uy", "chile": "cl", "peru": "pe", "ecuador": "ec",
+            "japan": "jp", "south korea": "kr", "australia": "au", "canada": "ca",
+            "costa rica": "cr", "honduras": "hn", "jamaica": "jm", "trinidad and tobago": "tt",
+            "egypt": "eg", "nigeria": "ng", "senegal": "sn", "morocco": "ma",
+            "ghana": "gh", "cameroon": "cm", "tunisia": "tn", "algeria": "dz",
+            "croatia": "hr", "serbia": "rs", "switzerland": "ch", "denmark": "dk",
+            "sweden": "se", "norway": "no", "poland": "pl", "czech republic": "cz",
+            "austria": "at", "turkey": "tr", "greece": "gr", "romania": "ro",
+            "ukraine": "ua", "russia": "ru", "wales": "gb-wls", "scotland": "gb-sct",
+            "ireland": "ie", "iceland": "is", "finland": "fi", "hungary": "hu",
+            "paraguay": "py", "bolivia": "bo", "venezuela": "ve", "china": "cn",
+            "india": "in", "iran": "ir", "iraq": "iq", "saudi arabia": "sa",
+            "qatar": "qa", "uae": "ae", "israel": "il", "new zealand": "nz",
+          };
+          const homeCode = COUNTRY_FLAGS[flagMatch[1].trim().toLowerCase()];
+          const awayCode = COUNTRY_FLAGS[flagMatch[2].trim().toLowerCase()];
+          if (homeCode) updatePayload.home_logo = `https://flagcdn.com/w80/${homeCode}.png`;
+          if (awayCode) updatePayload.away_logo = `https://flagcdn.com/w80/${awayCode}.png`;
+        }
+      }
+      await supabase.from("prediction_fights").update(updatePayload).eq("id", existingFight.id);
     } else {
       let volumeUsd = parseFloat(market.volume || "0");
       try {

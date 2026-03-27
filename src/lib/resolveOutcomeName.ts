@@ -32,16 +32,19 @@ export function resolveOutcomeName(
     const teamAUpper = teamA.toUpperCase().trim();
     const teamBUpper = teamB.toUpperCase().trim();
 
+    // Detect binary Yes/No markets (Polymarket soccer structure)
+    const isBinary = fight.fighter_a_name === "Yes" && fight.fighter_b_name === "No";
+
     if (titleUpper.startsWith("DRAW")) {
       // Draw market
       return side === "a" ? "Draw" : "No Draw";
     }
 
     if (titleUpper.includes(teamAUpper) || teamAUpper.includes(titleUpper)) {
-      return side === "a" ? teamA.trim() : `Not ${teamA.trim()}`;
+      return side === "a" ? teamA.trim() : (isBinary ? "No" : `Not ${teamA.trim()}`);
     }
     if (titleUpper.includes(teamBUpper) || teamBUpper.includes(titleUpper)) {
-      return side === "a" ? teamB.trim() : `Not ${teamB.trim()}`;
+      return side === "a" ? teamB.trim() : (isBinary ? "No" : `Not ${teamB.trim()}`);
     }
   }
 

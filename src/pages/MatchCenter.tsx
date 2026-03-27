@@ -379,21 +379,6 @@ export default function MatchCenter() {
               {fight.method && (
                 <div className="flex items-center gap-2"><span>🏆</span> Method: {fight.method}</div>
               )}
-              {fight.source === "polymarket" && (
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[10px] bg-muted/50 px-2 py-0.5 rounded-full">Powered by Polymarket</span>
-                  {fight.polymarket_slug && (
-                    <a
-                      href={`https://polymarket.com/event/${fight.polymarket_slug}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary/70 hover:text-primary flex items-center gap-0.5"
-                    >
-                      View on Polymarket <ExternalLink className="w-3 h-3" />
-                    </a>
-                  )}
-                </div>
-              )}
               <div className="flex items-center gap-2">
                 <span>💰</span> Platform fee: {((fight.commission_bps ?? 200) / 100).toFixed(0)}%
               </div>

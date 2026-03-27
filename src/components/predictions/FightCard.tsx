@@ -213,17 +213,11 @@ function ProbabilityBar({ probA, probB }: { probA: number; probB: number }) {
   );
 }
 
-/** Polymarket attribution badge */
-function PolymarketBadge() {
-  return (
-    <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-muted-foreground/70 bg-muted/20 px-2 py-0.5 rounded-full">
-      <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none">
-        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" opacity="0.5" />
-        <path d="M8 12l3 3 5-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-      Powered by Polymarket
-    </span>
-  );
+/** Format liquidity for display */
+function formatLiquidity(v: number): string {
+  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `$${(v / 1_000).toFixed(0)}K`;
+  return `$${v.toFixed(0)}`;
 }
 
 /** USDC per-side display for Polymarket events */
@@ -245,9 +239,24 @@ function PolymarketPoolStrip({ fight }: { fight: Fight }) {
   const { poolA, poolB } = getPoolUsd(fight);
   const hasPool = poolA > 0 || poolB > 0;
   const volume = fight.polymarket_volume_usd ?? 0;
+  const liquidity = (fight as any).polymarket_liquidity ?? 0;
 
   const nameA = displayName(fight.fighter_a_name, fight, "a");
   const nameB = displayName(fight.fighter_b_name, fight, "b");
+
+  // For Polymarket fights with no local pool, show liquidity or volume
+  const sideADisplay = hasPool
+    ? `$${poolA.toFixed(2)}`
+    : probs ? `${formatProb(probs.probA)}` : "—";
+  const sideBDisplay = hasPool
+    ? `$${poolB.toFixed(2)}`
+    : probs ? `${formatProb(probs.probB)}` : "—";
+
+  const centerLabel = volume > 0
+    ? `${formatVolume(volume)} Vol.`
+    : liquidity > 0
+      ? `${formatLiquidity(liquidity)} Liquidity`
+      : null;
 
   return (
     <div className="w-full space-y-2">
@@ -256,23 +265,16 @@ function PolymarketPoolStrip({ fight }: { fight: Fight }) {
       )}
       <div className="flex items-center justify-between text-[10px]">
         <div className="text-center">
-          <span className="block font-bold text-foreground text-xs">
-            {hasPool ? `$${poolA.toFixed(2)}` : probs ? `${formatProb(probs.probA)}` : "—"}
-          </span>
+          <span className="block font-bold text-foreground text-xs">{sideADisplay}</span>
           <span className="text-muted-foreground">{nameA.split(" ").pop()}</span>
         </div>
-        <div className="flex flex-col items-center gap-0.5">
-          <PolymarketBadge />
-          {volume > 0 && (
-            <span className="text-[10px] font-semibold text-primary/70">
-              {formatVolume(volume)} Vol.
-            </span>
-          )}
-        </div>
+        {centerLabel && (
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-[10px] font-semibold text-primary/70">{centerLabel}</span>
+          </div>
+        )}
         <div className="text-center">
-          <span className="block font-bold text-foreground text-xs">
-            {hasPool ? `$${poolB.toFixed(2)}` : probs ? `${formatProb(probs.probB)}` : "—"}
-          </span>
+          <span className="block font-bold text-foreground text-xs">{sideBDisplay}</span>
           <span className="text-muted-foreground">{nameB.split(" ").pop()}</span>
         </div>
       </div>
@@ -760,7 +762,7 @@ function SoccerTeamColumn({
       )}
       <p className="font-bold text-foreground text-sm sm:text-base leading-tight mt-0.5">{displayLabel}</p>
       <p className="text-[10px] text-muted-foreground">
-        {poolAmount > 0 ? `$${poolAmount.toFixed(2)} USDC` : "Market-backed"}
+        {poolAmount > 0 ? `$${poolAmount.toFixed(2)} USDC` : "Liquidity-backed"}
       </p>
       <p className="text-xl sm:text-2xl font-bold text-primary leading-none">{odds > 0 ? `${odds.toFixed(2)}x` : '—'}</p>
       {canPredict ? (

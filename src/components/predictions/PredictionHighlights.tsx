@@ -198,9 +198,13 @@ function HighlightCard({
 
         {/* Pool */}
         <div className="mt-2 pt-1.5 border-t border-border/30 flex items-center justify-between">
-          <span className="text-[10px] text-muted-foreground">{isPolymarketPool ? "Liquidity" : "Pool"}</span>
+          <span className="text-[10px] text-muted-foreground">{isPolymarketPool ? "Volume" : "Pool"}</span>
           <span className="text-[11px] font-bold text-primary">
-            {isPolymarketPool ? "Polymarket" : `$${totalPool.toFixed(2)}`}
+            {isPolymarketPool
+              ? ((fight.polymarket_volume_usd ?? 0) > 0
+                ? `$${((fight.polymarket_volume_usd ?? 0) >= 1000 ? `${((fight.polymarket_volume_usd ?? 0) / 1000).toFixed(0)}K` : (fight.polymarket_volume_usd ?? 0).toFixed(0))}`
+                : "Live Market")
+              : `$${totalPool.toFixed(2)}`}
           </span>
         </div>
       </div>
