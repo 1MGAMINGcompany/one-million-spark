@@ -2429,6 +2429,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
       setResults(data.results || []);
       setHighlightSlug(data.highlightSlug || null);
       setResultSource("URL Import");
+      setLastSportType(data.sportType || null);
       setTelemetry(data.telemetry || null);
       setRawSample(data.raw_sample || null);
       setRejectionSample(data.rejection_sample || null);
