@@ -2523,7 +2523,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
     for (const pmEventId of ids) {
       try {
         const { data, error } = await supabase.functions.invoke("polymarket-sync", {
-          body: { wallet, action: "import_single", polymarket_event_id: pmEventId, import_source: activeMode },
+          body: { wallet, action: "import_single", polymarket_event_id: pmEventId, import_source: activeMode, sport_type: lastSportType || undefined },
         });
         if (error) throw error;
         if (data?.error) throw new Error(data.error);
