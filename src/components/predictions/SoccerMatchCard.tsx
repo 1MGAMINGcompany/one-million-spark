@@ -14,9 +14,9 @@ const STATUS_BADGE: Record<string, { label: string; className: string }> = {
   cancelled: { label: "CANCELLED", className: "bg-muted text-muted-foreground" },
 };
 
-function formatCents(price: number | null | undefined): string {
+function formatPercent(price: number | null | undefined): string {
   if (!price || price <= 0) return "—";
-  return `${Math.round(price * 100)}¢`;
+  return `${Math.round(price * 100)}%`;
 }
 
 function formatVolume(usd: number): string {
