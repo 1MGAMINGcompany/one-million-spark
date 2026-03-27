@@ -34,6 +34,12 @@ const POLITICS_KEYWORDS = [
   "democrat", "republican", "political", "legislation",
   "governor", "mayor", "biden", "trump", "politics",
 ];
+const NON_SPORT_KEYWORDS = [
+  "champion", "season", "winner of", "year",
+  "ipo", "bitcoin", "ethereum", "crypto",
+  "stock", "recession", "inflation", "gdp",
+  "fed rate", "interest rate",
+];
 
 const MATCHUP_RE = /\bvs\.?\b|\sv\s|\bat\b/i;
 
