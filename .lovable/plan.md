@@ -1,49 +1,27 @@
 
 
-# Fix: Admin Browse Filters Rejecting All Polymarket Events
+# Improve Admin Intake: Proper Gamma API Integration
 
-## Problem (confirmed by screenshot)
-The PGA search returns 20 raw Polymarket results but **0 after filters**. Two filters are killing everything:
+## Current State
+The admin sync already works (48 FIFA Friendlies, 13 MMA visible). The tag-based fetching uses `GET /events?tag_id=...&active=true&closed=false` correctly. However, tag IDs are hardcoded and there's no way to discover new sports/tags dynamically.
 
-1. **Date filter** (`isDateEligible`): Cutoff is set to "tomorrow 00:00 UTC" — rejects today's games and any event with a past `startDate` (e.g., season-long markets like "2025 PGA Champion" with `startDate: 2025-03-03`)
-2. **Closed filter** (line 422): Rejects any event where `closed === true` on the parent event — but many Polymarket events mark the parent as `closed` while individual sub-markets remain active and tradeable
+## Changes
 
-## Solution
+### 1. Add `GET /sports` discovery endpoint (`polymarket-sync/index.ts`)
+Add a new action `discover_sports` that calls `GET https://gamma-api.polymarket.com/sports` and returns the full sport metadata (sport name, tag IDs, images, series info). This lets the admin UI dynamically show available sports instead of relying on hardcoded tag IDs.
 
-### File: `supabase/functions/polymarket-sync/index.ts`
+### 2. Add `browse_all` action using `GET /events` as main feed
+Add a new action `browse_all` that fetches `GET /events?active=true&closed=false&limit=100&order=startDate&ascending=true` with pagination support (`offset` param). This gives admins a single chronological view of ALL upcoming Polymarket events across all sports, sorted by start date.
 
-**1. Add `skipFilters` parameter to the filter function (~line 385)**
+### 3. Update admin UI (`FightPredictionAdmin.tsx`)
+- Add a "Browse All Upcoming" button that calls the `browse_all` action with pagination
+- Add a "Discover Sports" button that calls `discover_sports` to show all available Polymarket sports and their tag IDs (useful for adding new leagues)
+- Add pagination controls (Load More) for large result sets
 
-The filter function gets an optional `skipFilters: boolean` flag. When `true` (admin browse/search/preview modes), skip the date check and the `closed` check — only keep the matchup/fixture pattern check and the futures regex.
+### 4. Improve `fetchEventsByTagId` with sorting
+Update the tag-based fetch to include `&order=startDate&ascending=true` so results come back chronologically (soonest first).
 
-**2. Relax `isDateEligible` for auto-sync too**
-
-Change the cutoff from "tomorrow 00:00 UTC" to "2 hours ago" so today's games pass through even in non-admin flows.
-
-**3. For admin modes, skip `closed` check**
-
-When browsing, an event with `closed: true` on the parent can still have active sub-markets. Admin should see these and decide manually.
-
-**4. Update all admin call sites**
-
-Pass `skipFilters: true` from `browse_league`, `url_preview`, `search`, and `browse_all` action handlers so admins see all available events.
-
-### Changes Summary
-
-```text
-filterEvents(events)                    → filterEvents(events, { adminMode: true })
-                                           ↑ skips date + closed checks
-
-isDateEligible cutoff:
-  Before: tomorrow 00:00 UTC
-  After:  now - 2 hours (for auto-sync safety net)
-
-Admin browse/search/preview:
-  Skip date filter entirely
-  Skip closed===true filter
-  Keep: futures regex, matchup pattern check
-```
-
-### Single file changed
-- `supabase/functions/polymarket-sync/index.ts`
+### Files Changed
+- `supabase/functions/polymarket-sync/index.ts` — add `discover_sports` action, `browse_all` action, improve event sorting
+- `src/pages/FightPredictionAdmin.tsx` — add Browse All and Discover Sports UI buttons
 
