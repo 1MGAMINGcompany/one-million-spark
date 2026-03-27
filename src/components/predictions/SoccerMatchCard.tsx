@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { ChevronRight } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Fight } from "./FightCard";
 
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {
@@ -14,9 +14,9 @@ const STATUS_BADGE: Record<string, { label: string; className: string }> = {
   cancelled: { label: "CANCELLED", className: "bg-muted text-muted-foreground" },
 };
 
-function formatCents(price: number | null | undefined): string {
+function formatPercent(price: number | null | undefined): string {
   if (!price || price <= 0) return "—";
-  return `${Math.round(price * 100)}¢`;
+  return `${Math.round(price * 100)}%`;
 }
 
 function formatVolume(usd: number): string {
@@ -242,9 +242,18 @@ function OutcomeButton({
       <span className="text-[11px] font-semibold text-foreground text-center leading-tight line-clamp-2">
         {teamName}
       </span>
-      <span className={`text-sm font-bold ${priceColor}`}>
-        {loading ? "..." : formatCents(price)}
-      </span>
+      <TooltipProvider delayDuration={200}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className={`text-sm font-bold ${priceColor}`}>
+              {loading ? "..." : formatPercent(price)}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="text-xs">
+            Represents current market probability
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </button>
   );
 }
