@@ -730,25 +730,46 @@ const json = (data: unknown, status = 200) =>
 
 // ── Import helper (shared by all modes) ──
 
+const SPORT_TYPE_TO_CATEGORY: Record<string, string> = {
+  soccer: "FUTBOL",
+  mma: "MMA",
+  boxing: "BOXING",
+  bkfc: "BARE KNUCKLE",
+  nfl: "NFL",
+  nba: "NBA",
+  ncaa: "NCAA",
+  nhl: "NHL",
+  mlb: "MLB",
+  tennis: "TENNIS",
+  golf: "GOLF",
+};
+
 async function importSingleEvent(
   supabase: any,
   gEvent: GammaEvent,
   wallet: string | null,
   importSource: string,
+  sportType?: string | null,
 ): Promise<{ event_id: string; imported: number; is_past: boolean; warning?: string }> {
   const timeInfo = chooseSportsDisplayTime(gEvent);
   const chosenMs = timeInfo.chosen ? new Date(timeInfo.chosen).getTime() : null;
   const isPastEvent = chosenMs !== null && chosenMs < Date.now();
 
+  const category = sportType ? (SPORT_TYPE_TO_CATEGORY[sportType] || null) : null;
+
   const { data: existingEvt } = await supabase
     .from("prediction_events")
-    .select("id")
+    .select("id, category")
     .eq("polymarket_event_id", String(gEvent.id))
     .maybeSingle();
 
   let eventId: string;
   if (existingEvt) {
     eventId = existingEvt.id;
+    // Backfill category if currently null
+    if (category && !existingEvt.category) {
+      await supabase.from("prediction_events").update({ category }).eq("id", existingEvt.id);
+    }
   } else {
     const { data: newEvt, error } = await supabase
       .from("prediction_events")
@@ -761,6 +782,7 @@ async function importSingleEvent(
         source_provider: "polymarket",
         source_event_id: `pm_${gEvent.id}`,
         status: "pending_review",
+        ...(category ? { category } : {}),
       })
       .select("id")
       .single();
@@ -1005,6 +1027,7 @@ Deno.serve(async (req) => {
 
       let rawResults: GammaEvent[] = [];
       let highlightSlug: string | null = null;
+      let detectedSportType: string | null = null;
       const endpoints: string[] = [];
       let mode = parsed.type;
 
@@ -1021,6 +1044,7 @@ Deno.serve(async (req) => {
         const leagueKey = SPORTS_SLUG_MAP[parsed.leagueSlug!] || parsed.leagueSlug!;
         const cfg = LEAGUE_SOURCES[leagueKey];
         if (cfg) {
+          detectedSportType = cfg.sportType;
           const fetched = await fetchByLeagueSource(cfg);
           rawResults = fetched.events;
           endpoints.push(...fetched.endpoints);
@@ -1039,6 +1063,7 @@ Deno.serve(async (req) => {
         if (exactEv) {
           rawResults = [exactEv];
         } else if (cfg) {
+          detectedSportType = cfg.sportType;
           const fetched = await fetchByLeagueSource(cfg);
           rawResults = fetched.events;
           endpoints.push(...fetched.endpoints);
@@ -1072,6 +1097,7 @@ Deno.serve(async (req) => {
       return json({
         mode,
         highlightSlug,
+        sportType: detectedSportType,
         results: results.map(e => toPreview(e, "url_import")),
         raw_sample: rawSample,
         debug_report: debugReport,
@@ -1241,13 +1267,13 @@ Deno.serve(async (req) => {
     // ACTION: import_single
     // ══════════════════════════════════════════════════
     if (action === "import_single") {
-      const { polymarket_event_id, import_source } = body;
+      const { polymarket_event_id, import_source, sport_type } = body;
       if (!polymarket_event_id) return json({ error: "Missing polymarket_event_id" }, 400);
 
       const gEvent = await fetchEventById(polymarket_event_id);
       if (!gEvent) return json({ error: `Event not found (${polymarket_event_id})` }, 404);
 
-      const result = await importSingleEvent(supabase, gEvent, wallet, import_source || "manual");
+      const result = await importSingleEvent(supabase, gEvent, wallet, import_source || "manual", sport_type || null);
       return json({ success: true, ...result });
     }
 

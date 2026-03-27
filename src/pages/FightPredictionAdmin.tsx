@@ -2314,6 +2314,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
   const [showRawDebug, setShowRawDebug] = useState(false);
   const [showRawTimeFields, setShowRawTimeFields] = useState(false);
   const [debugReport, setDebugReport] = useState<any[] | null>(null);
+  const [lastSportType, setLastSportType] = useState<string | null>(null);
 
   // Mode 1 state
   const [urlInput, setUrlInput] = useState("");
@@ -2411,6 +2412,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
     setFilterMessage(null);
     setShowRawDebug(false);
     setDebugReport(null);
+    setLastSportType(null);
   };
 
   // MODE 1: URL Preview
@@ -2427,6 +2429,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
       setResults(data.results || []);
       setHighlightSlug(data.highlightSlug || null);
       setResultSource("URL Import");
+      setLastSportType(data.sportType || null);
       setTelemetry(data.telemetry || null);
       setRawSample(data.raw_sample || null);
       setRejectionSample(data.rejection_sample || null);
@@ -2452,6 +2455,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
       if (data?.error) throw new Error(data.error);
       setResults(data.results || []);
       setResultSource(`League: ${data.league || leagueKey} (${data.fetchStrategy || "tag"})`);
+      setLastSportType(data.sportType || null);
       setTelemetry(data.telemetry || null);
       setRawSample(data.raw_sample || null);
       setRejectionSample(data.rejection_sample || null);
@@ -2521,7 +2525,7 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
     for (const pmEventId of ids) {
       try {
         const { data, error } = await supabase.functions.invoke("polymarket-sync", {
-          body: { wallet, action: "import_single", polymarket_event_id: pmEventId, import_source: activeMode },
+          body: { wallet, action: "import_single", polymarket_event_id: pmEventId, import_source: activeMode, sport_type: lastSportType || undefined },
         });
         if (error) throw error;
         if (data?.error) throw new Error(data.error);
