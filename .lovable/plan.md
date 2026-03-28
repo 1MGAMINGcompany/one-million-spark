@@ -1,98 +1,54 @@
 
 
-# Prediction Markets SEO Content — Help & Guides Expansion
+# Polymarket-Style Compact Cards for All Sports
 
-## Overview
-Add 6 new long-form SEO articles focused on prediction markets to the Help & Guides section on both 1mgaming.com and 1mg.live. Each article targets high-intent search queries, includes structured FAQ schema for rich snippets, and links internally to the predictions page.
+## Problem
+Current FightCard is complex with multipliers (2.30x), USDC pool amounts, question text, and verbose layouts. The user wants all prediction cards (MMA, Boxing, Muay Thai, etc.) to look like Polymarket: compact, fun, showing fighter photos, names, records, and odds as percentages with simple colored pick buttons.
 
-## New Articles (added to `src/data/helpArticles.tsx`)
+## Design (Based on Polymarket Reference)
+Each fight renders as a single compact row card:
 
-### 1. `what-are-prediction-markets`
-**Title:** "What Are Prediction Markets? A Complete Guide"
-- What prediction markets are, how they work (buy shares in outcomes)
-- History (Iowa Electronic Markets, Intrade, Polymarket)
-- How prices reflect probabilities (43¢ = 43% chance)
-- Real-world use cases: sports, politics, crypto, entertainment
-- FAQ schema: 5-6 questions
+```text
+┌──────────────────────────────────────────────────────┐
+│  UFC · 12:00 AM   $215K Vol.           ⑨ Game View > │
+│                                                      │
+│  (photo) Yousri Belgaroui 9-3-0    [YOU 44%] [MAN 57%] │
+│  (photo) Mansur Abdul-Malik 9-0-1                    │
+└────────────────────────────────────────────────────────┘
+```
 
-### 2. `are-prediction-markets-legal`
-**Title:** "Are Prediction Markets Legal? What You Need to Know"
-- US regulatory landscape (CFTC, Kalshi ruling, Polymarket)
-- Why crypto-based prediction markets operate globally
-- How 1MGAMING operates (non-custodial, blockchain settlement)
-- Difference between predictions and gambling (skill/information vs luck)
-- FAQ schema: 5-6 questions
+Key changes:
+- **Compact row layout** — fighter photos + names on left, two colored pick buttons on right
+- **Percentages** — prices shown as `44%` not `2.30x`
+- **Abbreviated names** on buttons (first 3 chars of last name)
+- **Fighter photos** — circular, small (40px), with sport-icon fallback
+- **Records** shown inline next to name (e.g. "9-3-0")
+- **Volume** in header
+- **"Game View >"** links to match center
+- **Blue / Red** colored buttons for fighter A / fighter B
+- Winner banner, claim UI, draw/refund states all preserved but compact
 
-### 3. `prediction-markets-growth-2025`
-**Title:** "Prediction Markets in 2025: Growth, Volume & Why They Matter"
-- Market size stats ($50B+ traded on Polymarket in 2024)
-- Projected growth (Goldman Sachs, Bloomberg data points)
-- Why 1MGAMING is positioned: crypto-native, low fees, real-time settlement
-- Liquidity explanation: what it is, why it matters, how Polymarket provides it
-- Why we're the best: aggregated odds, instant crypto payouts, no KYC friction
-- FAQ schema
+## Files Changed
 
-### 4. `how-to-place-a-prediction`
-**Title:** "How to Place a Prediction on 1MGAMING — Step by Step"
-- Connect wallet → Browse events → Pick outcome → Confirm
-- Screenshots-style walkthrough (text descriptions)
-- Understanding odds/prices (percentage display)
-- What happens after you predict (settlement, payouts)
-- How to check your open positions
-- FAQ schema
+### `src/components/predictions/FightCard.tsx`
+- Replace the entire non-soccer card render (lines 512-665) with a new compact Polymarket-style layout
+- Keep all existing logic (calcOdds, status badges, claim handling, winner detection)
+- Replace multiplier display (`2.30x`) with percentage display (`44%`)
+- New `CompactFighterRow` sub-component: photo + name + record on left
+- New `PickButton` sub-component: colored button with abbreviated name + percentage
+- Remove verbose question text, pool dollar amounts, Swords icon
+- Keep the soccer card path unchanged (already redesigned)
+- Keep FighterColumn and SoccerTeamColumn for backward compat but the main card won't use FighterColumn anymore
 
-### 5. `how-prediction-payouts-work-crypto`
-**Title:** "How Prediction Payouts Work with Crypto"
-- What happens when you win (shares → full value)
-- Settlement process (automatic on-chain)
-- How to withdraw/convert crypto to cash (exchange ramps)
-- Gas fees explained (Solana = near zero)
-- Supported wallets (Phantom, Solflare, Backpack)
-- FAQ schema
+### `src/components/predictions/PredictionHighlights.tsx`
+- Update `HighlightCard` to use percentages instead of multipliers for consistency
 
-### 6. `what-is-liquidity-prediction-markets`
-**Title:** "What Is Liquidity in Prediction Markets?"
-- Liquidity explained simply (ability to buy/sell without moving price)
-- Order books vs AMMs
-- Why Polymarket liquidity matters for 1MGAMING users
-- How volume affects odds accuracy
-- FAQ schema
-
-## File Changes
-
-### `src/data/helpArticles.tsx`
-- Add 6 new article entries with full long-form JSX content (~100-150 lines each)
-- Each article has: slug, title, metaDescription, keywords, cardDescription, content()
-- Internal links to `/predictions`, other help articles, and wallet guides
-
-### `src/components/seo/FAQSection.tsx`
-- Add FAQ entries for all 6 new slugs in the `walletFAQs` map (rename to `articleFAQs`)
-
-### `src/pages/HelpCenter.tsx`
-- Add new "Prediction Markets" category section with slugs for the 6 articles
-- Render via existing `ArticleGrid` component
-
-### `public/sitemap.xml`
-- Add 6 new `<url>` entries for `/help/{slug}`
-
-### `src/pages/platform/PlatformApp.tsx`
-- Add `/help` and `/help/:slug` routes so 1mg.live also serves these SEO pages
-- Import and render `HelpCenter` and `HelpArticle` components
-
-## SEO Features (already built, reused)
-- `useSeoMeta` — canonical, OG, Twitter tags (already wired in HelpArticle)
-- `JsonLd` — Article + BreadcrumbList schema (already in HelpArticle)
-- `FAQSection` — FAQPage schema for Google rich results
-- `ArticleCTA` — conversion CTAs at bottom of each article
-- `RelatedArticles` — internal linking between articles
-
-## Keyword Targets
-- "what are prediction markets"
-- "are prediction markets legal"
-- "prediction markets 2025 growth"
-- "how to place a prediction crypto"
-- "prediction market payouts crypto"
-- "prediction market liquidity explained"
-- "polymarket alternative"
-- "best prediction market platform"
+## Preserved Functionality
+- Status badges (OPEN, LOCKED, LIVE, etc.)
+- Featured ribbon
+- Winner/claim/refund/draw states
+- Weight class & fight class tags
+- View Details link
+- Wallet gate on predict
+- eventHasStarted lock logic
 
