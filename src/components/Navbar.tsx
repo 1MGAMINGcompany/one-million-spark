@@ -4,7 +4,8 @@ import { useTranslation } from "react-i18next";
 import { useWallet } from "@/hooks/useWallet";
 import { usePrivy } from "@privy-io/react-auth";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
-import { Home, Wallet, PlusCircle, LayoutList, Menu, X, Coins, Volume2, VolumeX, Bell, BellOff, Trophy, ChevronDown, LogOut, ArrowRightLeft, Sparkles, User, Swords } from "lucide-react";
+import { Home, Wallet, Menu, X, Coins, Volume2, VolumeX, Bell, BellOff, Trophy, ChevronDown, LogOut, ArrowRightLeft, Sparkles, User, Swords, Sun, Moon } from "lucide-react";
+import { useTheme } from "@/hooks/useTheme";
 import { WalletButton } from "./WalletButton";
 import { PrivyLoginButton } from "./PrivyLoginButton";
 import { Button } from "@/components/ui/button";
@@ -81,13 +82,13 @@ const Navbar = () => {
     }
   }, [notificationsEnabled, play]);
 
+  const { theme, toggleTheme, isDark } = useTheme();
+
   const navItems: NavItem[] = [
     { path: "/", labelKey: "nav.home", icon: Home },
     { path: "/add-funds", labelKey: "nav.addFunds", icon: Coins },
-    { path: "/create-room", labelKey: "nav.createRoom", icon: PlusCircle },
-    { path: "/room-list", labelKey: "nav.roomList", icon: LayoutList },
-    { path: "/leaderboard/ludo", labelKey: "nav.leaderboard", icon: Trophy },
     { path: "/predictions", labelKey: "Predictions", icon: Swords },
+    { path: "/leaderboard/ludo", labelKey: "nav.leaderboard", icon: Trophy },
   ];
 
   return (
@@ -154,6 +155,16 @@ const Navbar = () => {
               title={notificationsEnabled ? "Notifications on" : "Enable notifications"}
             >
               {notificationsEnabled ? <Bell size={20} /> : <BellOff size={20} />}
+            </button>
+
+            {/* Day/Night Theme Toggle */}
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-lg text-primary hover:text-primary/80 hover:bg-secondary transition-all duration-200 drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.3)]"
+              aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {isDark ? <Sun size={20} /> : <Moon size={20} />}
             </button>
 
             {/* Money AI Helper Button */}
@@ -358,6 +369,15 @@ const Navbar = () => {
               >
                 {notificationsEnabled ? <Bell size={20} /> : <BellOff size={20} />}
                 <span>{notificationsEnabled ? "Notifications On" : "Notifications Off"}</span>
+              </button>
+
+              {/* Day/Night Theme Toggle (mobile) */}
+              <button
+                onClick={toggleTheme}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-primary hover:bg-secondary transition-all duration-200"
+              >
+                {isDark ? <Sun size={20} /> : <Moon size={20} />}
+                <span>{isDark ? "Light Mode" : "Dark Mode"}</span>
               </button>
 
               {/* Money AI Helper */}
