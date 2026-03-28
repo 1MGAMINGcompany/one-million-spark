@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import {
   TrendingUp, TrendingDown, Minus, Activity, Brain,
-  BarChart3, Eye, EyeOff, Droplets, AlertTriangle, Bug,
+  BarChart3, Eye, EyeOff, Droplets, AlertTriangle, Bug, Sparkles,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
@@ -18,24 +18,51 @@ import {
   fmtVolume,
   fmtProbability,
   type TrendLabel,
+  type LiquidityLabel,
+  type ConfidenceLabel,
 } from "@/lib/prediction-insights";
 
-/* ── Trend visual helpers ── */
-function trendIcon(t: TrendLabel) {
-  if (t === "Rising") return <TrendingUp className="w-3.5 h-3.5 text-green-400" />;
-  if (t === "Falling") return <TrendingDown className="w-3.5 h-3.5 text-red-400" />;
-  return <Minus className="w-3.5 h-3.5 text-muted-foreground" />;
+/* ── Visual helpers ── */
+function TrendBadge({ trend }: { trend: TrendLabel }) {
+  const config = {
+    Rising:  { icon: <TrendingUp className="w-3 h-3" />,  cls: "text-green-400" },
+    Falling: { icon: <TrendingDown className="w-3 h-3" />, cls: "text-red-400" },
+    Stable:  { icon: <Minus className="w-3 h-3" />,        cls: "text-muted-foreground" },
+  }[trend];
+  return (
+    <div className="flex items-center justify-center gap-1">
+      {config.icon}
+      <span className={`text-sm font-bold ${config.cls}`}>{trend}</span>
+    </div>
+  );
 }
 
-function trendColor(t: TrendLabel) {
-  if (t === "Rising") return "text-green-400";
-  if (t === "Falling") return "text-red-400";
-  return "text-muted-foreground";
+function LiquidityBadge({ liq }: { liq: LiquidityLabel }) {
+  const cls = liq === "High" ? "text-green-400" : liq === "Medium" ? "text-blue-400" : "text-yellow-400";
+  return (
+    <div className="flex items-center justify-center gap-1">
+      <Droplets className="w-3 h-3 opacity-60" />
+      <span className={`text-sm font-bold ${cls}`}>{liq}</span>
+    </div>
+  );
+}
+
+/* ── "Why this matters" one-liner ── */
+function getWhyLine(confidence: ConfidenceLabel, liq: LiquidityLabel, trend: TrendLabel): string | null {
+  if (confidence === "Strong Favorite" && liq === "High")
+    return "Strong consensus with deep liquidity — this market has clear price direction.";
+  if (liq === "Low")
+    return "Thin market — new entries can shift prices quickly.";
+  if (confidence === "Close Market")
+    return "Tight pricing means small edges matter more here.";
+  if (trend === "Rising")
+    return "Upward momentum backed by market activity.";
+  return null;
 }
 
 /* ── AI insight cache ── */
 const aiCache = new Map<string, { ts: number; data: AIInsight }>();
-const AI_CACHE_TTL = 5 * 60 * 1000; // 5 min
+const AI_CACHE_TTL = 5 * 60 * 1000;
 
 interface AIInsight {
   summary: string;
@@ -74,7 +101,7 @@ async function fetchAIInsight(fight: Fight, localData: ReturnType<typeof buildLo
 
     if (!resp.ok) return null;
     const data = await resp.json();
-    if (data.fallback) return null; // use local fallback
+    if (data.fallback) return null;
     const result: AIInsight = {
       summary: data.summary,
       confidenceLabel: data.confidenceLabel,
@@ -89,7 +116,7 @@ async function fetchAIInsight(fight: Fight, localData: ReturnType<typeof buildLo
   }
 }
 
-/* ── Build all local data ── */
+/* ── Build local data ── */
 function buildLocalData(fight: Fight) {
   const md = fightToMarketData(fight);
   return {
@@ -114,8 +141,8 @@ export default function PredictionInsightsPanel({ fight }: { fight: Fight }) {
   const fetchedRef = useRef(false);
 
   const local = useMemo(() => buildLocalData(fight), [fight]);
+  const whyLine = useMemo(() => getWhyLine(local.confidence, local.liquidity, local.trend), [local]);
 
-  // Async AI hydration — fires once per fight
   useEffect(() => {
     if (fetchedRef.current) return;
     fetchedRef.current = true;
@@ -130,57 +157,50 @@ export default function PredictionInsightsPanel({ fight }: { fight: Fight }) {
   const isAI = !!aiInsight && !aiInsight.fallback;
   const isDev = import.meta.env.DEV;
 
-  // Don't show for finished markets
   if (["settled", "cancelled", "refunds_complete"].includes(fight.status)) return null;
 
   return (
-    <div className="mt-3 rounded-lg border border-primary/15 bg-card/80 backdrop-blur-sm overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
+    <div className="mt-3 rounded-xl border border-primary/10 bg-gradient-to-b from-card/90 to-card/60 backdrop-blur-sm overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300 shadow-sm">
 
-      {/* Section 1: Smart Insights */}
-      <div className="px-3 py-2.5 border-b border-border/20">
-        <div className="flex items-center gap-1.5 mb-2">
+      {/* Section 1 — Key Numbers */}
+      <div className="px-4 py-3 border-b border-border/15">
+        <div className="flex items-center gap-1.5 mb-2.5">
           <BarChart3 className="w-3.5 h-3.5 text-primary" />
-          <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Smart Insights</span>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-primary">Market Overview</span>
         </div>
-        <div className="grid grid-cols-4 gap-2 text-center">
-          <div>
-            <p className="text-[9px] text-muted-foreground uppercase tracking-wide">Probability</p>
-            <p className="text-sm font-extrabold text-foreground">{local.favProb}</p>
+        <div className="grid grid-cols-4 gap-3 text-center">
+          <div className="space-y-0.5">
+            <p className="text-[9px] text-muted-foreground/70 uppercase tracking-wide font-medium">Favored</p>
+            <p className="text-base font-black text-foreground tabular-nums">{local.favProb}</p>
           </div>
-          <div>
-            <p className="text-[9px] text-muted-foreground uppercase tracking-wide">Volume</p>
-            <p className="text-sm font-extrabold text-foreground">{local.volumeFmt}</p>
+          <div className="space-y-0.5">
+            <p className="text-[9px] text-muted-foreground/70 uppercase tracking-wide font-medium">Volume</p>
+            <p className="text-base font-black text-foreground tabular-nums">{local.volumeFmt}</p>
           </div>
-          <div>
-            <p className="text-[9px] text-muted-foreground uppercase tracking-wide">Trend</p>
-            <div className="flex items-center justify-center gap-1">
-              {trendIcon(local.trend)}
-              <span className={`text-sm font-extrabold ${trendColor(local.trend)}`}>{local.trend}</span>
-            </div>
+          <div className="space-y-0.5">
+            <p className="text-[9px] text-muted-foreground/70 uppercase tracking-wide font-medium">Trend</p>
+            <TrendBadge trend={local.trend} />
           </div>
-          <div>
-            <p className="text-[9px] text-muted-foreground uppercase tracking-wide">Liquidity</p>
-            <div className="flex items-center justify-center gap-1">
-              <Droplets className="w-3 h-3 text-muted-foreground" />
-              <span className={`text-sm font-extrabold ${
-                local.liquidity === "High" ? "text-green-400" :
-                local.liquidity === "Medium" ? "text-blue-400" : "text-yellow-400"
-              }`}>{local.liquidity}</span>
-            </div>
+          <div className="space-y-0.5">
+            <p className="text-[9px] text-muted-foreground/70 uppercase tracking-wide font-medium">Liquidity</p>
+            <LiquidityBadge liq={local.liquidity} />
           </div>
         </div>
       </div>
 
-      {/* Section 2: Market Signals */}
+      {/* Section 2 — Market Signals */}
       {local.signals.length > 0 && (
-        <div className="px-3 py-2 border-b border-border/20">
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <Activity className="w-3.5 h-3.5 text-primary/70" />
-            <span className="text-[10px] font-bold uppercase tracking-wider text-primary/70">Market Signals</span>
+        <div className="px-4 py-2.5 border-b border-border/15">
+          <div className="flex items-center gap-1.5 mb-2">
+            <Activity className="w-3.5 h-3.5 text-primary/60" />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-primary/60">Signals</span>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {local.signals.map((s) => (
-              <span key={s.label} className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${s.color}`}>
+              <span
+                key={s.label}
+                className={`text-[10px] font-bold px-2.5 py-1 rounded-full border border-white/5 ${s.color} backdrop-blur-sm`}
+              >
                 {s.label}
               </span>
             ))}
@@ -188,57 +208,66 @@ export default function PredictionInsightsPanel({ fight }: { fight: Fight }) {
         </div>
       )}
 
-      {/* Section 3: AI Insight */}
-      <div className="px-3 py-2.5 border-b border-border/20">
-        <div className="flex items-center justify-between mb-1.5">
+      {/* Section 3 — AI / Market Read */}
+      <div className="px-4 py-3 border-b border-border/15">
+        <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-1.5">
-            <Brain className="w-3.5 h-3.5 text-accent" />
-            <span className="text-[10px] font-bold uppercase tracking-wider text-accent">
+            {isAI ? <Sparkles className="w-3.5 h-3.5 text-primary" /> : <Brain className="w-3.5 h-3.5 text-accent" />}
+            <span className="text-[10px] font-bold uppercase tracking-widest text-accent">
               {isAI ? "AI Market Read" : "Market Read"}
             </span>
+            {isAI && (
+              <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-primary/15 text-primary">AI</span>
+            )}
           </div>
           <button
             onClick={() => setShowAI((v) => !v)}
-            className="flex items-center gap-1 text-[9px] text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center gap-1 text-[9px] text-muted-foreground/60 hover:text-foreground transition-colors rounded-md px-1.5 py-0.5 hover:bg-muted/30"
           >
             {showAI ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
             {showAI ? "Hide" : "Show"}
           </button>
         </div>
         {showAI && (
-          <>
+          <div className="animate-in fade-in duration-200">
             {aiLoading ? (
-              <div className="space-y-1.5">
-                <Skeleton className="h-3 w-full" />
-                <Skeleton className="h-3 w-4/5" />
-                <Skeleton className="h-3 w-3/5" />
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-full rounded-sm" />
+                <Skeleton className="h-3 w-[85%] rounded-sm" />
+                <Skeleton className="h-3 w-[65%] rounded-sm" />
               </div>
             ) : (
-              <p className="text-[11px] leading-relaxed text-muted-foreground/90 animate-in fade-in duration-200">
+              <p className="text-[11px] leading-[1.6] text-muted-foreground/90">
                 {displayInsight}
               </p>
             )}
-          </>
+            {/* "Why this matters" */}
+            {whyLine && !aiLoading && (
+              <p className="mt-2 text-[10px] leading-relaxed text-primary/80 font-medium">
+                💡 {whyLine}
+              </p>
+            )}
+          </div>
         )}
       </div>
 
-      {/* Section 4: Caution / Opportunity */}
-      <div className="px-3 py-2">
-        <div className="flex items-start gap-1.5">
-          <AlertTriangle className="w-3 h-3 text-yellow-400/80 mt-0.5 shrink-0" />
-          <p className="text-[10px] leading-relaxed text-muted-foreground/70 italic">
+      {/* Section 4 — Caution */}
+      <div className="px-4 py-2.5">
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="w-3 h-3 text-yellow-500/60 mt-[2px] shrink-0" />
+          <p className="text-[10px] leading-relaxed text-muted-foreground/60">
             {displayCaution}
           </p>
         </div>
       </div>
 
-      {/* Dev-only debug */}
+      {/* Dev debug */}
       {isDev && (
         <Collapsible>
-          <CollapsibleTrigger className="w-full px-3 py-1 border-t border-border/10 flex items-center gap-1 text-[9px] text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+          <CollapsibleTrigger className="w-full px-4 py-1.5 border-t border-border/10 flex items-center gap-1 text-[9px] text-muted-foreground/40 hover:text-muted-foreground transition-colors">
             <Bug className="w-3 h-3" /> Debug
           </CollapsibleTrigger>
-          <CollapsibleContent className="px-3 py-2 text-[9px] text-muted-foreground/50 font-mono space-y-0.5 border-t border-border/10">
+          <CollapsibleContent className="px-4 py-2 text-[9px] text-muted-foreground/40 font-mono space-y-0.5 border-t border-border/10 bg-black/20">
             <p>priceA: {fight.price_a ?? "null"} | priceB: {fight.price_b ?? "null"}</p>
             <p>volume: ${local.volume.toFixed(0)} | liq: {local.liquidity}</p>
             <p>trend: {local.trend} | conf: {local.confidence}</p>
