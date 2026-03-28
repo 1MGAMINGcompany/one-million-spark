@@ -1,42 +1,28 @@
 
 
-# Filter to Main "Who Wins" Markets Only
+# Fix Soccer Insights Panel + Muay Thai Fighter Images
 
-## Problem
-Polymarket imports multiple markets per matchup: the main "who wins" plus props like "Fight Goes The Distance", "Over/Under Rounds", "Method of Victory", etc. Currently all are displayed. The user only wants the main win/lose prediction shown.
+## Two Issues
 
-## Solution
-Add a filter function that identifies and hides prop/secondary markets, keeping only the primary "who wins" market for each matchup.
+### 1. Soccer/Futbol events missing PredictionInsightsPanel
+The `SoccerMatchCard` component never renders `PredictionInsightsPanel`. It's only rendered inside `FightCard` (for both soccer individual cards and non-soccer compact cards). Since soccer matches are grouped into `SoccerMatchCard`, they bypass the insights panel entirely.
 
-## Detection Logic — `isPropMarket(fight)`
-A fight is a prop market if ANY of these match (case-insensitive on title):
-- `detectSport(fight) === "over_under"` (fighter names are Over/Under)
-- Title contains: "goes the distance", "total rounds", "method of victory", "decision", "knockout", "submission", "stoppage", "O/U", "over/under"
-- Fighter names are "Over" / "Under" or "Yes" / "No" (for non-soccer events)
+**Fix**: Add `PredictionInsightsPanel` to `SoccerMatchCard.tsx`, using the `homeFight` as the data source (it shares the same event-level data). Place it between the 3-way outcome row and the footer. No Falcon API key change needed — the same edge function and `LOVABLE_API_KEY` powers all sports.
 
-Soccer binary Yes/No markets are NOT props — they are the main market structure.
+### 2. Muay Thai fighter images showing fallback 🥊 instead of photos
+The `CompactFighterRow` component correctly renders photos when `fighter_a_photo` / `fighter_b_photo` exist. The session replay confirms all Muay Thai cards show the 🥊 fallback emoji, meaning the photo URLs are either `null`, empty, or failing to load. This is a **data issue** — the photos were likely present before the card redesign because the old layout may have used different fields or the ingest worker enrichment may need a re-run.
+
+**Fix**: No code change needed for this — the rendering logic is correct. The photos need to be re-enriched via the admin panel's "re-enrich" action. However, I'll add a small improvement: if the image `onError` fires, log the failed URL in dev mode so it's easier to debug missing assets.
 
 ## File Changes
 
-### `src/lib/detectSport.ts`
-- Export new `isPropMarket(fight)` function with the detection logic above
+### `src/components/predictions/SoccerMatchCard.tsx`
+- Import `PredictionInsightsPanel`
+- Add `<PredictionInsightsPanel fight={homeFight} />` after the 3-way outcome buttons and before the footer
 
-### `src/components/predictions/EventSection.tsx`
-- Import `isPropMarket`
-- In `SoccerAwareGrid`, filter out prop markets from the fights array before rendering
-- This single filter point covers all event sections (live, today, upcoming, past)
+### `src/components/predictions/FightCard.tsx`
+- In `CompactFighterRow`, add a dev-mode console.warn on image error to help debug missing fighter photos
 
-### `src/components/predictions/PredictionHighlights.tsx`
-- Import `isPropMarket`
-- Filter out prop markets from `enrichedFights` in the useMemo
+## No API key changes needed
+The AI insights use `LOVABLE_API_KEY` which is already configured. It works for all sports including soccer.
 
-## What stays visible
-- Main "Fighter A vs Fighter B" who-wins markets
-- Soccer 3-way grouped cards (home/away/draw)
-- All existing status/claim/refund logic unchanged
-
-## What gets hidden
-- "Fight Goes The Distance" Yes/No
-- Over/Under rounds
-- Method of Victory markets
-- Any other prop/derivative market
