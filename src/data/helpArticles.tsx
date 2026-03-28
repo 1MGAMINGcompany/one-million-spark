@@ -622,4 +622,342 @@ export const helpArticles: HelpArticleData[] = [
       </article>
     ),
   },
+  {
+    slug: "what-are-prediction-markets",
+    title: "What Are Prediction Markets? A Complete Guide",
+    metaDescription: "Learn what prediction markets are, how they work, and why platforms like 1MGAMING let you trade on real-world outcomes using crypto. Complete beginner's guide.",
+    keywords: ["what are prediction markets", "prediction markets explained", "polymarket alternative", "crypto predictions"],
+    cardDescription: "Understand how prediction markets work, their history, and why they're revolutionizing forecasting.",
+    content: () => (
+      <article className="prose prose-invert max-w-none">
+        <h1 className="text-3xl md:text-4xl font-bold text-primary mb-6">What Are Prediction Markets? A Complete Guide</h1>
+
+        <p className="text-foreground/80 text-lg leading-relaxed">
+          Prediction markets are exchange-style platforms where you buy and sell shares in the outcomes of real-world events. Instead of betting against a bookmaker, you trade with other participants — and the price of each outcome reflects the crowd's collective estimate of its probability.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">How Prediction Markets Work</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          Think of it like a stock market, but for events. Each outcome is priced between 0% and 100%. If "Team USA wins" is trading at 43%, the market believes there's roughly a 43% chance of that happening. You can buy shares at that price. If USA wins, your shares pay out at 100%. If they lose, your shares go to 0%.
+        </p>
+        <p className="text-foreground/70 leading-relaxed">
+          The difference between the current price and 100% is your potential profit. Buy at 43%, win at 100% — that's a 57% return. The market price moves as new information arrives: injuries, weather, lineup changes. This makes prediction markets one of the most accurate forecasting tools ever created.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">A Brief History</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          Prediction markets aren't new. The Iowa Electronic Markets launched in 1988 at the University of Iowa, allowing people to trade contracts on U.S. presidential elections. They consistently outperformed polls. Intrade operated from 2001–2013, covering politics, entertainment, and world events. More recently, Polymarket emerged as the leading crypto-native prediction market, processing over $50 billion in trading volume in 2024 alone.
+        </p>
+        <p className="text-foreground/70 leading-relaxed">
+          Academics have studied prediction markets extensively. Research from institutions like MIT, Stanford, and the University of Pennsylvania confirms that well-designed prediction markets produce more accurate forecasts than expert panels, polls, and statistical models.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">How Prices Reflect Probabilities</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          On 1MGAMING, odds are displayed as percentages. If a soccer match shows "Brazil 58%", the market thinks Brazil has a 58% chance of winning. These prices are sourced from Polymarket's deep liquidity pools, meaning they reflect the consensus of thousands of traders putting real money behind their opinions.
+        </p>
+        <p className="text-foreground/70 leading-relaxed">
+          This is fundamentally different from traditional sports odds set by a bookmaker. In prediction markets, the odds are set by the crowd — and the crowd has skin in the game.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">Real-World Use Cases</h2>
+        <ul className="list-disc list-inside space-y-3 text-foreground/70">
+          <li><strong>Sports:</strong> Soccer, boxing, MMA — predict match outcomes with real odds sourced from global markets.</li>
+          <li><strong>Politics:</strong> Election outcomes, policy decisions, leadership changes.</li>
+          <li><strong>Entertainment:</strong> Award shows, TV ratings, cultural events.</li>
+          <li><strong>Crypto & Tech:</strong> Bitcoin price milestones, product launches, regulatory decisions.</li>
+          <li><strong>World Events:</strong> Climate milestones, space exploration, geopolitical outcomes.</li>
+        </ul>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">Why 1MGAMING for Predictions</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          1MGAMING aggregates prediction markets from Polymarket — the world's largest prediction exchange — and presents them in a clean, easy-to-use interface. You get Polymarket's deep liquidity and accurate pricing with a simpler experience. No complex order books, no multi-step setup. Connect your wallet, pick an outcome, and confirm.
+        </p>
+        <p className="text-foreground/70 leading-relaxed">
+          Ready to try it? <Link to="/predictions" className="text-primary hover:text-primary/80">Browse live prediction markets</Link> and place your first trade.
+        </p>
+
+        <div className="mt-10 pt-6 border-t border-border">
+          <p className="text-foreground/60 text-sm">
+            Related guides: <Link to="/help/are-prediction-markets-legal" className="text-primary hover:text-primary/80">Are Prediction Markets Legal?</Link> · <Link to="/help/how-to-place-a-prediction" className="text-primary hover:text-primary/80">How to Place a Prediction</Link> · <Link to="/help/what-is-liquidity-prediction-markets" className="text-primary hover:text-primary/80">What Is Liquidity?</Link>
+          </p>
+        </div>
+      </article>
+    ),
+  },
+  {
+    slug: "are-prediction-markets-legal",
+    title: "Are Prediction Markets Legal? What You Need to Know",
+    metaDescription: "Are prediction markets legal? Learn about the regulatory landscape, CFTC rulings, and why crypto prediction platforms like 1MGAMING operate globally.",
+    keywords: ["are prediction markets legal", "prediction market regulation", "CFTC prediction markets", "Kalshi ruling"],
+    cardDescription: "Understand the legal status of prediction markets, CFTC rulings, and how crypto platforms operate.",
+    content: () => (
+      <article className="prose prose-invert max-w-none">
+        <h1 className="text-3xl md:text-4xl font-bold text-primary mb-6">Are Prediction Markets Legal? What You Need to Know</h1>
+
+        <p className="text-foreground/80 text-lg leading-relaxed">
+          Prediction markets exist in a fascinating legal space. They're increasingly recognized as legitimate information tools — not gambling — and recent regulatory decisions have opened the door for wider adoption. Here's what you need to know.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">The U.S. Regulatory Landscape</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          In the United States, prediction markets are regulated by the Commodity Futures Trading Commission (CFTC). The CFTC has historically allowed event contracts under certain conditions. A landmark moment came in 2024 when Kalshi — a CFTC-regulated exchange — won a court ruling allowing political event contracts. This opened the floodgates for legitimate prediction market activity in the U.S.
+        </p>
+        <p className="text-foreground/70 leading-relaxed">
+          Polymarket, the world's largest prediction market by volume, operates using blockchain-based smart contracts. While it doesn't hold a U.S. CFTC license, it operates globally and has processed billions in volume. The growing regulatory clarity suggests prediction markets are moving toward mainstream acceptance.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">Predictions vs. Gambling: The Key Difference</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          Prediction markets are fundamentally different from gambling. In traditional gambling, outcomes are driven by chance — a roulette spin, a dice roll. In prediction markets, outcomes are driven by real-world events, and participants use information, analysis, and research to make their decisions. This makes prediction markets <strong>information aggregation tools</strong>, not games of chance.
+        </p>
+        <p className="text-foreground/70 leading-relaxed">
+          Academic research consistently shows that prediction markets produce superior forecasts. The U.S. intelligence community has even experimented with internal prediction markets to improve geopolitical analysis. When participants have real money at stake, they tend to be honest about what they believe — and the crowd's aggregate opinion becomes remarkably accurate.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">How 1MGAMING Operates</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          1MGAMING is a non-custodial platform. We never hold your funds — all transactions happen on the blockchain through smart contracts. When you place a prediction, your funds go into a transparent on-chain pool. When the event resolves, winners are paid out automatically. No intermediary, no counterparty risk.
+        </p>
+        <p className="text-foreground/70 leading-relaxed">
+          For prediction markets, 1MGAMING aggregates odds and liquidity from Polymarket, ensuring you get the deepest markets and most accurate prices available. Settlement is automatic and on-chain.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">Global Access</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          Crypto-based prediction markets are accessible globally. Because they operate on decentralized blockchains, they aren't subject to the same geographic restrictions as traditional financial exchanges. Users can participate from most countries using a non-custodial wallet — no bank account or brokerage needed.
+        </p>
+
+        <div className="mt-10 pt-6 border-t border-border">
+          <p className="text-foreground/60 text-sm">
+            Related guides: <Link to="/help/what-are-prediction-markets" className="text-primary hover:text-primary/80">What Are Prediction Markets?</Link> · <Link to="/help/prediction-markets-growth-2025" className="text-primary hover:text-primary/80">Prediction Markets Growth in 2025</Link>
+          </p>
+        </div>
+      </article>
+    ),
+  },
+  {
+    slug: "prediction-markets-growth-2025",
+    title: "Prediction Markets in 2025: Growth, Volume & Why They Matter",
+    metaDescription: "Prediction markets are booming in 2025. Learn about market size, growth projections, and why 1MGAMING is the best crypto-native prediction platform.",
+    keywords: ["prediction markets 2025", "prediction market growth", "polymarket volume", "best prediction market platform"],
+    cardDescription: "Market size, growth data, and why prediction markets are the fastest-growing sector in crypto.",
+    content: () => (
+      <article className="prose prose-invert max-w-none">
+        <h1 className="text-3xl md:text-4xl font-bold text-primary mb-6">Prediction Markets in 2025: Growth, Volume & Why They Matter</h1>
+
+        <p className="text-foreground/80 text-lg leading-relaxed">
+          Prediction markets have exploded. In 2024, Polymarket alone processed over $50 billion in trading volume — driven largely by the U.S. presidential election. But that was just the beginning. In 2025, prediction markets are expanding into sports, crypto, entertainment, and global events at an unprecedented pace.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">The Numbers</h2>
+        <ul className="list-disc list-inside space-y-3 text-foreground/70">
+          <li><strong>$50B+</strong> traded on Polymarket in 2024, making it the largest prediction exchange in history.</li>
+          <li><strong>1M+ monthly active traders</strong> on Polymarket by Q4 2024.</li>
+          <li><strong>Sports prediction markets</strong> are the fastest-growing category in 2025, with soccer leading globally.</li>
+          <li>Goldman Sachs and Bloomberg analysts project the on-chain prediction market sector could reach <strong>$100B+ annual volume</strong> by 2026.</li>
+        </ul>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">Why the Growth?</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          Several forces are driving this explosion. The Kalshi court ruling legitimized event contracts in the U.S. Polymarket proved the model works at scale during the 2024 election. And crypto infrastructure has matured — stablecoins, low-fee blockchains like Solana, and user-friendly wallets make participation seamless.
+        </p>
+        <p className="text-foreground/70 leading-relaxed">
+          Media coverage has also played a role. Major outlets including Bloomberg, The New York Times, and The Wall Street Journal now cite Polymarket odds alongside traditional polls. Prediction markets are becoming a trusted data source.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">Why 1MGAMING Is Positioned to Win</h2>
+        <ul className="list-disc list-inside space-y-3 text-foreground/70">
+          <li><strong>Aggregated liquidity:</strong> We source odds from Polymarket's deep markets, so you get accurate prices without needing to navigate complex order books.</li>
+          <li><strong>Crypto-native:</strong> Connect your wallet and trade. No KYC, no bank transfers, no waiting periods.</li>
+          <li><strong>Low fees:</strong> Solana's near-zero gas costs mean more of your money goes toward your predictions.</li>
+          <li><strong>Instant settlement:</strong> When an event resolves, your payout is automatic. No withdrawal requests, no delays.</li>
+          <li><strong>Clean interface:</strong> We present prediction markets the way they should look — clear outcomes, real-time odds, one-click predictions.</li>
+        </ul>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">What Is Liquidity and Why Does It Matter?</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          Liquidity is the ability to buy or sell shares without significantly moving the price. High liquidity means tight spreads and accurate pricing. Low liquidity means your trade can move the market and you pay more. By aggregating Polymarket's liquidity, 1MGAMING ensures you always get competitive prices — even on niche markets.
+        </p>
+        <p className="text-foreground/70 leading-relaxed">
+          Learn more in our dedicated guide: <Link to="/help/what-is-liquidity-prediction-markets" className="text-primary hover:text-primary/80">What Is Liquidity in Prediction Markets?</Link>
+        </p>
+
+        <div className="mt-10 pt-6 border-t border-border">
+          <p className="text-foreground/60 text-sm">
+            Related guides: <Link to="/help/what-are-prediction-markets" className="text-primary hover:text-primary/80">What Are Prediction Markets?</Link> · <Link to="/help/how-to-place-a-prediction" className="text-primary hover:text-primary/80">How to Place a Prediction</Link>
+          </p>
+        </div>
+      </article>
+    ),
+  },
+  {
+    slug: "how-to-place-a-prediction",
+    title: "How to Place a Prediction on 1MGAMING — Step by Step",
+    metaDescription: "Step-by-step guide to placing your first prediction on 1MGAMING. Connect wallet, pick an outcome, confirm your trade, and get paid when you're right.",
+    keywords: ["how to place a prediction", "prediction market tutorial", "1MGAMING predictions guide", "crypto prediction how to"],
+    cardDescription: "Complete walkthrough: connect wallet, browse events, pick an outcome, and confirm your first prediction.",
+    content: () => (
+      <article className="prose prose-invert max-w-none">
+        <h1 className="text-3xl md:text-4xl font-bold text-primary mb-6">How to Place a Prediction on 1MGAMING — Step by Step</h1>
+
+        <p className="text-foreground/80 text-lg leading-relaxed">
+          Placing a prediction on 1MGAMING takes under a minute. You pick an outcome, choose your amount, and confirm. Here's exactly how it works, from wallet connection to payout.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">Step 1: Connect Your Wallet</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          You need a crypto wallet with funds to place predictions. 1MGAMING supports Phantom, Solflare, and Backpack wallets. If you don't have one yet, check our wallet guides: <Link to="/help/connect-phantom-wallet-1mgaming" className="text-primary hover:text-primary/80">Phantom</Link>, <Link to="/help/connect-solflare-wallet-1mgaming" className="text-primary hover:text-primary/80">Solflare</Link>, or <Link to="/help/connect-backpack-wallet-1mgaming" className="text-primary hover:text-primary/80">Backpack</Link>.
+        </p>
+        <p className="text-foreground/70 leading-relaxed">
+          Click "Select Wallet" in the top navigation, choose your wallet, and approve the connection. This only shares your public address — no funds are moved.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">Step 2: Browse Prediction Markets</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          Navigate to the <Link to="/predictions" className="text-primary hover:text-primary/80">Predictions page</Link>. You'll see live events organized by sport and category. Each event card shows the current market odds as percentages — for example, "Brazil 58% | Draw 24% | Argentina 18%".
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">Step 3: Pick Your Outcome</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          Click the outcome you believe will happen. For soccer matches, you'll see three options: Home Win, Draw, and Away Win. For other events, it might be Yes/No or two competitors. The percentage shown is the current market probability — buying at a lower percentage means a higher potential payout.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">Step 4: Enter Your Amount</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          Choose how much you want to stake. The prediction modal shows your potential payout based on the current odds. For example, if you buy "Brazil" at 58% for $10, and Brazil wins, you receive approximately $17.24 (your $10 ÷ 0.58).
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">Step 5: Confirm Your Prediction</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          Review your selection and click "Confirm Prediction." Your wallet will prompt you to approve the transaction. Once confirmed, your prediction is live. You can view your open predictions anytime.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">What Happens After?</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          When the event concludes, the market resolves automatically. If you picked the winning outcome, your payout is sent directly to your wallet — no claim process, no withdrawal delay. If your outcome didn't win, the shares resolve to zero. Settlement is automatic and on-chain.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">Understanding the Odds</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          Odds are displayed as percentages reflecting market probability. They update in real-time as other traders buy and sell. Lower percentages mean higher risk but higher reward. A 20% outcome that wins pays 5x your investment. A 75% outcome that wins pays 1.33x.
+        </p>
+
+        <div className="mt-10 pt-6 border-t border-border">
+          <p className="text-foreground/60 text-sm">
+            Related guides: <Link to="/help/how-prediction-payouts-work-crypto" className="text-primary hover:text-primary/80">How Prediction Payouts Work</Link> · <Link to="/help/what-are-prediction-markets" className="text-primary hover:text-primary/80">What Are Prediction Markets?</Link>
+          </p>
+        </div>
+      </article>
+    ),
+  },
+  {
+    slug: "how-prediction-payouts-work-crypto",
+    title: "How Prediction Payouts Work with Crypto",
+    metaDescription: "Learn how prediction market payouts work on 1MGAMING. Automatic settlement, crypto withdrawals, gas fees, and how to convert winnings to cash.",
+    keywords: ["prediction market payouts", "crypto prediction payout", "prediction settlement blockchain", "convert crypto to cash"],
+    cardDescription: "How you get paid when you win: automatic settlement, crypto wallets, and converting to cash.",
+    content: () => (
+      <article className="prose prose-invert max-w-none">
+        <h1 className="text-3xl md:text-4xl font-bold text-primary mb-6">How Prediction Payouts Work with Crypto</h1>
+
+        <p className="text-foreground/80 text-lg leading-relaxed">
+          One of the biggest advantages of crypto-based prediction markets is instant, transparent payouts. No withdrawal forms, no bank processing delays, no minimum balance requirements. Here's exactly how it works on 1MGAMING.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">When You Win</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          If you picked the correct outcome, your shares resolve to full value. The payout is calculated based on the price you bought at. If you bought "Team A wins" at 40% and they win, each share you purchased pays out at 100% — a 2.5x return. The payout is sent directly to your connected wallet automatically.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">Settlement Process</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          Settlement happens on-chain through smart contracts. When the event concludes and the result is confirmed, the contract distributes funds to winning participants proportionally. On 1MGAMING, this process is automatic — you don't need to claim, request, or wait. The funds appear in your wallet.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">Gas Fees: Near Zero on Solana</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          Every blockchain transaction has a small network fee (gas). On Ethereum, these fees can be $5–$50 during busy periods. On Solana, the average transaction fee is <strong>under $0.01</strong>. This means nearly all of your payout goes to you — not to network fees. It's one of the key reasons 1MGAMING is built on Solana.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">Converting Crypto to Cash</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          Once your winnings are in your wallet, you have several options to convert to traditional currency:
+        </p>
+        <ul className="list-disc list-inside space-y-3 text-foreground/70">
+          <li><strong>Centralized exchanges:</strong> Send your SOL or USDC to Coinbase, Binance, Kraken, or any major exchange. Sell for USD, EUR, or your local currency and withdraw to your bank.</li>
+          <li><strong>On-ramp/off-ramp services:</strong> Services like MoonPay, Ramp, or Transak let you sell crypto directly to your bank account or card without using an exchange.</li>
+          <li><strong>Peer-to-peer:</strong> Trade crypto directly with other users on P2P platforms.</li>
+          <li><strong>Keep it in crypto:</strong> Many users prefer to keep winnings in SOL or stablecoins for future trades and predictions.</li>
+        </ul>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">Supported Wallets</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          1MGAMING supports three Solana wallets: <Link to="/help/connect-phantom-wallet-1mgaming" className="text-primary hover:text-primary/80">Phantom</Link>, <Link to="/help/connect-solflare-wallet-1mgaming" className="text-primary hover:text-primary/80">Solflare</Link>, and <Link to="/help/connect-backpack-wallet-1mgaming" className="text-primary hover:text-primary/80">Backpack</Link>. All three support SOL and SPL tokens, and all three can be used to receive prediction payouts.
+        </p>
+
+        <div className="mt-10 pt-6 border-t border-border">
+          <p className="text-foreground/60 text-sm">
+            Related guides: <Link to="/help/how-to-place-a-prediction" className="text-primary hover:text-primary/80">How to Place a Prediction</Link> · <Link to="/help/what-is-liquidity-prediction-markets" className="text-primary hover:text-primary/80">What Is Liquidity?</Link>
+          </p>
+        </div>
+      </article>
+    ),
+  },
+  {
+    slug: "what-is-liquidity-prediction-markets",
+    title: "What Is Liquidity in Prediction Markets?",
+    metaDescription: "Liquidity explained for prediction markets. Learn why liquidity matters, how it affects odds accuracy, and how 1MGAMING leverages Polymarket's deep pools.",
+    keywords: ["prediction market liquidity", "liquidity explained", "prediction market order book", "Polymarket liquidity"],
+    cardDescription: "What liquidity means, why it matters for accurate odds, and how deep markets benefit you.",
+    content: () => (
+      <article className="prose prose-invert max-w-none">
+        <h1 className="text-3xl md:text-4xl font-bold text-primary mb-6">What Is Liquidity in Prediction Markets?</h1>
+
+        <p className="text-foreground/80 text-lg leading-relaxed">
+          Liquidity is the most important concept in prediction markets — and the least understood. Simply put, liquidity is the ability to buy or sell shares without significantly moving the price. High liquidity means better odds for you. Here's why.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">Liquidity Explained Simply</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          Imagine you want to buy shares in "Brazil wins" at 58%. In a liquid market, there are many sellers willing to sell at that price. Your trade executes at 58%, and you get exactly the odds you expected. In an illiquid market, there might only be a few sellers — your trade pushes the price up to 62%, and you get worse odds.
+        </p>
+        <p className="text-foreground/70 leading-relaxed">
+          This is called "slippage." High liquidity means low slippage — you get the price you see. Low liquidity means your trade moves the market against you.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">Order Books vs. AMMs</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          There are two main ways prediction markets provide liquidity. <strong>Order books</strong> (used by Polymarket) match buyers and sellers directly, similar to a stock exchange. <strong>Automated Market Makers (AMMs)</strong> use algorithms and liquidity pools to provide constant pricing. Order books generally offer tighter spreads and better prices for large trades, which is why Polymarket has become the dominant prediction platform.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">Why Polymarket's Liquidity Matters for You</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          1MGAMING sources prediction market odds from Polymarket, which has the deepest liquidity in the industry. This means:
+        </p>
+        <ul className="list-disc list-inside space-y-3 text-foreground/70">
+          <li><strong>More accurate prices:</strong> Deep liquidity means the displayed percentages closely reflect true probabilities.</li>
+          <li><strong>Better execution:</strong> Your trades are filled at competitive prices without excessive slippage.</li>
+          <li><strong>More markets available:</strong> High liquidity attracts more market makers, which means more events to trade on.</li>
+          <li><strong>Real-time updates:</strong> Prices adjust instantly as new information arrives, giving you the most current odds.</li>
+        </ul>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">How Volume Affects Odds Accuracy</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          Trading volume is closely related to liquidity. Markets with high volume attract more participants, which makes prices more accurate. A soccer match with $500,000 in volume will have much more accurate odds than one with $5,000. On 1MGAMING, each prediction card shows the total volume so you can gauge how well-traded a market is.
+        </p>
+
+        <h2 className="text-2xl font-semibold text-primary/90 mt-10 mb-4">The Bottom Line</h2>
+        <p className="text-foreground/70 leading-relaxed">
+          Liquidity is what separates reliable prediction markets from unreliable ones. By leveraging Polymarket's billions in trading volume, 1MGAMING gives you access to the most liquid prediction markets in the world — all through a simple, clean interface. <Link to="/predictions" className="text-primary hover:text-primary/80">Browse live markets now</Link>.
+        </p>
+
+        <div className="mt-10 pt-6 border-t border-border">
+          <p className="text-foreground/60 text-sm">
+            Related guides: <Link to="/help/what-are-prediction-markets" className="text-primary hover:text-primary/80">What Are Prediction Markets?</Link> · <Link to="/help/prediction-markets-growth-2025" className="text-primary hover:text-primary/80">Prediction Markets Growth in 2025</Link> · <Link to="/help/how-prediction-payouts-work-crypto" className="text-primary hover:text-primary/80">How Payouts Work</Link>
+          </p>
+        </div>
+      </article>
+    ),
+  },
 ];
