@@ -223,7 +223,7 @@ function SoccerAwareGrid({ fights, sport, wallet, onPredict, userEntries, onClai
 
   return (
     <div className={`grid gap-3 sm:grid-cols-2`}>
-      {fights.map(fight => (
+      {mainFightsOnly.map(fight => (
         <FightCard
           key={fight.id}
           fight={fight}

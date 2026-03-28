@@ -273,6 +273,7 @@ export default function PredictionHighlights({
   const enrichedFights: HighlightFight[] = useMemo(() => {
     return fights
       .filter((f) => !["draw", "refund_pending", "refunds_processing", "refunds_complete", "cancelled"].includes(f.status))
+      .filter((f) => !isPropMarket(f))
       .map((f) => {
         const ev = f.event_id ? eventMap.get(f.event_id) : undefined;
         return {
