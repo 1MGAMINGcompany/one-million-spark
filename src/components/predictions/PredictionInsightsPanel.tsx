@@ -1,144 +1,185 @@
-import { useState, useMemo } from "react";
-import { TrendingUp, TrendingDown, Minus, Activity, Brain, BarChart3, Eye, EyeOff } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
+import { useState, useMemo, useEffect, useRef } from "react";
+import {
+  TrendingUp, TrendingDown, Minus, Activity, Brain,
+  BarChart3, Eye, EyeOff, Droplets, AlertTriangle, Bug,
+} from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import type { Fight } from "./FightCard";
+import {
+  fightToMarketData,
+  getTotalVolume,
+  getTrendLabel,
+  getLiquidityLabel,
+  getConfidenceLabel,
+  getMarketSignals,
+  getCautionMessage,
+  generateLocalInsight,
+  fmtVolume,
+  fmtProbability,
+  type TrendLabel,
+} from "@/lib/prediction-insights";
 
-/* ── Trend detection ── */
-type Trend = "up" | "down" | "neutral";
-
-function detectTrend(fight: Fight): Trend {
-  const pA = fight.price_a ?? 0;
-  const pB = fight.price_b ?? 0;
-  // If either side > 0.65 treat as trending toward that side
-  if (pA > 0.65 || pB > 0.65) return "up";
-  if (pA < 0.35 && pB < 0.35) return "down";
-  return "neutral";
-}
-
-function trendIcon(t: Trend) {
-  if (t === "up") return <TrendingUp className="w-3.5 h-3.5 text-green-400" />;
-  if (t === "down") return <TrendingDown className="w-3.5 h-3.5 text-red-400" />;
+/* ── Trend visual helpers ── */
+function trendIcon(t: TrendLabel) {
+  if (t === "Rising") return <TrendingUp className="w-3.5 h-3.5 text-green-400" />;
+  if (t === "Falling") return <TrendingDown className="w-3.5 h-3.5 text-red-400" />;
   return <Minus className="w-3.5 h-3.5 text-muted-foreground" />;
 }
 
-function trendLabel(t: Trend) {
-  if (t === "up") return "Rising";
-  if (t === "down") return "Falling";
-  return "Stable";
+function trendColor(t: TrendLabel) {
+  if (t === "Rising") return "text-green-400";
+  if (t === "Falling") return "text-red-400";
+  return "text-muted-foreground";
 }
 
-/* ── Market signals ── */
-interface Signal { label: string; color: string }
+/* ── AI insight cache ── */
+const aiCache = new Map<string, { ts: number; data: AIInsight }>();
+const AI_CACHE_TTL = 5 * 60 * 1000; // 5 min
 
-function deriveSignals(fight: Fight, volume: number, trend: Trend): Signal[] {
-  const signals: Signal[] = [];
-  if (volume > 50_000) signals.push({ label: "High Activity", color: "text-green-400 bg-green-500/10" });
-  else if (volume > 10_000) signals.push({ label: "Moderate Activity", color: "text-blue-400 bg-blue-500/10" });
-  else if (volume > 0) signals.push({ label: "Low Liquidity", color: "text-yellow-400 bg-yellow-500/10" });
-
-  if (trend === "up") signals.push({ label: "Trending Up", color: "text-green-400 bg-green-500/10" });
-  if (trend === "down") signals.push({ label: "Trending Down", color: "text-red-400 bg-red-500/10" });
-
-  const pA = fight.price_a ?? 0;
-  const pB = fight.price_b ?? 0;
-  if (Math.abs(pA - pB) > 0.4) signals.push({ label: "Sharp Movement", color: "text-orange-400 bg-orange-500/10" });
-
-  return signals;
+interface AIInsight {
+  summary: string;
+  confidenceLabel?: string;
+  signalTags?: string[];
+  caution?: string;
+  fallback: boolean;
 }
 
-/* ── AI insight placeholder (Falcon-ready) ── */
-function generateInsight(fight: Fight, volume: number, trend: Trend): string {
-  const favored = (fight.price_a ?? 0) >= (fight.price_b ?? 0) ? fight.fighter_a_name : fight.fighter_b_name;
-  const prob = Math.max(fight.price_a ?? 0, fight.price_b ?? 0);
-  const pct = prob > 0 ? Math.round(prob * 100) : 50;
+async function fetchAIInsight(fight: Fight, localData: ReturnType<typeof buildLocalData>): Promise<AIInsight | null> {
+  const cacheKey = fight.id;
+  const cached = aiCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < AI_CACHE_TTL) return cached.data;
 
-  const trendText =
-    trend === "up" ? "Recent activity shows upward price movement, suggesting growing market confidence." :
-    trend === "down" ? "Market sentiment appears to be shifting — watch for further changes." :
-    "The market is currently stable with no strong directional bias.";
+  try {
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/prediction-ai-insight`;
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+      },
+      body: JSON.stringify({
+        title: fight.title,
+        sport: fight.source,
+        sideA: fight.fighter_a_name,
+        sideB: fight.fighter_b_name,
+        probabilityA: fight.price_a ?? 0,
+        probabilityB: fight.price_b ?? 0,
+        volume: localData.volume,
+        liquidity: localData.liquidity,
+        trend: localData.trend,
+        signals: localData.signals.map((s) => s.label),
+      }),
+    });
 
-  const volText =
-    volume > 50_000 ? "High trading volume indicates strong market interest." :
-    volume > 5_000 ? "Moderate volume — enough liquidity for reliable signals." :
-    "Low volume — odds may shift quickly with new predictions.";
-
-  return `${favored} is currently favored at ${pct}%. ${trendText} ${volText}`;
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    if (data.fallback) return null; // use local fallback
+    const result: AIInsight = {
+      summary: data.summary,
+      confidenceLabel: data.confidenceLabel,
+      signalTags: data.signalTags,
+      caution: data.caution,
+      fallback: false,
+    };
+    aiCache.set(cacheKey, { ts: Date.now(), data: result });
+    return result;
+  } catch {
+    return null;
+  }
 }
 
-/** Placeholder for future Falcon API */
-async function fetchAIInsight(fight: Fight, volume: number, trend: Trend): Promise<string> {
-  // TODO: Replace with Falcon API call
-  return generateInsight(fight, volume, trend);
-}
-
-/* ── Format helpers ── */
-function fmtVol(v: number): string {
-  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
-  if (v >= 1_000) return `$${(v / 1_000).toFixed(0)}K`;
-  if (v > 0) return `$${v.toFixed(0)}`;
-  return "—";
+/* ── Build all local data ── */
+function buildLocalData(fight: Fight) {
+  const md = fightToMarketData(fight);
+  return {
+    volume: getTotalVolume(md),
+    trend: getTrendLabel(md),
+    liquidity: getLiquidityLabel(md),
+    confidence: getConfidenceLabel(md),
+    signals: getMarketSignals(md),
+    caution: getCautionMessage(md),
+    localInsight: generateLocalInsight(md),
+    favProb: fmtProbability(Math.max(md.priceA, md.priceB)),
+    volumeFmt: fmtVolume(getTotalVolume(md)),
+    md,
+  };
 }
 
 /* ── Component ── */
 export default function PredictionInsightsPanel({ fight }: { fight: Fight }) {
   const [showAI, setShowAI] = useState(true);
+  const [aiInsight, setAiInsight] = useState<AIInsight | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const fetchedRef = useRef(false);
 
-  const volume = useMemo(() => {
-    if ((fight.polymarket_volume_usd ?? 0) > 0) return fight.polymarket_volume_usd!;
-    return (fight.pool_a_usd ?? 0) + (fight.pool_b_usd ?? 0);
-  }, [fight]);
+  const local = useMemo(() => buildLocalData(fight), [fight]);
 
-  const trend = useMemo(() => detectTrend(fight), [fight]);
-  const signals = useMemo(() => deriveSignals(fight, volume, trend), [fight, volume, trend]);
+  // Async AI hydration — fires once per fight
+  useEffect(() => {
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
+    setAiLoading(true);
+    fetchAIInsight(fight, local)
+      .then((result) => setAiInsight(result))
+      .finally(() => setAiLoading(false));
+  }, [fight.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const favProb = useMemo(() => {
-    const p = Math.max(fight.price_a ?? 0, fight.price_b ?? 0);
-    return p > 0 ? `${Math.round(p * 100)}%` : "—";
-  }, [fight]);
+  const displayInsight = aiInsight?.summary || local.localInsight;
+  const displayCaution = aiInsight?.caution || local.caution;
+  const isAI = !!aiInsight && !aiInsight.fallback;
+  const isDev = import.meta.env.DEV;
 
-  const aiText = useMemo(() => generateInsight(fight, volume, trend), [fight, volume, trend]);
-
-  // Don't show for finished / settled markets
+  // Don't show for finished markets
   if (["settled", "cancelled", "refunds_complete"].includes(fight.status)) return null;
 
   return (
     <div className="mt-3 rounded-lg border border-primary/15 bg-card/80 backdrop-blur-sm overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
+
       {/* Section 1: Smart Insights */}
       <div className="px-3 py-2.5 border-b border-border/20">
         <div className="flex items-center gap-1.5 mb-2">
           <BarChart3 className="w-3.5 h-3.5 text-primary" />
           <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Smart Insights</span>
         </div>
-        <div className="grid grid-cols-3 gap-2 text-center">
+        <div className="grid grid-cols-4 gap-2 text-center">
           <div>
             <p className="text-[9px] text-muted-foreground uppercase tracking-wide">Probability</p>
-            <p className="text-sm font-extrabold text-foreground">{favProb}</p>
+            <p className="text-sm font-extrabold text-foreground">{local.favProb}</p>
           </div>
           <div>
             <p className="text-[9px] text-muted-foreground uppercase tracking-wide">Volume</p>
-            <p className="text-sm font-extrabold text-foreground">{fmtVol(volume)}</p>
+            <p className="text-sm font-extrabold text-foreground">{local.volumeFmt}</p>
           </div>
           <div>
             <p className="text-[9px] text-muted-foreground uppercase tracking-wide">Trend</p>
             <div className="flex items-center justify-center gap-1">
-              {trendIcon(trend)}
+              {trendIcon(local.trend)}
+              <span className={`text-sm font-extrabold ${trendColor(local.trend)}`}>{local.trend}</span>
+            </div>
+          </div>
+          <div>
+            <p className="text-[9px] text-muted-foreground uppercase tracking-wide">Liquidity</p>
+            <div className="flex items-center justify-center gap-1">
+              <Droplets className="w-3 h-3 text-muted-foreground" />
               <span className={`text-sm font-extrabold ${
-                trend === "up" ? "text-green-400" : trend === "down" ? "text-red-400" : "text-muted-foreground"
-              }`}>{trendLabel(trend)}</span>
+                local.liquidity === "High" ? "text-green-400" :
+                local.liquidity === "Medium" ? "text-blue-400" : "text-yellow-400"
+              }`}>{local.liquidity}</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* Section 2: Market Signals */}
-      {signals.length > 0 && (
+      {local.signals.length > 0 && (
         <div className="px-3 py-2 border-b border-border/20">
           <div className="flex items-center gap-1.5 mb-1.5">
             <Activity className="w-3.5 h-3.5 text-primary/70" />
             <span className="text-[10px] font-bold uppercase tracking-wider text-primary/70">Market Signals</span>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {signals.map((s) => (
+            {local.signals.map((s) => (
               <span key={s.label} className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${s.color}`}>
                 {s.label}
               </span>
@@ -148,11 +189,13 @@ export default function PredictionInsightsPanel({ fight }: { fight: Fight }) {
       )}
 
       {/* Section 3: AI Insight */}
-      <div className="px-3 py-2.5">
+      <div className="px-3 py-2.5 border-b border-border/20">
         <div className="flex items-center justify-between mb-1.5">
           <div className="flex items-center gap-1.5">
             <Brain className="w-3.5 h-3.5 text-accent" />
-            <span className="text-[10px] font-bold uppercase tracking-wider text-accent">AI Insight</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-accent">
+              {isAI ? "AI Market Read" : "Market Read"}
+            </span>
           </div>
           <button
             onClick={() => setShowAI((v) => !v)}
@@ -163,11 +206,47 @@ export default function PredictionInsightsPanel({ fight }: { fight: Fight }) {
           </button>
         </div>
         {showAI && (
-          <p className="text-[11px] leading-relaxed text-muted-foreground/90 animate-in fade-in duration-200">
-            {aiText}
-          </p>
+          <>
+            {aiLoading ? (
+              <div className="space-y-1.5">
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-4/5" />
+                <Skeleton className="h-3 w-3/5" />
+              </div>
+            ) : (
+              <p className="text-[11px] leading-relaxed text-muted-foreground/90 animate-in fade-in duration-200">
+                {displayInsight}
+              </p>
+            )}
+          </>
         )}
       </div>
+
+      {/* Section 4: Caution / Opportunity */}
+      <div className="px-3 py-2">
+        <div className="flex items-start gap-1.5">
+          <AlertTriangle className="w-3 h-3 text-yellow-400/80 mt-0.5 shrink-0" />
+          <p className="text-[10px] leading-relaxed text-muted-foreground/70 italic">
+            {displayCaution}
+          </p>
+        </div>
+      </div>
+
+      {/* Dev-only debug */}
+      {isDev && (
+        <Collapsible>
+          <CollapsibleTrigger className="w-full px-3 py-1 border-t border-border/10 flex items-center gap-1 text-[9px] text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+            <Bug className="w-3 h-3" /> Debug
+          </CollapsibleTrigger>
+          <CollapsibleContent className="px-3 py-2 text-[9px] text-muted-foreground/50 font-mono space-y-0.5 border-t border-border/10">
+            <p>priceA: {fight.price_a ?? "null"} | priceB: {fight.price_b ?? "null"}</p>
+            <p>volume: ${local.volume.toFixed(0)} | liq: {local.liquidity}</p>
+            <p>trend: {local.trend} | conf: {local.confidence}</p>
+            <p>signals: {local.signals.map(s => s.label).join(", ") || "none"}</p>
+            <p>source: {isAI ? "AI (Lovable)" : "Local fallback"} | loading: {String(aiLoading)}</p>
+          </CollapsibleContent>
+        </Collapsible>
+      )}
     </div>
   );
 }

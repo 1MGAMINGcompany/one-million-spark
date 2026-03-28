@@ -98,7 +98,7 @@ export function getCautionMessage(m: MarketData): string {
     return "This is a close market with no strong favorite.";
   if (trend === "Rising" && delta > 0.3)
     return "Recent movement suggests momentum, but volatility remains possible.";
-  if (conf === "Strong Favorite" && liq !== "Low")
+  if (conf === "Strong Favorite")
     return "This market shows strong activity and clearer price direction.";
   return "Insights are informational and not guaranteed outcomes.";
 }
