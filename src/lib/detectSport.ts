@@ -53,3 +53,40 @@ export function detectSport(fight: {
 export function isOverSide(name: string): boolean {
   return name.toLowerCase().trim() === "over";
 }
+
+const PROP_KEYWORDS = [
+  "goes the distance", "total rounds", "method of victory",
+  "decision", "knockout", "submission", "stoppage",
+  "o/u", "over/under", "round betting", "how will",
+  "will the fight", "points spread", "handicap",
+];
+
+/**
+ * Returns true if a fight is a prop/secondary market (not "who wins").
+ * Soccer Yes/No markets are NOT props — they are the main structure.
+ */
+export function isPropMarket(fight: {
+  title?: string;
+  fighter_a_name?: string;
+  fighter_b_name?: string;
+  source?: string | null;
+  event_name?: string;
+}): boolean {
+  // Soccer binary Yes/No markets are the main market, not props
+  if (detectSport(fight) === "soccer") return false;
+
+  // Over/Under sport type
+  if (detectSport(fight) === "over_under") return true;
+
+  // Title keyword check
+  const title = (fight.title || "").toLowerCase();
+  if (PROP_KEYWORDS.some(k => title.includes(k))) return true;
+
+  // Fighter names are Yes/No or Over/Under (non-soccer)
+  const a = (fight.fighter_a_name || "").toLowerCase().trim();
+  const b = (fight.fighter_b_name || "").toLowerCase().trim();
+  if ((a === "yes" && b === "no") || (a === "no" && b === "yes")) return true;
+  if ((a === "over" && b === "under") || (a === "under" && b === "over")) return true;
+
+  return false;
+}

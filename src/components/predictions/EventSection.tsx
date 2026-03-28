@@ -10,6 +10,7 @@ import futbolImg from "@/assets/soccerball-1mg.png";
 import bareKnuckleImg from "@/assets/bare-knuckle.png";
 import { getSportItemLabel } from "@/lib/sportLabels";
 import { formatEventDateTime, formatEventTime } from "@/lib/formatEventLocalDateTime";
+import { isPropMarket } from "@/lib/detectSport";
 
 interface SportConfig {
   icon?: string;
@@ -175,8 +176,11 @@ function SoccerAwareGrid({ fights, sport, wallet, onPredict, userEntries, onClai
   eventHasStarted?: boolean;
   readOnly?: boolean;
 }) {
+  // Filter out prop/secondary markets — keep only main "who wins"
+  const mainFightsOnly = fights.filter(f => !isPropMarket(f));
+
   if (sport === "FUTBOL") {
-    const { grouped, ungrouped } = groupSoccerBinaryFights(fights);
+    const { grouped, ungrouped } = groupSoccerBinaryFights(mainFightsOnly);
     return (
       <div className="space-y-3">
         {grouped.map(g => (
@@ -219,7 +223,7 @@ function SoccerAwareGrid({ fights, sport, wallet, onPredict, userEntries, onClai
 
   return (
     <div className={`grid gap-3 sm:grid-cols-2`}>
-      {fights.map(fight => (
+      {mainFightsOnly.map(fight => (
         <FightCard
           key={fight.id}
           fight={fight}
