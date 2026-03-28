@@ -126,3 +126,6 @@ verify_jwt = false
 
 [functions.operator-manage]
 verify_jwt = false
+
+[functions.prediction-ai-insight]
+verify_jwt = false
