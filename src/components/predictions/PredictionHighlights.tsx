@@ -4,6 +4,7 @@ import { Swords, Trophy, Lock, Radio, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { Fight } from "./FightCard";
+import { isPropMarket } from "@/lib/detectSport";
 
 export interface PredictionEvent {
   id: string;
