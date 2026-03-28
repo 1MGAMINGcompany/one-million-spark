@@ -82,13 +82,13 @@ const Navbar = () => {
     }
   }, [notificationsEnabled, play]);
 
+  const { theme, toggleTheme, isDark } = useTheme();
+
   const navItems: NavItem[] = [
     { path: "/", labelKey: "nav.home", icon: Home },
     { path: "/add-funds", labelKey: "nav.addFunds", icon: Coins },
-    { path: "/create-room", labelKey: "nav.createRoom", icon: PlusCircle },
-    { path: "/room-list", labelKey: "nav.roomList", icon: LayoutList },
-    { path: "/leaderboard/ludo", labelKey: "nav.leaderboard", icon: Trophy },
     { path: "/predictions", labelKey: "Predictions", icon: Swords },
+    { path: "/leaderboard/ludo", labelKey: "nav.leaderboard", icon: Trophy },
   ];
 
   return (
