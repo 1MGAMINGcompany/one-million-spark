@@ -239,20 +239,21 @@
     @apply border-border;
   }
 
-  html {
-    @apply dark;
-  }
-
   body {
     @apply bg-background text-foreground antialiased;
     font-family: 'Raleway', system-ui, sans-serif;
+    background-color: hsl(var(--background));
+    background-attachment: fixed;
+    min-height: 100vh;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  .dark body {
     background: 
       radial-gradient(ellipse at 50% 100%, hsl(222 40% 12% / 0.8) 0%, transparent 60%),
       radial-gradient(ellipse at 80% 80%, hsl(35 40% 15% / 0.3) 0%, transparent 40%),
       radial-gradient(ellipse at 20% 80%, hsl(45 30% 12% / 0.2) 0%, transparent 35%),
       linear-gradient(180deg, hsl(222 47% 6%) 0%, hsl(222 47% 8%) 50%, hsl(222 40% 10%) 100%);
-    background-attachment: fixed;
-    min-height: 100vh;
   }
 
   h1, h2, h3, h4, h5, h6 {
