@@ -445,6 +445,11 @@ export default function FightCard({
           <ViewDetailsLink fightId={fight.id} hasUpdates={fight.has_updates} />
         </div>
 
+        {/* Insights Panel (soccer) */}
+        <div className="mx-4 sm:mx-6 mb-3">
+          <PredictionInsightsPanel fight={fight} />
+        </div>
+
         {/* Draw info */}
         {["draw", "refund_pending", "refunds_processing", "refunds_complete"].includes(fight.status) && (
           <div className="mx-4 sm:mx-6 mb-3 bg-muted/30 border border-border/30 rounded-lg p-3 text-center">
