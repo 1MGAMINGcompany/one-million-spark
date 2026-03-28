@@ -157,6 +157,16 @@ const Navbar = () => {
               {notificationsEnabled ? <Bell size={20} /> : <BellOff size={20} />}
             </button>
 
+            {/* Day/Night Theme Toggle */}
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-lg text-primary hover:text-primary/80 hover:bg-secondary transition-all duration-200 drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.3)]"
+              aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {isDark ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
+
             {/* Money AI Helper Button */}
             <button
               onClick={() => { play('ui_click'); window.dispatchEvent(new Event("aihelper-show")); }}
