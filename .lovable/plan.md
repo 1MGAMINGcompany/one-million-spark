@@ -1,54 +1,42 @@
 
 
-# Polymarket-Style Compact Cards for All Sports
+# Filter to Main "Who Wins" Markets Only
 
 ## Problem
-Current FightCard is complex with multipliers (2.30x), USDC pool amounts, question text, and verbose layouts. The user wants all prediction cards (MMA, Boxing, Muay Thai, etc.) to look like Polymarket: compact, fun, showing fighter photos, names, records, and odds as percentages with simple colored pick buttons.
+Polymarket imports multiple markets per matchup: the main "who wins" plus props like "Fight Goes The Distance", "Over/Under Rounds", "Method of Victory", etc. Currently all are displayed. The user only wants the main win/lose prediction shown.
 
-## Design (Based on Polymarket Reference)
-Each fight renders as a single compact row card:
+## Solution
+Add a filter function that identifies and hides prop/secondary markets, keeping only the primary "who wins" market for each matchup.
 
-```text
-┌──────────────────────────────────────────────────────┐
-│  UFC · 12:00 AM   $215K Vol.           ⑨ Game View > │
-│                                                      │
-│  (photo) Yousri Belgaroui 9-3-0    [YOU 44%] [MAN 57%] │
-│  (photo) Mansur Abdul-Malik 9-0-1                    │
-└────────────────────────────────────────────────────────┘
-```
+## Detection Logic — `isPropMarket(fight)`
+A fight is a prop market if ANY of these match (case-insensitive on title):
+- `detectSport(fight) === "over_under"` (fighter names are Over/Under)
+- Title contains: "goes the distance", "total rounds", "method of victory", "decision", "knockout", "submission", "stoppage", "O/U", "over/under"
+- Fighter names are "Over" / "Under" or "Yes" / "No" (for non-soccer events)
 
-Key changes:
-- **Compact row layout** — fighter photos + names on left, two colored pick buttons on right
-- **Percentages** — prices shown as `44%` not `2.30x`
-- **Abbreviated names** on buttons (first 3 chars of last name)
-- **Fighter photos** — circular, small (40px), with sport-icon fallback
-- **Records** shown inline next to name (e.g. "9-3-0")
-- **Volume** in header
-- **"Game View >"** links to match center
-- **Blue / Red** colored buttons for fighter A / fighter B
-- Winner banner, claim UI, draw/refund states all preserved but compact
+Soccer binary Yes/No markets are NOT props — they are the main market structure.
 
-## Files Changed
+## File Changes
 
-### `src/components/predictions/FightCard.tsx`
-- Replace the entire non-soccer card render (lines 512-665) with a new compact Polymarket-style layout
-- Keep all existing logic (calcOdds, status badges, claim handling, winner detection)
-- Replace multiplier display (`2.30x`) with percentage display (`44%`)
-- New `CompactFighterRow` sub-component: photo + name + record on left
-- New `PickButton` sub-component: colored button with abbreviated name + percentage
-- Remove verbose question text, pool dollar amounts, Swords icon
-- Keep the soccer card path unchanged (already redesigned)
-- Keep FighterColumn and SoccerTeamColumn for backward compat but the main card won't use FighterColumn anymore
+### `src/lib/detectSport.ts`
+- Export new `isPropMarket(fight)` function with the detection logic above
+
+### `src/components/predictions/EventSection.tsx`
+- Import `isPropMarket`
+- In `SoccerAwareGrid`, filter out prop markets from the fights array before rendering
+- This single filter point covers all event sections (live, today, upcoming, past)
 
 ### `src/components/predictions/PredictionHighlights.tsx`
-- Update `HighlightCard` to use percentages instead of multipliers for consistency
+- Import `isPropMarket`
+- Filter out prop markets from `enrichedFights` in the useMemo
 
-## Preserved Functionality
-- Status badges (OPEN, LOCKED, LIVE, etc.)
-- Featured ribbon
-- Winner/claim/refund/draw states
-- Weight class & fight class tags
-- View Details link
-- Wallet gate on predict
-- eventHasStarted lock logic
+## What stays visible
+- Main "Fighter A vs Fighter B" who-wins markets
+- Soccer 3-way grouped cards (home/away/draw)
+- All existing status/claim/refund logic unchanged
 
+## What gets hidden
+- "Fight Goes The Distance" Yes/No
+- Over/Under rounds
+- Method of Victory markets
+- Any other prop/derivative market
