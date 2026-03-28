@@ -149,11 +149,11 @@ function HighlightCard({
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2" dir="ltr">
             <div className="text-center">
               <p className="text-xs font-bold text-foreground truncate">{fight.fighter_a_name}</p>
-              <p className="text-primary font-bold text-sm">{oddsA > 0 ? `${oddsA.toFixed(2)}x` : '—'}</p>
+              <p className="text-primary font-bold text-sm">{oddsA > 0 ? `${Math.round(100 / oddsA)}%` : '—'}</p>
               {!btn.disabled && onPredict && (
                 <Button
                   size="sm"
-                  className="mt-1 w-full text-[10px] h-7 bg-primary text-primary-foreground hover:bg-primary/90"
+                  className="mt-1 w-full text-[10px] h-7 bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/30"
                   onClick={() => onPredict(fight, "fighter_a")}
                 >
                   Predict
@@ -165,11 +165,11 @@ function HighlightCard({
             </div>
             <div className="text-center">
               <p className="text-xs font-bold text-foreground truncate">{fight.fighter_b_name}</p>
-              <p className="text-primary font-bold text-sm">{oddsB > 0 ? `${oddsB.toFixed(2)}x` : '—'}</p>
+              <p className="text-primary font-bold text-sm">{oddsB > 0 ? `${Math.round(100 / oddsB)}%` : '—'}</p>
               {!btn.disabled && onPredict && (
                 <Button
                   size="sm"
-                  className="mt-1 w-full text-[10px] h-7 bg-primary text-primary-foreground hover:bg-primary/90"
+                  className="mt-1 w-full text-[10px] h-7 bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30"
                   onClick={() => onPredict(fight, "fighter_b")}
                 >
                   Predict
