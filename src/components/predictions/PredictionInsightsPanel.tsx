@@ -55,7 +55,7 @@ function getWhyLine(confidence: ConfidenceLabel, liq: LiquidityLabel, trend: Tre
     return "Thin market — new entries can shift prices quickly.";
   if (confidence === "Close Market")
     return "Tight pricing means small edges matter more here.";
-  if (trend === "Rising" && liq !== "Low")
+  if (trend === "Rising")
     return "Upward momentum backed by market activity.";
   return null;
 }
