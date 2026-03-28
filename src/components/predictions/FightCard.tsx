@@ -631,6 +631,9 @@ export default function FightCard({
           </div>
         )}
 
+        {/* Insights Panel (non-soccer) */}
+        <PredictionInsightsPanel fight={fight} />
+
         {/* Draw info */}
         {["draw", "refund_pending", "refunds_processing", "refunds_complete"].includes(fight.status) && (
           <div className="mt-2 bg-muted/30 border border-border/30 rounded-lg p-2.5 text-center">
