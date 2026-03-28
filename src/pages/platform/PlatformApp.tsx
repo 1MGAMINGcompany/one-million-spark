@@ -6,6 +6,8 @@ import OperatorOnboarding from "./OperatorOnboarding";
 import OperatorDashboard from "./OperatorDashboard";
 import OperatorApp from "./OperatorApp";
 import PurchasePage from "./PurchasePage";
+import HelpCenter from "@/pages/HelpCenter";
+import HelpArticle from "@/pages/HelpArticle";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { ready, authenticated } = usePrivy();
