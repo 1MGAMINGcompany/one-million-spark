@@ -176,8 +176,11 @@ function SoccerAwareGrid({ fights, sport, wallet, onPredict, userEntries, onClai
   eventHasStarted?: boolean;
   readOnly?: boolean;
 }) {
+  // Filter out prop/secondary markets — keep only main "who wins"
+  const mainFightsOnly = fights.filter(f => !isPropMarket(f));
+
   if (sport === "FUTBOL") {
-    const { grouped, ungrouped } = groupSoccerBinaryFights(fights);
+    const { grouped, ungrouped } = groupSoccerBinaryFights(mainFightsOnly);
     return (
       <div className="space-y-3">
         {grouped.map(g => (
