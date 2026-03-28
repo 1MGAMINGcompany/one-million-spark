@@ -34,6 +34,7 @@ const predictionSlugs = [
 const walletArticles = helpArticles.filter((a) => walletSlugs.includes(a.slug));
 const skillArticles = helpArticles.filter((a) => skillSlugs.includes(a.slug));
 const engineeringArticles = helpArticles.filter((a) => engineeringSlugs.includes(a.slug));
+const predictionArticles = helpArticles.filter((a) => predictionSlugs.includes(a.slug));
 
 const ArticleGrid = ({ articles, title }: { articles: typeof helpArticles; title: string }) => (
   <section className="mb-10">
