@@ -508,7 +508,20 @@ export default function FightCard({
     );
   }
 
-  // ── Non-soccer (combat sports) card ──
+  // ── Non-soccer: Compact Polymarket-style card ──
+  const probs = getProbabilities(fight);
+  const volume = fight.polymarket_volume_usd ?? 0;
+
+  /** Abbreviated last name for pick buttons */
+  const abbrev = (name: string) => {
+    const parts = name.trim().split(/\s+/);
+    const last = parts[parts.length - 1] || name;
+    return last.slice(0, 3).toUpperCase();
+  };
+
+  const pctA = probs ? formatProb(probs.probA) : oddsA > 0 ? `${Math.round(100 / oddsA)}%` : "—";
+  const pctB = probs ? formatProb(probs.probB) : oddsB > 0 ? `${Math.round(100 / oddsB)}%` : "—";
+
   return (
     <Card className={`bg-card overflow-hidden relative ${featuredBorder}`}>
       {isFeatured && (
@@ -516,93 +529,105 @@ export default function FightCard({
           Featured
         </div>
       )}
-      <div className="px-4 py-3 border-b border-border/30">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-foreground font-['Cinzel']">{fightLabel}</h3>
+
+      {/* Header row: event label · volume · status · game view */}
+      <div className="px-3 py-2 border-b border-border/20 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 min-w-0 text-[10px] text-muted-foreground truncate">
+          <span className="font-semibold uppercase tracking-wider truncate">{fightLabel}</span>
+          {volume > 0 && (
+            <>
+              <span className="text-border">·</span>
+              <span className="font-bold text-primary/70 shrink-0">{formatVolume(volume)} Vol.</span>
+            </>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badge.className}`}>
             {badge.label}
           </span>
-        </div>
-        {(weight || fightClass || fight.method) && (
-          <div className="flex items-center gap-2 mt-1 flex-wrap">
-            {weight && (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-300">{weight}</span>
-            )}
-            {fightClass && (
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                fightClass.startsWith('A') ? 'bg-primary/30 text-primary' :
-                fightClass.startsWith('B') ? 'bg-secondary text-secondary-foreground' :
-                'bg-muted text-muted-foreground'
-              }`}>{fightClass}</span>
-            )}
-            {fight.method && (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                {fight.method}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-
-      <div className="p-4">
-        <p className="text-xs sm:text-sm font-semibold text-center text-foreground/80 mb-3 flex items-center justify-center gap-1.5">
-          <HelpCircle className="w-3.5 h-3.5 text-primary/60 flex-shrink-0" />
-          {buildQuestion(fight, false)}
-        </p>
-
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3" dir="ltr">
-          <FighterColumn
-            name={fight.fighter_a_name}
-            poolAmount={poolA}
-            odds={oddsA}
-            isWinner={fight.winner === "fighter_a" && isClaimable}
-            canPredict={canPredict}
-            onPredict={() => onPredict(fight, "fighter_a")}
-            photo={fight.fighter_a_photo}
-            record={fight.fighter_a_record}
-            sport={sport}
-          />
-          <div className="flex flex-col items-center gap-0.5">
-            <Swords className="w-5 h-5 text-primary/60" />
-            <span className="text-[10px] text-muted-foreground font-bold">VS</span>
-          </div>
-          <FighterColumn
-            name={fight.fighter_b_name}
-            poolAmount={poolB}
-            odds={oddsB}
-            isWinner={fight.winner === "fighter_b" && isClaimable}
-            canPredict={canPredict}
-            onPredict={() => onPredict(fight, "fighter_b")}
-            photo={fight.fighter_b_photo}
-            record={fight.fighter_b_record}
-            sport={sport}
-          />
-        </div>
-
-        {/* Pool / odds strip */}
-        <div className="mt-3 pt-3 border-t border-border/30">
-          {isPolymarket ? (
-            <PolymarketPoolStrip fight={fight} />
-          ) : (
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-muted-foreground">Total Pool</span>
-              <span className="text-xs font-bold text-primary">${totalPool.toFixed(2)}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Venue / referee + View Details */}
-        <div className="mt-2 flex items-center justify-between">
-          <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-            {fight.venue && <span>📍 {fight.venue}</span>}
-            {fight.referee && <span>🏁 {fight.referee}</span>}
-          </div>
           <ViewDetailsLink fightId={fight.id} hasUpdates={fight.has_updates} />
         </div>
+      </div>
+
+      {/* Tags row */}
+      {(weight || fightClass) && (
+        <div className="px-3 pt-1.5 flex items-center gap-1.5 flex-wrap">
+          {weight && (
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-300">{weight}</span>
+          )}
+          {fightClass && (
+            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+              fightClass.startsWith('A') ? 'bg-primary/30 text-primary' :
+              fightClass.startsWith('B') ? 'bg-secondary text-secondary-foreground' :
+              'bg-muted text-muted-foreground'
+            }`}>{fightClass}</span>
+          )}
+        </div>
+      )}
+
+      {/* Main body: fighters + pick buttons */}
+      <div className="px-3 py-3">
+        {resolving ? (
+          <div className="text-center py-3">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-yellow-400 bg-yellow-500/10 px-3 py-1 rounded-full">
+              Market Settling
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            {/* Fighters column */}
+            <div className="flex-1 min-w-0 space-y-2">
+              <CompactFighterRow
+                name={fight.fighter_a_name}
+                record={fight.fighter_a_record}
+                photo={fight.fighter_a_photo}
+                sport={sport}
+                isWinner={fight.winner === "fighter_a" && isClaimable}
+              />
+              <CompactFighterRow
+                name={fight.fighter_b_name}
+                record={fight.fighter_b_record}
+                photo={fight.fighter_b_photo}
+                sport={sport}
+                isWinner={fight.winner === "fighter_b" && isClaimable}
+              />
+            </div>
+
+            {/* Pick buttons */}
+            <div className="flex gap-1.5 shrink-0">
+              <PickButton
+                label={abbrev(fight.fighter_a_name)}
+                pct={pctA}
+                color="blue"
+                disabled={!canPredict}
+                onClick={() => onPredict(fight, "fighter_a")}
+              />
+              <PickButton
+                label={abbrev(fight.fighter_b_name)}
+                pct={pctB}
+                color="red"
+                disabled={!canPredict}
+                onClick={() => onPredict(fight, "fighter_b")}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Pool / volume strip */}
+        {!resolving && (
+          <div className="mt-2 pt-2 border-t border-border/20 flex items-center justify-between text-[10px] text-muted-foreground">
+            <span>{isPolymarket && totalPool === 0 ? "Volume" : "Pool"}</span>
+            <span className="font-bold text-primary text-[11px]">
+              {isPolymarket && totalPool === 0
+                ? (volume > 0 ? formatVolume(volume) : "Live Market")
+                : `$${totalPool.toFixed(2)}`}
+            </span>
+          </div>
+        )}
 
         {/* Draw info */}
         {["draw", "refund_pending", "refunds_processing", "refunds_complete"].includes(fight.status) && (
-          <div className="mt-3 bg-muted/30 border border-border/30 rounded-lg p-3 text-center">
+          <div className="mt-2 bg-muted/30 border border-border/30 rounded-lg p-2.5 text-center">
             <p className="text-xs font-bold text-muted-foreground">
               {fight.status === "refunds_complete" ? "✅ Refunds complete" :
                fight.status === "refunds_processing" ? "⏳ Refunds processing..." :
@@ -612,56 +637,104 @@ export default function FightCard({
           </div>
         )}
 
-        {/* Winner banner for finished fights */}
+        {/* Winner banner */}
         {isFinished && winnerName && !["draw", "refund_pending", "refunds_processing", "refunds_complete"].includes(fight.status) && (
-          <div className="mt-3 bg-primary/10 border border-primary/20 rounded-lg p-3 text-center">
+          <div className="mt-2 bg-primary/10 border border-primary/20 rounded-lg p-2.5 text-center">
             <div className="flex items-center justify-center gap-1.5">
-              <Trophy className="w-4 h-4 text-primary" />
-              <span className="text-sm font-bold text-primary">Winner: {winnerName}</span>
+              <Trophy className="w-3.5 h-3.5 text-primary" />
+              <span className="text-xs font-bold text-primary">Winner: {winnerName}</span>
             </div>
             {fight.method && (
-              <p className="text-[10px] text-muted-foreground mt-1">via {fight.method}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">via {fight.method}</p>
             )}
           </div>
         )}
 
-        {/* Auto-payout status for winners */}
+        {/* Auto-payout */}
         {isClaimable && fight.winner && userEntries.some((e) => e.fighter_pick === fight.winner && e.claimed && e.tx_signature) && (
-          <div className="mt-3 bg-green-500/10 border border-green-500/20 rounded-lg p-3 text-center">
-            <p className="text-xs font-bold text-green-400 mb-0.5">✅ Paid — Winnings sent to your wallet</p>
-            <p className="text-[10px] text-muted-foreground">
-              USDC was automatically transferred to your connected wallet.
-            </p>
+          <div className="mt-2 bg-green-500/10 border border-green-500/20 rounded-lg p-2.5 text-center">
+            <p className="text-[11px] font-bold text-green-400">✅ Paid — Winnings sent to your wallet</p>
           </div>
         )}
         {hasWinningEntries && claimsOpen && (
-          <div className="mt-3 bg-primary/10 border border-primary/20 rounded-lg p-3 text-center">
+          <div className="mt-2 bg-primary/10 border border-primary/20 rounded-lg p-2.5 text-center">
             <p className="text-xs font-bold text-primary mb-0.5">🎉 You won!</p>
-            <p className="text-[11px] text-muted-foreground mb-2">
-              Winnings are being automatically sent to your wallet.
-            </p>
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-xs"
-              onClick={() => onClaim(fight.id)}
-              disabled={claiming}
-            >
+            <p className="text-[10px] text-muted-foreground mb-1.5">Winnings are being sent to your wallet.</p>
+            <Button size="sm" variant="outline" className="text-[10px] h-7" onClick={() => onClaim(fight.id)} disabled={claiming}>
               {claiming ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
-              Claim Now (if not received)
+              Claim Now
             </Button>
           </div>
         )}
         {hasWinningEntries && !claimsOpen && (
-          <div className="mt-3 bg-primary/10 border border-primary/20 rounded-lg p-3 text-center">
-            <p className="text-xs font-bold text-primary mb-1">🎉 You won!</p>
-            <p className="text-[11px] text-muted-foreground">
-              Winnings will be automatically sent to your wallet shortly.
-            </p>
+          <div className="mt-2 bg-primary/10 border border-primary/20 rounded-lg p-2.5 text-center">
+            <p className="text-xs font-bold text-primary">🎉 You won!</p>
+            <p className="text-[10px] text-muted-foreground">Winnings will be sent to your wallet shortly.</p>
           </div>
         )}
       </div>
     </Card>
+  );
+}
+
+/** Compact fighter row: photo + name + record */
+function CompactFighterRow({
+  name, record, photo, sport, isWinner,
+}: {
+  name: string; record?: string | null; photo?: string | null; sport?: SportType; isWinner?: boolean;
+}) {
+  const [imgErr, setImgErr] = useState(false);
+  const effectiveSport = sport || "combat";
+
+  return (
+    <div className={`flex items-center gap-2.5 ${isWinner ? "ring-1 ring-primary/40 rounded-lg px-1.5 py-0.5 bg-primary/5" : ""}`}>
+      {photo && !imgErr ? (
+        <img
+          src={photo}
+          alt={name}
+          className="w-10 h-10 rounded-full object-cover object-top ring-1 ring-border/40 shrink-0"
+          onError={() => setImgErr(true)}
+          loading="lazy"
+        />
+      ) : (
+        <div className="w-10 h-10 rounded-full bg-muted/40 flex items-center justify-center shrink-0 text-base">
+          {SportFallbackEmoji(effectiveSport, name)}
+        </div>
+      )}
+      <div className="min-w-0">
+        <p className="text-sm font-bold text-foreground truncate leading-tight flex items-center gap-1.5">
+          {name}
+          {isWinner && <Trophy className="w-3.5 h-3.5 text-primary shrink-0" />}
+        </p>
+        {record && (
+          <p className="text-[10px] text-muted-foreground font-medium">{record}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Colored pick button with abbreviated name + percentage */
+function PickButton({
+  label, pct, color, disabled, onClick,
+}: {
+  label: string; pct: string; color: "blue" | "red"; disabled: boolean; onClick: () => void;
+}) {
+  const colorClasses = color === "blue"
+    ? "bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 border-blue-500/30"
+    : "bg-red-500/15 text-red-400 hover:bg-red-500/25 border-red-500/30";
+
+  return (
+    <button
+      disabled={disabled}
+      onClick={onClick}
+      className={`flex flex-col items-center justify-center w-16 sm:w-[4.5rem] py-2 rounded-lg border text-center transition-all active:scale-95
+        ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:scale-[1.03]"}
+        ${colorClasses}`}
+    >
+      <span className="text-[10px] font-bold leading-none">{label}</span>
+      <span className="text-base sm:text-lg font-extrabold leading-tight">{pct}</span>
+    </button>
   );
 }
 
