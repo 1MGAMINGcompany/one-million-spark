@@ -892,6 +892,16 @@
       "Match tile ends to play (e.g., 6 connects to 6).",
       "Draw from the boneyard if you can't play.",
       "First to play all tiles or lowest pip count when blocked wins."
+    ],
+    "predictions": "Predictions",
+    "predictionsRules": [
+      "Browse live events on the Predictions page and select an outcome you believe will happen.",
+      "Enter your stake amount — the potential payout is shown based on current market odds.",
+      "Odds are displayed as percentages reflecting the market's estimated probability of each outcome.",
+      "Lower probability outcomes offer higher potential payouts if correct.",
+      "Once an event concludes, winning predictions are settled automatically and payouts are sent to your account.",
+      "All prediction entries are final once confirmed. Refunds are only issued if an event is cancelled.",
+      "A small platform fee applies to winning payouts. The fee is disclosed before you confirm your prediction."
     ]
   },
   "privacy": {
