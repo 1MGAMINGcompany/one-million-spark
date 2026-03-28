@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Shield, Coins, Zap, Scale, Link2, UserCheck } from "lucide-react";
+import { Shield, Coins, Zap, Scale, Eye, UserCheck } from "lucide-react";
 import { useSeoMeta } from "@/components/seo/SeoMeta";
 
 const TermsOfService = () => {
@@ -33,10 +33,11 @@ const TermsOfService = () => {
                   A. Nature of Platform
                 </h2>
                 <p className="text-muted-foreground leading-relaxed">
-                  1MGAMING provides a decentralized, skill-based gaming platform
-                  where users compete against other users. Outcomes are
-                  determined by player skill and strategy. No random number
-                  generators are used to determine winners.
+                  1MGAMING provides a skill-based gaming and prediction market
+                  platform where users compete against other users. Game outcomes
+                  are determined by player skill and strategy. No random number
+                  generators are used to determine winners. Prediction markets
+                  allow users to trade on the outcomes of real-world events.
                 </p>
               </div>
             </div>
@@ -56,6 +57,8 @@ const TermsOfService = () => {
                   1MGAMING does not operate as a gambling platform, a platform
                   for games of chance, or a casino. Entry fees represent
                   competitive participation fees for skill-based contests.
+                  Prediction markets are information-driven tools, not games of
+                  chance.
                 </p>
               </div>
             </div>
@@ -73,13 +76,13 @@ const TermsOfService = () => {
                 </h2>
                 <p className="text-muted-foreground leading-relaxed">
                   Users are solely responsible for determining whether
-                  participation in skill-based contests for digital assets is
+                  participation in skill-based contests and prediction markets is
                   permitted under their local laws. By using the platform, users
                   represent that they are legally allowed to participate.
                 </p>
                 <p className="text-muted-foreground leading-relaxed mt-3">
                   Users are solely responsible for ensuring that participation
-                  in skill-based competitions involving digital assets is lawful
+                  in skill-based competitions and prediction markets is lawful
                   in their jurisdiction. 1MGAMING does not make representations
                   regarding the legality of participation in any specific
                   country, state, or territory.
@@ -106,25 +109,26 @@ const TermsOfService = () => {
             </div>
           </section>
 
-          {/* E. Blockchain Transparency */}
+          {/* E. Platform Transparency */}
           <section className="bg-card border border-border rounded-lg p-6">
             <div className="flex items-start gap-4">
               <div className="p-3 bg-primary/10 rounded-full shrink-0">
-                <Link2 className="text-primary" size={24} />
+                <Eye className="text-primary" size={24} />
               </div>
               <div>
                 <h2 className="text-xl font-semibold text-foreground mb-3">
-                  E. Blockchain Transparency
+                  E. Platform Transparency
                 </h2>
                 <p className="text-muted-foreground leading-relaxed">
-                  Game outcomes and settlements occur on the Solana blockchain
-                  and are publicly verifiable.
+                  Game outcomes and settlements are verifiable and auditable.
+                  All transactions are recorded transparently and can be
+                  independently verified.
                 </p>
               </div>
             </div>
           </section>
 
-          {/* Gas Fees */}
+          {/* Transaction Fees */}
           <section className="bg-card border border-border rounded-lg p-6">
             <div className="flex items-start gap-4">
               <div className="p-3 bg-primary/10 rounded-full shrink-0">

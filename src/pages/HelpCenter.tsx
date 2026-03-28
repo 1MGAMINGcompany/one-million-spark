@@ -8,32 +8,21 @@ import PlatformStatus from "@/components/seo/PlatformStatus";
 
 const SITE_URL = "https://1mgaming.com";
 
-const walletSlugs = [
-  "connect-phantom-wallet-1mgaming",
-  "connect-solflare-wallet-1mgaming",
-  "connect-backpack-wallet-1mgaming",
-  "compare-solana-wallets-gaming",
-];
 const skillSlugs = [
-  "solana-skill-games-not-luck",
-  "play-real-money-chess-solana",
+  "skill-games-not-luck",
+  "play-real-money-chess",
   "ludo-skill-or-luck-competitive-strategy",
-];
-const engineeringSlugs = [
-  "server-enforced-turn-timeouts-supabase-solana",
 ];
 const predictionSlugs = [
   "what-are-prediction-markets",
   "are-prediction-markets-legal",
   "prediction-markets-growth-2025",
   "how-to-place-a-prediction",
-  "how-prediction-payouts-work-crypto",
+  "how-prediction-payouts-work",
   "what-is-liquidity-prediction-markets",
 ];
 
-const walletArticles = helpArticles.filter((a) => walletSlugs.includes(a.slug));
 const skillArticles = helpArticles.filter((a) => skillSlugs.includes(a.slug));
-const engineeringArticles = helpArticles.filter((a) => engineeringSlugs.includes(a.slug));
 const predictionArticles = helpArticles.filter((a) => predictionSlugs.includes(a.slug));
 
 const ArticleGrid = ({ articles, title }: { articles: typeof helpArticles; title: string }) => (
@@ -65,8 +54,8 @@ const ArticleGrid = ({ articles, title }: { articles: typeof helpArticles; title
 
 const HelpCenter = () => {
   useSeoMeta({
-    title: "Help & Guides | 1MGAMING — Solana Skill Gaming",
-    description: "1MGAMING help center: connect Solana wallets, learn skill-based gaming, and start playing chess, backgammon, checkers, dominos, and ludo for real SOL.",
+    title: "Help & Guides | 1MGAMING — Skill Gaming & Prediction Markets",
+    description: "1MGAMING help center: learn about skill-based gaming, prediction markets, and start playing chess, backgammon, checkers, dominos, and ludo for real stakes.",
     path: "/help",
   });
 
@@ -74,7 +63,7 @@ const HelpCenter = () => {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
     name: "1MGAMING Help & Guides",
-    description: "Help center and guides for 1MGAMING Solana skill gaming platform.",
+    description: "Help center and guides for the 1MGAMING skill gaming and prediction markets platform.",
     url: `${SITE_URL}/help`,
     isPartOf: {
       "@type": "WebSite",
@@ -88,7 +77,7 @@ const HelpCenter = () => {
     "@type": "Organization",
     name: "1MGAMING",
     url: SITE_URL,
-    description: "Solana-based skill gaming platform — chess, backgammon, checkers, dominos, and ludo for real SOL.",
+    description: "Skill-based gaming and prediction markets platform — chess, backgammon, checkers, dominos, ludo, and real-world event predictions.",
   };
 
   return (
@@ -101,14 +90,12 @@ const HelpCenter = () => {
           1MGAMING Help & Guides
         </h1>
         <p className="text-foreground/70 text-lg max-w-2xl mx-auto leading-relaxed">
-          1MGAMING is a Solana-based skill gaming platform where you compete in chess, backgammon, checkers, dominos, and ludo for real SOL. No RNG, no luck — just pure strategy. We support Phantom, Solflare, and Backpack wallets.
+          1MGAMING is a skill-based gaming and prediction markets platform where you compete in chess, backgammon, checkers, dominos, and ludo for real stakes — and trade on the outcomes of real-world events. No RNG, no luck — just pure strategy and informed predictions.
         </p>
       </header>
 
-      <ArticleGrid title="Wallet Guides" articles={walletArticles} />
       <ArticleGrid title="Skill Games" articles={skillArticles} />
       <ArticleGrid title="Prediction Markets" articles={predictionArticles} />
-      {/* Engineering section hidden intentionally */}
 
       <PlatformStatus />
 
