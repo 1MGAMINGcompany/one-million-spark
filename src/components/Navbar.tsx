@@ -371,6 +371,15 @@ const Navbar = () => {
                 <span>{notificationsEnabled ? "Notifications On" : "Notifications Off"}</span>
               </button>
 
+              {/* Day/Night Theme Toggle (mobile) */}
+              <button
+                onClick={toggleTheme}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-primary hover:bg-secondary transition-all duration-200"
+              >
+                {isDark ? <Sun size={20} /> : <Moon size={20} />}
+                <span>{isDark ? "Light Mode" : "Dark Mode"}</span>
+              </button>
+
               {/* Money AI Helper */}
               <button
                 onClick={() => { play('ui_click'); setIsOpen(false); window.dispatchEvent(new Event("aihelper-show")); }}
