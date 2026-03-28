@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { ChevronRight } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Fight } from "./FightCard";
+import PredictionInsightsPanel from "./PredictionInsightsPanel";
 
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {
   open: { label: "OPEN", className: "bg-green-500/20 text-green-400" },
