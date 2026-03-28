@@ -702,7 +702,7 @@ function CompactFighterRow({
           src={photo}
           alt={name}
           className="w-10 h-10 rounded-full object-cover object-top ring-1 ring-border/40 shrink-0"
-          onError={() => setImgErr(true)}
+          onError={() => { setImgErr(true); if (import.meta.env.DEV) console.warn(`[FighterPhoto] failed to load: ${photo}`); }}
           loading="lazy"
         />
       ) : (
