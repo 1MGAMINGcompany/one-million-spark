@@ -22,6 +22,14 @@ const skillSlugs = [
 const engineeringSlugs = [
   "server-enforced-turn-timeouts-supabase-solana",
 ];
+const predictionSlugs = [
+  "what-are-prediction-markets",
+  "are-prediction-markets-legal",
+  "prediction-markets-growth-2025",
+  "how-to-place-a-prediction",
+  "how-prediction-payouts-work-crypto",
+  "what-is-liquidity-prediction-markets",
+];
 
 const walletArticles = helpArticles.filter((a) => walletSlugs.includes(a.slug));
 const skillArticles = helpArticles.filter((a) => skillSlugs.includes(a.slug));
