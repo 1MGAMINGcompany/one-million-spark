@@ -10,6 +10,7 @@ import futbolImg from "@/assets/soccerball-1mg.png";
 import bareKnuckleImg from "@/assets/bare-knuckle.png";
 import { getSportItemLabel } from "@/lib/sportLabels";
 import { formatEventDateTime, formatEventTime } from "@/lib/formatEventLocalDateTime";
+import { isPropMarket } from "@/lib/detectSport";
 
 interface SportConfig {
   icon?: string;
