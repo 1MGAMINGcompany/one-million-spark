@@ -2,29 +2,27 @@ import { Link } from "react-router-dom";
 import { helpArticles } from "@/data/helpArticles";
 import { ArrowRight } from "lucide-react";
 
-// Category map for selecting related articles
 const categoryMap: Record<string, string> = {
-  "connect-phantom-wallet-1mgaming": "wallet",
-  "connect-solflare-wallet-1mgaming": "wallet",
-  "connect-backpack-wallet-1mgaming": "wallet",
-  "compare-solana-wallets-gaming": "wallet",
-  "solana-skill-games-not-luck": "skill",
-  "play-real-money-chess-solana": "skill",
+  "skill-games-not-luck": "skill",
+  "play-real-money-chess": "skill",
   "ludo-skill-or-luck-competitive-strategy": "skill",
-  "server-enforced-turn-timeouts-supabase-solana": "engineering",
+  "server-enforced-turn-timeouts": "engineering",
+  "what-are-prediction-markets": "predictions",
+  "are-prediction-markets-legal": "predictions",
+  "prediction-markets-growth-2025": "predictions",
+  "how-to-place-a-prediction": "predictions",
+  "how-prediction-payouts-work": "predictions",
+  "what-is-liquidity-prediction-markets": "predictions",
 };
 
 function getRelated(currentSlug: string, count = 3) {
   const currentCat = categoryMap[currentSlug] || "skill";
-
-  // Prefer same category first, then others
   const sameCategory = helpArticles.filter(
     (a) => a.slug !== currentSlug && categoryMap[a.slug] === currentCat
   );
   const other = helpArticles.filter(
     (a) => a.slug !== currentSlug && categoryMap[a.slug] !== currentCat
   );
-
   return [...sameCategory, ...other].slice(0, count);
 }
 
@@ -34,7 +32,6 @@ interface Props {
 
 const RelatedArticles = ({ currentSlug }: Props) => {
   const related = getRelated(currentSlug);
-  const allArticles = helpArticles.filter((a) => a.slug !== currentSlug);
   const currentIdx = helpArticles.findIndex((a) => a.slug === currentSlug);
   const nextArticle = helpArticles[(currentIdx + 1) % helpArticles.length];
 

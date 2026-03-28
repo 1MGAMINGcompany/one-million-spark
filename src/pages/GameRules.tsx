@@ -11,6 +11,7 @@ const GameRules = () => {
     { id: "chess", nameKey: "gameRules.chess", rulesKey: "gameRules.chessRules" },
     { id: "backgammon", nameKey: "gameRules.backgammon", rulesKey: "gameRules.backgammonRules" },
     { id: "checkers", nameKey: "gameRules.checkers", rulesKey: "gameRules.checkersRules" },
+    { id: "predictions", nameKey: "gameRules.predictions", rulesKey: "gameRules.predictionsRules" },
   ];
 
   return (
