@@ -1,53 +1,68 @@
 
 
-# Clean Up Navbar + Add Day/Night Theme Toggle
+# Clean Up Legal/Help Pages — Remove Solana References, Add Predictions
 
-## Changes
+## Overview
+Remove all Solana/SOL/blockchain/wallet-specific references from legal, support, and help pages. Reframe the platform as a skill-based gaming + prediction market platform using USDC. Add Predictions as a featured product throughout.
 
-### 1. Remove Create Room & Room List from nav
-In `Navbar.tsx`, trim `navItems` to:
-- Home
-- Add Funds
-- Predictions
-- Leaderboard
+## File Changes
 
-### 2. Add Day/Night toggle
-- Create a simple theme context/hook or use localStorage + `document.documentElement.classList` to toggle between `dark` class and light mode
-- Add a Sun/Moon toggle button in the navbar icon row (desktop + mobile)
-- Default: dark (current behavior)
+### 1. `src/i18n/locales/en.json` — Update all legal/footer translation keys
 
-### 3. Add Light theme CSS variables
-In `src/index.css`, the current `:root` block IS the dark theme. Add a proper light theme by making `:root` (without `.dark`) use light colors:
-- `--background`: white/near-white
-- `--foreground`: dark text
-- `--card`: light gray
-- `--primary`: keep gold `45 93% 54%`
-- `--primary-foreground`: dark
-- `--secondary`, `--muted`: light grays
-- `--border`: light gold/tan
-- Keep gold accent system intact
+**Privacy section (lines 897-916)**:
+- Section 1: Change "blockchain" / "wallet address" → "account information" / "login credentials"
+- Section 2: Remove "Solana network" → "facilitate gameplay and process transactions"
+- Section 3: Remove "Solana blockchain" → "securely stored with encryption"
+- Section 5: Remove "Solana wallet providers (Phantom, Solflare, Backpack)" → "wallet providers and payment processors"
 
-The `.dark` block stays as-is.
+**Terms section (lines 980-998)**:
+- Remove `cryptoTitle`/`cryptoText`/`cryptoPoint1-3` (all Solana-specific crypto policy)
+- Update `gasFeesTitle`/`gasFeesText` → "Transaction Fees" with generic low-fee language
+- Update `fairPlayText` to remove "on-chain" and "blockchain" references
+- Keep skill-based messaging intact
 
-Change `html` from `@apply dark` to no default class, and instead apply `.dark` via JS on mount (from localStorage, defaulting to dark).
+**Game Rules section (lines 847-896)**: Add a "Predictions" entry with rules covering how prediction markets work on the platform
 
-### 4. File Changes
+### 2. `src/pages/TermsOfService.tsx` — Rewrite sections
 
-**`src/index.css`**
-- Update `:root` with light theme variables (white bg, dark text, gold accents)
-- Keep `.dark` block unchanged
-- Remove `@apply dark` from `html` rule
-- Add body background variants for light mode (lighter gradient or solid white)
+- Section E "Blockchain Transparency" → "Platform Transparency" — outcomes are verifiable and auditable
+- Remove "Solana blockchain" from the text
+- Remove the "Gas Fees" section referencing Solana fees → replace with "Transaction Fees" about platform fees only
+- Keep all other sections (skill-based, user responsibility, age requirement) unchanged
 
-**`src/hooks/useTheme.ts`** (new)
-- Simple hook: reads `localStorage("theme")`, defaults to `"dark"`
-- Toggles `.dark` class on `<html>`
-- Returns `{ theme, toggleTheme, isDark }`
+### 3. `src/pages/GameRules.tsx` — Add Predictions game entry
 
-**`src/components/Navbar.tsx`**
-- Remove `PlusCircle`, `LayoutList` imports and their nav items
-- Import `Sun`, `Moon` from lucide
-- Import `useTheme`
-- Add theme toggle button next to sound/notification toggles
-- Same for mobile menu
+- Add a "Predictions" accordion item explaining how prediction markets work on the platform
+
+### 4. `src/pages/HelpCenter.tsx` — Remove Solana wallet guides, rebrand
+
+- Remove `walletSlugs` section (Phantom, Solflare, Backpack, Compare wallets) — these are Solana-specific
+- Remove "Wallet Guides" `ArticleGrid`
+- Update SEO title/description to remove "Solana" references
+- Update header description to say "skill gaming + prediction markets platform" instead of "Solana-based"
+- Update JSON-LD descriptions similarly
+- Keep Skill Games and Prediction Markets sections
+
+### 5. `src/pages/PrivacyPolicy.tsx` — No code changes needed (uses translation keys)
+
+### 6. `src/pages/Support.tsx` — No changes needed (already generic)
+
+### 7. `src/data/helpArticles.tsx` — Trim Solana-specific articles
+
+- Remove 4 wallet guide articles: `connect-phantom-wallet-1mgaming`, `connect-solflare-wallet-1mgaming`, `connect-backpack-wallet-1mgaming`, `compare-solana-wallets-gaming`
+- Update `solana-skill-games-not-luck` slug/title → "skill-games-not-luck" / "Skill Games — Skill Not Luck" — remove Solana references from content, replace SOL with generic "real stakes"
+- Update `play-real-money-chess-solana` slug/title → "play-real-money-chess" / "Play Real Money Chess" — remove SOL/Solana references
+- Update `ludo-skill-or-luck-competitive-strategy` — remove "play for real SOL" line at bottom
+- Update engineering article — keep but remove Solana from title, soften blockchain specifics
+- Prediction articles: remove "Polymarket" mentions per brand sovereignty memory, replace with "1MGAMING market data"
+
+### Summary of Removals
+- All Phantom/Solflare/Backpack wallet guide articles
+- All "SOL", "Solana", "blockchain" references in legal pages
+- Polymarket brand mentions in help articles
+
+### Summary of Additions
+- Predictions entry in Game Rules accordion
+- Generic "USDC" or stake-neutral language throughout
+- Platform-first branding in all help content
 
