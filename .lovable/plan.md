@@ -1,28 +1,53 @@
 
 
-# Fix Soccer Insights Panel + Muay Thai Fighter Images
+# Clean Up Navbar + Add Day/Night Theme Toggle
 
-## Two Issues
+## Changes
 
-### 1. Soccer/Futbol events missing PredictionInsightsPanel
-The `SoccerMatchCard` component never renders `PredictionInsightsPanel`. It's only rendered inside `FightCard` (for both soccer individual cards and non-soccer compact cards). Since soccer matches are grouped into `SoccerMatchCard`, they bypass the insights panel entirely.
+### 1. Remove Create Room & Room List from nav
+In `Navbar.tsx`, trim `navItems` to:
+- Home
+- Add Funds
+- Predictions
+- Leaderboard
 
-**Fix**: Add `PredictionInsightsPanel` to `SoccerMatchCard.tsx`, using the `homeFight` as the data source (it shares the same event-level data). Place it between the 3-way outcome row and the footer. No Falcon API key change needed — the same edge function and `LOVABLE_API_KEY` powers all sports.
+### 2. Add Day/Night toggle
+- Create a simple theme context/hook or use localStorage + `document.documentElement.classList` to toggle between `dark` class and light mode
+- Add a Sun/Moon toggle button in the navbar icon row (desktop + mobile)
+- Default: dark (current behavior)
 
-### 2. Muay Thai fighter images showing fallback 🥊 instead of photos
-The `CompactFighterRow` component correctly renders photos when `fighter_a_photo` / `fighter_b_photo` exist. The session replay confirms all Muay Thai cards show the 🥊 fallback emoji, meaning the photo URLs are either `null`, empty, or failing to load. This is a **data issue** — the photos were likely present before the card redesign because the old layout may have used different fields or the ingest worker enrichment may need a re-run.
+### 3. Add Light theme CSS variables
+In `src/index.css`, the current `:root` block IS the dark theme. Add a proper light theme by making `:root` (without `.dark`) use light colors:
+- `--background`: white/near-white
+- `--foreground`: dark text
+- `--card`: light gray
+- `--primary`: keep gold `45 93% 54%`
+- `--primary-foreground`: dark
+- `--secondary`, `--muted`: light grays
+- `--border`: light gold/tan
+- Keep gold accent system intact
 
-**Fix**: No code change needed for this — the rendering logic is correct. The photos need to be re-enriched via the admin panel's "re-enrich" action. However, I'll add a small improvement: if the image `onError` fires, log the failed URL in dev mode so it's easier to debug missing assets.
+The `.dark` block stays as-is.
 
-## File Changes
+Change `html` from `@apply dark` to no default class, and instead apply `.dark` via JS on mount (from localStorage, defaulting to dark).
 
-### `src/components/predictions/SoccerMatchCard.tsx`
-- Import `PredictionInsightsPanel`
-- Add `<PredictionInsightsPanel fight={homeFight} />` after the 3-way outcome buttons and before the footer
+### 4. File Changes
 
-### `src/components/predictions/FightCard.tsx`
-- In `CompactFighterRow`, add a dev-mode console.warn on image error to help debug missing fighter photos
+**`src/index.css`**
+- Update `:root` with light theme variables (white bg, dark text, gold accents)
+- Keep `.dark` block unchanged
+- Remove `@apply dark` from `html` rule
+- Add body background variants for light mode (lighter gradient or solid white)
 
-## No API key changes needed
-The AI insights use `LOVABLE_API_KEY` which is already configured. It works for all sports including soccer.
+**`src/hooks/useTheme.ts`** (new)
+- Simple hook: reads `localStorage("theme")`, defaults to `"dark"`
+- Toggles `.dark` class on `<html>`
+- Returns `{ theme, toggleTheme, isDark }`
+
+**`src/components/Navbar.tsx`**
+- Remove `PlusCircle`, `LayoutList` imports and their nav items
+- Import `Sun`, `Moon` from lucide
+- Import `useTheme`
+- Add theme toggle button next to sound/notification toggles
+- Same for mobile menu
 
