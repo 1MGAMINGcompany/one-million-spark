@@ -72,7 +72,7 @@ const POLITICS_KEYWORDS = [
   "governor", "mayor", "biden", "trump", "politics",
 ];
 const NON_SPORT_KEYWORDS = [
-  "champion", "season", "winner of", "year",
+  "season", "winner of", "year",
   "ipo", "bitcoin", "ethereum", "crypto",
   "stock", "recession", "inflation", "gdp",
   "fed rate", "interest rate",
