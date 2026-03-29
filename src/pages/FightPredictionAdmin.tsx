@@ -2427,6 +2427,10 @@ function PolymarketSyncPanel({ wallet, busy: parentBusy, onComplete }: { wallet:
     { key: "atp", label: "ATP Tennis" },
     { key: "wta", label: "WTA Tennis" },
     { key: "golf", label: "Golf / PGA" },
+    { key: "f1", label: "Formula 1" },
+    { key: "cricket", label: "Cricket" },
+    { key: "rugby", label: "Rugby" },
+    { key: "table-tennis", label: "Table Tennis" },
   ];
 
   const resetResults = () => {

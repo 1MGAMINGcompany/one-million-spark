@@ -41,6 +41,30 @@ const PROP_KEYWORDS = [
   "stoppage",
   "decision",
   "submission",
+  // Additional prop/non-matchup keywords
+  "over",
+  "under",
+  "o/u",
+  "cba",
+  "agreement",
+  "by dec",
+  "mvp",
+  "award",
+  "season wins",
+  "draft",
+  "trade",
+  "signed",
+  "contract",
+  "will they",
+  "how many",
+  "will .* make",
+  "most",
+  "top scorer",
+  "batting average",
+  "home runs",
+  "touchdowns",
+  "assists",
+  "rebounds",
 ];
 const POLITICS_KEYWORDS = [
   "election", "president", "congress", "senate", "vote",
@@ -231,6 +255,12 @@ const LEAGUE_SOURCES: Record<string, LeagueSource> = {
   "wta":    { key: "wta",    label: "WTA",    sportType: "tennis", fetchStrategy: "tag", tagId: "102123" },
   // ─── Golf ───
   "golf":   { key: "golf",   label: "Golf",   sportType: "golf",   fetchStrategy: "search", searchSeed: ["PGA", "golf", "PGA Tour", "Masters golf"] },
+  // ─── Motorsport ───
+  "f1":     { key: "f1",     label: "Formula 1", sportType: "golf", fetchStrategy: "search", searchSeed: ["Formula 1", "F1", "Grand Prix"] },
+  // ─── Other ───
+  "cricket":  { key: "cricket",  label: "Cricket",  sportType: "tennis", fetchStrategy: "search", searchSeed: ["cricket", "IPL", "T20"] },
+  "rugby":    { key: "rugby",    label: "Rugby",    sportType: "tennis", fetchStrategy: "search", searchSeed: ["rugby", "Six Nations", "rugby union"] },
+  "table-tennis": { key: "table-tennis", label: "Table Tennis", sportType: "tennis", fetchStrategy: "search", searchSeed: ["table tennis", "ping pong"] },
 };
 
 // Slug → league key mapping for URL parsing
@@ -867,6 +897,19 @@ async function importSingleEvent(
     }
     if (skipMarket) continue;
 
+    // Reject already-settled markets (0%/100% probability)
+    const priceA = parseFloat(outcomePrices[0] || "0");
+    const priceB = parseFloat(outcomePrices[1] || "0");
+    if ((priceA <= 0.01 && priceB >= 0.99) || (priceB <= 0.01 && priceA >= 0.99)) continue;
+
+    // Dedup: skip if conditionId already exists in prediction_fights
+    const { data: existingByCondition } = await supabase
+      .from("prediction_fights")
+      .select("id")
+      .eq("polymarket_condition_id", market.conditionId)
+      .maybeSingle();
+    if (existingByCondition) { imported++; continue; }
+
     const { data: existingFight } = await supabase
       .from("prediction_fights")
       .select("id")
@@ -1392,6 +1435,32 @@ Deno.serve(async (req) => {
 
       const result = await importSingleEvent(supabase, gEvent, wallet, import_source || "manual", sport_type || null, visibility || null);
       return json({ success: true, ...result });
+    }
+
+    // ══════════════════════════════════════════════════
+    // ACTION: import_bulk — Import multiple events at once
+    // ══════════════════════════════════════════════════
+    if (action === "import_bulk") {
+      const { event_ids, import_source, sport_type, visibility } = body;
+      if (!event_ids || !Array.isArray(event_ids) || event_ids.length === 0) {
+        return json({ error: "Missing or empty event_ids array" }, 400);
+      }
+      const results: { id: string; success: boolean; imported?: number; error?: string }[] = [];
+      for (const eid of event_ids.slice(0, 50)) { // Max 50 at once
+        try {
+          const gEvent = await fetchEventById(eid);
+          if (!gEvent) {
+            results.push({ id: eid, success: false, error: "Event not found" });
+            continue;
+          }
+          const r = await importSingleEvent(supabase, gEvent, wallet, import_source || "bulk_import", sport_type || null, visibility || null);
+          results.push({ id: eid, success: true, imported: r.imported });
+        } catch (err: any) {
+          results.push({ id: eid, success: false, error: err.message });
+        }
+      }
+      const totalImported = results.filter(r => r.success).reduce((sum, r) => sum + (r.imported || 0), 0);
+      return json({ success: true, total_events: results.length, total_imported: totalImported, results });
     }
 
     // ══════════════════════════════════════════════════
