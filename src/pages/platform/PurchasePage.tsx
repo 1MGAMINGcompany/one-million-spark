@@ -3,7 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { usePrivy, useSendTransaction } from "@privy-io/react-auth";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
+import { supabase } from "@/integrations/supabase/client";
 import {
   ArrowRight,
   CheckCircle,
@@ -14,23 +16,32 @@ import {
   Headphones,
   DollarSign,
   Wallet,
+  Tag,
 } from "lucide-react";
 
 const TREASURY_ADDRESS = "0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d";
 const USDC_CONTRACT = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359";
-const PURCHASE_AMOUNT = 2400;
-const PURCHASE_AMOUNT_RAW = "0x" + (BigInt(PURCHASE_AMOUNT) * BigInt(10 ** 6)).toString(16); // 2400 USDC
+const BASE_PRICE = 2400;
 
 // ERC-20 transfer(address,uint256) function selector
 const TRANSFER_SELECTOR = "0xa9059cbb";
 
-function encodeTransferData(to: string, amountHex: string): string {
+function encodeTransferData(to: string, amountRaw: string): string {
   const paddedTo = to.slice(2).toLowerCase().padStart(64, "0");
-  const paddedAmount = amountHex.slice(2).padStart(64, "0");
+  const paddedAmount = amountRaw.slice(2).padStart(64, "0");
   return TRANSFER_SELECTOR + paddedTo + paddedAmount;
 }
 
 type Step = "disclosure" | "payment" | "confirming" | "success" | "error";
+
+interface PromoResult {
+  valid: boolean;
+  discount_type?: string;
+  discount_value?: number;
+  discounted_price?: number;
+  promo_id?: string;
+  error?: string;
+}
 
 export default function PurchasePage() {
   const navigate = useNavigate();
@@ -44,14 +55,57 @@ export default function PurchasePage() {
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
 
-  const hasEnoughBalance = usdc_balance !== null && usdc_balance >= PURCHASE_AMOUNT;
+  // Promo code
+  const [promoCode, setPromoCode] = useState("");
+  const [promoResult, setPromoResult] = useState<PromoResult | null>(null);
+  const [validatingPromo, setValidatingPromo] = useState(false);
+
+  const effectivePrice = promoResult?.valid ? (promoResult.discounted_price ?? BASE_PRICE) : BASE_PRICE;
+  const hasEnoughBalance = effectivePrice === 0 || (usdc_balance !== null && usdc_balance >= effectivePrice);
+
+  const validatePromo = useCallback(async () => {
+    if (!promoCode.trim()) return;
+    setValidatingPromo(true);
+    try {
+      const { data, error: err } = await supabase.functions.invoke("prediction-admin", {
+        body: { action: "validatePromoCode", wallet: "system", code: promoCode.trim() },
+      });
+      if (err) throw err;
+      setPromoResult(data as PromoResult);
+    } catch {
+      setPromoResult({ valid: false, error: "Validation failed" });
+    } finally {
+      setValidatingPromo(false);
+    }
+  }, [promoCode]);
 
   const handlePayment = useCallback(async () => {
     setError(null);
     setStep("payment");
 
     try {
-      const data = encodeTransferData(TREASURY_ADDRESS, PURCHASE_AMOUNT_RAW);
+      const token = await getAccessToken();
+
+      // Free with promo code — no tx needed
+      if (effectivePrice === 0 && promoResult?.valid) {
+        setStep("confirming");
+        setConfirming(true);
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/operator-manage`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-privy-token": token || "" },
+            body: JSON.stringify({ action: "confirm_purchase", promo_code: promoCode.trim() }),
+          }
+        );
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || "Verification failed");
+        setStep("success");
+        return;
+      }
+
+      const amountRaw = "0x" + (BigInt(Math.ceil(effectivePrice)) * BigInt(10 ** 6)).toString(16);
+      const data = encodeTransferData(TREASURY_ADDRESS, amountRaw);
 
       const txReceipt = await sendTransaction({
         to: USDC_CONTRACT,
@@ -67,7 +121,6 @@ export default function PurchasePage() {
       setConfirming(true);
 
       // Verify on backend
-      const token = await getAccessToken();
       const res = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/operator-manage`,
         {
@@ -79,6 +132,7 @@ export default function PurchasePage() {
           body: JSON.stringify({
             action: "confirm_purchase",
             tx_hash: hash,
+            promo_code: promoCode.trim() || undefined,
           }),
         }
       );
@@ -95,7 +149,7 @@ export default function PurchasePage() {
     } finally {
       setConfirming(false);
     }
-  }, [sendTransaction, getAccessToken]);
+  }, [sendTransaction, getAccessToken, effectivePrice, promoCode, promoResult]);
 
   if (step === "success") {
     return (
@@ -134,8 +188,20 @@ export default function PurchasePage() {
         <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-6 sm:p-8">
           {/* Price */}
           <div className="text-center mb-6 pb-6 border-b border-white/5">
-            <div className="text-4xl font-bold text-white mb-1">$2,400</div>
-            <div className="text-white/40 text-sm">USDC on Polygon • One-time payment</div>
+            {promoResult?.valid && effectivePrice < BASE_PRICE ? (
+              <>
+                <div className="text-lg text-white/30 line-through">${BASE_PRICE.toLocaleString()}</div>
+                <div className="text-4xl font-bold text-green-400 mb-1">
+                  {effectivePrice === 0 ? "FREE" : `$${effectivePrice.toLocaleString()}`}
+                </div>
+                <div className="text-green-400/60 text-sm">Promo applied ✓</div>
+              </>
+            ) : (
+              <>
+                <div className="text-4xl font-bold text-white mb-1">${BASE_PRICE.toLocaleString()}</div>
+                <div className="text-white/40 text-sm">USDC on Polygon • One-time payment</div>
+              </>
+            )}
           </div>
 
           {/* What's included */}
@@ -166,6 +232,38 @@ export default function PurchasePage() {
             </p>
           </div>
 
+          {/* Promo Code */}
+          <div className="mb-6">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Tag size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+                <Input
+                  value={promoCode}
+                  onChange={e => { setPromoCode(e.target.value); setPromoResult(null); }}
+                  placeholder="Promo code"
+                  className="pl-9 bg-white/5 border-white/10 text-white placeholder:text-white/20 uppercase font-mono"
+                />
+              </div>
+              <Button
+                onClick={validatePromo}
+                disabled={!promoCode.trim() || validatingPromo}
+                variant="outline"
+                className="border-white/10 text-white hover:bg-white/5"
+              >
+                {validatingPromo ? <Loader2 size={14} className="animate-spin" /> : "Apply"}
+              </Button>
+            </div>
+            {promoResult && (
+              <p className={`text-xs mt-2 ${promoResult.valid ? "text-green-400" : "text-red-400"}`}>
+                {promoResult.valid
+                  ? effectivePrice === 0
+                    ? "✓ Full discount — no payment needed!"
+                    : `✓ Discount applied — new price: $${effectivePrice}`
+                  : `✗ ${promoResult.error || "Invalid code"}`}
+              </p>
+            )}
+          </div>
+
           {/* Agreement Checkbox */}
           <div className="flex items-start gap-3 mb-6">
             <Checkbox
@@ -180,22 +278,24 @@ export default function PurchasePage() {
           </div>
 
           {/* Balance */}
-          <div className="bg-white/[0.02] rounded-xl p-4 mb-6 border border-white/5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-white/50">
-                <Wallet size={16} />
-                <span>USDC Balance (Polygon)</span>
+          {effectivePrice > 0 && (
+            <div className="bg-white/[0.02] rounded-xl p-4 mb-6 border border-white/5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm text-white/50">
+                  <Wallet size={16} />
+                  <span>USDC Balance (Polygon)</span>
+                </div>
+                <div className={`text-sm font-mono font-semibold ${hasEnoughBalance ? "text-green-400" : "text-red-400"}`}>
+                  {balanceLoading ? "..." : usdc_balance_formatted ? `$${usdc_balance_formatted}` : "$0.00"}
+                </div>
               </div>
-              <div className={`text-sm font-mono font-semibold ${hasEnoughBalance ? "text-green-400" : "text-red-400"}`}>
-                {balanceLoading ? "..." : usdc_balance_formatted ? `$${usdc_balance_formatted}` : "$0.00"}
-              </div>
+              {!balanceLoading && !hasEnoughBalance && usdc_balance !== null && (
+                <p className="text-xs text-red-400/70 mt-2">
+                  Insufficient balance. You need ${effectivePrice} USDC on Polygon.
+                </p>
+              )}
             </div>
-            {!balanceLoading && !hasEnoughBalance && usdc_balance !== null && (
-              <p className="text-xs text-red-400/70 mt-2">
-                Insufficient balance. You need ${PURCHASE_AMOUNT} USDC on Polygon.
-              </p>
-            )}
-          </div>
+          )}
 
           {/* Error */}
           {error && (
@@ -220,9 +320,13 @@ export default function PurchasePage() {
               <>
                 <Loader2 size={20} className="animate-spin" /> Sending transaction...
               </>
+            ) : effectivePrice === 0 ? (
+              <>
+                Activate for Free <ArrowRight size={18} />
+              </>
             ) : (
               <>
-                Confirm Purchase — ${PURCHASE_AMOUNT} USDC <ArrowRight size={18} />
+                Confirm Purchase — ${effectivePrice.toLocaleString()} USDC <ArrowRight size={18} />
               </>
             )}
           </Button>

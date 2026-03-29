@@ -80,6 +80,48 @@ Deno.serve(async (req) => {
     // ── confirm_purchase ──
     if (action === "confirm_purchase") {
       const txHash = body.tx_hash;
+      const promoCode = body.promo_code;
+
+      // If promo code provided, validate and potentially skip payment
+      if (promoCode) {
+        const { data: promo } = await sb.from("promo_codes").select("*").eq("code", promoCode.toUpperCase()).maybeSingle();
+        if (!promo) return jsonResp({ error: "invalid_promo_code" }, 400);
+        if (promo.uses_count >= promo.max_uses) return jsonResp({ error: "promo_code_exhausted" }, 400);
+        if (promo.expires_at && new Date(promo.expires_at) < new Date()) return jsonResp({ error: "promo_code_expired" }, 400);
+
+        let discountedPrice = 2400;
+        if (promo.discount_type === "full") discountedPrice = 0;
+        else if (promo.discount_type === "percent") discountedPrice = Math.max(0, 2400 * (1 - promo.discount_value / 100));
+        else if (promo.discount_type === "fixed") discountedPrice = Math.max(0, 2400 - promo.discount_value);
+
+        if (discountedPrice === 0) {
+          // Full discount — activate without payment
+          await sb.from("promo_codes").update({ uses_count: promo.uses_count + 1 }).eq("id", promo.id);
+          const { data: existing } = await sb.from("operators").select("id, status").eq("user_id", privyDid).maybeSingle();
+          if (existing) {
+            await sb.from("operators").update({ status: "active", updated_at: new Date().toISOString() }).eq("id", existing.id);
+          } else {
+            await sb.from("operators").insert({ user_id: privyDid, brand_name: "My App", subdomain: "pending-" + Date.now(), status: "active" });
+          }
+          return jsonResp({ success: true, status: "active", promo_applied: true, amount_charged: 0 });
+        }
+
+        // Partial discount — still need tx verification but with lower amount
+        // For now, just verify tx normally and increment promo usage
+        if (!txHash) return jsonResp({ error: "tx_hash_required_for_partial_discount", discounted_price: discountedPrice }, 400);
+        const verification = await verifyTxOnChain(txHash);
+        if (!verification.valid) return jsonResp({ error: verification.error || "verification_failed" }, 400);
+        await sb.from("promo_codes").update({ uses_count: promo.uses_count + 1 }).eq("id", promo.id);
+        const { data: existing } = await sb.from("operators").select("id, status").eq("user_id", privyDid).maybeSingle();
+        if (existing) {
+          await sb.from("operators").update({ status: "active", updated_at: new Date().toISOString() }).eq("id", existing.id);
+        } else {
+          await sb.from("operators").insert({ user_id: privyDid, brand_name: "My App", subdomain: "pending-" + Date.now(), status: "active" });
+        }
+        return jsonResp({ success: true, status: "active", promo_applied: true });
+      }
+
+      // No promo code — standard payment verification
       if (!txHash || typeof txHash !== "string" || txHash.length < 60) return jsonResp({ error: "invalid_tx_hash" }, 400);
       const verification = await verifyTxOnChain(txHash);
       if (!verification.valid) return jsonResp({ error: verification.error || "verification_failed" }, 400);
