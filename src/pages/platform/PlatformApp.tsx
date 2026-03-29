@@ -77,6 +77,7 @@ export default function PlatformApp({ context }: PlatformAppProps) {
       <Route path="/dashboard" element={<RequireActiveOperator><OperatorDashboard /></RequireActiveOperator>} />
       <Route path="/help" element={<HelpCenter />} />
       <Route path="/help/:slug" element={<HelpArticle />} />
+      <Route path="/admin" element={<PlatformAdmin />} />
       <Route path="/terms-of-service" element={<LandingPage />} />
       <Route path="/privacy-policy" element={<LandingPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
