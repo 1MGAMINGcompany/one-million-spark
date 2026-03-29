@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { useWallet } from "@/hooks/useWallet";
 import { toast } from "sonner";
@@ -14,7 +14,8 @@ import PromoCodeManager from "@/components/admin/PromoCodeManager";
 import { Link } from "react-router-dom";
 import {
   Shield, Loader2, Trash2, Lock, Play, CheckCircle, Trophy,
-  Download, Globe, Calendar, Users, RefreshCw, Search, ArrowLeft,
+  Download, Globe, Calendar, Users, RefreshCw, ArrowLeft,
+  BarChart3, TrendingUp, ChevronRight,
 } from "lucide-react";
 
 // ── Types ──
@@ -77,6 +78,9 @@ const SPORT_BADGE: Record<string, { label: string; color: string }> = {
   combat: { label: "🥊 Combat", color: "bg-red-500/20 text-red-400" },
   tennis: { label: "🎾 Tennis", color: "bg-lime-500/20 text-lime-400" },
   golf: { label: "⛳ Golf", color: "bg-emerald-500/20 text-emerald-400" },
+  f1: { label: "🏎️ F1", color: "bg-red-500/20 text-red-400" },
+  cricket: { label: "🏏 Cricket", color: "bg-green-500/20 text-green-400" },
+  rugby: { label: "🏉 Rugby", color: "bg-green-500/20 text-green-400" },
   over_under: { label: "📊 O/U", color: "bg-muted text-muted-foreground" },
 };
 
@@ -86,16 +90,59 @@ const VIS_BADGE: Record<string, { label: string; color: string }> = {
   flagship: { label: "Flagship", color: "bg-yellow-500/20 text-yellow-400" },
 };
 
-// Polymarket sport tabs for browsing
+// Full sport tab list for Polymarket browser
 const BROWSE_LEAGUES = [
   { key: "nfl", label: "NFL" },
   { key: "nhl", label: "NHL" },
   { key: "nba", label: "NBA" },
+  { key: "wnba", label: "WNBA" },
   { key: "mlb", label: "MLB" },
-  { key: "epl", label: "Soccer" },
-  { key: "ufc", label: "MMA" },
+  { key: "epl", label: "EPL" },
+  { key: "ucl", label: "UCL" },
+  { key: "la-liga", label: "La Liga" },
+  { key: "bundesliga", label: "Bundesliga" },
+  { key: "serie-a", label: "Serie A" },
+  { key: "ligue-1", label: "Ligue 1" },
+  { key: "mls", label: "MLS" },
+  { key: "liga-mx", label: "Liga MX" },
+  { key: "ufc", label: "UFC" },
+  { key: "mma", label: "MMA" },
+  { key: "boxing", label: "Boxing" },
+  { key: "bkfc", label: "BKFC" },
+  { key: "ncaab", label: "NCAAB" },
+  { key: "cfb", label: "CFB" },
+  { key: "atp", label: "ATP" },
+  { key: "wta", label: "WTA" },
   { key: "golf", label: "Golf" },
+  { key: "f1", label: "F1" },
+  { key: "cricket", label: "Cricket" },
+  { key: "rugby", label: "Rugby" },
 ];
+
+// All sport filter keys for dashboard
+const DASHBOARD_SPORTS = ["soccer", "nfl", "nba", "nhl", "mlb", "ncaa", "combat", "tennis", "golf", "f1", "cricket", "rugby"];
+
+// ── Helpers ──
+
+function getDaysUntil(dateStr: string | null): number | null {
+  if (!dateStr) return null;
+  const diff = new Date(dateStr).getTime() - Date.now();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
+
+function getEventRowColor(fight: PlatformFight): string {
+  if (["settled", "draw", "cancelled"].includes(fight.status)) return "";
+  const days = getDaysUntil(fight.event_date);
+  if (days === null) return "";
+  if (days < 0) return "border-l-2 border-l-red-500";
+  if (days === 0) return "border-l-2 border-l-green-500";
+  if (days <= 3) return "border-l-2 border-l-yellow-500";
+  return "";
+}
+
+// ══════════════════════════════════════════════════
+// COMPONENT
+// ══════════════════════════════════════════════════
 
 export default function PlatformAdmin() {
   const { address } = useWallet();
@@ -106,14 +153,20 @@ export default function PlatformAdmin() {
   const [busy, setBusy] = useState(false);
   const [filter, setFilter] = useState<"active" | "settled" | "all">("active");
   const [sportFilter, setSportFilter] = useState<string>("all");
+  const [activeTab, setActiveTab] = useState<"browser" | "dashboard" | "analytics">("browser");
 
   // Polymarket browser state
   const [browseLeague, setBrowseLeague] = useState("nfl");
   const [browseResults, setBrowseResults] = useState<PolymarketPreview[]>([]);
   const [browseLoading, setBrowseLoading] = useState(false);
   const [browseMessage, setBrowseMessage] = useState("");
-  const [importingId, setImportingId] = useState<string | null>(null);
   const [importedIds, setImportedIds] = useState<Set<string>>(new Set());
+
+  // Bulk import state
+  const [selectedEvents, setSelectedEvents] = useState<Set<string>>(new Set());
+  const [bulkImporting, setBulkImporting] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState(0);
+  const [bulkTotal, setBulkTotal] = useState(0);
 
   // Check admin
   useEffect(() => {
@@ -147,7 +200,6 @@ export default function PlatformAdmin() {
       setEntryCounts(counts);
     }
 
-    // Track which polymarket IDs are already imported
     if (fightsRes.data) {
       const ids = new Set<string>();
       fightsRes.data.forEach((f: any) => {
@@ -184,6 +236,7 @@ export default function PlatformAdmin() {
     setBrowseLoading(true);
     setBrowseMessage("");
     setBrowseResults([]);
+    setSelectedEvents(new Set());
     try {
       const { data, error } = await supabase.functions.invoke("polymarket-sync", {
         body: { action: "browse_league", wallet: address, league_key: league },
@@ -202,27 +255,55 @@ export default function PlatformAdmin() {
     }
   };
 
-  // Import a single event to platform
-  const handleImport = async (eventId: string) => {
-    setImportingId(eventId);
+  // Bulk import
+  const handleBulkImport = async () => {
+    const ids = Array.from(selectedEvents);
+    if (ids.length === 0) { toast.error("No events selected"); return; }
+    setBulkImporting(true);
+    setBulkTotal(ids.length);
+    setBulkProgress(0);
     try {
       const { data, error } = await supabase.functions.invoke("polymarket-sync", {
         body: {
-          action: "import_single",
+          action: "import_bulk",
           wallet: address,
-          polymarket_event_id: eventId,
-          import_source: "platform_admin",
+          event_ids: ids,
+          import_source: "platform_admin_bulk",
           sport_type: browseLeague,
           visibility: "platform",
         },
       });
       if (error || data?.error) throw new Error(data?.error || error?.message);
-      toast.success(`Imported! (${data?.imported || 0} markets)`);
+      const imported = data?.total_imported || 0;
+      toast.success(`Imported ${imported} markets from ${ids.length} events`);
+      setSelectedEvents(new Set());
       loadFights();
     } catch (err: any) {
       toast.error(err.message);
     } finally {
-      setImportingId(null);
+      setBulkImporting(false);
+      setBulkProgress(0);
+    }
+  };
+
+  // Toggle single event selection
+  const toggleEventSelection = (id: string) => {
+    setSelectedEvents(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  // Select all importable events
+  const importableEvents = browseResults.filter(ev => !ev.markets?.some(m => importedIds.has(m.conditionId)));
+  const allSelected = importableEvents.length > 0 && importableEvents.every(ev => selectedEvents.has(ev.id));
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedEvents(new Set());
+    } else {
+      setSelectedEvents(new Set(importableEvents.map(ev => ev.id)));
     }
   };
 
@@ -231,13 +312,38 @@ export default function PlatformAdmin() {
     detectSport({ event_name: f.event_name, fighter_a_name: f.fighter_a_name, fighter_b_name: f.fighter_b_name, source: f.source });
 
   const filtered = fights.filter(f => {
-    // Status filter
     if (filter === "active" && !["open", "locked", "live", "result_selected", "confirmed"].includes(f.status)) return false;
     if (filter === "settled" && !["settled", "draw", "refunds_complete", "cancelled"].includes(f.status)) return false;
-    // Sport filter
     if (sportFilter !== "all" && getSport(f) !== sportFilter) return false;
     return true;
   });
+
+  // ── Analytics computations ──
+  const analytics = useMemo(() => {
+    const active = fights.filter(f => ["open", "locked", "live"].includes(f.status)).length;
+    const settled = fights.filter(f => ["settled", "draw"].includes(f.status)).length;
+    const pending = fights.filter(f => ["result_selected", "confirmed"].includes(f.status)).length;
+    const totalPool = fights.reduce((sum, f) => sum + (f.pool_a_usd || 0) + (f.pool_b_usd || 0), 0);
+    const totalPredictions = Object.values(entryCounts).reduce((s, c) => s + c, 0);
+    const uniqueEvents = fights.length;
+    const avgPool = uniqueEvents > 0 ? totalPool / uniqueEvents : 0;
+    const settlementRate = uniqueEvents > 0 ? ((settled / uniqueEvents) * 100) : 0;
+
+    // Top 5 most predicted
+    const top5 = fights
+      .map(f => ({ name: `${f.fighter_a_name} vs ${f.fighter_b_name}`, count: entryCounts[f.id] || 0 }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+
+    // Predictions per sport
+    const perSport: Record<string, number> = {};
+    fights.forEach(f => {
+      const s = getSport(f);
+      perSport[s] = (perSport[s] || 0) + (entryCounts[f.id] || 0);
+    });
+
+    return { active, settled, pending, totalPool, totalPredictions, avgPool, settlementRate, top5, perSport };
+  }, [fights, entryCounts]);
 
   if (loading) {
     return (
@@ -262,20 +368,29 @@ export default function PlatformAdmin() {
 
   return (
     <div className="min-h-screen bg-background pt-20 px-4 pb-8">
-      <div className="max-w-3xl mx-auto space-y-6">
-        {/* Header */}
+      <div className="max-w-4xl mx-auto space-y-6">
+        {/* ── Breadcrumb + Header ── */}
+        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          <Link to="/predictions/admin" className="hover:text-foreground transition-colors">Admin</Link>
+          <ChevronRight className="w-3 h-3" />
+          <span className="text-foreground">1MG.live Platform</span>
+        </div>
+
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-foreground font-['Cinzel'] flex items-center gap-2">
             <Globe className="w-6 h-6 text-blue-400" /> 1MG.live Admin
           </h1>
           <div className="flex items-center gap-2">
             <Link to="/predictions/admin">
-              <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground hover:text-foreground">
+              <Button variant="outline" size="sm" className="gap-1">
                 <ArrowLeft className="w-3 h-3" /> Main Admin
               </Button>
             </Link>
             <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded-full">
               {activePlatformCount} active
+            </span>
+            <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded-full">
+              ${analytics.totalPool.toFixed(0)} pool
             </span>
             <Button variant="outline" size="sm" onClick={() => loadFights()} className="gap-1">
               <RefreshCw className="w-3 h-3" /> Refresh
@@ -283,44 +398,127 @@ export default function PlatformAdmin() {
           </div>
         </div>
 
-        {/* ═══ Section A: Polymarket Browser ═══ */}
-        <Card className="bg-card border-border/50 p-4">
-          <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
-            <Download className="w-4 h-4 text-blue-400" /> Polymarket Browser — Import to 1MG.live
-          </h2>
-          <p className="text-xs text-muted-foreground mb-3">
-            Browse upcoming events by sport. One-click import sets visibility to <span className="text-blue-400 font-medium">Platform only</span>.
-          </p>
+        {/* ── Top-level tabs ── */}
+        <div className="flex gap-2">
+          {([
+            { key: "browser", label: "Polymarket Browser", icon: <Download className="w-3 h-3" /> },
+            { key: "dashboard", label: "Events Dashboard", icon: <Globe className="w-3 h-3" /> },
+            { key: "analytics", label: "Analytics", icon: <BarChart3 className="w-3 h-3" /> },
+          ] as const).map(t => (
+            <button
+              key={t.key}
+              onClick={() => setActiveTab(t.key)}
+              className={`flex items-center gap-1.5 text-xs px-4 py-2 rounded-lg transition-colors ${
+                activeTab === t.key ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t.icon} {t.label}
+            </button>
+          ))}
+        </div>
 
-          {/* Sport tabs */}
-          <Tabs value={browseLeague} onValueChange={(v) => handleBrowse(v)}>
-            <TabsList className="w-full flex-wrap h-auto gap-1">
-              {BROWSE_LEAGUES.map(l => (
-                <TabsTrigger key={l.key} value={l.key} className="text-xs px-3 py-1.5">
-                  {l.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+        {/* ══════ TAB: Polymarket Browser ══════ */}
+        {activeTab === "browser" && (
+          <Card className="bg-card border-border/50 p-4">
+            <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+              <Download className="w-4 h-4 text-blue-400" /> Polymarket Browser — Import to 1MG.live
+            </h2>
+            <p className="text-xs text-muted-foreground mb-3">
+              Browse upcoming events by sport. Select multiple and bulk import with visibility <span className="text-blue-400 font-medium">Platform only</span>.
+            </p>
 
-            {BROWSE_LEAGUES.map(l => (
-              <TabsContent key={l.key} value={l.key}>
-                {browseLoading ? (
-                  <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
-                ) : browseMessage ? (
-                  <div className="text-center py-8">
-                    <p className="text-sm text-muted-foreground">{browseMessage}</p>
-                    <p className="text-xs text-muted-foreground/60 mt-2">Use the manual creator below for events Polymarket doesn't cover.</p>
-                  </div>
-                ) : browseResults.length === 0 ? (
-                  <div className="text-center py-6">
-                    <p className="text-xs text-muted-foreground">Click a sport tab to browse</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2 max-h-[500px] overflow-y-auto mt-2">
+            {/* Scrollable sport tabs */}
+            <div className="overflow-x-auto pb-2 -mx-1">
+              <div className="flex gap-1 px-1 min-w-max">
+                {BROWSE_LEAGUES.map(l => (
+                  <button
+                    key={l.key}
+                    onClick={() => handleBrowse(l.key)}
+                    className={`text-xs px-3 py-1.5 rounded-md whitespace-nowrap transition-colors ${
+                      browseLeague === l.key ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {l.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Bulk import bar */}
+            {selectedEvents.size > 0 && (
+              <div className="flex items-center gap-3 mt-3 p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                <span className="text-xs text-blue-400 font-medium">{selectedEvents.size} selected</span>
+                <Button
+                  size="sm"
+                  className="h-7 text-[10px] px-4 gap-1"
+                  onClick={handleBulkImport}
+                  disabled={bulkImporting}
+                >
+                  {bulkImporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                  Import Selected to 1MG.live
+                </Button>
+                <button
+                  onClick={() => setSelectedEvents(new Set())}
+                  className="text-[10px] text-muted-foreground hover:text-foreground ml-auto"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+
+            {bulkImporting && (
+              <div className="mt-2">
+                <Progress value={50} className="h-1.5" />
+                <p className="text-[10px] text-muted-foreground mt-1">Importing events...</p>
+              </div>
+            )}
+
+            {/* Results */}
+            <div className="mt-3">
+              {browseLoading ? (
+                <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+              ) : browseMessage ? (
+                <div className="text-center py-8">
+                  <p className="text-sm text-muted-foreground">{browseMessage}</p>
+                  <p className="text-xs text-muted-foreground/60 mt-2">Use the manual creator below for events Polymarket doesn't cover.</p>
+                </div>
+              ) : browseResults.length === 0 ? (
+                <div className="text-center py-6">
+                  <p className="text-xs text-muted-foreground">Click a sport tab to browse</p>
+                </div>
+              ) : (
+                <>
+                  {/* Select all header */}
+                  {importableEvents.length > 0 && (
+                    <div className="flex items-center gap-2 mb-2 px-1">
+                      <Checkbox
+                        checked={allSelected}
+                        onCheckedChange={toggleSelectAll}
+                        className="h-3.5 w-3.5"
+                      />
+                      <span className="text-[10px] text-muted-foreground">
+                        Select all ({importableEvents.length} importable)
+                      </span>
+                    </div>
+                  )}
+                  <div className="space-y-2 max-h-[500px] overflow-y-auto">
                     {browseResults.map(ev => {
                       const isImported = ev.markets?.some(m => importedIds.has(m.conditionId));
+                      const isSelected = selectedEvents.has(ev.id);
                       return (
-                        <div key={ev.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/30">
+                        <div
+                          key={ev.id}
+                          className={`flex items-center gap-3 p-3 rounded-lg bg-muted/30 border transition-colors ${
+                            isSelected ? "border-blue-500/50 bg-blue-500/5" : "border-border/30"
+                          }`}
+                        >
+                          {!isImported && (
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => toggleEventSelection(ev.id)}
+                              className="h-3.5 w-3.5 flex-shrink-0"
+                            />
+                          )}
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-foreground truncate">{ev.title}</p>
                             <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -340,167 +538,252 @@ export default function PlatformAdmin() {
                               )}
                             </div>
                           </div>
-                          <Button
-                            size="sm"
-                            variant={isImported ? "ghost" : "outline"}
-                            className="h-7 text-[10px] px-3 ml-2"
-                            disabled={!!importingId || isImported}
-                            onClick={() => handleImport(ev.id)}
-                          >
-                            {importingId === ev.id ? <Loader2 className="w-3 h-3 animate-spin" /> : isImported ? "✓" : "Import"}
-                          </Button>
                         </div>
                       );
                     })}
                   </div>
-                )}
-              </TabsContent>
-            ))}
-          </Tabs>
-        </Card>
+                </>
+              )}
+            </div>
+          </Card>
+        )}
 
-        {/* ═══ Section B: Events Dashboard ═══ */}
-        <Card className="bg-card border-border/50 p-4">
-          <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
-            <Globe className="w-4 h-4 text-blue-400" /> 1MG.live Events
-            <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full ml-1">{fights.length} total</span>
-          </h2>
+        {/* ══════ TAB: Events Dashboard ══════ */}
+        {activeTab === "dashboard" && (
+          <Card className="bg-card border-border/50 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+                <Globe className="w-4 h-4 text-blue-400" /> 1MG.live Events
+                <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full ml-1">{fights.length} total</span>
+                <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">${analytics.totalPool.toFixed(0)} pool</span>
+              </h2>
+              <Button variant="outline" size="sm" onClick={() => loadFights()} className="gap-1 h-7 text-[10px]">
+                <RefreshCw className="w-3 h-3" /> Refresh
+              </Button>
+            </div>
 
-          {/* Filter row */}
-          <div className="flex gap-2 mb-3 flex-wrap">
-            {(["active", "settled", "all"] as const).map(f => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`text-xs px-3 py-1 rounded-full transition-colors ${
-                  filter === f ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {f.charAt(0).toUpperCase() + f.slice(1)}
-              </button>
-            ))}
-            <div className="border-l border-border/50 mx-1" />
-            <button
-              onClick={() => setSportFilter("all")}
-              className={`text-xs px-2 py-1 rounded-full ${sportFilter === "all" ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}
-            >
-              All Sports
-            </button>
-            {["soccer", "nfl", "nba", "nhl", "mlb", "combat"].map(s => (
-              <button
-                key={s}
-                onClick={() => setSportFilter(s)}
-                className={`text-xs px-2 py-1 rounded-full ${sportFilter === s ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}
-              >
-                {SPORT_BADGE[s]?.label || s}
-              </button>
-            ))}
-          </div>
+            {/* Filter row */}
+            <div className="flex gap-2 mb-3 flex-wrap">
+              {(["active", "settled", "all"] as const).map(f => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`text-xs px-3 py-1 rounded-full transition-colors ${
+                    filter === f ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {f.charAt(0).toUpperCase() + f.slice(1)}
+                </button>
+              ))}
+              <div className="border-l border-border/50 mx-1" />
+              <div className="overflow-x-auto flex gap-1">
+                <button
+                  onClick={() => setSportFilter("all")}
+                  className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${sportFilter === "all" ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}
+                >
+                  All Sports
+                </button>
+                {DASHBOARD_SPORTS.map(s => (
+                  <button
+                    key={s}
+                    onClick={() => setSportFilter(s)}
+                    className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${sportFilter === s ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}
+                  >
+                    {SPORT_BADGE[s]?.label || s}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-          {/* Events list */}
-          {filtered.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-6">No events match filters</p>
-          ) : (
-            <div className="space-y-2 max-h-[600px] overflow-y-auto">
-              {filtered.map(f => {
-                const sport = getSport(f);
-                const badge = SPORT_BADGE[sport] || { label: sport, color: "bg-muted text-muted-foreground" };
-                const vis = VIS_BADGE[f.visibility] || VIS_BADGE.all;
-                const pool = (f.pool_a_usd || 0) + (f.pool_b_usd || 0);
-                const entries = entryCounts[f.id] || 0;
+            {/* Events list */}
+            {filtered.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-6">No events match filters</p>
+            ) : (
+              <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                {filtered.map(f => {
+                  const sport = getSport(f);
+                  const badge = SPORT_BADGE[sport] || { label: sport, color: "bg-muted text-muted-foreground" };
+                  const vis = VIS_BADGE[f.visibility] || VIS_BADGE.all;
+                  const pool = (f.pool_a_usd || 0) + (f.pool_b_usd || 0);
+                  const entries = entryCounts[f.id] || 0;
+                  const daysUntil = getDaysUntil(f.event_date);
+                  const rowColor = getEventRowColor(f);
 
-                return (
-                  <div key={f.id} className="p-3 rounded-lg bg-muted/30 border border-border/30">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{f.fighter_a_name} vs {f.fighter_b_name}</p>
-                        <p className="text-[10px] text-muted-foreground truncate">{f.event_name}</p>
-                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${badge.color}`}>{badge.label}</span>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${STATUS_COLORS[f.status] || "bg-muted text-muted-foreground"}`}>{f.status}</span>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${vis.color}`}>{vis.label}</span>
-                          {f.polymarket_condition_id && (
-                            <span className="text-[10px] text-purple-400/70">PM ✓</span>
-                          )}
-                          {f.event_date && (
-                            <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
-                              <Calendar className="w-2.5 h-2.5" />
-                              {formatEventDateTime(f.event_date)}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-3 mt-1">
-                          <span className="text-[10px] text-muted-foreground">
-                            <Users className="w-2.5 h-2.5 inline mr-0.5" />{entries} predictions
-                          </span>
-                          <span className="text-[10px] text-muted-foreground">
-                            Pool: ${pool.toFixed(2)}
-                          </span>
-                          {f.price_a != null && f.price_b != null && (f.price_a > 0 || f.price_b > 0) && (
+                  return (
+                    <div key={f.id} className={`p-3 rounded-lg bg-muted/30 border border-border/30 ${rowColor}`}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{f.fighter_a_name} vs {f.fighter_b_name}</p>
+                          <p className="text-[10px] text-muted-foreground truncate">{f.event_name}</p>
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${badge.color}`}>{badge.label}</span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${STATUS_COLORS[f.status] || "bg-muted text-muted-foreground"}`}>{f.status}</span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${vis.color}`}>{vis.label}</span>
+                            {f.polymarket_condition_id && (
+                              <span className="text-[10px] text-purple-400/70">PM ✓</span>
+                            )}
+                            {f.event_date && (
+                              <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                                <Calendar className="w-2.5 h-2.5" />
+                                {formatEventDateTime(f.event_date)}
+                              </span>
+                            )}
+                            {daysUntil !== null && (
+                              <span className={`text-[10px] font-medium ${
+                                daysUntil < 0 ? "text-red-400" : daysUntil === 0 ? "text-green-400" : daysUntil <= 3 ? "text-yellow-400" : "text-muted-foreground"
+                              }`}>
+                                {daysUntil < 0 ? `${Math.abs(daysUntil)}d ago` : daysUntil === 0 ? "Today" : `in ${daysUntil}d`}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3 mt-1">
                             <span className="text-[10px] text-muted-foreground">
-                              {(f.price_a * 100).toFixed(0)}% / {(f.price_b * 100).toFixed(0)}%
+                              <Users className="w-2.5 h-2.5 inline mr-0.5" />{entries} predictions
                             </span>
+                            <span className="text-[10px] text-muted-foreground">
+                              Pool: ${pool.toFixed(2)}
+                            </span>
+                            {f.price_a != null && f.price_b != null && (f.price_a > 0 || f.price_b > 0) && (
+                              <span className="text-[10px] text-muted-foreground">
+                                {(f.price_a * 100).toFixed(0)}% / {(f.price_b * 100).toFixed(0)}%
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex gap-1 flex-shrink-0 flex-wrap justify-end">
+                          {f.status === "open" && (
+                            <>
+                              <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" disabled={busy}
+                                onClick={() => callAdmin("lockPredictions", { fight_id: f.id })} title="Lock">
+                                <Lock className="w-3 h-3" />
+                              </Button>
+                              <Button size="sm" variant="ghost" className="h-7 text-[10px] px-2 text-destructive" disabled={busy}
+                                onClick={() => callAdmin("deleteFight", { fight_id: f.id })} title="Delete">
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            </>
+                          )}
+                          {f.status === "locked" && (
+                            <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" disabled={busy}
+                              onClick={() => callAdmin("markLive", { fight_id: f.id })} title="Mark Live">
+                              <Play className="w-3 h-3" />
+                            </Button>
+                          )}
+                          {f.status === "live" && (
+                            <>
+                              <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" disabled={busy}
+                                onClick={() => callAdmin("selectResult", { fight_id: f.id, winner: "fighter_a" })}>
+                                A
+                              </Button>
+                              <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" disabled={busy}
+                                onClick={() => callAdmin("selectResult", { fight_id: f.id, winner: "fighter_b" })}>
+                                B
+                              </Button>
+                            </>
+                          )}
+                          {f.status === "result_selected" && (
+                            <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" disabled={busy}
+                              onClick={() => callAdmin("confirmResult", { fight_id: f.id })} title="Confirm">
+                              <CheckCircle className="w-3 h-3" />
+                            </Button>
+                          )}
+                          {f.status === "confirmed" && (
+                            <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" disabled={busy}
+                              onClick={() => callAdmin("settleEvent", { fight_id: f.id })} title="Settle">
+                              <Trophy className="w-3 h-3" />
+                            </Button>
                           )}
                         </div>
-                      </div>
-
-                      {/* Action buttons */}
-                      <div className="flex gap-1 flex-shrink-0 flex-wrap justify-end">
-                        {f.status === "open" && (
-                          <>
-                            <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" disabled={busy}
-                              onClick={() => callAdmin("lockPredictions", { fight_id: f.id })} title="Lock">
-                              <Lock className="w-3 h-3" />
-                            </Button>
-                            <Button size="sm" variant="ghost" className="h-7 text-[10px] px-2 text-destructive" disabled={busy}
-                              onClick={() => callAdmin("deleteFight", { fight_id: f.id })} title="Delete">
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          </>
-                        )}
-                        {f.status === "locked" && (
-                          <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" disabled={busy}
-                            onClick={() => callAdmin("markLive", { fight_id: f.id })} title="Mark Live">
-                            <Play className="w-3 h-3" />
-                          </Button>
-                        )}
-                        {f.status === "live" && (
-                          <>
-                            <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" disabled={busy}
-                              onClick={() => callAdmin("selectResult", { fight_id: f.id, winner: "fighter_a" })}>
-                              A
-                            </Button>
-                            <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" disabled={busy}
-                              onClick={() => callAdmin("selectResult", { fight_id: f.id, winner: "fighter_b" })}>
-                              B
-                            </Button>
-                          </>
-                        )}
-                        {f.status === "result_selected" && (
-                          <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" disabled={busy}
-                            onClick={() => callAdmin("confirmResult", { fight_id: f.id })} title="Confirm">
-                            <CheckCircle className="w-3 h-3" />
-                          </Button>
-                        )}
-                        {f.status === "confirmed" && (
-                          <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" disabled={busy}
-                            onClick={() => callAdmin("settleEvent", { fight_id: f.id })} title="Settle">
-                            <Trophy className="w-3 h-3" />
-                          </Button>
-                        )}
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+        )}
+
+        {/* ══════ TAB: Analytics ══════ */}
+        {activeTab === "analytics" && (
+          <div className="space-y-4">
+            {/* KPI Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { label: "Active Events", value: analytics.active, color: "text-green-400" },
+                { label: "Settled", value: analytics.settled, color: "text-blue-400" },
+                { label: "Pending", value: analytics.pending, color: "text-yellow-400" },
+                { label: "Total Pool", value: `$${analytics.totalPool.toFixed(0)}`, color: "text-primary" },
+                { label: "Total Predictions", value: analytics.totalPredictions, color: "text-foreground" },
+                { label: "Avg Pool/Event", value: `$${analytics.avgPool.toFixed(2)}`, color: "text-muted-foreground" },
+                { label: "Settlement Rate", value: `${analytics.settlementRate.toFixed(0)}%`, color: "text-blue-400" },
+                { label: "Total Events", value: fights.length, color: "text-foreground" },
+              ].map((kpi, i) => (
+                <Card key={i} className="bg-card border-border/50 p-3">
+                  <p className="text-[10px] text-muted-foreground">{kpi.label}</p>
+                  <p className={`text-lg font-bold ${kpi.color}`}>{kpi.value}</p>
+                </Card>
+              ))}
             </div>
-          )}
-        </Card>
+
+            {/* Top 5 Most Predicted */}
+            <Card className="bg-card border-border/50 p-4">
+              <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-primary" /> Top 5 Most Predicted Events
+              </h3>
+              <div className="space-y-2">
+                {analytics.top5.map((ev, i) => (
+                  <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted/30">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-primary w-5">#{i + 1}</span>
+                      <span className="text-xs text-foreground truncate max-w-[250px]">{ev.name}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">{ev.count} predictions</span>
+                  </div>
+                ))}
+                {analytics.top5.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-4">No predictions yet</p>
+                )}
+              </div>
+            </Card>
+
+            {/* Predictions per Sport */}
+            <Card className="bg-card border-border/50 p-4">
+              <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-blue-400" /> Predictions per Sport
+              </h3>
+              <div className="space-y-2">
+                {Object.entries(analytics.perSport)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([sport, count]) => {
+                    const maxCount = Math.max(...Object.values(analytics.perSport), 1);
+                    const badge = SPORT_BADGE[sport] || { label: sport, color: "bg-muted text-muted-foreground" };
+                    return (
+                      <div key={sport} className="flex items-center gap-2">
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium w-24 text-center ${badge.color}`}>{badge.label}</span>
+                        <div className="flex-1 bg-muted/30 rounded-full h-4 overflow-hidden">
+                          <div
+                            className="bg-primary/40 h-full rounded-full transition-all"
+                            style={{ width: `${(count / maxCount) * 100}%` }}
+                          />
+                        </div>
+                        <span className="text-[10px] text-muted-foreground w-10 text-right">{count}</span>
+                      </div>
+                    );
+                  })}
+                {Object.keys(analytics.perSport).length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-4">No data yet</p>
+                )}
+              </div>
+            </Card>
+          </div>
+        )}
 
         {/* ═══ Promo Codes ═══ */}
         <PromoCodeManager wallet={address!} />
 
-        {/* ═══ Section C: Manual Fight Creator ═══ */}
+        {/* ═══ Manual Fight Creator ═══ */}
         <Card className="bg-card border-border/50 p-4">
           <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
             🥊 Manual Fight Creator
