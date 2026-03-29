@@ -20,6 +20,9 @@ interface Props {
   showShare: boolean;
   setShowShare: (v: boolean) => void;
   tradeResult?: TradeResult | null;
+  operatorBrandName?: string;
+  operatorLogoUrl?: string | null;
+  operatorSubdomain?: string;
 }
 
 /* ── Status display helpers ── */
@@ -74,6 +77,9 @@ export default function PredictionSuccessScreen({
   showShare,
   setShowShare,
   tradeResult,
+  operatorBrandName,
+  operatorLogoUrl,
+  operatorSubdomain,
 }: Props) {
   // Privy access token for authenticated polling
   const { getAccessToken } = usePrivy();
@@ -212,6 +218,9 @@ export default function PredictionSuccessScreen({
           poolUsd={poolA + poolB}
           wallet={wallet}
           referralCode={referralCode ?? undefined}
+          operatorBrandName={operatorBrandName}
+          operatorLogoUrl={operatorLogoUrl}
+          operatorSubdomain={operatorSubdomain}
         />
       )}
     </>

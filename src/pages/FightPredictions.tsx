@@ -309,8 +309,8 @@ export default function FightPredictions() {
         if (hasLiveFights && isStaleLive) staleKeys.add(eventName);
       } else if (eventMs && eventMs > tomorrowStart.getTime()) {
         upcoming.push([eventName, group]);
-      } else if (eventMs && (nowMs - eventMs) > 24 * 60 * 60 * 1000 && new Date(eventMs).toDateString() !== todayStr) {
-        // Event date is >24h in the past and not today's calendar day → past regardless of open fights
+      } else if (eventMs && new Date(eventMs).toDateString() !== todayStr && eventMs < nowMs) {
+        // Event date is on a previous calendar day → always past, even if fights are still "open"
         past.push([eventName, group]);
       } else if (hasOpenFights || (eventMs && new Date(eventMs).toDateString() === todayStr)) {
         today.push([eventName, group]);

@@ -48,6 +48,9 @@ export interface ShareModalProps {
   opponentType?: string;
   streak?: number;
   gameName?: string;
+  operatorBrandName?: string;
+  operatorLogoUrl?: string | null;
+  operatorSubdomain?: string;
 }
 
 function logShareAction(variant: ShareVariant, method: string, wallet?: string) {
@@ -62,8 +65,10 @@ function logShareAction(variant: ShareVariant, method: string, wallet?: string) 
   }).then(() => {});
 }
 
-function buildShareUrl(referralCode?: string): string {
-  const base = "https://1mgaming.com/predictions";
+function buildShareUrl(referralCode?: string, operatorSubdomain?: string): string {
+  const base = operatorSubdomain
+    ? `https://${operatorSubdomain}.1mg.live`
+    : "https://1mgaming.com/predictions";
   if (referralCode && referralCode.length >= 4 && referralCode.length <= 16) {
     return `${base}?ref=${referralCode}`;
   }
@@ -75,15 +80,19 @@ export default function SocialShareModal(props: ShareModalProps) {
     open, onClose, variant,
     eventTitle, sport, fighterPick, amountUsd, poolUsd,
     gameTitle, amountWon, solWon, wallet, referralCode, opponentType, streak, gameName,
+    operatorBrandName, operatorLogoUrl, operatorSubdomain,
   } = props;
 
   const winAmount = amountWon ?? solWon;
   const isSolWin = amountWon == null && solWon != null;
 
+  const brandName = operatorBrandName || "1MGAMING";
+  const brandLogo = operatorLogoUrl || pyramidLogo;
+
   const cardRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
 
-  const shareUrl = buildShareUrl(referralCode);
+  const shareUrl = buildShareUrl(referralCode, operatorSubdomain);
   const caption = buildCaption(props, shareUrl);
 
   const handleCopyLink = useCallback(() => {
@@ -100,7 +109,7 @@ export default function SocialShareModal(props: ShareModalProps) {
       const { toPng } = await import("html-to-image");
       const dataUrl = await toPng(cardRef.current, { pixelRatio: 2, cacheBust: true });
       const link = document.createElement("a");
-      link.download = `1mgaming-${variant}.png`;
+      link.download = `${brandName.toLowerCase().replace(/\s+/g, "-")}-${variant}.png`;
       link.href = dataUrl;
       link.click();
       logShareAction(variant, "download", wallet);
@@ -129,7 +138,7 @@ export default function SocialShareModal(props: ShareModalProps) {
 
   const handleNativeShare = useCallback(() => {
     if (navigator.share) {
-      navigator.share({ title: "1MGAMING", text: caption, url: shareUrl });
+      navigator.share({ title: brandName, text: caption, url: shareUrl });
       logShareAction(variant, "native_share", wallet);
     } else {
       handleCopyLink();
@@ -158,8 +167,8 @@ export default function SocialShareModal(props: ShareModalProps) {
               />
               <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[hsl(var(--card))]" />
               <div className="absolute top-3 left-3 flex items-center gap-2">
-                <img src={pyramidLogo} alt="1MGAMING" className="w-7 h-7" crossOrigin="anonymous" />
-                <span className="text-[11px] font-bold text-white/90 tracking-wider font-['Cinzel']">1MGAMING</span>
+                <img src={brandLogo} alt={brandName} className="w-7 h-7 rounded" crossOrigin="anonymous" />
+                <span className="text-[11px] font-bold text-white/90 tracking-wider font-['Cinzel']">{brandName}</span>
               </div>
               <div className="absolute top-3 right-3">
                 <span className={`text-[10px] font-extrabold px-3 py-1 rounded-full tracking-wider ${
@@ -296,15 +305,17 @@ export default function SocialShareModal(props: ShareModalProps) {
 
 function buildCaption(p: ShareModalProps, url: string): string {
   const emoji = sportEmoji(p.sport);
+  const brand = p.operatorBrandName || "1MGAMING";
+  const brandAt = p.operatorBrandName ? brand : "@1MGaming";
   if (p.variant === "prediction") {
     return `WHO WINS? 👊\n${emoji} My pick: ${p.fighterPick}${p.amountUsd ? ` | $${p.amountUsd.toFixed(2)}` : ""}\nFight Predictions (BKFC · Muay Thai · MMA · Futbol)\nPlayers vs Players • Winners take the pot\n👇 Make your pick\n🌐 ${url}`;
   }
   if (p.variant === "claim_win") {
     const won = p.amountWon ?? p.solWon;
     const fmt = p.amountWon != null ? `$${won?.toFixed(2)}` : `${won?.toFixed(4) || ""} SOL`;
-    return `💰 Won ${fmt} on @1MGaming!\n${p.gameTitle || p.eventTitle || ""}`;
+    return `💰 Won ${fmt} on ${brandAt}!\n${p.gameTitle || p.eventTitle || ""}`;
   }
   const won = p.amountWon ?? p.solWon;
   const fmt = p.amountWon != null ? `$${won?.toFixed(2)}` : won ? `${won.toFixed(4)} SOL` : "";
-  return `🏆 Victory on @1MGaming!${fmt ? ` Won ${fmt}` : ""}\n${p.gameName || p.gameTitle || ""}`;
+  return `🏆 Victory on ${brandAt}!${fmt ? ` Won ${fmt}` : ""}\n${p.gameName || p.gameTitle || ""}`;
 }
