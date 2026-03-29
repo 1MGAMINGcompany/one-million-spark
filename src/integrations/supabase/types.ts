@@ -1436,6 +1436,7 @@ export type Database = {
           created_at: string
           enrichment_notes: string | null
           event_banner_url: string | null
+          event_date: string | null
           event_id: string | null
           event_name: string
           explainer_card: string | null
@@ -1504,6 +1505,7 @@ export type Database = {
           created_at?: string
           enrichment_notes?: string | null
           event_banner_url?: string | null
+          event_date?: string | null
           event_id?: string | null
           event_name?: string
           explainer_card?: string | null
@@ -1572,6 +1574,7 @@ export type Database = {
           created_at?: string
           enrichment_notes?: string | null
           event_banner_url?: string | null
+          event_date?: string | null
           event_id?: string | null
           event_name?: string
           explainer_card?: string | null

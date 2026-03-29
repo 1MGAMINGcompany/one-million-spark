@@ -1,0 +1,1 @@
+ALTER TABLE public.prediction_fights ADD COLUMN event_date timestamptz;
