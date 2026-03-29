@@ -20,7 +20,7 @@ export interface MarketData {
 /* ── Derived metrics ── */
 
 export function getTotalVolume(m: MarketData): number {
-  if ((m.polymarketVolumeUsd ?? 0) > 0) return m.polymarketVolumeUsd!;
+  if ((m.externalVolumeUsd ?? 0) > 0) return m.externalVolumeUsd!;
   return m.poolAUsd + m.poolBUsd;
 }
 
