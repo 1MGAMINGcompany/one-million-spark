@@ -36,7 +36,7 @@ import { formatEventDateTime } from "@/lib/formatEventLocalDateTime";
 import PromoCodeManager from "@/components/admin/PromoCodeManager";
 import PlatformEventCreator from "@/components/admin/PlatformEventCreator";
 import OperatorAdminSection from "@/components/admin/OperatorAdminSection";
-import PlatformAdminSection from "@/components/admin/PlatformAdminSection";
+// PlatformAdminSection removed — now at /admin/platform
 
 /** Convert a datetime-local value to a full ISO string preserving the local offset */
 function localDatetimeToISO(val: string): string {
