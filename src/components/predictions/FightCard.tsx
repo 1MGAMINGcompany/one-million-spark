@@ -690,7 +690,7 @@ export default function FightCard({
   );
 }
 
-/** Compact fighter row: photo + name + record */
+/** Compact fighter row: photo + name + record + auto-detected logo */
 function CompactFighterRow({
   name, record, photo, sport, isWinner,
 }: {
@@ -698,6 +698,9 @@ function CompactFighterRow({
 }) {
   const [imgErr, setImgErr] = useState(false);
   const effectiveSport = sport || "combat";
+
+  // Auto-detect team logo
+  const teamLogo = getTeamLogo(name, effectiveSport);
 
   return (
     <div className={`flex items-center gap-2.5 ${isWinner ? "ring-1 ring-primary/40 rounded-lg px-1.5 py-0.5 bg-primary/5" : ""}`}>
@@ -709,6 +712,18 @@ function CompactFighterRow({
           onError={() => { setImgErr(true); if (import.meta.env.DEV) console.warn(`[FighterPhoto] failed to load: ${photo}`); }}
           loading="lazy"
         />
+      ) : teamLogo?.url ? (
+        <img
+          src={teamLogo.url}
+          alt={name}
+          className="w-10 h-10 rounded-full object-contain ring-1 ring-border/40 shrink-0 bg-white/5 p-1"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          loading="lazy"
+        />
+      ) : teamLogo?.emoji ? (
+        <div className="w-10 h-10 rounded-full bg-muted/30 ring-1 ring-border/40 shrink-0 flex items-center justify-center text-xl">
+          {teamLogo.emoji}
+        </div>
       ) : (
         <div className="w-10 h-10 rounded-full bg-black ring-1 ring-border/40 shrink-0" />
       )}
