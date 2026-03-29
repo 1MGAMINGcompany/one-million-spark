@@ -10,7 +10,13 @@ import { getTeamLogo } from "@/lib/teamLogos";
 
 const SPORTS = ["Soccer", "MMA", "Boxing", "NFL", "NBA", "NHL", "MLB", "NCAA", "Tennis", "Golf", "Muay Thai", "Bare Knuckle"];
 
-export default function PlatformEventCreator({ wallet }: { wallet: string }) {
+const VISIBILITY_OPTIONS = [
+  { value: "flagship", label: "1MGAMING.com only" },
+  { value: "platform", label: "1MG.live only" },
+  { value: "all", label: "Both" },
+] as const;
+
+export default function PlatformEventCreator({ wallet, defaultVisibility = "all" }: { wallet: string; defaultVisibility?: string }) {
   const [sport, setSport] = useState("Soccer");
   const [league, setLeague] = useState("");
   const [teamA, setTeamA] = useState("");
@@ -18,6 +24,7 @@ export default function PlatformEventCreator({ wallet }: { wallet: string }) {
   const [eventDate, setEventDate] = useState("");
   const [featured, setFeatured] = useState(false);
   const [drawAllowed, setDrawAllowed] = useState(false);
+  const [visibility, setVisibility] = useState(defaultVisibility);
   const [creating, setCreating] = useState(false);
 
   const handleCreate = async () => {
@@ -45,6 +52,7 @@ export default function PlatformEventCreator({ wallet }: { wallet: string }) {
           draw_allowed: drawAllowed,
           home_logo: logoA?.url || null,
           away_logo: logoB?.url || null,
+          visibility,
         },
       });
       if (error || data?.error) throw new Error(data?.error || error?.message);
@@ -128,6 +136,18 @@ export default function PlatformEventCreator({ wallet }: { wallet: string }) {
           onChange={e => setEventDate(e.target.value)}
           className="text-foreground"
         />
+
+        {/* Visibility selector */}
+        <div>
+          <label className="text-xs text-muted-foreground mb-1 block">Visibility</label>
+          <select
+            value={visibility}
+            onChange={e => setVisibility(e.target.value)}
+            className="bg-background border border-border rounded-md h-10 px-3 text-sm text-foreground w-full"
+          >
+            {VISIBILITY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
 
         <div className="flex items-center gap-6">
           <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
