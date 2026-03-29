@@ -1,50 +1,84 @@
 
 
-## Plan: 1MG.live Branding — Logo, Favicon, and Google SEO Meta
+## Plan: Event Date Fix, Auto-Claim Clarity, and Operator-Branded Sharing
 
-### What we're doing
-1. Use the uploaded `1mglive-logo.png` as the favicon and brand icon for 1mg.live (browser tab, smartphone home screen, Google results)
-2. Update SEO meta tags dynamically when on the 1mg.live domain
-3. Write compelling Google descriptions for the platform
+### Problem Analysis
+
+**1. Date categorization bug (lines 310-315 of FightPredictions.tsx)**
+The current logic only moves events to "past" if they're >24h old AND on a different calendar day (line 312). A March 28th event viewed on March 29th morning is <24h old, so it falls through to line 315 where `hasOpenFights` keeps it in "TODAY". Fix: any event whose `event_date` calendar day is before today should go to "past", regardless of age or open fights.
+
+**2. Claim behavior**
+Auto-claim is already implemented (`prediction-auto-claim` edge function). The UI already states "Winnings are automatically sent to your wallet." The `handleClaim` button exists as a manual fallback. No backend changes needed — just ensure messaging is consistent.
+
+**3. Operator-branded sharing**
+`SocialShareModal` hardcodes "1MGAMING" logo, "1mgaming.com" URL, and "1MGAMING" text. When used from an operator app (`*.1mg.live`), it should show the operator's brand name, logo, and link to their subdomain.
+
+---
 
 ### Changes
 
-**1. Copy logo to public directory**
-- Copy `user-uploads://1mglive-logo.png` to `public/images/1mglive-logo.png`
+**File 1: `src/pages/FightPredictions.tsx`** — Fix date categorization
 
-**2. Update `src/components/seo/SeoMeta.tsx`**
-- Detect domain context and use `https://1mg.live` as SITE_URL when on the platform domain
-- Set `og:site_name` to "1MG.live" when on platform
-- Set `og:image` to the 1mglive logo when on platform
+Replace the event categorization block (lines ~310-321) so that events whose `event_date` is on a previous calendar day are always categorized as "past", even if they have open fights:
 
-**3. Update `index.html`**
-- Add a small inline script that detects if hostname is `1mg.live` and dynamically swaps:
-  - `<title>` to "1MG.live | Launch Your Own Predictions App"
-  - Favicon link to `/images/1mglive-logo.png`
-  - Meta description to a conversion-focused description
-  - OG tags for 1mg.live
+```text
+Current (buggy):
+  line 312: if eventMs > 24h ago AND different day → past
+  line 315: if hasOpenFights → today  ← THIS IS THE BUG
 
-**4. Add `public/site-1mg.webmanifest`**
-- A separate PWA manifest for 1mg.live with:
-  - name: "1MG.live"
-  - short_name: "1MG.live"
-  - description: conversion-focused copy
-  - icons pointing to the 1mglive logo
-- The inline script in index.html will swap the manifest link when on 1mg.live
+Fixed:
+  NEW CHECK: if event_date's calendar day < today's calendar day → past
+  Then: if hasOpenFights or same calendar day → today
+```
 
-**5. Update `LandingPage.tsx`**
-- Add `useSeoMeta()` call with platform-specific title and description:
-  - Title: "1MG.live — Launch Your Own Predictions App in Minutes"
-  - Description: "Start a sports predictions business with your own branded app. Built-in payments, live events, and instant payouts. No coding required. One-time $2,400 setup."
+**File 2: `src/components/SocialShareModal.tsx`** — Accept operator branding props
 
-### Google Description Copy
-- **Homepage**: "Start a sports predictions business with your own branded app. Built-in payments, live events, and instant payouts. No coding required."
-- **OG title**: "1MG.live — Your Predictions App, Your Brand, Your Revenue"
+- Add optional props: `operatorBrandName`, `operatorLogoUrl`, `operatorSubdomain`
+- When present, replace "1MGAMING" with operator brand name
+- Replace pyramid logo with operator logo (fallback to pyramid)
+- Change share URL from `1mgaming.com/predictions` to `{subdomain}.1mg.live`
+- Update download filename to use operator brand
 
-### Files changed
-1. `public/images/1mglive-logo.png` (new — copied from upload)
-2. `index.html` — domain-aware inline script for title/favicon/meta swap
-3. `src/components/seo/SeoMeta.tsx` — domain-aware SITE_URL and og:site_name
-4. `src/pages/platform/LandingPage.tsx` — add useSeoMeta call
-5. `public/site-1mg.webmanifest` (new — PWA manifest for 1mg.live)
+**File 3: `src/pages/platform/OperatorApp.tsx`** — Pass operator branding to share modal
+
+- Pass `operator.brand_name`, `operator.logo_url`, and `operator.subdomain` through to `PredictionSuccessScreen` and `SocialShareModal`
+
+**File 4: `src/components/predictions/PredictionSuccessScreen.tsx`** — Forward operator props
+
+- Accept and forward `operatorBrandName`, `operatorLogoUrl`, `operatorSubdomain` to `SocialShareModal`
+
+**File 5: `src/components/predictions/PredictionModal.tsx`** — Thread operator props through
+
+- Accept and forward operator branding props to `PredictionSuccessScreen`
+
+---
+
+### Technical Details
+
+**Date fix logic:**
+```typescript
+// Before the hasOpenFights check, add:
+const eventDay = eventMs ? new Date(eventMs).toDateString() : null;
+const isPastDay = eventDay != null && eventDay !== todayStr && eventMs! < nowMs;
+
+// Then in the categorization:
+} else if (isPastDay) {
+  past.push([eventName, group]);
+} else if (hasOpenFights || ...) {
+  today.push([eventName, group]);
+}
+```
+
+**Operator share URL:**
+```typescript
+function buildShareUrl(referralCode?: string, operatorSubdomain?: string): string {
+  const base = operatorSubdomain
+    ? `https://${operatorSubdomain}.1mg.live`
+    : "https://1mgaming.com/predictions";
+  if (referralCode) return `${base}?ref=${referralCode}`;
+  return base;
+}
+```
+
+**Auto-claim messaging:** Already correct in `PastEventsSection`. The claim button is a manual safety fallback — no changes needed.
 
