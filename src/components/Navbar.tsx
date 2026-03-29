@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useWallet } from "@/hooks/useWallet";
 import { usePrivy } from "@privy-io/react-auth";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
-import { Home, Wallet, Menu, X, Coins, Volume2, VolumeX, Bell, BellOff, Trophy, ChevronDown, LogOut, ArrowRightLeft, Sparkles, User, Swords, Sun, Moon } from "lucide-react";
+import { Home, Wallet, Menu, X, Coins, Volume2, VolumeX, Bell, BellOff, Trophy, ChevronDown, LogOut, ArrowRightLeft, User, Swords, Sun, Moon } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import { WalletButton } from "./WalletButton";
 import { PrivyLoginButton } from "./PrivyLoginButton";
