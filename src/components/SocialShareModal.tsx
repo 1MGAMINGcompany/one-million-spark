@@ -138,7 +138,7 @@ export default function SocialShareModal(props: ShareModalProps) {
 
   const handleNativeShare = useCallback(() => {
     if (navigator.share) {
-      navigator.share({ title: "1MGAMING", text: caption, url: shareUrl });
+      navigator.share({ title: brandName, text: caption, url: shareUrl });
       logShareAction(variant, "native_share", wallet);
     } else {
       handleCopyLink();
