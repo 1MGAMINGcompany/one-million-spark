@@ -106,6 +106,8 @@ interface Fight {
   commission_bps: number;
   featured: boolean;
   trading_allowed: boolean;
+  // Visibility
+  visibility: string;
   // Polymarket mapping
   polymarket_market_id: string | null;
   polymarket_condition_id: string | null;
