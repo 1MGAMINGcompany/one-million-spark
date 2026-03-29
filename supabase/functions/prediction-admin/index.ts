@@ -993,6 +993,96 @@ Deno.serve(async (req) => {
       return json({ fight: data });
     }
 
+    // ── Promo Code Management ──
+
+    if (action === "createPromoCode") {
+      const { code, discount_type, discount_value, max_uses, expires_at } = body;
+      if (!code || !discount_type) return json({ error: "Missing code or discount_type" }, 400);
+      if (!["full", "percent", "fixed"].includes(discount_type)) return json({ error: "Invalid discount_type" }, 400);
+
+      const { data, error } = await supabase
+        .from("promo_codes")
+        .insert({
+          code: code.toUpperCase(),
+          discount_type,
+          discount_value: discount_value || 0,
+          max_uses: max_uses || 1,
+          expires_at: expires_at || null,
+          created_by: wallet,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return json({ promo: data });
+    }
+
+    if (action === "deletePromoCode") {
+      const { promo_id } = body;
+      if (!promo_id) return json({ error: "Missing promo_id" }, 400);
+      const { error } = await supabase.from("promo_codes").delete().eq("id", promo_id);
+      if (error) throw error;
+      return json({ success: true });
+    }
+
+    if (action === "validatePromoCode") {
+      const { code } = body;
+      if (!code) return json({ error: "Missing code" }, 400);
+      const { data: promo } = await supabase
+        .from("promo_codes")
+        .select("*")
+        .eq("code", code.toUpperCase())
+        .maybeSingle();
+
+      if (!promo) return json({ valid: false, error: "Code not found" });
+      if (promo.uses_count >= promo.max_uses) return json({ valid: false, error: "Code fully redeemed" });
+      if (promo.expires_at && new Date(promo.expires_at) < new Date()) return json({ valid: false, error: "Code expired" });
+
+      let discounted_price = 2400;
+      if (promo.discount_type === "full") discounted_price = 0;
+      else if (promo.discount_type === "percent") discounted_price = Math.max(0, 2400 * (1 - promo.discount_value / 100));
+      else if (promo.discount_type === "fixed") discounted_price = Math.max(0, 2400 - promo.discount_value);
+
+      return json({ valid: true, discount_type: promo.discount_type, discount_value: promo.discount_value, discounted_price, promo_id: promo.id });
+    }
+
+    // ── Quick Platform Event Creation ──
+
+    if (action === "createPlatformFight") {
+      const { title, event_name, fighter_a_name, fighter_b_name, sport, event_date, featured, draw_allowed, home_logo, away_logo } = body;
+      if (!fighter_a_name || !fighter_b_name) return json({ error: "Both team names required" }, 400);
+
+      const { data: fight, error } = await supabase
+        .from("prediction_fights")
+        .insert({
+          title: title || `${fighter_a_name} vs ${fighter_b_name}`,
+          event_name: event_name || title || `${fighter_a_name} vs ${fighter_b_name}`,
+          fighter_a_name,
+          fighter_b_name,
+          status: "open",
+          source: "manual",
+          trading_allowed: true,
+          featured: featured || false,
+          home_logo: home_logo || null,
+          away_logo: away_logo || null,
+          commission_bps: 100, // 1% platform fee only
+        })
+        .select("id")
+        .single();
+
+      if (error) throw error;
+
+      await supabase.from("automation_logs").insert({
+        action: "create_platform_fight",
+        fight_id: fight.id,
+        admin_wallet: wallet,
+        source: "prediction-admin",
+        details: { sport, event_date, draw_allowed },
+      });
+
+      return json({ fight_id: fight.id, success: true });
+    }
+
     return json({ error: "Unknown action" }, 400);
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), {
