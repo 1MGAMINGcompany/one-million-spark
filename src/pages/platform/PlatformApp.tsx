@@ -11,6 +11,7 @@ import PurchasePage from "./PurchasePage";
 import BuyPredictionsApp from "./BuyPredictionsApp";
 import HelpCenter from "@/pages/HelpCenter";
 import HelpArticle from "@/pages/HelpArticle";
+import PlatformAdmin from "./PlatformAdmin";
 
 /** Extracts privy DID from JWT without remote verification */
 function extractPrivyDid(token: string): string | null {
