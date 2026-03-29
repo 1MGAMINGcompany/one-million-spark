@@ -1,7 +1,12 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 
-const SITE_URL = "https://1mgaming.com";
+function isPlatformDomain() {
+  const h = window.location.hostname;
+  return h === "1mg.live" || h === "www.1mg.live" || h.endsWith(".1mg.live");
+}
+
+const SITE_URL = isPlatformDomain() ? "https://1mg.live" : "https://1mgaming.com";
 
 interface SeoMetaProps {
   title: string;
