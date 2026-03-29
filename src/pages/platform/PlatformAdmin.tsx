@@ -10,9 +10,11 @@ import { toast } from "sonner";
 import { detectSport, type SportType } from "@/lib/detectSport";
 import { formatEventDateTime } from "@/lib/formatEventLocalDateTime";
 import PlatformEventCreator from "@/components/admin/PlatformEventCreator";
+import PromoCodeManager from "@/components/admin/PromoCodeManager";
+import { Link } from "react-router-dom";
 import {
   Shield, Loader2, Trash2, Lock, Play, CheckCircle, Trophy,
-  Download, Globe, Calendar, Users, RefreshCw, Search,
+  Download, Globe, Calendar, Users, RefreshCw, Search, ArrowLeft,
 } from "lucide-react";
 
 // ── Types ──
