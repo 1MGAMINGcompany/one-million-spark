@@ -93,14 +93,14 @@ export function getCautionMessage(m: MarketData): string {
   const delta = Math.abs(m.priceA - m.priceB);
 
   if (liq === "Low")
-    return "Low liquidity can make this market move quickly.";
+    return "Lower liquidity — price may shift on smaller entries.";
   if (conf === "Close Market")
-    return "This is a close market with no strong favorite.";
+    return "Close market with no clear favorite. Price direction is uncertain.";
   if (trend === "Rising" && delta > 0.3)
-    return "Recent movement suggests momentum, but volatility remains possible.";
+    return "Recent momentum is strong, but reversals remain possible.";
   if (conf === "Strong Favorite")
-    return "This market shows strong activity and clearer price direction.";
-  return "Insights are informational and not guaranteed outcomes.";
+    return "Market leans strongly to one side with healthy activity.";
+  return "Market insights are informational only — not guaranteed outcomes.";
 }
 
 /* ── Local AI insight ── */
@@ -115,33 +115,33 @@ export function generateLocalInsight(m: MarketData): string {
 
   const parts: string[] = [];
 
-  // Opening
+  // Opening — sharper, less generic
   if (conf === "Strong Favorite") {
-    parts.push(`${favored} is currently favored at ${pct}%, with stronger price support from the market.`);
+    parts.push(`Market leans strongly toward ${favored} at ${pct}%, backed by clear price support.`);
   } else if (conf === "Moderate Lean") {
     parts.push(`${favored} holds a moderate edge at ${pct}%, though the market hasn't fully committed.`);
   } else if (conf === "Close Market") {
-    parts.push(`This is a tight market with no dominant favorite — both sides are priced near ${pct}%.`);
+    parts.push(`Close market with no strong favorite — both sides priced near ${pct}%.`);
   } else {
     parts.push(`Market pricing is still developing for this matchup.`);
   }
 
   // Trend
   if (trend === "Rising") {
-    parts.push("Recent activity shows upward price movement, suggesting growing market confidence.");
+    parts.push("Recent activity shows upward movement, suggesting growing confidence.");
   } else if (trend === "Falling") {
-    parts.push("Market sentiment appears to be shifting — watch for further changes.");
+    parts.push("Sentiment appears to be shifting — watch for further movement.");
   } else {
-    parts.push("The market is currently stable with no strong directional bias.");
+    parts.push("Currently stable with no strong directional bias.");
   }
 
-  // Volume
+  // Volume — concise
   if (vol >= 50_000) {
-    parts.push("High trading volume indicates strong market interest and more reliable pricing.");
+    parts.push("High volume indicates strong interest and more reliable pricing.");
   } else if (vol >= 5_000) {
-    parts.push("Moderate volume — enough liquidity for reasonable price signals.");
+    parts.push("Moderate volume — enough for reasonable price signals.");
   } else if (vol > 0) {
-    parts.push("Volume is still light, so prices may react more sharply to new entries.");
+    parts.push("Volume is light, so prices may react sharply to new entries.");
   }
 
   return parts.join(" ");
