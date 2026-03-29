@@ -2,7 +2,7 @@ import { ArrowRight, Check, ChevronRight, Globe, Shield, Zap, DollarSign, Users,
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { usePrivy } from "@privy-io/react-auth";
-import SeoMeta from "@/components/seo/SeoMeta";
+import { useSeoMeta } from "@/components/seo/SeoMeta";
 import JsonLd from "@/components/seo/JsonLd";
 
 const FEATURES = [
