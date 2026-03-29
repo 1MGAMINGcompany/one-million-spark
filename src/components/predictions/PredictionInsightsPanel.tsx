@@ -284,7 +284,7 @@ export default function PredictionInsightsPanel({ fight }: { fight: Fight }) {
           <div className="flex items-center gap-1.5">
             {isAI ? <Sparkles className="w-3.5 h-3.5 text-primary" /> : <Brain className="w-3.5 h-3.5 text-accent" />}
             <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-accent">
-              {isAI ? "AI Market Read" : "Market Read"}
+              Quick Insight
             </span>
             {isAI && (
               <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-primary/15 text-primary">AI</span>
