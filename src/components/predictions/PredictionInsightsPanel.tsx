@@ -236,7 +236,7 @@ export default function PredictionInsightsPanel({ fight }: { fight: Fight }) {
       <div className="px-3 sm:px-4 py-3 border-b border-border/15">
         <div className="flex items-center gap-1.5 mb-2.5">
           <BarChart3 className="w-3.5 h-3.5 text-primary" />
-          <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-primary">Market Overview</span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-primary">Market Info</span>
         </div>
         <div className="grid grid-cols-4 gap-2 sm:gap-3 text-center">
           <div className="space-y-0.5">
