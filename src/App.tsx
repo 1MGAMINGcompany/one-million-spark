@@ -51,7 +51,7 @@ import FightPredictionAdmin from "./pages/FightPredictionAdmin";
 import MatchCenter from "./pages/MatchCenter";
 import ReferralAdmin from "./pages/ReferralAdmin";
 import DebugHUD from "./components/DebugHUD";
-import AIAgentHelperOverlay from "./components/AIAgentHelperOverlay";
+// import AIAgentHelperOverlay from "./components/AIAgentHelperOverlay";
 import { isDebugEnabled } from "@/lib/debugLog";
 import { useReferralCapture } from "@/hooks/useReferralCapture";
 import { useWallet } from "@/hooks/useWallet";
