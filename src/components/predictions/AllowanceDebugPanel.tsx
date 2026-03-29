@@ -5,7 +5,8 @@ import { usePolygonUSDC, FEE_RELAYER_ADDRESS } from "@/hooks/usePolygonUSDC";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
 import { isDebugEnabled } from "@/lib/debugLog";
 
-const USDC_CONTRACT = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359";
+// Bridged USDC.e — canonical token (matches trading + settlement)
+const USDC_CONTRACT = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
 const POLYGON_RPCS = [
   "https://polygon-bor-rpc.publicnode.com",
   "https://polygon.drpc.org",

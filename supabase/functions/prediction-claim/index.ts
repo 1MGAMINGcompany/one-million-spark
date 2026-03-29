@@ -20,7 +20,8 @@ const MAX_CLAIM_USD = 500;
 const DAILY_CEILING_USD = 5_000;
 
 const TREASURY_WALLET = "0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d";
-const USDC_CONTRACT = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359";
+// Bridged USDC.e — canonical token for all prediction money flows
+const USDC_CONTRACT = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
 const USDC_DECIMALS = 6;
 const POLYGON_RPC = "https://polygon-rpc.com";
 
