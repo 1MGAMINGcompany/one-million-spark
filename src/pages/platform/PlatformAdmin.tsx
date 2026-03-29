@@ -254,6 +254,7 @@ export default function PlatformAdmin() {
     setBrowseMessage("");
     setBrowseResults([]);
     setSelectedEvents(new Set());
+    setBrowseDebugStats(null);
     try {
       const { data, error } = await supabase.functions.invoke("polymarket-sync", {
         body: { action: "browse_league", wallet: address, league_key: league },
@@ -265,6 +266,7 @@ export default function PlatformAdmin() {
         setBrowseMessage(`No active Polymarket markets for ${leagueLabel} right now. Season may be in offseason.`);
       }
       setBrowseResults(events);
+      if (data?.debug_stats) setBrowseDebugStats(data.debug_stats);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
