@@ -50,6 +50,7 @@ import FightPredictions from "./pages/FightPredictions";
 import FightPredictionAdmin from "./pages/FightPredictionAdmin";
 import MatchCenter from "./pages/MatchCenter";
 import ReferralAdmin from "./pages/ReferralAdmin";
+import PlatformAdminPage from "./pages/platform/PlatformAdmin";
 import DebugHUD from "./components/DebugHUD";
 // import AIAgentHelperOverlay from "./components/AIAgentHelperOverlay";
 import { isDebugEnabled } from "@/lib/debugLog";
