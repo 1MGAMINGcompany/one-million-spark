@@ -449,6 +449,7 @@ export default function FightCard({
         {/* Insights Panel (soccer) */}
         <div className="mx-4 sm:mx-6 mb-3">
           <PredictionInsightsPanel fight={fight} />
+          <SmartMoneyTracker fight={fight} />
         </div>
 
         {/* Draw info */}
