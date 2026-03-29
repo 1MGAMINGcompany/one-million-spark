@@ -473,9 +473,6 @@ export default function FightPredictionAdmin() {
         {/* ── Quick Platform Event (Flagship) ── */}
         <PlatformEventCreator wallet={address!} defaultVisibility="flagship" />
 
-        {/* ── 1MG.live Platform Events ── */}
-        <PlatformAdminSection wallet={address!} />
-
         {/* ── Promo Codes ── */}
         <PromoCodeManager wallet={address!} />
 
