@@ -191,7 +191,7 @@ export default function FightPredictions() {
 
   const loadFights = useCallback(async () => {
     const [fightsRes, eventsRes] = await Promise.all([
-      supabase.from("prediction_fights").select("*").not("status", "eq", "draft").order("created_at", { ascending: true }),
+      supabase.from("prediction_fights").select("*").not("status", "eq", "draft").in("visibility", ["flagship", "all"]).is("operator_id", null).order("created_at", { ascending: true }),
       supabase.from("prediction_events").select("*").eq("status", "approved").order("event_date", { ascending: true }),
     ]);
     if (fightsRes.data) setFights(fightsRes.data as any);

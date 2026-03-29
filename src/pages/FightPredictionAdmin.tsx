@@ -36,6 +36,7 @@ import { formatEventDateTime } from "@/lib/formatEventLocalDateTime";
 import PromoCodeManager from "@/components/admin/PromoCodeManager";
 import PlatformEventCreator from "@/components/admin/PlatformEventCreator";
 import OperatorAdminSection from "@/components/admin/OperatorAdminSection";
+import PlatformAdminSection from "@/components/admin/PlatformAdminSection";
 
 /** Convert a datetime-local value to a full ISO string preserving the local offset */
 function localDatetimeToISO(val: string): string {
@@ -464,8 +465,11 @@ export default function FightPredictionAdmin() {
           </div>
         </div>
 
-        {/* ── Quick Platform Event ── */}
-        <PlatformEventCreator wallet={address!} />
+        {/* ── Quick Platform Event (Flagship) ── */}
+        <PlatformEventCreator wallet={address!} defaultVisibility="flagship" />
+
+        {/* ── 1MG.live Platform Events ── */}
+        <PlatformAdminSection wallet={address!} />
 
         {/* ── Promo Codes ── */}
         <PromoCodeManager wallet={address!} />

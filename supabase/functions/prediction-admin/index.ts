@@ -1049,8 +1049,10 @@ Deno.serve(async (req) => {
     // ── Quick Platform Event Creation ──
 
     if (action === "createPlatformFight") {
-      const { title, event_name, fighter_a_name, fighter_b_name, sport, event_date, featured, draw_allowed, home_logo, away_logo } = body;
+      const { title, event_name, fighter_a_name, fighter_b_name, sport, event_date, featured, draw_allowed, home_logo, away_logo, visibility } = body;
       if (!fighter_a_name || !fighter_b_name) return json({ error: "Both team names required" }, 400);
+
+      const validVisibility = ["flagship", "platform", "all"].includes(visibility) ? visibility : "all";
 
       const { data: fight, error } = await supabase
         .from("prediction_fights")
@@ -1066,6 +1068,7 @@ Deno.serve(async (req) => {
           home_logo: home_logo || null,
           away_logo: away_logo || null,
           commission_bps: 100, // 1% platform fee only
+          visibility: validVisibility,
         })
         .select("id")
         .single();
