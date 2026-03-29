@@ -6,6 +6,7 @@ import { Swords, Trophy, Loader2, HelpCircle, ChevronRight, Newspaper, ArrowUp, 
 import { detectSport, isOverSide, type SportType } from "@/lib/detectSport";
 import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
 import PredictionInsightsPanel from "./PredictionInsightsPanel";
+import SmartMoneyTracker from "./SmartMoneyTracker";
 
 export interface Fight {
   id: string;
