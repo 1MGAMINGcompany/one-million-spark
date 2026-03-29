@@ -161,7 +161,7 @@ const AppContent = () => {
         </Routes>
       </main>
       {!hideFooter && <Footer />}
-      <AIAgentHelperOverlay />
+      {/* <AIAgentHelperOverlay /> */}
       {isDebugEnabled() && <DebugHUD />}
     </div>
   );

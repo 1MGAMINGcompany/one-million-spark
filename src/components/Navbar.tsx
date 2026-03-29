@@ -371,14 +371,6 @@ const Navbar = () => {
                 <span>{isDark ? "Light Mode" : "Dark Mode"}</span>
               </button>
 
-              {/* Money AI Helper */}
-              <button
-                onClick={() => { play('ui_click'); setIsOpen(false); window.dispatchEvent(new Event("aihelper-show")); }}
-                className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-primary hover:bg-secondary transition-all duration-200"
-              >
-                <Sparkles size={20} />
-                <span>Money AI Helper</span>
-              </button>
 
             </div>
           </div>
