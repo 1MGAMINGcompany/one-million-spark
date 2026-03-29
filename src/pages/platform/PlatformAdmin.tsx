@@ -10,9 +10,11 @@ import { toast } from "sonner";
 import { detectSport, type SportType } from "@/lib/detectSport";
 import { formatEventDateTime } from "@/lib/formatEventLocalDateTime";
 import PlatformEventCreator from "@/components/admin/PlatformEventCreator";
+import PromoCodeManager from "@/components/admin/PromoCodeManager";
+import { Link } from "react-router-dom";
 import {
   Shield, Loader2, Trash2, Lock, Play, CheckCircle, Trophy,
-  Download, Globe, Calendar, Users, RefreshCw, Search,
+  Download, Globe, Calendar, Users, RefreshCw, Search, ArrowLeft,
 } from "lucide-react";
 
 // ── Types ──
@@ -184,10 +186,10 @@ export default function PlatformAdmin() {
     setBrowseResults([]);
     try {
       const { data, error } = await supabase.functions.invoke("polymarket-sync", {
-        body: { action: "browse_league", wallet: address, league },
+        body: { action: "browse_league", wallet: address, league_key: league },
       });
       if (error) throw error;
-      const events = data?.events || [];
+      const events = data?.results || [];
       if (events.length === 0) {
         const leagueLabel = BROWSE_LEAGUES.find(l => l.key === league)?.label || league;
         setBrowseMessage(`No active Polymarket markets for ${leagueLabel} right now. Season may be in offseason.`);
@@ -267,6 +269,11 @@ export default function PlatformAdmin() {
             <Globe className="w-6 h-6 text-blue-400" /> 1MG.live Admin
           </h1>
           <div className="flex items-center gap-2">
+            <Link to="/predictions/admin">
+              <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground hover:text-foreground">
+                <ArrowLeft className="w-3 h-3" /> Main Admin
+              </Button>
+            </Link>
             <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded-full">
               {activePlatformCount} active
             </span>
@@ -489,6 +496,9 @@ export default function PlatformAdmin() {
             </div>
           )}
         </Card>
+
+        {/* ═══ Promo Codes ═══ */}
+        <PromoCodeManager wallet={address!} />
 
         {/* ═══ Section C: Manual Fight Creator ═══ */}
         <Card className="bg-card border-border/50 p-4">
