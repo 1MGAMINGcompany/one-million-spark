@@ -168,6 +168,13 @@ export default function PlatformAdmin() {
   const [browseLoading, setBrowseLoading] = useState(false);
   const [browseMessage, setBrowseMessage] = useState("");
   const [importedIds, setImportedIds] = useState<Set<string>>(new Set());
+  const [browseDebugStats, setBrowseDebugStats] = useState<{
+    raw_fetched: number;
+    after_prop_filter: number;
+    after_date_filter: number;
+    after_all_filters: number;
+    rejection_breakdown: Record<string, number>;
+  } | null>(null);
 
   // Bulk import state
   const [selectedEvents, setSelectedEvents] = useState<Set<string>>(new Set());
