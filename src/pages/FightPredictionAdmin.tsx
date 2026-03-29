@@ -18,7 +18,7 @@ import {
   Shield, Plus, Lock, Trophy, Loader2, Play, CheckCircle, Ban,
   ArrowDown, Trash2, Eye, AlertTriangle, RefreshCw, Power, Download,
   Archive, EyeOff, Filter, ChevronUp, ChevronDown, Users, Settings,
-  Save,
+  Save, Globe,
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import {
@@ -36,7 +36,7 @@ import { formatEventDateTime } from "@/lib/formatEventLocalDateTime";
 import PromoCodeManager from "@/components/admin/PromoCodeManager";
 import PlatformEventCreator from "@/components/admin/PlatformEventCreator";
 import OperatorAdminSection from "@/components/admin/OperatorAdminSection";
-import PlatformAdminSection from "@/components/admin/PlatformAdminSection";
+// PlatformAdminSection removed — now at /admin/platform
 
 /** Convert a datetime-local value to a full ISO string preserving the local offset */
 function localDatetimeToISO(val: string): string {
@@ -106,6 +106,8 @@ interface Fight {
   commission_bps: number;
   featured: boolean;
   trading_allowed: boolean;
+  // Visibility
+  visibility: string;
   // Polymarket mapping
   polymarket_market_id: string | null;
   polymarket_condition_id: string | null;
@@ -459,6 +461,9 @@ export default function FightPredictionAdmin() {
             <Shield className="w-6 h-6 text-primary" /> Prediction Admin
           </h1>
           <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => navigate('/admin/platform')} className="gap-2">
+              <Globe className="w-4 h-4" /> 1MG.live
+            </Button>
             <Button variant="outline" size="sm" onClick={() => navigate('/referrals/admin')} className="gap-2">
               <Users className="w-4 h-4" /> Referrals
             </Button>
@@ -467,9 +472,6 @@ export default function FightPredictionAdmin() {
 
         {/* ── Quick Platform Event (Flagship) ── */}
         <PlatformEventCreator wallet={address!} defaultVisibility="flagship" />
-
-        {/* ── 1MG.live Platform Events ── */}
-        <PlatformAdminSection wallet={address!} />
 
         {/* ── Promo Codes ── */}
         <PromoCodeManager wallet={address!} />
@@ -1148,6 +1150,14 @@ function AdminFightCard({
           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/20 text-primary">🏠 NATIVE</span>
         )}
         <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted/50 text-muted-foreground">{commissionPct}% fee</span>
+        {/* Visibility badge */}
+        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+          fight.visibility === "platform" ? "bg-blue-500/20 text-blue-400" :
+          fight.visibility === "all" ? "bg-green-500/20 text-green-400" :
+          "bg-yellow-500/20 text-yellow-400"
+        }`}>
+          {fight.visibility === "platform" ? "1MG.live" : fight.visibility === "all" ? "Both" : "Flagship"}
+        </span>
         {fight.featured && (
           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400">⭐ FEATURED</span>
         )}

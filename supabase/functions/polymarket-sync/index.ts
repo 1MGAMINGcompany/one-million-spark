@@ -28,6 +28,19 @@ const PROP_KEYWORDS = [
   "moneyline alt",
   "over/under",
   "handicap",
+  "ko",
+  "knockout",
+  "goals",
+  "points",
+  "rounds",
+  "total",
+  "margin",
+  "first",
+  "how many",
+  "player props",
+  "stoppage",
+  "decision",
+  "submission",
 ];
 const POLITICS_KEYWORDS = [
   "election", "president", "congress", "senate", "vote",
@@ -791,6 +804,7 @@ async function importSingleEvent(
   wallet: string | null,
   importSource: string,
   sportType?: string | null,
+  visibility?: string | null,
 ): Promise<{ event_id: string; imported: number; is_past: boolean; warning?: string }> {
   const timeInfo = chooseSportsDisplayTime(gEvent);
   const chosenMs = timeInfo.chosen ? new Date(timeInfo.chosen).getTime() : null;
@@ -840,6 +854,8 @@ async function importSingleEvent(
       tokenIds = JSON.parse(market.clobTokenIds || "[]");
     } catch { continue; }
 
+    // Reject markets with more than 3 outcomes (prop markets)
+    if (outcomes.length > 3) continue;
     if (outcomes.length < 2 || tokenIds.length < 2) continue;
 
     // Skip prop/more-markets at market level
@@ -908,6 +924,8 @@ async function importSingleEvent(
         }
       } catch { /* non-fatal */ }
 
+      const fightVisibility = visibility || "all";
+
       await supabase.from("prediction_fights").insert({
         title: market.groupItemTitle || market.question,
         fighter_a_name: outcomes[0],
@@ -929,6 +947,8 @@ async function importSingleEvent(
         price_a: parseFloat(outcomePrices[0] || "0"),
         price_b: parseFloat(outcomePrices[1] || "0"),
         status: "open",
+        visibility: fightVisibility,
+        event_date: timeInfo.chosen || gEvent.startDate || null,
       });
     }
     imported++;
@@ -1364,13 +1384,13 @@ Deno.serve(async (req) => {
     // ACTION: import_single
     // ══════════════════════════════════════════════════
     if (action === "import_single") {
-      const { polymarket_event_id, import_source, sport_type } = body;
+      const { polymarket_event_id, import_source, sport_type, visibility } = body;
       if (!polymarket_event_id) return json({ error: "Missing polymarket_event_id" }, 400);
 
       const gEvent = await fetchEventById(polymarket_event_id);
       if (!gEvent) return json({ error: `Event not found (${polymarket_event_id})` }, 404);
 
-      const result = await importSingleEvent(supabase, gEvent, wallet, import_source || "manual", sport_type || null);
+      const result = await importSingleEvent(supabase, gEvent, wallet, import_source || "manual", sport_type || null, visibility || null);
       return json({ success: true, ...result });
     }
 

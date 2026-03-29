@@ -50,6 +50,7 @@ import FightPredictions from "./pages/FightPredictions";
 import FightPredictionAdmin from "./pages/FightPredictionAdmin";
 import MatchCenter from "./pages/MatchCenter";
 import ReferralAdmin from "./pages/ReferralAdmin";
+import PlatformAdminPage from "./pages/platform/PlatformAdmin";
 import DebugHUD from "./components/DebugHUD";
 // import AIAgentHelperOverlay from "./components/AIAgentHelperOverlay";
 import { isDebugEnabled } from "@/lib/debugLog";
@@ -156,6 +157,7 @@ const AppContent = () => {
           <Route path="/predictions/:fightId" element={<MatchCenter />} />
           <Route path="/predictions/admin" element={<FightPredictionAdmin />} />
           <Route path="/referrals/admin" element={<ReferralAdmin />} />
+          <Route path="/admin/platform" element={<PlatformAdminPage />} />
           <Route path="/debug/join" element={isDebugEnabled() ? <DebugJoinRoom /> : <Navigate to="/" replace />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

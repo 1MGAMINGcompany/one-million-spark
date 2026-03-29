@@ -11,6 +11,7 @@ import PurchasePage from "./PurchasePage";
 import BuyPredictionsApp from "./BuyPredictionsApp";
 import HelpCenter from "@/pages/HelpCenter";
 import HelpArticle from "@/pages/HelpArticle";
+import PlatformAdmin from "./PlatformAdmin";
 
 /** Extracts privy DID from JWT without remote verification */
 function extractPrivyDid(token: string): string | null {
@@ -76,6 +77,7 @@ export default function PlatformApp({ context }: PlatformAppProps) {
       <Route path="/dashboard" element={<RequireActiveOperator><OperatorDashboard /></RequireActiveOperator>} />
       <Route path="/help" element={<HelpCenter />} />
       <Route path="/help/:slug" element={<HelpArticle />} />
+      <Route path="/admin" element={<PlatformAdmin />} />
       <Route path="/terms-of-service" element={<LandingPage />} />
       <Route path="/privacy-policy" element={<LandingPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />

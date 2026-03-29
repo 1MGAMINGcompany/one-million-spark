@@ -1069,6 +1069,7 @@ Deno.serve(async (req) => {
           away_logo: away_logo || null,
           commission_bps: 100, // 1% platform fee only
           visibility: validVisibility,
+          event_date: event_date || null,
         })
         .select("id")
         .single();
