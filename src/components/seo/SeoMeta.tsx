@@ -67,7 +67,7 @@ export function useSeoMeta({ title, description, path, ogType = "website", ogIma
     setMeta("name", "twitter:image", image);
 
     // Site-level
-    setMeta("property", "og:site_name", "1M Gaming");
+    setMeta("property", "og:site_name", isPlatformDomain() ? "1MG.live" : "1M Gaming");
   }, [title, description, path, ogType, ogImage, location.pathname]);
 }
 

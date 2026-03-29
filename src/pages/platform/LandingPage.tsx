@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { usePrivy } from "@privy-io/react-auth";
 import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
+import { useSeoMeta } from "@/components/seo/SeoMeta";
 
 import footballImg from "@/assets/football-1mg.png";
 import basketballImg from "@/assets/basketball-1mg.png";
