@@ -644,9 +644,19 @@ export default function FightCard({
           </div>
         )}
 
-        {/* Insights Panel (non-soccer) */}
-        <PredictionInsightsPanel fight={fight} />
-        <SmartMoneyTracker fight={fight} />
+        {/* Collapsible Insights (non-soccer) */}
+        <div className="mt-2">
+          <Collapsible>
+            <CollapsibleTrigger className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors w-full justify-center py-1">
+              <ChevronDown className="w-3.5 h-3.5" />
+              <span className="font-semibold">Show Insights</span>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-2 space-y-2">
+              <PredictionInsightsPanel fight={fight} />
+              <SmartMoneyTracker fight={fight} />
+            </CollapsibleContent>
+          </Collapsible>
+        </div>
 
         {/* Draw info */}
         {["draw", "refund_pending", "refunds_processing", "refunds_complete"].includes(fight.status) && (
