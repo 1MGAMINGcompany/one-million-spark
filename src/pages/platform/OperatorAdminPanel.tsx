@@ -1,12 +1,16 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Globe, DollarSign, Users, Calendar, ExternalLink } from "lucide-react";
+import { Globe, DollarSign, Users, Calendar, ExternalLink, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 /**
  * Admin panel for viewing all operators (mounted inside 1mgaming admin).
- * Read-only visibility into operator ecosystem.
+ * Read-only visibility into operator ecosystem with search/filter.
  */
 export default function OperatorAdminPanel() {
+  const [search, setSearch] = useState("");
+
   const { data: operators, isLoading } = useQuery({
     queryKey: ["admin_operators"],
     queryFn: async () => {
@@ -57,6 +61,16 @@ export default function OperatorAdminPanel() {
     return <div className="text-muted-foreground text-sm py-8 text-center">No operators yet.</div>;
   }
 
+  const q = search.toLowerCase().trim();
+  const filtered = q
+    ? operators.filter((op: any) =>
+        (op.brand_name || "").toLowerCase().includes(q) ||
+        (op.subdomain || "").toLowerCase().includes(q) ||
+        (op.user_id || "").toLowerCase().includes(q) ||
+        (op.status || "").toLowerCase().includes(q)
+      )
+    : operators;
+
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
@@ -64,8 +78,21 @@ export default function OperatorAdminPanel() {
         1MG Operators ({operators.length})
       </h2>
 
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search by brand, subdomain, or user ID..."
+          className="pl-9 bg-card border-border"
+        />
+      </div>
+
+      <div className="text-xs text-muted-foreground">{filtered.length} result{filtered.length !== 1 ? "s" : ""}</div>
+
       <div className="space-y-3">
-        {operators.map((op: any) => {
+        {filtered.map((op: any) => {
           const rev = revenueMap?.[op.id];
           const evCount = eventCounts?.[op.id] || 0;
           const settings = op.operator_settings?.[0] || op.operator_settings;
@@ -96,6 +123,12 @@ export default function OperatorAdminPanel() {
                 }`}>
                   {op.status}
                 </span>
+              </div>
+
+              {/* Metadata row */}
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-muted-foreground mb-3">
+                <span>User: <span className="font-mono text-foreground/60">{op.user_id?.slice(0, 12)}…</span></span>
+                <span>Created: {new Date(op.created_at).toLocaleDateString()}</span>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
