@@ -77,6 +77,9 @@ export default function PredictionSuccessScreen({
   showShare,
   setShowShare,
   tradeResult,
+  operatorBrandName,
+  operatorLogoUrl,
+  operatorSubdomain,
 }: Props) {
   // Privy access token for authenticated polling
   const { getAccessToken } = usePrivy();
