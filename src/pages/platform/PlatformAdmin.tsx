@@ -506,7 +506,7 @@ export default function PlatformAdmin() {
                 <Button
                   size="sm"
                   className="h-7 text-[10px] px-4 gap-1"
-                  onClick={handleBulkImport}
+                  onClick={() => handleBulkImport()}
                   disabled={bulkImporting}
                 >
                   {bulkImporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
