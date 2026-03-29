@@ -1326,6 +1326,21 @@ Deno.serve(async (req) => {
         filter_message: results.length === 0 && rawEvents.length > 0
           ? `Data found from Polymarket (${rawEvents.length} events), but local filters rejected all results.`
           : undefined,
+        // Debug stats for admin panel
+        debug_stats: {
+          raw_fetched: rawEvents.length,
+          after_prop_filter: rawEvents.length - rejected.filter(r => r.fixtureReason && !r.dateReason).length,
+          after_date_filter: rawEvents.length - rejected.filter(r => r.dateReason).length,
+          after_all_filters: results.length,
+          rejection_breakdown: (() => {
+            const reasons: Record<string, number> = {};
+            for (const r of rejected) {
+              const reason = (r.dateReason || r.fixtureReason || "unknown").split(":")[0];
+              reasons[reason] = (reasons[reason] || 0) + 1;
+            }
+            return reasons;
+          })(),
+        },
         telemetry: tel,
       });
     }
