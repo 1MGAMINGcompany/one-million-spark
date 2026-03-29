@@ -723,6 +723,48 @@ export type Database = {
           },
         ]
       }
+      operator_revenue: {
+        Row: {
+          created_at: string
+          entry_amount_usdc: number
+          entry_id: string | null
+          fight_id: string
+          id: string
+          operator_fee_usdc: number
+          operator_id: string
+          payout_status: string
+          platform_fee_usdc: number
+          total_fee_usdc: number
+          trade_order_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          entry_amount_usdc?: number
+          entry_id?: string | null
+          fight_id: string
+          id?: string
+          operator_fee_usdc?: number
+          operator_id: string
+          payout_status?: string
+          platform_fee_usdc?: number
+          total_fee_usdc?: number
+          trade_order_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          entry_amount_usdc?: number
+          entry_id?: string | null
+          fight_id?: string
+          id?: string
+          operator_fee_usdc?: number
+          operator_id?: string
+          payout_status?: string
+          platform_fee_usdc?: number
+          total_fee_usdc?: number
+          trade_order_id?: string | null
+        }
+        Relationships: []
+      }
       operator_settings: {
         Row: {
           allowed_sports: string[] | null
@@ -1138,6 +1180,7 @@ export type Database = {
           reward_lamports: number | null
           reward_usd: number | null
           shares: number
+          source_operator_id: string | null
           tx_signature: string | null
           wallet: string
         }
@@ -1158,6 +1201,7 @@ export type Database = {
           reward_lamports?: number | null
           reward_usd?: number | null
           shares: number
+          source_operator_id?: string | null
           tx_signature?: string | null
           wallet: string
         }
@@ -1178,6 +1222,7 @@ export type Database = {
           reward_lamports?: number | null
           reward_usd?: number | null
           shares?: number
+          source_operator_id?: string | null
           tx_signature?: string | null
           wallet?: string
         }
@@ -1379,6 +1424,8 @@ export type Database = {
           home_logo: string | null
           id: string
           method: string | null
+          operator_event_id: string | null
+          operator_id: string | null
           polymarket_active: boolean | null
           polymarket_competitive: number | null
           polymarket_condition_id: string | null
@@ -1444,6 +1491,8 @@ export type Database = {
           home_logo?: string | null
           id?: string
           method?: string | null
+          operator_event_id?: string | null
+          operator_id?: string | null
           polymarket_active?: boolean | null
           polymarket_competitive?: number | null
           polymarket_condition_id?: string | null
@@ -1509,6 +1558,8 @@ export type Database = {
           home_logo?: string | null
           id?: string
           method?: string | null
+          operator_event_id?: string | null
+          operator_id?: string | null
           polymarket_active?: boolean | null
           polymarket_competitive?: number | null
           polymarket_condition_id?: string | null
@@ -1687,6 +1738,7 @@ export type Database = {
           requested_amount_usdc: number
           side: string
           slippage_bps: number
+          source_operator_id: string | null
           status: string
           submitted_at: string | null
           token_id: string | null
@@ -1717,6 +1769,7 @@ export type Database = {
           requested_amount_usdc?: number
           side: string
           slippage_bps?: number
+          source_operator_id?: string | null
           status?: string
           submitted_at?: string | null
           token_id?: string | null
@@ -1747,6 +1800,7 @@ export type Database = {
           requested_amount_usdc?: number
           side?: string
           slippage_bps?: number
+          source_operator_id?: string | null
           status?: string
           submitted_at?: string | null
           token_id?: string | null
