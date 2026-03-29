@@ -6,6 +6,7 @@ import OperatorOnboarding from "./OperatorOnboarding";
 import OperatorDashboard from "./OperatorDashboard";
 import OperatorApp from "./OperatorApp";
 import PurchasePage from "./PurchasePage";
+import BuyPredictionsApp from "./BuyPredictionsApp";
 import HelpCenter from "@/pages/HelpCenter";
 import HelpArticle from "@/pages/HelpArticle";
 
@@ -28,6 +29,7 @@ export default function PlatformApp({ context }: PlatformAppProps) {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
+      <Route path="/buy-predictions-app" element={<BuyPredictionsApp />} />
       <Route path="/purchase" element={<RequireAuth><PurchasePage /></RequireAuth>} />
       <Route path="/onboarding" element={<RequireAuth><OperatorOnboarding /></RequireAuth>} />
       <Route path="/dashboard" element={<RequireAuth><OperatorDashboard /></RequireAuth>} />
