@@ -1491,6 +1491,7 @@ export type Database = {
           trading_allowed: boolean
           updated_at: string
           venue: string | null
+          visibility: string
           weight_class: string | null
           winner: string | null
         }
@@ -1558,6 +1559,7 @@ export type Database = {
           trading_allowed?: boolean
           updated_at?: string
           venue?: string | null
+          visibility?: string
           weight_class?: string | null
           winner?: string | null
         }
@@ -1625,6 +1627,7 @@ export type Database = {
           trading_allowed?: boolean
           updated_at?: string
           venue?: string | null
+          visibility?: string
           weight_class?: string | null
           winner?: string | null
         }

@@ -1,0 +1,1 @@
+ALTER TABLE prediction_fights ADD COLUMN visibility text NOT NULL DEFAULT 'all';
