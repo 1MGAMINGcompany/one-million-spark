@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useOperatorBySubdomain, useOperatorSettings } from "@/hooks/useOperator";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import EventSection, { parseSport } from "@/components/predictions/EventSection";
 import PredictionModal from "@/components/predictions/PredictionModal";
 import { WalletGateModal } from "@/components/WalletGateModal";
+import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
 import type { Fight } from "@/components/predictions/FightCard";
 import type { TradeResult } from "@/components/predictions/tradeResultTypes";
 import { isPropMarket } from "@/lib/detectSport";
@@ -31,6 +33,7 @@ interface OperatorAppProps {
 }
 
 export default function OperatorApp({ subdomain }: OperatorAppProps) {
+  const { t } = useTranslation();
   const { data: operator, isLoading } = useOperatorBySubdomain(subdomain);
   const { data: settings } = useOperatorSettings(operator?.id ?? null);
 
@@ -52,7 +55,6 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [userEntries, setUserEntries] = useState<any[]>([]);
   const [claiming, setClaiming] = useState(false);
 
-  // Operator's own fights (via operator_id on prediction_fights)
   const { data: operatorFights } = useQuery({
     queryKey: ["operator_fights", operator?.id],
     queryFn: async () => {
@@ -68,7 +70,6 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     refetchInterval: 15000,
   });
 
-  // Platform shared fights
   const allowedSports = settings?.allowed_sports || [];
   const { data: platformFights } = useQuery({
     queryKey: ["platform_fights_operator", settings?.show_platform_events],
@@ -86,7 +87,6 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     refetchInterval: 15000,
   });
 
-  // Load user entries
   const loadUserEntries = useCallback(async () => {
     if (!address) return;
     const { data } = await supabase.from("prediction_entries").select("*").eq("wallet", address);
@@ -95,13 +95,10 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
   useEffect(() => { loadUserEntries(); }, [loadUserEntries]);
 
-  // Combine and filter fights with proper ordering:
-  // 1. Featured operator events  2. Other operator events  3. Platform events
   const allFights = useMemo(() => {
     const opFights = (operatorFights || []).filter(f => !isPropMarket(f));
     const featuredOp = opFights.filter(f => f.featured);
     const normalOp = opFights.filter(f => !f.featured);
-
     const platFights = (platformFights || []).filter(f => {
       if (isPropMarket(f)) return false;
       if (allowedSports.length > 0) {
@@ -112,11 +109,9 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       }
       return true;
     });
-
     return [...featuredOp, ...normalOp, ...platFights];
   }, [operatorFights, platformFights, allowedSports]);
 
-  // Group fights by event
   const groupedEvents = useMemo(() => {
     const groups: Record<string, { fights: Fight[] }> = {};
     allFights.forEach(f => {
@@ -129,7 +124,6 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
   const hotFightIds = useMemo(() => new Set<string>(), []);
 
-  // ── Prediction submission (reuses same engine as FightPredictions) ──
   const handleSubmit = async (amountUsd: number) => {
     if (!selectedFight || !selectedPick || !isConnected || !address) return;
     setSubmitting(true);
@@ -138,12 +132,11 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     try {
       const privyToken = await getAccessToken();
       if (!privyToken) {
-        toast.error("Session expired", { description: "Please log in again." });
+        toast.error(t("operator.sessionExpired"), { description: t("operator.pleaseLoginAgain") });
         setSubmitting(false);
         return;
       }
 
-      // Allowance gate
       const feeRate = selectedFight.commission_bps != null
         ? selectedFight.commission_bps / 10_000
         : (selectedFight.source === "polymarket" ? 0.02 : 0.05);
@@ -153,7 +146,6 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         if (!approved) { setSubmitting(false); return; }
       }
 
-      // Submit with operator context
       const { data, error } = await supabase.functions.invoke("prediction-submit", {
         body: {
           fight_id: selectedFight.id,
@@ -171,7 +163,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         const msg = data?.error || error?.message || "Backend error";
         const errorCode = data?.error_code || "";
         if (errorCode === "trading_wallet_setup_required") {
-          toast.error("Trading wallet setup needed");
+          toast.error(t("operator.tradingWalletNeeded"));
           setupTradingWallet().catch(() => {});
           setSubmitting(false);
           return;
@@ -189,13 +181,13 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         entry_id: data?.entry_id,
       });
 
-      toast.success("Prediction submitted!", {
-        description: `$${amountUsd.toFixed(2)} placed successfully`,
+      toast.success(t("operator.predictionSubmitted"), {
+        description: t("operator.amountPlaced", { amount: amountUsd.toFixed(2) }),
       });
       setShowSuccess(true);
       loadUserEntries();
     } catch (err: any) {
-      toast.error("Prediction failed", { description: err.message });
+      toast.error(t("operator.predictionFailed"), { description: err.message });
     } finally {
       setSubmitting(false);
     }
@@ -203,7 +195,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
   const handlePredict = (fight: Fight, pick: "fighter_a" | "fighter_b") => {
     if (fight.status !== "open") {
-      toast.error("Predictions closed");
+      toast.error(t("operator.predictionsClosed"));
       return;
     }
     if (!isConnected) {
@@ -223,10 +215,10 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         body: { fight_id: fightId, wallet: address, chain: "polygon" },
       });
       if (error || data?.error) throw new Error(data?.error || error?.message);
-      toast.success("Reward claimed!", { description: `$${(data.reward_usd || 0).toFixed(2)} sent` });
+      toast.success(t("operator.rewardClaimed"), { description: t("operator.rewardSent", { amount: (data.reward_usd || 0).toFixed(2) }) });
       loadUserEntries();
     } catch (err: any) {
-      toast.error("Claim failed", { description: err.message });
+      toast.error(t("operator.claimFailed"), { description: err.message });
     } finally {
       setClaiming(false);
     }
@@ -244,8 +236,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     return (
       <div className="min-h-screen bg-[#06080f] text-white flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-2xl font-bold mb-2">Not Found</h2>
-          <p className="text-white/50">This app doesn't exist yet.</p>
+          <h2 className="text-2xl font-bold mb-2">{t("operator.notFound")}</h2>
+          <p className="text-white/50">{t("operator.notFoundDesc")}</p>
         </div>
       </div>
     );
@@ -266,6 +258,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
             <span className="font-bold text-base">{operator.brand_name}</span>
           </div>
           <div className="flex items-center gap-3">
+            <PlatformLanguageSwitcher />
             {isConnected && address ? (
               <span className="text-xs text-white/40 font-mono">
                 {address.slice(0, 6)}…{address.slice(-4)}
@@ -277,7 +270,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                 className="text-xs font-bold border-0"
                 style={{ backgroundColor: theme.primary }}
               >
-                Sign In
+                {t("operator.signIn")}
               </Button>
             )}
           </div>
@@ -288,7 +281,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
         {allFights.length === 0 ? (
           <div className="text-center py-20 text-white/30">
-            No events available yet. Check back soon!
+            {t("operator.noEvents")}
           </div>
         ) : (
           eventEntries.map(([eventName, group]) => (
@@ -311,12 +304,12 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       {/* Fee disclosure */}
       <div className="max-w-4xl mx-auto px-4 pb-4">
         <p className="text-[10px] text-white/20 text-center">
-          1MG platform fee: 1%. For some events, additional market fees may apply where required.
+          {t("operator.platformFee")}
         </p>
       </div>
 
       <footer className="border-t border-white/5 py-6 text-center text-xs text-white/20">
-        Powered by <span style={{ color: theme.primary }}>1MG.live</span>
+        {t("operator.poweredBy")} <span style={{ color: theme.primary }}>1MG.live</span>
       </footer>
 
       {/* Prediction Modal */}
@@ -338,8 +331,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       <WalletGateModal
         isOpen={showWalletGate}
         onClose={() => setShowWalletGate(false)}
-        title="Sign In to Predict"
-        description="Create an account to place predictions and earn rewards."
+        title={t("operator.signInToPredict")}
+        description={t("operator.signInDesc")}
       />
     </div>
   );

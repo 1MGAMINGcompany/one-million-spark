@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ArrowRight,
   Globe,
@@ -14,10 +15,12 @@ import {
   Calendar,
   Share2,
   Percent,
+  Mail,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { usePrivy } from "@privy-io/react-auth";
+import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
 
 import footballImg from "@/assets/football-1mg.png";
 import basketballImg from "@/assets/basketball-1mg.png";
@@ -138,51 +141,8 @@ function AnimatedCounter({ target, suffix = "" }: { target: number; suffix?: str
   return <div ref={ref} className="text-4xl sm:text-5xl font-bold text-blue-400 mb-2">{count}{suffix}</div>;
 }
 
-/* ── Data ── */
-const STEPS = [
-  {
-    icon: DollarSign,
-    num: "01",
-    title: "Buy Your App",
-    desc: "Secure your own branded predictions platform",
-    accent: "from-blue-500 to-cyan-400",
-  },
-  {
-    icon: Calendar,
-    num: "02",
-    title: "Choose Your Sports",
-    desc: "NBA, NFL, Soccer, MMA, Boxing & more",
-    sub: "Built-in liquidity means your events already have activity",
-    accent: "from-cyan-400 to-emerald-400",
-  },
-  {
-    icon: Share2,
-    num: "03",
-    title: "Share With Your Network",
-    desc: "Invite your audience, community, or local fans",
-    accent: "from-emerald-400 to-yellow-400",
-  },
-  {
-    icon: Percent,
-    num: "04",
-    title: "Earn Your %",
-    desc: "Set your fee and earn on every prediction",
-    accent: "from-yellow-400 to-orange-400",
-  },
-];
-
-const WHAT_YOU_GET = [
-  "Your own branded predictions app",
-  "Your own web address (yourname.1mg.live)",
-  "Built-in digital payments",
-  "Built-in liquidity — money flows from day one",
-  "Access to major sports markets",
-  "Add your own custom events",
-  "Mobile & desktop ready",
-  "Set your own fee percentage",
-];
-
 export default function LandingPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { ready, authenticated, login, logout, user } = usePrivy();
 
@@ -203,6 +163,45 @@ export default function LandingPage() {
     if (authenticated) navigate("/purchase");
     else login();
   };
+
+  const STEPS = [
+    {
+      icon: DollarSign, num: "01",
+      title: t("platform.howItWorks.step1Title"),
+      desc: t("platform.howItWorks.step1Desc"),
+      accent: "from-blue-500 to-cyan-400",
+    },
+    {
+      icon: Calendar, num: "02",
+      title: t("platform.howItWorks.step2Title"),
+      desc: t("platform.howItWorks.step2Desc"),
+      sub: t("platform.howItWorks.step2Sub"),
+      accent: "from-cyan-400 to-emerald-400",
+    },
+    {
+      icon: Share2, num: "03",
+      title: t("platform.howItWorks.step3Title"),
+      desc: t("platform.howItWorks.step3Desc"),
+      accent: "from-emerald-400 to-yellow-400",
+    },
+    {
+      icon: Percent, num: "04",
+      title: t("platform.howItWorks.step4Title"),
+      desc: t("platform.howItWorks.step4Desc"),
+      accent: "from-yellow-400 to-orange-400",
+    },
+  ];
+
+  const WHAT_YOU_GET = [
+    t("platform.whatYouGet.item1"),
+    t("platform.whatYouGet.item2"),
+    t("platform.whatYouGet.item3"),
+    t("platform.whatYouGet.item4"),
+    t("platform.whatYouGet.item5"),
+    t("platform.whatYouGet.item6"),
+    t("platform.whatYouGet.item7"),
+    t("platform.whatYouGet.item8"),
+  ];
 
   return (
     <div className="min-h-screen bg-[#04060c] text-white relative">
@@ -240,6 +239,7 @@ export default function LandingPage() {
             <span className="text-white/50">.live</span>
           </div>
           <div className="flex items-center gap-3">
+            <PlatformLanguageSwitcher />
             {ready && authenticated && shortAddress ? (
               <>
                 <Button
@@ -248,7 +248,7 @@ export default function LandingPage() {
                   size="sm"
                   className="text-white/70 hover:text-white hover:bg-white/5"
                 >
-                  Dashboard
+                  {t("platform.nav.dashboard")}
                 </Button>
                 <div className="flex items-center gap-1.5 text-sm text-white/70 bg-white/[0.05] px-3 py-1.5 rounded-lg border border-white/10">
                   <Wallet size={14} className="text-blue-400" />
@@ -270,7 +270,7 @@ export default function LandingPage() {
                 size="sm"
                 className="bg-blue-600 hover:bg-blue-500 text-white border-0"
               >
-                Sign In
+                {t("platform.nav.signIn")}
               </Button>
             ) : null}
           </div>
@@ -285,16 +285,16 @@ export default function LandingPage() {
             {/* Left */}
             <div className="text-center lg:text-left">
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.08] mb-6">
-                Your Own Digital{" "}
+                {t("platform.hero.title")}{" "}
                 <span className="bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
-                  Predictions Business
+                  {t("platform.hero.titleHighlight")}
                 </span>
               </h1>
               <p className="text-lg sm:text-xl text-white/50 max-w-xl mb-3 leading-relaxed mx-auto lg:mx-0">
-                Launch your own branded predictions app with digital payments and built-in liquidity.
+                {t("platform.hero.subtitle")}
               </p>
               <p className="text-base text-white/40 max-w-lg mb-10 mx-auto lg:mx-0">
-                We handle the money and activity — you grow your app.
+                {t("platform.hero.subtitleSmall")}
               </p>
 
               {/* CTA */}
@@ -304,7 +304,7 @@ export default function LandingPage() {
                   size="lg"
                   className="bg-blue-600 hover:bg-blue-500 text-white text-lg px-10 h-16 border-0 btn-glow rounded-xl font-bold"
                 >
-                  BUY NOW — $2,400 USDC <ArrowRight size={20} className="ml-2" />
+                  {t("platform.cta.buyNow")} <ArrowRight size={20} className="ml-2" />
                 </Button>
                 <Button
                   onClick={handleCreateAccount}
@@ -312,17 +312,17 @@ export default function LandingPage() {
                   size="lg"
                   className="border-white/10 text-white hover:bg-white/5 text-lg px-10 h-16 rounded-xl font-bold"
                 >
-                  CREATE ACCOUNT
+                  {t("platform.cta.createAccount")}
                 </Button>
               </div>
 
               {/* Trust */}
               <div className="flex flex-wrap gap-x-6 gap-y-2 justify-center lg:justify-start text-sm text-white/30">
-                <span className="flex items-center gap-1.5"><Shield size={14} className="text-blue-400/60" /> We handle payments</span>
-                <span className="flex items-center gap-1.5"><Zap size={14} className="text-blue-400/60" /> Built-in liquidity</span>
-                <span className="flex items-center gap-1.5"><Globe size={14} className="text-blue-400/60" /> Full backend included</span>
+                <span className="flex items-center gap-1.5"><Shield size={14} className="text-blue-400/60" /> {t("platform.trust.weHandlePayments")}</span>
+                <span className="flex items-center gap-1.5"><Zap size={14} className="text-blue-400/60" /> {t("platform.trust.builtInLiquidity")}</span>
+                <span className="flex items-center gap-1.5"><Globe size={14} className="text-blue-400/60" /> {t("platform.trust.fullBackend")}</span>
               </div>
-              <p className="text-xs text-white/20 mt-3 text-center lg:text-left">You focus on growing your brand.</p>
+              <p className="text-xs text-white/20 mt-3 text-center lg:text-left">{t("platform.trust.youFocus")}</p>
             </div>
 
             {/* Right — Phone */}
@@ -336,8 +336,8 @@ export default function LandingPage() {
       {/* ═══════════════ HOW IT WORKS — 4 STEPS ═══════════════ */}
       <section className="py-20 px-4 sm:px-6 relative z-10">
         <div className="max-w-6xl mx-auto">
-          <h2 className="text-3xl sm:text-4xl font-bold text-center mb-4">How It Works</h2>
-          <p className="text-white/40 text-center mb-14 max-w-lg mx-auto">Four simple steps to your own predictions business</p>
+          <h2 className="text-3xl sm:text-4xl font-bold text-center mb-4">{t("platform.howItWorks.title")}</h2>
+          <p className="text-white/40 text-center mb-14 max-w-lg mx-auto">{t("platform.howItWorks.subtitle")}</p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {STEPS.map((s) => (
@@ -363,31 +363,31 @@ export default function LandingPage() {
       <section className="py-20 px-4 sm:px-6 relative z-10">
         <div className="max-w-4xl mx-auto">
           <div className="bg-gradient-to-br from-blue-600/[0.08] to-cyan-600/[0.04] border border-blue-500/15 rounded-3xl p-10 sm:p-14 text-center">
-            <h2 className="text-3xl sm:text-4xl font-bold mb-6">Built-In Money Flow</h2>
+            <h2 className="text-3xl sm:text-4xl font-bold mb-6">{t("platform.moneyFlow.title")}</h2>
             <p className="text-white/50 text-lg max-w-2xl mx-auto mb-8 leading-relaxed">
-              Your app is never empty. We provide active prediction markets, real user activity, and money already flowing.
+              {t("platform.moneyFlow.desc")}
             </p>
             <p className="text-lg sm:text-xl font-semibold text-white/80 mb-4">
-              You don't start from zero.
+              {t("platform.moneyFlow.noZero")}
             </p>
             <div className="inline-block bg-blue-500/10 border border-blue-400/20 rounded-xl px-6 py-3 mb-10">
               <p className="text-blue-300 font-medium text-sm sm:text-base">
-                💰 There is already money and activity in your app from day one.
+                💰 {t("platform.moneyFlow.dayOne")}
               </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-4">
               <div className="bg-white/[0.03] rounded-xl p-6 border border-white/5">
                 <AnimatedCounter target={1} suffix="B+" />
-                <div className="text-white/40 text-sm">Market Liquidity</div>
+                <div className="text-white/40 text-sm">{t("platform.moneyFlow.liquidity")}</div>
               </div>
               <div className="bg-white/[0.03] rounded-xl p-6 border border-white/5">
                 <div className="text-4xl sm:text-5xl font-bold text-blue-400 mb-2">24/7</div>
-                <div className="text-white/40 text-sm">Always Active</div>
+                <div className="text-white/40 text-sm">{t("platform.moneyFlow.alwaysActive")}</div>
               </div>
               <div className="bg-white/[0.03] rounded-xl p-6 border border-white/5">
                 <AnimatedCounter target={100} suffix="+" />
-                <div className="text-white/40 text-sm">Sports Events</div>
+                <div className="text-white/40 text-sm">{t("platform.moneyFlow.sportsEvents")}</div>
               </div>
             </div>
           </div>
@@ -397,17 +397,17 @@ export default function LandingPage() {
       {/* ═══════════════ WHAT YOU GET ═══════════════ */}
       <section className="py-20 px-4 sm:px-6 relative z-10">
         <div className="max-w-4xl mx-auto">
-          <h2 className="text-3xl sm:text-4xl font-bold text-center mb-12">What You Get</h2>
+          <h2 className="text-3xl sm:text-4xl font-bold text-center mb-12">{t("platform.whatYouGet.title")}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto mb-8">
-            {WHAT_YOU_GET.map((item) => (
-              <div key={item} className="flex items-start gap-3 text-white/70">
+            {WHAT_YOU_GET.map((item, i) => (
+              <div key={i} className="flex items-start gap-3 text-white/70">
                 <ChevronRight size={16} className="text-blue-400 mt-1 shrink-0" />
                 <span className="text-sm leading-relaxed">{item}</span>
               </div>
             ))}
           </div>
           <p className="text-center text-white/25 text-xs max-w-md mx-auto">
-            You can also add your own local events — games, fights, races, or anything you want.
+            {t("platform.whatYouGet.customEvents")}
           </p>
         </div>
       </section>
@@ -415,9 +415,9 @@ export default function LandingPage() {
       {/* ═══════════════ FINAL CTA ═══════════════ */}
       <section className="py-24 px-4 sm:px-6 relative z-10">
         <div className="max-w-3xl mx-auto text-center">
-          <h2 className="text-3xl sm:text-4xl font-bold mb-4">Ready to Start Earning?</h2>
+          <h2 className="text-3xl sm:text-4xl font-bold mb-4">{t("platform.cta.readyToStart")}</h2>
           <p className="text-white/40 text-lg mb-10">
-            Your own predictions business — live in minutes.
+            {t("platform.cta.readyDesc")}
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button
@@ -425,7 +425,7 @@ export default function LandingPage() {
               size="lg"
               className="bg-blue-600 hover:bg-blue-500 text-white text-lg px-10 h-16 border-0 btn-glow rounded-xl font-bold"
             >
-              BUY NOW — $2,400 USDC <ArrowRight size={20} className="ml-2" />
+              {t("platform.cta.buyNow")} <ArrowRight size={20} className="ml-2" />
             </Button>
             <Button
               onClick={handleCreateAccount}
@@ -433,7 +433,7 @@ export default function LandingPage() {
               size="lg"
               className="border-white/10 text-white hover:bg-white/5 text-lg px-10 h-16 rounded-xl font-bold"
             >
-              CREATE ACCOUNT
+              {t("platform.cta.createAccount")}
             </Button>
           </div>
         </div>
@@ -441,16 +441,22 @@ export default function LandingPage() {
 
       {/* ── Footer ── */}
       <footer className="border-t border-white/5 py-10 px-4 sm:px-6 relative z-10">
-        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="text-sm text-white/25">
-            © {new Date().getFullYear()} 1MG.live — All rights reserved
+        <div className="max-w-5xl mx-auto">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
+            <div className="text-sm text-white/25">
+              {t("platform.footer.rights", { year: new Date().getFullYear() })}
+            </div>
+            <div className="flex flex-wrap gap-6 text-sm text-white/35">
+              <a href="/buy-predictions-app" className="hover:text-white/60 transition-colors">{t("platform.footer.buyApp")}</a>
+              <a href="/help/are-prediction-markets-legal" className="hover:text-white/60 transition-colors">{t("platform.footer.whyLegal")}</a>
+              <a href="mailto:1mgaming@proton.me" className="hover:text-white/60 transition-colors">{t("platform.footer.contact")}</a>
+              <a href="/terms-of-service" className="hover:text-white/60 transition-colors">{t("platform.footer.terms")}</a>
+              <a href="/privacy-policy" className="hover:text-white/60 transition-colors">{t("platform.footer.privacy")}</a>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-6 text-sm text-white/35">
-            <a href="/buy-predictions-app" className="hover:text-white/60 transition-colors">Buy a Predictions App</a>
-            <a href="/help/are-prediction-markets-legal" className="hover:text-white/60 transition-colors">Why Predictions Are Legal</a>
-            <a href="#" className="hover:text-white/60 transition-colors">Contact</a>
-            <a href="/terms-of-service" className="hover:text-white/60 transition-colors">Terms</a>
-            <a href="/privacy-policy" className="hover:text-white/60 transition-colors">Privacy</a>
+          <div className="flex items-center justify-center gap-2 text-xs text-white/20">
+            <Mail size={12} />
+            <a href="mailto:1mgaming@proton.me" className="hover:text-white/40 transition-colors">1mgaming@proton.me</a>
           </div>
         </div>
       </footer>
