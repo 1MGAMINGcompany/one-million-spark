@@ -791,6 +791,7 @@ async function importSingleEvent(
   wallet: string | null,
   importSource: string,
   sportType?: string | null,
+  visibility?: string | null,
 ): Promise<{ event_id: string; imported: number; is_past: boolean; warning?: string }> {
   const timeInfo = chooseSportsDisplayTime(gEvent);
   const chosenMs = timeInfo.chosen ? new Date(timeInfo.chosen).getTime() : null;
