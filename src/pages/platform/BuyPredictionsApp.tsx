@@ -70,12 +70,13 @@ export default function BuyPredictionsApp() {
     else login();
   };
 
+  useSeoMeta({
+    title: "Buy a Predictions App | Start Your Own Sports Predictions Business",
+    description: "Buy your own branded predictions app with built-in payments and liquidity. Launch a sports predictions business in minutes — no coding required. One-time $2,400 USDC setup.",
+  });
+
   return (
     <div className="min-h-screen bg-[#04060c] text-white">
-      <SeoMeta
-        title="Buy a Predictions App | Start Your Own Sports Predictions Business"
-        description="Buy your own branded predictions app with built-in payments and liquidity. Launch a sports predictions business in minutes — no coding required. One-time $2,400 USDC setup."
-      />
       <JsonLd data={articleJsonLd} />
       <JsonLd data={faqJsonLd} />
 
