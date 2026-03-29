@@ -706,9 +706,7 @@ function CompactFighterRow({
           loading="lazy"
         />
       ) : (
-        <div className="w-10 h-10 rounded-full bg-muted/40 flex items-center justify-center shrink-0 text-base">
-          {SportFallbackEmoji(effectiveSport, name)}
-        </div>
+        <div className="w-10 h-10 rounded-full bg-black ring-1 ring-border/40 shrink-0" />
       )}
       <div className="min-w-0">
         <p className="text-sm font-bold text-foreground truncate leading-tight flex items-center gap-1.5">
@@ -781,13 +779,7 @@ function FighterColumn({
         />
       )}
       {!showLogo && !showPhoto && (
-        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-muted/40 flex items-center justify-center mx-auto mb-1.5">
-          {effectiveSport === "over_under" ? (
-            isOverSide(name) ? <ArrowUp className="w-6 h-6 text-green-400" /> : <ArrowDown className="w-6 h-6 text-red-400" />
-          ) : (
-            <span className="text-lg">{SportFallbackEmoji(effectiveSport, name)}</span>
-          )}
-        </div>
+        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black mx-auto mb-1.5" />
       )}
       <p className={`font-bold text-foreground ${isSoccer && showLogo ? 'text-base sm:text-lg' : showLogo ? 'text-[15px]' : 'text-sm'}`}>{name}</p>
       {record && (
