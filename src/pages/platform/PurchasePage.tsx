@@ -3,7 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { usePrivy, useSendTransaction } from "@privy-io/react-auth";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
+import { supabase } from "@/integrations/supabase/client";
 import {
   ArrowRight,
   CheckCircle,
@@ -14,23 +16,32 @@ import {
   Headphones,
   DollarSign,
   Wallet,
+  Tag,
 } from "lucide-react";
 
 const TREASURY_ADDRESS = "0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d";
 const USDC_CONTRACT = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359";
-const PURCHASE_AMOUNT = 2400;
-const PURCHASE_AMOUNT_RAW = "0x" + (BigInt(PURCHASE_AMOUNT) * BigInt(10 ** 6)).toString(16); // 2400 USDC
+const BASE_PRICE = 2400;
 
 // ERC-20 transfer(address,uint256) function selector
 const TRANSFER_SELECTOR = "0xa9059cbb";
 
-function encodeTransferData(to: string, amountHex: string): string {
+function encodeTransferData(to: string, amountRaw: string): string {
   const paddedTo = to.slice(2).toLowerCase().padStart(64, "0");
-  const paddedAmount = amountHex.slice(2).padStart(64, "0");
+  const paddedAmount = amountRaw.slice(2).padStart(64, "0");
   return TRANSFER_SELECTOR + paddedTo + paddedAmount;
 }
 
 type Step = "disclosure" | "payment" | "confirming" | "success" | "error";
+
+interface PromoResult {
+  valid: boolean;
+  discount_type?: string;
+  discount_value?: number;
+  discounted_price?: number;
+  promo_id?: string;
+  error?: string;
+}
 
 export default function PurchasePage() {
   const navigate = useNavigate();
@@ -44,7 +55,13 @@ export default function PurchasePage() {
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
 
-  const hasEnoughBalance = usdc_balance !== null && usdc_balance >= PURCHASE_AMOUNT;
+  // Promo code
+  const [promoCode, setPromoCode] = useState("");
+  const [promoResult, setPromoResult] = useState<PromoResult | null>(null);
+  const [validatingPromo, setValidatingPromo] = useState(false);
+
+  const effectivePrice = promoResult?.valid ? (promoResult.discounted_price ?? BASE_PRICE) : BASE_PRICE;
+  const hasEnoughBalance = effectivePrice === 0 || (usdc_balance !== null && usdc_balance >= effectivePrice);
 
   const handlePayment = useCallback(async () => {
     setError(null);
