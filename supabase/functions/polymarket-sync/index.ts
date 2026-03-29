@@ -205,7 +205,7 @@ type FetchStrategy = "tag" | "series" | "search";
 interface LeagueSource {
   key: string;
   label: string;
-  sportType: "soccer" | "mma" | "boxing" | "bkfc" | "nfl" | "nba" | "nhl" | "ncaa" | "mlb" | "tennis" | "golf";
+  sportType: "soccer" | "mma" | "boxing" | "bkfc" | "nfl" | "nba" | "nhl" | "ncaa" | "mlb" | "tennis" | "golf" | "cricket" | "f1" | "rugby";
   fetchStrategy: FetchStrategy;
   tagId?: string;
   tagSlug?: string;
