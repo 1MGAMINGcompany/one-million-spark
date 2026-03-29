@@ -2,7 +2,9 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Swords, Trophy, Loader2, HelpCircle, ChevronRight, Newspaper, ArrowUp, ArrowDown } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Swords, Trophy, Loader2, HelpCircle, ChevronRight, Newspaper, ArrowUp, ArrowDown, ChevronDown } from "lucide-react";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { detectSport, isOverSide, type SportType } from "@/lib/detectSport";
 import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
 import { getTeamLogo } from "@/lib/teamLogos";
@@ -447,10 +449,18 @@ export default function FightCard({
           <ViewDetailsLink fightId={fight.id} hasUpdates={fight.has_updates} />
         </div>
 
-        {/* Insights Panel (soccer) */}
+        {/* Collapsible Insights (soccer) */}
         <div className="mx-4 sm:mx-6 mb-3">
-          <PredictionInsightsPanel fight={fight} />
-          <SmartMoneyTracker fight={fight} />
+          <Collapsible>
+            <CollapsibleTrigger className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors w-full justify-center py-1">
+              <ChevronDown className="w-3.5 h-3.5" />
+              <span className="font-semibold">Show Insights</span>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-2 space-y-2">
+              <PredictionInsightsPanel fight={fight} />
+              <SmartMoneyTracker fight={fight} />
+            </CollapsibleContent>
+          </Collapsible>
         </div>
 
         {/* Draw info */}
@@ -634,9 +644,19 @@ export default function FightCard({
           </div>
         )}
 
-        {/* Insights Panel (non-soccer) */}
-        <PredictionInsightsPanel fight={fight} />
-        <SmartMoneyTracker fight={fight} />
+        {/* Collapsible Insights (non-soccer) */}
+        <div className="mt-2">
+          <Collapsible>
+            <CollapsibleTrigger className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors w-full justify-center py-1">
+              <ChevronDown className="w-3.5 h-3.5" />
+              <span className="font-semibold">Show Insights</span>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-2 space-y-2">
+              <PredictionInsightsPanel fight={fight} />
+              <SmartMoneyTracker fight={fight} />
+            </CollapsibleContent>
+          </Collapsible>
+        </div>
 
         {/* Draw info */}
         {["draw", "refund_pending", "refunds_processing", "refunds_complete"].includes(fight.status) && (

@@ -236,7 +236,7 @@ export default function PredictionInsightsPanel({ fight }: { fight: Fight }) {
       <div className="px-3 sm:px-4 py-3 border-b border-border/15">
         <div className="flex items-center gap-1.5 mb-2.5">
           <BarChart3 className="w-3.5 h-3.5 text-primary" />
-          <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-primary">Market Overview</span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-primary">Market Info</span>
         </div>
         <div className="grid grid-cols-4 gap-2 sm:gap-3 text-center">
           <div className="space-y-0.5">
@@ -252,7 +252,7 @@ export default function PredictionInsightsPanel({ fight }: { fight: Fight }) {
             <TrendBadge trend={local.trend} />
           </div>
           <div className="space-y-0.5">
-            <p className="text-[9px] text-muted-foreground/70 uppercase tracking-wide font-medium">Liquidity</p>
+            <p className="text-[9px] text-muted-foreground/70 uppercase tracking-wide font-medium">Money in Pool</p>
             <LiquidityBadge liq={local.liquidity} />
           </div>
         </div>
@@ -263,7 +263,7 @@ export default function PredictionInsightsPanel({ fight }: { fight: Fight }) {
         <div className="px-3 sm:px-4 py-2.5 border-b border-border/15">
           <div className="flex items-center gap-1.5 mb-2">
             <Activity className="w-3.5 h-3.5 text-primary/60" />
-            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-primary/60">Signals</span>
+            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-primary/60">Market Signals</span>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {local.signals.map((s) => (
@@ -284,7 +284,7 @@ export default function PredictionInsightsPanel({ fight }: { fight: Fight }) {
           <div className="flex items-center gap-1.5">
             {isAI ? <Sparkles className="w-3.5 h-3.5 text-primary" /> : <Brain className="w-3.5 h-3.5 text-accent" />}
             <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-accent">
-              {isAI ? "AI Market Read" : "Market Read"}
+              Quick Insight
             </span>
             {isAI && (
               <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-primary/15 text-primary">AI</span>

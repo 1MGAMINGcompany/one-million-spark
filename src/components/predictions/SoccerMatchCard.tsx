@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
-import { ChevronRight } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ChevronRight, ChevronDown, Trophy } from "lucide-react";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import type { Fight } from "./FightCard";
 import PredictionInsightsPanel from "./PredictionInsightsPanel";
 import SmartMoneyTracker from "./SmartMoneyTracker";
@@ -28,14 +30,24 @@ function formatVolume(usd: number): string {
   return "";
 }
 
-/** Extract team name from a fight title like "Will United States win ..." */
 function extractTeamFromTitle(title: string): string {
-  // "Will United States win ...?" → "United States"
   const willMatch = title.match(/^Will\s+(.+?)\s+win/i);
   if (willMatch) return willMatch[1].trim();
-  // Fallback: first part before " — "
   const dash = title.split(" — ")[0];
   return dash || title;
+}
+
+/** Estimate potential winnings based on pool-share model */
+function estimateWin(price: number | null | undefined, amount: number, feeRate: number): number {
+  if (!price || price <= 0 || amount <= 0) return 0;
+  const net = amount * (1 - feeRate);
+  // Multiplier = 1 / price (e.g. price 0.4 → 2.5x)
+  return net * (1 / price);
+}
+
+function getFeeRate(fight: Fight): number {
+  if (fight.commission_bps != null) return fight.commission_bps / 10_000;
+  return fight.source === "polymarket" ? 0.02 : 0.05;
 }
 
 interface SoccerMatchCardProps {
@@ -62,9 +74,9 @@ export default function SoccerMatchCard({
   readOnly,
 }: SoccerMatchCardProps) {
   const navigate = useNavigate();
-  const [predicting, setPredicting] = useState<string | null>(null);
+  const [selectedFight, setSelectedFight] = useState<Fight | null>(null);
+  const [amount, setAmount] = useState("");
 
-  // Derive status from the group (use most "active" status)
   const allFights = [homeFight, awayFight, drawFight].filter(Boolean) as Fight[];
   const groupStatus = allFights.some(f => f.status === "live") ? "live"
     : allFights.some(f => f.status === "open") ? "open"
@@ -75,46 +87,54 @@ export default function SoccerMatchCard({
   const isOpen = effectiveStatus === "open";
   const badge = STATUS_BADGE[effectiveStatus] || STATUS_BADGE.open;
 
-  // Team names
   const homeTeam = extractTeamFromTitle(homeFight.title);
   const awayTeam = extractTeamFromTitle(awayFight.title);
 
-  // Prices (probability in decimal, e.g. 0.39)
   const homePrice = homeFight.price_a;
   const awayPrice = awayFight.price_a;
   const drawPrice = drawFight?.price_a;
 
-  // Logos — all sibling fights share the same home_logo/away_logo (event-level).
-  // Determine which fight represents the "home" team from the event name (e.g. "Mexico vs. Belgium")
   const eventName = homeFight.event_name || awayFight.event_name;
   const [eventHome] = eventName.split(/\s+vs\.?\s+/i);
   const homeIsEventHome = homeFight.title.toLowerCase().includes((eventHome || "").toLowerCase().trim());
-  const anyFight = allFights[0]; // all share same logos
+  const anyFight = allFights[0];
   const homeLogo = homeIsEventHome ? anyFight.home_logo : anyFight.away_logo;
   const awayLogo = homeIsEventHome ? anyFight.away_logo : anyFight.home_logo;
 
-  // Volume
   const totalVolume = allFights.reduce((sum, f) => sum + (f.polymarket_volume_usd ?? 0), 0);
 
-  // User has entries?
   const allFightIds = new Set(allFights.map(f => f.id));
   const myEntries = userEntries.filter(e => allFightIds.has(e.fight_id));
   const hasBet = myEntries.length > 0;
 
-  // Match date from polymarket question
   const matchTitle = homeFight.event_name || `${homeTeam} vs ${awayTeam}`;
 
-  const handlePredict = (fight: Fight) => {
-    if (readOnly) return;
+  // Win calculation
+  const amountNum = parseFloat(amount) || 0;
+  const selectedPrice = selectedFight
+    ? (selectedFight.id === homeFight.id ? homePrice
+      : selectedFight.id === awayFight.id ? awayPrice
+      : drawPrice)
+    : null;
+  const feeRate = selectedFight ? getFeeRate(selectedFight) : 0.02;
+  const estimatedWin = estimateWin(selectedPrice, amountNum, feeRate);
+
+  const handleSelect = (fight: Fight) => {
+    if (readOnly || !isOpen) return;
     if (!wallet) {
       onWalletRequired?.();
       return;
     }
-    if (!isOpen) return;
-    setPredicting(fight.id);
-    onPredict(fight, "fighter_a"); // Betting "Yes" on this outcome
-    setTimeout(() => setPredicting(null), 2000);
+    setSelectedFight(prev => prev?.id === fight.id ? null : fight);
+    setAmount("");
   };
+
+  const handlePlacePrediction = () => {
+    if (!selectedFight || amountNum < 1) return;
+    onPredict(selectedFight, "fighter_a");
+  };
+
+  const isSelected = (fight: Fight) => selectedFight?.id === fight.id;
 
   return (
     <Card className="overflow-hidden border-border/50 hover:border-primary/30 transition-all">
@@ -131,61 +151,106 @@ export default function SoccerMatchCard({
         </span>
       </div>
 
-      {/* Match title */}
-      <div className="px-4 pb-2">
-        <h3 className="text-sm font-bold text-foreground truncate">{matchTitle}</h3>
+      {/* Match title with flags */}
+      <div className="px-4 pb-2 flex items-center gap-2">
+        {homeLogo && <img src={homeLogo} alt="" className="w-5 h-5 object-contain" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
+        <h3 className="text-sm font-bold text-foreground truncate flex-1">{matchTitle}</h3>
+        {awayLogo && <img src={awayLogo} alt="" className="w-5 h-5 object-contain" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
       </div>
 
-      {/* 3-way outcome row */}
+      {/* WHO WINS? */}
+      <div className="px-4 pb-1">
+        <p className="text-xs font-bold text-center text-muted-foreground uppercase tracking-wider">Who Wins?</p>
+      </div>
+
+      {/* 3-way outcome buttons – larger, mobile-friendly */}
       <div className="px-4 pb-3">
         <div className="grid grid-cols-3 gap-2">
-          {/* Home */}
           <OutcomeButton
             logo={homeLogo}
             teamName={homeTeam}
             price={homePrice}
-            colorClass="border-blue-500/40 hover:border-blue-400 hover:bg-blue-500/10"
-            priceColor="text-blue-400"
+            selected={isSelected(homeFight)}
             disabled={!isOpen || readOnly}
-            loading={predicting === homeFight.id}
             hasBet={myEntries.some(e => e.fight_id === homeFight.id)}
-            onClick={() => handlePredict(homeFight)}
+            onClick={() => handleSelect(homeFight)}
           />
-
-          {/* Draw */}
           {drawFight && (
             <OutcomeButton
               emoji="🤝"
               teamName="Draw"
               price={drawPrice}
-              colorClass="border-muted-foreground/30 hover:border-muted-foreground/60 hover:bg-muted/30"
-              priceColor="text-muted-foreground"
+              selected={isSelected(drawFight)}
               disabled={!isOpen || readOnly}
-              loading={predicting === drawFight.id}
               hasBet={myEntries.some(e => e.fight_id === drawFight.id)}
-              onClick={() => handlePredict(drawFight)}
+              onClick={() => handleSelect(drawFight)}
             />
           )}
-
-          {/* Away */}
           <OutcomeButton
             logo={awayLogo}
             teamName={awayTeam}
             price={awayPrice}
-            colorClass="border-red-500/40 hover:border-red-400 hover:bg-red-500/10"
-            priceColor="text-red-400"
+            selected={isSelected(awayFight)}
             disabled={!isOpen || readOnly}
-            loading={predicting === awayFight.id}
             hasBet={myEntries.some(e => e.fight_id === awayFight.id)}
-            onClick={() => handlePredict(awayFight)}
+            onClick={() => handleSelect(awayFight)}
           />
         </div>
       </div>
 
-      {/* Insights Panel */}
+      {/* Inline bet input + win calculation (shown after selection) */}
+      {selectedFight && isOpen && (
+        <div className="px-4 pb-4 space-y-3">
+          <div className="space-y-2">
+            <Input
+              type="number"
+              inputMode="decimal"
+              placeholder="Enter Amount (USD)"
+              value={amount}
+              onChange={e => setAmount(e.target.value)}
+              className="text-center text-lg font-bold h-12 bg-background border-border"
+              min="1"
+              step="1"
+            />
+
+            {/* Live win calculation */}
+            {amountNum >= 1 && (
+              <div className="text-center py-2 bg-green-500/10 border border-green-500/20 rounded-lg">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">You Win</p>
+                <p className="text-2xl font-extrabold text-green-400">
+                  ${estimatedWin.toFixed(2)}
+                </p>
+              </div>
+            )}
+
+            <p className="text-[10px] text-muted-foreground text-center">
+              Winners share the pool.
+            </p>
+          </div>
+
+          {/* Primary CTA */}
+          <Button
+            onClick={handlePlacePrediction}
+            disabled={amountNum < 1}
+            className="w-full h-12 text-base font-extrabold bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.97] transition-all uppercase tracking-wide"
+          >
+            Place Prediction
+          </Button>
+        </div>
+      )}
+
+      {/* Collapsible insights */}
       <div className="px-4 pb-3">
-        <PredictionInsightsPanel fight={homeFight} />
-        <SmartMoneyTracker fight={homeFight} />
+        <Collapsible>
+          <CollapsibleTrigger className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors w-full justify-center py-1">
+            <ChevronDown className="w-3.5 h-3.5" />
+            <span className="font-semibold">Show Insights</span>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-2 space-y-2">
+            <PredictionInsightsPanel fight={homeFight} />
+            <SmartMoneyTracker fight={homeFight} />
+          </CollapsibleContent>
+        </Collapsible>
       </div>
 
       {/* Footer: volume + detail link */}
@@ -214,10 +279,8 @@ function OutcomeButton({
   emoji,
   teamName,
   price,
-  colorClass,
-  priceColor,
+  selected,
   disabled,
-  loading,
   hasBet,
   onClick,
 }: {
@@ -225,43 +288,38 @@ function OutcomeButton({
   emoji?: string;
   teamName: string;
   price: number | null | undefined;
-  colorClass: string;
-  priceColor: string;
+  selected?: boolean;
   disabled?: boolean;
-  loading?: boolean;
   hasBet?: boolean;
   onClick: () => void;
 }) {
+  const baseClass = selected
+    ? "border-primary bg-primary/15 ring-2 ring-primary/50"
+    : hasBet
+      ? "border-primary/30 ring-1 ring-primary/30"
+      : "border-border/40 hover:border-primary/40 hover:bg-primary/5";
+
   return (
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`flex flex-col items-center gap-1.5 rounded-lg border p-3 transition-all ${colorClass} ${
-        disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
-      } ${hasBet ? "ring-2 ring-primary/50" : ""}`}
+      className={`flex flex-col items-center gap-2 rounded-xl border p-4 transition-all ${baseClass} ${
+        disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer active:scale-[0.97]"
+      }`}
     >
       {logo ? (
-        <img src={logo} alt={teamName} className="w-8 h-8 object-contain rounded-sm" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+        <img src={logo} alt={teamName} className="w-10 h-10 object-contain rounded-sm" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
       ) : emoji ? (
-        <span className="text-2xl">{emoji}</span>
+        <span className="text-3xl">{emoji}</span>
       ) : (
-        <span className="text-2xl">⚽</span>
+        <span className="text-3xl">⚽</span>
       )}
-      <span className="text-[11px] font-semibold text-foreground text-center leading-tight line-clamp-2">
+      <span className="text-xs font-bold text-foreground text-center leading-tight line-clamp-2">
         {teamName}
       </span>
-      <TooltipProvider delayDuration={200}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className={`text-sm font-bold ${priceColor}`}>
-              {loading ? "..." : formatPercent(price)}
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="text-xs">
-            Represents current market probability
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      <span className={`text-lg font-extrabold ${selected ? "text-primary" : "text-foreground"}`}>
+        {formatPercent(price)}
+      </span>
     </button>
   );
 }
