@@ -218,6 +218,9 @@ export default function PredictionSuccessScreen({
           poolUsd={poolA + poolB}
           wallet={wallet}
           referralCode={referralCode ?? undefined}
+          operatorBrandName={operatorBrandName}
+          operatorLogoUrl={operatorLogoUrl}
+          operatorSubdomain={operatorSubdomain}
         />
       )}
     </>

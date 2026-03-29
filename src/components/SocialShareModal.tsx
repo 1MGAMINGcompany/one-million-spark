@@ -305,15 +305,17 @@ export default function SocialShareModal(props: ShareModalProps) {
 
 function buildCaption(p: ShareModalProps, url: string): string {
   const emoji = sportEmoji(p.sport);
+  const brand = p.operatorBrandName || "1MGAMING";
+  const brandAt = p.operatorBrandName ? brand : "@1MGaming";
   if (p.variant === "prediction") {
     return `WHO WINS? 👊\n${emoji} My pick: ${p.fighterPick}${p.amountUsd ? ` | $${p.amountUsd.toFixed(2)}` : ""}\nFight Predictions (BKFC · Muay Thai · MMA · Futbol)\nPlayers vs Players • Winners take the pot\n👇 Make your pick\n🌐 ${url}`;
   }
   if (p.variant === "claim_win") {
     const won = p.amountWon ?? p.solWon;
     const fmt = p.amountWon != null ? `$${won?.toFixed(2)}` : `${won?.toFixed(4) || ""} SOL`;
-    return `💰 Won ${fmt} on @1MGaming!\n${p.gameTitle || p.eventTitle || ""}`;
+    return `💰 Won ${fmt} on ${brandAt}!\n${p.gameTitle || p.eventTitle || ""}`;
   }
   const won = p.amountWon ?? p.solWon;
   const fmt = p.amountWon != null ? `$${won?.toFixed(2)}` : won ? `${won.toFixed(4)} SOL` : "";
-  return `🏆 Victory on @1MGaming!${fmt ? ` Won ${fmt}` : ""}\n${p.gameName || p.gameTitle || ""}`;
+  return `🏆 Victory on ${brandAt}!${fmt ? ` Won ${fmt}` : ""}\n${p.gameName || p.gameTitle || ""}`;
 }
