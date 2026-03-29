@@ -72,7 +72,7 @@ const POLITICS_KEYWORDS = [
   "governor", "mayor", "biden", "trump", "politics",
 ];
 const NON_SPORT_KEYWORDS = [
-  "champion", "season", "winner of", "year",
+  "season", "winner of", "year",
   "ipo", "bitcoin", "ethereum", "crypto",
   "stock", "recession", "inflation", "gdp",
   "fed rate", "interest rate",
@@ -389,7 +389,7 @@ function buildTelemetry(partial: Partial<QueryTelemetry>): QueryTelemetry {
 
 // ── Fetch functions ──
 
-/** Fetch events by tag_id — reliable for soccer league discovery. Supports pagination. */
+/** Fetch events by tag_id — reliable for soccer league discovery. Supports pagination up to 500 events. */
 async function fetchEventsByTagId(tagId: string, limit = 100): Promise<GammaEvent[]> {
   const allEvents: GammaEvent[] = [];
   const seen = new Set<string>();
@@ -398,7 +398,7 @@ async function fetchEventsByTagId(tagId: string, limit = 100): Promise<GammaEven
   
   for (let page = 0; page < maxPages; page++) {
     try {
-      const url = `${GAMMA_BASE}/events?tag_id=${tagId}&active=true&closed=false&limit=${limit}&offset=${offset}&order=startDate&ascending=false`;
+      const url = `${GAMMA_BASE}/events?tag_id=${tagId}&closed=false&upcoming=true&limit=${limit}&offset=${offset}&order=startDate&ascending=true`;
       const res = await fetch(url);
       if (!res.ok) break;
       const data = await res.json();
@@ -425,7 +425,7 @@ async function fetchEventsByTagId(tagId: string, limit = 100): Promise<GammaEven
 /** Fetch ALL active events from Gamma (no tag filter) with pagination */
 async function fetchAllActiveEvents(limit = 50, offset = 0): Promise<GammaEvent[]> {
   try {
-    const url = `${GAMMA_BASE}/events?active=true&closed=false&limit=${limit}&offset=${offset}&order=startDate&ascending=false`;
+    const url = `${GAMMA_BASE}/events?closed=false&upcoming=true&limit=${limit}&offset=${offset}&order=startDate&ascending=true`;
     const res = await fetch(url);
     if (!res.ok) return [];
     const data = await res.json();
@@ -1326,6 +1326,21 @@ Deno.serve(async (req) => {
         filter_message: results.length === 0 && rawEvents.length > 0
           ? `Data found from Polymarket (${rawEvents.length} events), but local filters rejected all results.`
           : undefined,
+        // Debug stats for admin panel
+        debug_stats: {
+          raw_fetched: rawEvents.length,
+          after_prop_filter: rawEvents.length - rejected.filter(r => r.fixtureReason && !r.dateReason).length,
+          after_date_filter: rawEvents.length - rejected.filter(r => r.dateReason).length,
+          after_all_filters: results.length,
+          rejection_breakdown: (() => {
+            const reasons: Record<string, number> = {};
+            for (const r of rejected) {
+              const reason = (r.dateReason || r.fixtureReason || "unknown").split(":")[0];
+              reasons[reason] = (reasons[reason] || 0) + 1;
+            }
+            return reasons;
+          })(),
+        },
         telemetry: tel,
       });
     }
