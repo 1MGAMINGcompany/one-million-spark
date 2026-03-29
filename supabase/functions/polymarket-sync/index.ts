@@ -854,6 +854,8 @@ async function importSingleEvent(
       tokenIds = JSON.parse(market.clobTokenIds || "[]");
     } catch { continue; }
 
+    // Reject markets with more than 3 outcomes (prop markets)
+    if (outcomes.length > 3) continue;
     if (outcomes.length < 2 || tokenIds.length < 2) continue;
 
     // Skip prop/more-markets at market level
