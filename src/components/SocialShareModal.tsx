@@ -65,8 +65,10 @@ function logShareAction(variant: ShareVariant, method: string, wallet?: string) 
   }).then(() => {});
 }
 
-function buildShareUrl(referralCode?: string): string {
-  const base = "https://1mgaming.com/predictions";
+function buildShareUrl(referralCode?: string, operatorSubdomain?: string): string {
+  const base = operatorSubdomain
+    ? `https://${operatorSubdomain}.1mg.live`
+    : "https://1mgaming.com/predictions";
   if (referralCode && referralCode.length >= 4 && referralCode.length <= 16) {
     return `${base}?ref=${referralCode}`;
   }
