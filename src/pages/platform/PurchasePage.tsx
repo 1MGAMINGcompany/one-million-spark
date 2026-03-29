@@ -63,12 +63,49 @@ export default function PurchasePage() {
   const effectivePrice = promoResult?.valid ? (promoResult.discounted_price ?? BASE_PRICE) : BASE_PRICE;
   const hasEnoughBalance = effectivePrice === 0 || (usdc_balance !== null && usdc_balance >= effectivePrice);
 
+  const validatePromo = useCallback(async () => {
+    if (!promoCode.trim()) return;
+    setValidatingPromo(true);
+    try {
+      const { data, error: err } = await supabase.functions.invoke("prediction-admin", {
+        body: { action: "validatePromoCode", wallet: "system", code: promoCode.trim() },
+      });
+      if (err) throw err;
+      setPromoResult(data as PromoResult);
+    } catch {
+      setPromoResult({ valid: false, error: "Validation failed" });
+    } finally {
+      setValidatingPromo(false);
+    }
+  }, [promoCode]);
+
   const handlePayment = useCallback(async () => {
     setError(null);
     setStep("payment");
 
     try {
-      const data = encodeTransferData(TREASURY_ADDRESS, PURCHASE_AMOUNT_RAW);
+      const token = await getAccessToken();
+
+      // Free with promo code — no tx needed
+      if (effectivePrice === 0 && promoResult?.valid) {
+        setStep("confirming");
+        setConfirming(true);
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/operator-manage`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-privy-token": token || "" },
+            body: JSON.stringify({ action: "confirm_purchase", promo_code: promoCode.trim() }),
+          }
+        );
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || "Verification failed");
+        setStep("success");
+        return;
+      }
+
+      const amountRaw = "0x" + (BigInt(Math.ceil(effectivePrice)) * BigInt(10 ** 6)).toString(16);
+      const data = encodeTransferData(TREASURY_ADDRESS, amountRaw);
 
       const txReceipt = await sendTransaction({
         to: USDC_CONTRACT,
@@ -84,7 +121,6 @@ export default function PurchasePage() {
       setConfirming(true);
 
       // Verify on backend
-      const token = await getAccessToken();
       const res = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/operator-manage`,
         {
@@ -96,6 +132,7 @@ export default function PurchasePage() {
           body: JSON.stringify({
             action: "confirm_purchase",
             tx_hash: hash,
+            promo_code: promoCode.trim() || undefined,
           }),
         }
       );
@@ -112,7 +149,7 @@ export default function PurchasePage() {
     } finally {
       setConfirming(false);
     }
-  }, [sendTransaction, getAccessToken]);
+  }, [sendTransaction, getAccessToken, effectivePrice, promoCode, promoResult]);
 
   if (step === "success") {
     return (
