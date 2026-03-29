@@ -909,6 +909,8 @@ async function importSingleEvent(
         }
       } catch { /* non-fatal */ }
 
+      const fightVisibility = visibility || "all";
+
       await supabase.from("prediction_fights").insert({
         title: market.groupItemTitle || market.question,
         fighter_a_name: outcomes[0],
@@ -930,6 +932,8 @@ async function importSingleEvent(
         price_a: parseFloat(outcomePrices[0] || "0"),
         price_b: parseFloat(outcomePrices[1] || "0"),
         status: "open",
+        visibility: fightVisibility,
+        event_date: timeInfo.chosen || gEvent.startDate || null,
       });
     }
     imported++;
