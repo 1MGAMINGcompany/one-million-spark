@@ -1150,6 +1150,14 @@ function AdminFightCard({
           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/20 text-primary">🏠 NATIVE</span>
         )}
         <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted/50 text-muted-foreground">{commissionPct}% fee</span>
+        {/* Visibility badge */}
+        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+          fight.visibility === "platform" ? "bg-blue-500/20 text-blue-400" :
+          fight.visibility === "all" ? "bg-green-500/20 text-green-400" :
+          "bg-yellow-500/20 text-yellow-400"
+        }`}>
+          {fight.visibility === "platform" ? "1MG.live" : fight.visibility === "all" ? "Both" : "Flagship"}
+        </span>
         {fight.featured && (
           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400">⭐ FEATURED</span>
         )}
