@@ -186,10 +186,10 @@ export default function PlatformAdmin() {
     setBrowseResults([]);
     try {
       const { data, error } = await supabase.functions.invoke("polymarket-sync", {
-        body: { action: "browse_league", wallet: address, league },
+        body: { action: "browse_league", wallet: address, league_key: league },
       });
       if (error) throw error;
-      const events = data?.events || [];
+      const events = data?.results || [];
       if (events.length === 0) {
         const leagueLabel = BROWSE_LEAGUES.find(l => l.key === league)?.label || league;
         setBrowseMessage(`No active Polymarket markets for ${leagueLabel} right now. Season may be in offseason.`);
