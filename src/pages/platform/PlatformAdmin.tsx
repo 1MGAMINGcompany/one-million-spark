@@ -269,6 +269,11 @@ export default function PlatformAdmin() {
             <Globe className="w-6 h-6 text-blue-400" /> 1MG.live Admin
           </h1>
           <div className="flex items-center gap-2">
+            <Link to="/predictions/admin">
+              <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground hover:text-foreground">
+                <ArrowLeft className="w-3 h-3" /> Main Admin
+              </Button>
+            </Link>
             <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded-full">
               {activePlatformCount} active
             </span>
