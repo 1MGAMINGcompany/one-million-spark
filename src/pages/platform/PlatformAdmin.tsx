@@ -113,9 +113,15 @@ const BROWSE_LEAGUES = [
   { key: "cfb", label: "CFB" },
   { key: "atp", label: "ATP" },
   { key: "wta", label: "WTA" },
+  { key: "tennis-atp", label: "Tennis ATP" },
+  { key: "tennis-wta", label: "Tennis WTA" },
+  { key: "tennis-grand-slam", label: "Grand Slams" },
   { key: "golf", label: "Golf" },
   { key: "f1", label: "F1" },
   { key: "cricket", label: "Cricket" },
+  { key: "cricket-ipl", label: "IPL" },
+  { key: "cricket-psl", label: "PSL" },
+  { key: "cricket-intl", label: "Cricket Intl" },
   { key: "rugby", label: "Rugby" },
 ];
 
