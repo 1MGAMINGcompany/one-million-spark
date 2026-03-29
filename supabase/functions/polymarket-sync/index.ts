@@ -1458,8 +1458,10 @@ Deno.serve(async (req) => {
       if (!event_ids || !Array.isArray(event_ids) || event_ids.length === 0) {
         return json({ error: "Missing or empty event_ids array" }, 400);
       }
+      // Cap at 15 per call to avoid timeout
+      const batch = event_ids.slice(0, 15);
       const results: { id: string; success: boolean; imported?: number; error?: string }[] = [];
-      for (const eid of event_ids.slice(0, 50)) { // Max 50 at once
+      for (const eid of batch) {
         try {
           const gEvent = await fetchEventById(eid);
           if (!gEvent) {
@@ -1473,7 +1475,7 @@ Deno.serve(async (req) => {
         }
       }
       const totalImported = results.filter(r => r.success).reduce((sum, r) => sum + (r.imported || 0), 0);
-      return json({ success: true, total_events: results.length, total_imported: totalImported, results });
+      return json({ success: true, total_events: results.length, total_imported: totalImported, results, has_more: event_ids.length > 15 });
     }
 
     // ══════════════════════════════════════════════════

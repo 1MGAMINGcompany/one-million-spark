@@ -623,9 +623,14 @@ export default function PlatformAdmin() {
                 <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full ml-1">{fights.length} total</span>
                 <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">${analytics.totalPool.toFixed(0)} pool</span>
               </h2>
-              <Button variant="outline" size="sm" onClick={() => loadFights()} className="gap-1 h-7 text-[10px]">
-                <RefreshCw className="w-3 h-3" /> Refresh
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="sm" onClick={handleCleanup} disabled={cleanupBusy} className="gap-1 h-7 text-[10px] text-red-400">
+                  <Trash2 className="w-3 h-3" /> {cleanupBusy ? "Cleaning..." : "Remove Junk"}
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => loadFights()} className="gap-1 h-7 text-[10px]">
+                  <RefreshCw className="w-3 h-3" /> Refresh
+                </Button>
+              </div>
             </div>
 
             {/* Filter row */}
