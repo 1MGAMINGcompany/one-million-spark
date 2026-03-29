@@ -4,6 +4,30 @@
     <script>
       (function(){var t=localStorage.getItem('theme');if(!t)t='dark';if(t==='dark')document.documentElement.classList.add('dark');})();
     </script>
+    <script>
+      (function(){
+        var h=location.hostname;
+        if(h==='1mg.live'||h==='www.1mg.live'){
+          document.title='1MG.live | Launch Your Own Predictions App';
+          var setM=function(a,k,v){var e=document.querySelector('meta['+a+'="'+k+'"]');if(e)e.setAttribute('content',v);};
+          setM('name','description','Start a sports predictions business with your own branded app. Built-in payments, live events, and instant payouts. No coding required.');
+          setM('property','og:title','1MG.live — Your Predictions App, Your Brand, Your Revenue');
+          setM('property','og:description','Start a sports predictions business with your own branded app. Built-in payments, live events, and instant payouts.');
+          setM('property','og:url','https://1mg.live/');
+          setM('property','og:image','https://1mg.live/images/1mglive-logo.png');
+          setM('property','og:site_name','1MG.live');
+          setM('name','twitter:title','1MG.live — Launch Your Own Predictions App');
+          setM('name','twitter:description','Start a sports predictions business with your own branded app. Built-in payments, live events, and instant payouts.');
+          setM('name','twitter:image','https://1mg.live/images/1mglive-logo.png');
+          var cl=document.querySelector("link[rel='canonical']");if(cl)cl.setAttribute('href','https://1mg.live/');
+          var fi=document.querySelector("link[rel='icon']");if(fi){fi.setAttribute('href','/images/1mglive-logo.png');fi.setAttribute('type','image/png');}
+          var mn=document.querySelector("link[rel='manifest']");if(mn)mn.setAttribute('href','/site-1mg.webmanifest');
+          var at=document.querySelector("meta[name='apple-mobile-web-app-title']");if(at)at.setAttribute('content','1MG.live');
+          var an=document.querySelector("meta[name='application-name']");if(an)an.setAttribute('content','1MG.live');
+          var ai=document.querySelector("link[rel='apple-touch-icon']");if(ai)ai.setAttribute('href','/images/1mglive-logo.png');
+        }
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>1M Gaming | Premium Skill Gaming Platform</title>

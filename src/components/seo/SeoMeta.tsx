@@ -1,7 +1,12 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 
-const SITE_URL = "https://1mgaming.com";
+function isPlatformDomain() {
+  const h = window.location.hostname;
+  return h === "1mg.live" || h === "www.1mg.live" || h.endsWith(".1mg.live");
+}
+
+const SITE_URL = isPlatformDomain() ? "https://1mg.live" : "https://1mgaming.com";
 
 interface SeoMetaProps {
   title: string;
@@ -62,7 +67,7 @@ export function useSeoMeta({ title, description, path, ogType = "website", ogIma
     setMeta("name", "twitter:image", image);
 
     // Site-level
-    setMeta("property", "og:site_name", "1M Gaming");
+    setMeta("property", "og:site_name", isPlatformDomain() ? "1MG.live" : "1M Gaming");
   }, [title, description, path, ogType, ogImage, location.pathname]);
 }
 

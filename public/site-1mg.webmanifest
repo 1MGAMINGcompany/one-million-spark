@@ -1,0 +1,26 @@
+{
+  "name": "1MG.live",
+  "short_name": "1MG.live",
+  "description": "Launch your own sports predictions app. Built-in payments, live events, instant payouts.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0A0A0F",
+  "theme_color": "#0A0A0F",
+  "icons": [
+    {
+      "src": "/images/1mglive-logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/images/1mglive-logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/images/1mglive-logo.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

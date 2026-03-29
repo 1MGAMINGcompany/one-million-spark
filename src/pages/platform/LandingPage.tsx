@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { usePrivy } from "@privy-io/react-auth";
 import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
+import { useSeoMeta } from "@/components/seo/SeoMeta";
 
 import footballImg from "@/assets/football-1mg.png";
 import basketballImg from "@/assets/basketball-1mg.png";
@@ -145,6 +146,12 @@ export default function LandingPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { ready, authenticated, login, logout, user } = usePrivy();
+
+  useSeoMeta({
+    title: "1MG.live — Launch Your Own Predictions App in Minutes",
+    description: "Start a sports predictions business with your own branded app. Built-in payments, live events, and instant payouts. No coding required.",
+    ogImage: "https://1mg.live/images/1mglive-logo.png",
+  });
 
   const evmWallet = user?.linkedAccounts?.find(
     (a: any) => a.type === "wallet" && a.chainType === "ethereum"
