@@ -13,7 +13,8 @@ export interface MarketData {
   priceB: number;
   poolAUsd: number;
   poolBUsd: number;
-  polymarketVolumeUsd?: number;
+  /** Aggregated market volume (internal) */
+  externalVolumeUsd?: number;
 }
 
 /* ── Derived metrics ── */
