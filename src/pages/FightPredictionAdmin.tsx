@@ -461,6 +461,9 @@ export default function FightPredictionAdmin() {
             <Shield className="w-6 h-6 text-primary" /> Prediction Admin
           </h1>
           <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => navigate('/admin/platform')} className="gap-2">
+              <Globe className="w-4 h-4" /> 1MG.live
+            </Button>
             <Button variant="outline" size="sm" onClick={() => navigate('/referrals/admin')} className="gap-2">
               <Users className="w-4 h-4" /> Referrals
             </Button>
