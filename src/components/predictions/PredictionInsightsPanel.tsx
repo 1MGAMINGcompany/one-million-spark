@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import {
   TrendingUp, TrendingDown, Minus, Activity, Brain,
   BarChart3, Eye, EyeOff, Droplets, AlertTriangle, Bug, Sparkles,
@@ -21,6 +21,11 @@ import {
   type LiquidityLabel,
   type ConfidenceLabel,
 } from "@/lib/prediction-insights";
+
+/* ── Constants ── */
+const AI_CACHE_TTL = 5 * 60 * 1000;
+const AI_REQUEST_TIMEOUT = 6_000; // 6s hard timeout
+const isDev = import.meta.env.DEV;
 
 /* ── Visual helpers ── */
 function TrendBadge({ trend }: { trend: TrendLabel }) {
@@ -50,20 +55,17 @@ function LiquidityBadge({ liq }: { liq: LiquidityLabel }) {
 /* ── "Why this matters" one-liner ── */
 function getWhyLine(confidence: ConfidenceLabel, liq: LiquidityLabel, trend: TrendLabel): string | null {
   if (confidence === "Strong Favorite" && liq === "High")
-    return "Strong consensus with deep liquidity — this market has clear price direction.";
+    return "Deep liquidity backs a clear market lean — pricing is more reliable here.";
   if (liq === "Low")
-    return "Thin market — new entries can shift prices quickly.";
+    return "Lower liquidity means price can move quickly on new entries.";
   if (confidence === "Close Market")
-    return "Tight pricing means small edges matter more here.";
+    return "No strong favorite — small entries can shift the balance.";
   if (trend === "Rising")
-    return "Upward momentum backed by market activity.";
+    return "Momentum is building, backed by recent activity.";
   return null;
 }
 
-/* ── AI insight cache ── */
-const aiCache = new Map<string, { ts: number; data: AIInsight }>();
-const AI_CACHE_TTL = 5 * 60 * 1000;
-
+/* ── AI insight types & cache ── */
 interface AIInsight {
   summary: string;
   confidenceLabel?: string;
@@ -72,48 +74,92 @@ interface AIInsight {
   fallback: boolean;
 }
 
-async function fetchAIInsight(fight: Fight, localData: ReturnType<typeof buildLocalData>): Promise<AIInsight | null> {
+const aiCache = new Map<string, { ts: number; data: AIInsight }>();
+/** Track in-flight requests to prevent duplicate fetches */
+const inflightRequests = new Map<string, Promise<AIInsight | null>>();
+
+async function fetchAIInsight(
+  fight: Fight,
+  localData: ReturnType<typeof buildLocalData>,
+): Promise<AIInsight | null> {
   const cacheKey = fight.id;
+
+  // Return cached result if fresh
   const cached = aiCache.get(cacheKey);
-  if (cached && Date.now() - cached.ts < AI_CACHE_TTL) return cached.data;
-
-  try {
-    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/prediction-ai-insight`;
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-      },
-      body: JSON.stringify({
-        title: fight.title,
-        sport: fight.source,
-        sideA: fight.fighter_a_name,
-        sideB: fight.fighter_b_name,
-        probabilityA: fight.price_a ?? 0,
-        probabilityB: fight.price_b ?? 0,
-        volume: localData.volume,
-        liquidity: localData.liquidity,
-        trend: localData.trend,
-        signals: localData.signals.map((s) => s.label),
-      }),
-    });
-
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    if (data.fallback) return null;
-    const result: AIInsight = {
-      summary: data.summary,
-      confidenceLabel: data.confidenceLabel,
-      signalTags: data.signalTags,
-      caution: data.caution,
-      fallback: false,
-    };
-    aiCache.set(cacheKey, { ts: Date.now(), data: result });
-    return result;
-  } catch {
-    return null;
+  if (cached && Date.now() - cached.ts < AI_CACHE_TTL) {
+    if (isDev) console.log(`[InsightsPanel] cache hit for ${cacheKey}`);
+    return cached.data;
   }
+
+  // Deduplicate in-flight requests
+  const inflight = inflightRequests.get(cacheKey);
+  if (inflight) {
+    if (isDev) console.log(`[InsightsPanel] deduped request for ${cacheKey}`);
+    return inflight;
+  }
+
+  const promise = (async (): Promise<AIInsight | null> => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT);
+
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/prediction-ai-insight`;
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          title: fight.title,
+          sport: fight.source,
+          sideA: fight.fighter_a_name,
+          sideB: fight.fighter_b_name,
+          probabilityA: fight.price_a ?? 0,
+          probabilityB: fight.price_b ?? 0,
+          volume: localData.volume,
+          liquidity: localData.liquidity,
+          trend: localData.trend,
+          signals: localData.signals.map((s) => s.label),
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!resp.ok) {
+        if (isDev) console.warn(`[InsightsPanel] AI response ${resp.status}`);
+        return null;
+      }
+
+      const data = await resp.json();
+      if (data.fallback) {
+        if (isDev) console.log(`[InsightsPanel] AI returned fallback: ${data.error}`);
+        return null;
+      }
+
+      const result: AIInsight = {
+        summary: data.summary,
+        confidenceLabel: data.confidenceLabel,
+        signalTags: data.signalTags,
+        caution: data.caution,
+        fallback: false,
+      };
+      aiCache.set(cacheKey, { ts: Date.now(), data: result });
+      if (isDev) console.log(`[InsightsPanel] AI insight cached for ${cacheKey}`);
+      return result;
+    } catch (err) {
+      if (isDev) {
+        const msg = err instanceof Error ? err.message : "unknown";
+        console.warn(`[InsightsPanel] AI fetch failed (${msg}) — using local fallback`);
+      }
+      return null;
+    }
+  })();
+
+  inflightRequests.set(cacheKey, promise);
+  promise.finally(() => inflightRequests.delete(cacheKey));
+  return promise;
 }
 
 /* ── Build local data ── */
@@ -139,43 +185,67 @@ export default function PredictionInsightsPanel({ fight }: { fight: Fight }) {
   const [aiInsight, setAiInsight] = useState<AIInsight | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const fetchedRef = useRef(false);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const local = useMemo(() => buildLocalData(fight), [fight]);
   const whyLine = useMemo(() => getWhyLine(local.confidence, local.liquidity, local.trend), [local]);
 
-  useEffect(() => {
+  // Visibility-gated AI fetch — only fire when panel enters viewport
+  const triggerFetch = useCallback(() => {
     if (fetchedRef.current) return;
     fetchedRef.current = true;
     setAiLoading(true);
     fetchAIInsight(fight, local)
       .then((result) => setAiInsight(result))
       .finally(() => setAiLoading(false));
-  }, [fight.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fight, local]);
+
+  useEffect(() => {
+    if (fetchedRef.current) return;
+    if (!panelRef.current) {
+      // Fallback: if IntersectionObserver unavailable, fetch immediately
+      triggerFetch();
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          triggerFetch();
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.1 },
+    );
+    observer.observe(panelRef.current);
+    return () => observer.disconnect();
+  }, [triggerFetch]);
 
   const displayInsight = aiInsight?.summary || local.localInsight;
   const displayCaution = aiInsight?.caution || local.caution;
   const isAI = !!aiInsight && !aiInsight.fallback;
-  const isDev = import.meta.env.DEV;
 
   if (["settled", "cancelled", "refunds_complete"].includes(fight.status)) return null;
 
   return (
-    <div className="mt-3 rounded-xl border border-primary/10 bg-gradient-to-b from-card/90 to-card/60 backdrop-blur-sm overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300 shadow-sm">
-
+    <div
+      ref={panelRef}
+      className="mt-3 rounded-xl border border-primary/10 bg-gradient-to-b from-card/90 to-card/60 backdrop-blur-sm overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300 shadow-sm"
+    >
       {/* Section 1 — Key Numbers */}
-      <div className="px-4 py-3 border-b border-border/15">
+      <div className="px-3 sm:px-4 py-3 border-b border-border/15">
         <div className="flex items-center gap-1.5 mb-2.5">
           <BarChart3 className="w-3.5 h-3.5 text-primary" />
-          <span className="text-[10px] font-bold uppercase tracking-widest text-primary">Market Overview</span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-primary">Market Overview</span>
         </div>
-        <div className="grid grid-cols-4 gap-3 text-center">
+        <div className="grid grid-cols-4 gap-2 sm:gap-3 text-center">
           <div className="space-y-0.5">
             <p className="text-[9px] text-muted-foreground/70 uppercase tracking-wide font-medium">Favored</p>
-            <p className="text-base font-black text-foreground tabular-nums">{local.favProb}</p>
+            <p className="text-sm sm:text-base font-black text-foreground tabular-nums">{local.favProb}</p>
           </div>
           <div className="space-y-0.5">
             <p className="text-[9px] text-muted-foreground/70 uppercase tracking-wide font-medium">Volume</p>
-            <p className="text-base font-black text-foreground tabular-nums">{local.volumeFmt}</p>
+            <p className="text-sm sm:text-base font-black text-foreground tabular-nums">{local.volumeFmt}</p>
           </div>
           <div className="space-y-0.5">
             <p className="text-[9px] text-muted-foreground/70 uppercase tracking-wide font-medium">Trend</p>
@@ -190,10 +260,10 @@ export default function PredictionInsightsPanel({ fight }: { fight: Fight }) {
 
       {/* Section 2 — Market Signals */}
       {local.signals.length > 0 && (
-        <div className="px-4 py-2.5 border-b border-border/15">
+        <div className="px-3 sm:px-4 py-2.5 border-b border-border/15">
           <div className="flex items-center gap-1.5 mb-2">
             <Activity className="w-3.5 h-3.5 text-primary/60" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-primary/60">Signals</span>
+            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-primary/60">Signals</span>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {local.signals.map((s) => (
@@ -209,11 +279,11 @@ export default function PredictionInsightsPanel({ fight }: { fight: Fight }) {
       )}
 
       {/* Section 3 — AI / Market Read */}
-      <div className="px-4 py-3 border-b border-border/15">
+      <div className="px-3 sm:px-4 py-3 border-b border-border/15">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-1.5">
             {isAI ? <Sparkles className="w-3.5 h-3.5 text-primary" /> : <Brain className="w-3.5 h-3.5 text-accent" />}
-            <span className="text-[10px] font-bold uppercase tracking-widest text-accent">
+            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-accent">
               {isAI ? "AI Market Read" : "Market Read"}
             </span>
             {isAI && (
@@ -241,7 +311,6 @@ export default function PredictionInsightsPanel({ fight }: { fight: Fight }) {
                 {displayInsight}
               </p>
             )}
-            {/* "Why this matters" */}
             {whyLine && !aiLoading && (
               <p className="mt-2 text-[10px] leading-relaxed text-primary/80 font-medium">
                 💡 {whyLine}
@@ -252,7 +321,7 @@ export default function PredictionInsightsPanel({ fight }: { fight: Fight }) {
       </div>
 
       {/* Section 4 — Caution */}
-      <div className="px-4 py-2.5">
+      <div className="px-3 sm:px-4 py-2.5">
         <div className="flex items-start gap-2">
           <AlertTriangle className="w-3 h-3 text-yellow-500/60 mt-[2px] shrink-0" />
           <p className="text-[10px] leading-relaxed text-muted-foreground/60">
@@ -261,13 +330,13 @@ export default function PredictionInsightsPanel({ fight }: { fight: Fight }) {
         </div>
       </div>
 
-      {/* Dev debug */}
+      {/* Dev debug — never visible in production */}
       {isDev && (
         <Collapsible>
-          <CollapsibleTrigger className="w-full px-4 py-1.5 border-t border-border/10 flex items-center gap-1 text-[9px] text-muted-foreground/40 hover:text-muted-foreground transition-colors">
+          <CollapsibleTrigger className="w-full px-3 sm:px-4 py-1.5 border-t border-border/10 flex items-center gap-1 text-[9px] text-muted-foreground/40 hover:text-muted-foreground transition-colors">
             <Bug className="w-3 h-3" /> Debug
           </CollapsibleTrigger>
-          <CollapsibleContent className="px-4 py-2 text-[9px] text-muted-foreground/40 font-mono space-y-0.5 border-t border-border/10 bg-black/20">
+          <CollapsibleContent className="px-3 sm:px-4 py-2 text-[9px] text-muted-foreground/40 font-mono space-y-0.5 border-t border-border/10 bg-black/20">
             <p>priceA: {fight.price_a ?? "null"} | priceB: {fight.price_b ?? "null"}</p>
             <p>volume: ${local.volume.toFixed(0)} | liq: {local.liquidity}</p>
             <p>trend: {local.trend} | conf: {local.confidence}</p>

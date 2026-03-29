@@ -29,7 +29,7 @@ serve(async (req) => {
     if (!LOVABLE_API_KEY) {
       console.warn("LOVABLE_API_KEY not set — returning fallback");
       return new Response(
-        JSON.stringify({ fallback: true, error: "AI key not configured" }),
+        JSON.stringify({ fallback: true, error: "ai_unavailable" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -38,12 +38,12 @@ serve(async (req) => {
     const pctB = Math.round((probabilityB ?? 0) * 100);
 
     const systemPrompt = `You are a concise prediction market analyst for 1MGAMING. Produce a SHORT JSON object with these exact keys:
-- "summary": 2-3 sentences of plain-English market analysis. Never guarantee outcomes. Use words like "prediction", "market", "activity". Never use "bet" or "gamble".
+- "summary": 2-3 sentences of plain-English market analysis. Be specific and useful — avoid filler. Use words like "market", "pricing", "activity". Never use "bet", "gamble", or "wager". Never guarantee outcomes.
 - "confidenceLabel": one of "Strong Favorite", "Moderate Lean", "Close Market", "Uncertain"
 - "signalTags": array of 2-4 short tags like "High Activity", "Trending Up", "Low Liquidity"
-- "caution": one sentence of responsible caution
+- "caution": one short sentence of responsible caution relevant to this specific market
 
-Respond ONLY with valid JSON, no markdown.`;
+Respond ONLY with valid JSON, no markdown fences.`;
 
     const userPrompt = `Market: ${title}
 Sport: ${sport || "unknown"}
@@ -55,6 +55,10 @@ Trend: ${trend ?? "stable"}
 Current Signals: ${(signals ?? []).join(", ") || "none"}
 
 Analyze this market concisely.`;
+
+    // Hard 8s timeout on AI gateway call
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8_000);
 
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -70,7 +74,10 @@ Analyze this market concisely.`;
         ],
         temperature: 0.4,
       }),
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (!aiResp.ok) {
       const status = aiResp.status;
@@ -129,9 +136,11 @@ Analyze this market concisely.`;
       );
     }
   } catch (e) {
-    console.error("prediction-ai-insight error:", e);
+    // Timeout or network error — never expose raw error
+    const isTimeout = e instanceof DOMException && e.name === "AbortError";
+    console.error("prediction-ai-insight error:", isTimeout ? "request_timeout" : e);
     return new Response(
-      JSON.stringify({ fallback: true, error: e instanceof Error ? e.message : "Unknown error" }),
+      JSON.stringify({ fallback: true, error: isTimeout ? "timeout" : "ai_error" }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
