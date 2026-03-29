@@ -66,7 +66,7 @@ export default function SmartMoneyTracker({ fight }: { fight: Fight }) {
         <div className="flex items-center gap-1.5">
           <Zap className="w-3.5 h-3.5 text-primary" />
           <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-primary">
-            Smart Money Activity
+            Big Player Activity
           </span>
         </div>
       </div>
