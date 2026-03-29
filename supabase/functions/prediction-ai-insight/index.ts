@@ -38,10 +38,16 @@ serve(async (req) => {
     const pctB = Math.round((probabilityB ?? 0) * 100);
 
     const systemPrompt = `You are a concise prediction market analyst for 1MGAMING. Produce a SHORT JSON object with these exact keys:
-- "summary": 2-3 sentences of plain-English market analysis. Be specific and useful — avoid filler. Use words like "market", "pricing", "activity". Never use "bet", "gamble", or "wager". Never guarantee outcomes.
+- "summary": 2-3 sentences of plain-English market analysis. Be specific and useful — avoid filler. Use words like "market", "pricing", "activity", "liquidity", "momentum", "trading activity". Never use "bet", "gamble", or "wager". Never guarantee outcomes.
 - "confidenceLabel": one of "Strong Favorite", "Moderate Lean", "Close Market", "Uncertain"
 - "signalTags": array of 2-4 short tags like "High Activity", "Trending Up", "Low Liquidity"
 - "caution": one short sentence of responsible caution relevant to this specific market
+
+STRICT RULES:
+- Never mention Polymarket, external liquidity sources, third-party markets, or any backend provider.
+- Present all data as native 1MGAMING market intelligence.
+- Use neutral terms: "market activity", "current pricing", "trading activity", "liquidity", "market momentum", "active prediction market".
+- Never reveal integrations, data routing, or external dependencies.
 
 Respond ONLY with valid JSON, no markdown fences.`;
 

@@ -182,6 +182,6 @@ export function fightToMarketData(fight: {
     priceB: fight.price_b ?? 0,
     poolAUsd: fight.pool_a_usd ?? 0,
     poolBUsd: fight.pool_b_usd ?? 0,
-    polymarketVolumeUsd: fight.polymarket_volume_usd ?? undefined,
+    externalVolumeUsd: fight.polymarket_volume_usd ?? undefined,
   };
 }
