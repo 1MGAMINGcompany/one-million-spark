@@ -263,7 +263,7 @@ export default function PredictionInsightsPanel({ fight }: { fight: Fight }) {
         <div className="px-3 sm:px-4 py-2.5 border-b border-border/15">
           <div className="flex items-center gap-1.5 mb-2">
             <Activity className="w-3.5 h-3.5 text-primary/60" />
-            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-primary/60">Signals</span>
+            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-primary/60">Market Signals</span>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {local.signals.map((s) => (
