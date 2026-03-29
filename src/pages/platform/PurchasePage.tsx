@@ -320,9 +320,13 @@ export default function PurchasePage() {
               <>
                 <Loader2 size={20} className="animate-spin" /> Sending transaction...
               </>
+            ) : effectivePrice === 0 ? (
+              <>
+                Activate for Free <ArrowRight size={18} />
+              </>
             ) : (
               <>
-                Confirm Purchase — ${PURCHASE_AMOUNT} USDC <ArrowRight size={18} />
+                Confirm Purchase — ${effectivePrice.toLocaleString()} USDC <ArrowRight size={18} />
               </>
             )}
           </Button>
