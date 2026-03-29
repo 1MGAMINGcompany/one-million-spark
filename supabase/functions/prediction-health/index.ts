@@ -7,7 +7,9 @@ const corsHeaders = {
 };
 
 const TREASURY_WALLET = "0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d";
+// Bridged USDC.e — canonical token for all prediction money flows
 const USDC_E_CONTRACT = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
+// Native USDC — only for balance diagnostics, NOT used in money flow
 const NATIVE_USDC_CONTRACT = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359";
 const CTF_EXCHANGE = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045";
 
