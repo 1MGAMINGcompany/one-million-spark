@@ -167,8 +167,8 @@ export default function SocialShareModal(props: ShareModalProps) {
               />
               <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[hsl(var(--card))]" />
               <div className="absolute top-3 left-3 flex items-center gap-2">
-                <img src={pyramidLogo} alt="1MGAMING" className="w-7 h-7" crossOrigin="anonymous" />
-                <span className="text-[11px] font-bold text-white/90 tracking-wider font-['Cinzel']">1MGAMING</span>
+                <img src={brandLogo} alt={brandName} className="w-7 h-7 rounded" crossOrigin="anonymous" />
+                <span className="text-[11px] font-bold text-white/90 tracking-wider font-['Cinzel']">{brandName}</span>
               </div>
               <div className="absolute top-3 right-3">
                 <span className={`text-[10px] font-extrabold px-3 py-1 rounded-full tracking-wider ${
