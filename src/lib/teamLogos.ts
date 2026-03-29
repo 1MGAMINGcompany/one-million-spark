@@ -70,7 +70,7 @@ const NBA_TEAMS: Record<string, string> = {
 const NHL_TEAMS: Record<string, string> = {
   bruins: "bos", canadiens: "mtl", montreal: "mtl",
   "maple leafs": "tor", rangers: "nyr", "new york rangers": "nyr",
-  penguins: "pit", blackhawks: "chi", red wings: "det",
+  penguins: "pit", blackhawks: "chi", "red wings": "det",
   oilers: "edm", edmonton: "edm", flames: "cgy", calgary: "cgy",
   canucks: "van", vancouver: "van", avalanche: "col", colorado: "col",
   lightning: "tb", panthers: "fla", florida: "fla",
