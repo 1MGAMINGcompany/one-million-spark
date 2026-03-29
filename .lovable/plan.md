@@ -1,20 +1,29 @@
 
 
-# Hide Money AI Agent — All Access Points
+# SEO Page for 1mg.live — "Buy a Predictions App"
+
+## Overview
+Create a long-form SEO page at `/buy-predictions-app` on the 1mg.live platform, targeting search queries like "buy a predictions app", "white-label predictions platform", "start a predictions business". Add footer links on the LandingPage pointing to it.
 
 ## Changes
 
-### 1. `src/App.tsx`
-- Comment out or remove the `<AIAgentHelperOverlay />` render (line 164)
-- Remove the import (line 54)
+### 1. New page: `src/pages/platform/BuyPredictionsApp.tsx`
+- Long-form SEO content page styled consistently with the dark 1mg.live theme
+- H1: "Buy Your Own Predictions App"
+- Sections: What you get, How it works, Who it's for, Sports & events covered, Pricing, FAQ
+- Structured data: JSON-LD (Article + FAQPage) for Google rich results
+- Meta tags via the existing `SeoMeta` component
+- CTA buttons throughout linking to `/purchase` (or triggering Privy login)
+- Footer matching the LandingPage footer style
 
-### 2. `src/components/Navbar.tsx`
-- Remove the "Money AI Helper" button in desktop nav (lines 170-177)
-- Remove the "Money AI Helper" button in mobile menu (lines 383-390)
-- Remove the `Sparkles` import if no longer used
+### 2. Update `src/pages/platform/PlatformApp.tsx`
+- Add route: `<Route path="/buy-predictions-app" element={<BuyPredictionsApp />} />`
 
-### 3. Other overlays (chess/checkers/backgammon/dominos/ludo onboarding)
-- These reference Money's image but are self-contained onboarding tips — leave them as-is since they don't open the AI agent panel
+### 3. Update `src/pages/platform/LandingPage.tsx` footer
+- Add link: "Buy a Predictions App" pointing to `/buy-predictions-app`
+- Keep existing links (Why Predictions Are Legal, Contact, Terms, Privacy)
 
-No files deleted — just hidden so it can be re-enabled later.
+### SEO targets
+- Primary: "buy predictions app", "buy a predictions app"
+- Secondary: "white label predictions platform", "start predictions business", "predictions app for sale", "sports predictions app"
 
