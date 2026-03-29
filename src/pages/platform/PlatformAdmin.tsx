@@ -523,8 +523,19 @@ export default function PlatformAdmin() {
 
             {bulkImporting && (
               <div className="mt-2">
-                <Progress value={50} className="h-1.5" />
-                <p className="text-[10px] text-muted-foreground mt-1">Importing events...</p>
+                <Progress value={bulkTotal > 0 ? (bulkProgress / bulkTotal) * 100 : 0} className="h-1.5" />
+                <p className="text-[10px] text-muted-foreground mt-1">Importing batch {bulkProgress}/{bulkTotal}...</p>
+              </div>
+            )}
+
+            {bulkSummary && !bulkImporting && (
+              <div className="mt-2 flex items-center gap-2">
+                <p className="text-[10px] text-muted-foreground">{bulkSummary}</p>
+                {failedBatchIds.length > 0 && (
+                  <Button size="sm" variant="outline" className="h-6 text-[10px] px-3" onClick={() => handleBulkImport(failedBatchIds)}>
+                    Retry {failedBatchIds.length} Failed
+                  </Button>
+                )}
               </div>
             )}
 
