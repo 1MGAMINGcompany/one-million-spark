@@ -449,10 +449,18 @@ export default function FightCard({
           <ViewDetailsLink fightId={fight.id} hasUpdates={fight.has_updates} />
         </div>
 
-        {/* Insights Panel (soccer) */}
+        {/* Collapsible Insights (soccer) */}
         <div className="mx-4 sm:mx-6 mb-3">
-          <PredictionInsightsPanel fight={fight} />
-          <SmartMoneyTracker fight={fight} />
+          <Collapsible>
+            <CollapsibleTrigger className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors w-full justify-center py-1">
+              <ChevronDown className="w-3.5 h-3.5" />
+              <span className="font-semibold">Show Insights</span>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-2 space-y-2">
+              <PredictionInsightsPanel fight={fight} />
+              <SmartMoneyTracker fight={fight} />
+            </CollapsibleContent>
+          </Collapsible>
         </div>
 
         {/* Draw info */}
