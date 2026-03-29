@@ -706,9 +706,7 @@ function CompactFighterRow({
           loading="lazy"
         />
       ) : (
-        <div className="w-10 h-10 rounded-full bg-muted/40 flex items-center justify-center shrink-0 text-base">
-          {SportFallbackEmoji(effectiveSport, name)}
-        </div>
+        <div className="w-10 h-10 rounded-full bg-black ring-1 ring-border/40 shrink-0" />
       )}
       <div className="min-w-0">
         <p className="text-sm font-bold text-foreground truncate leading-tight flex items-center gap-1.5">
