@@ -29,6 +29,7 @@ export default function PlatformApp({ context }: PlatformAppProps) {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
+      <Route path="/buy-predictions-app" element={<BuyPredictionsApp />} />
       <Route path="/purchase" element={<RequireAuth><PurchasePage /></RequireAuth>} />
       <Route path="/onboarding" element={<RequireAuth><OperatorOnboarding /></RequireAuth>} />
       <Route path="/dashboard" element={<RequireAuth><OperatorDashboard /></RequireAuth>} />

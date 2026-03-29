@@ -446,6 +446,7 @@ export default function LandingPage() {
             © {new Date().getFullYear()} 1MG.live — All rights reserved
           </div>
           <div className="flex flex-wrap gap-6 text-sm text-white/35">
+            <a href="/buy-predictions-app" className="hover:text-white/60 transition-colors">Buy a Predictions App</a>
             <a href="/help/are-prediction-markets-legal" className="hover:text-white/60 transition-colors">Why Predictions Are Legal</a>
             <a href="#" className="hover:text-white/60 transition-colors">Contact</a>
             <a href="/terms-of-service" className="hover:text-white/60 transition-colors">Terms</a>
