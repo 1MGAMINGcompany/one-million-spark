@@ -1443,9 +1443,34 @@ Deno.serve(async (req) => {
         amount_lamports: 0,
         fee_lamports: 0,
         pool_lamports: 0,
+        source_operator_id: source_operator_id || fight.operator_id || null,
       })
       .select()
       .single();
+
+    // ── OPERATOR REVENUE TRACKING ──
+    const resolvedOperatorId = source_operator_id || fight.operator_id || null;
+    if (resolvedOperatorId && entry) {
+      try {
+        // Split: 1% platform (100bps), remainder is operator fee
+        const platformFeeBps = 100;
+        const platformFeeUsd = Number(((parsedAmount * platformFeeBps) / 10_000).toFixed(6));
+        const operatorFeeUsd = Math.max(0, Number((fee_usd - platformFeeUsd).toFixed(6)));
+
+        await supabase.from("operator_revenue").insert({
+          operator_id: resolvedOperatorId,
+          fight_id,
+          entry_id: entry.id,
+          trade_order_id: tradeOrderId,
+          platform_fee_usdc: platformFeeUsd,
+          operator_fee_usdc: operatorFeeUsd,
+          total_fee_usdc: fee_usd,
+          entry_amount_usdc: parsedAmount,
+        });
+      } catch (revErr) {
+        console.warn("[prediction-submit] operator_revenue insert failed:", revErr);
+      }
+    }
 
     if (insertErr) throw insertErr;
 
