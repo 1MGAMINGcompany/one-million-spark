@@ -147,6 +147,12 @@ export default function LandingPage() {
   const navigate = useNavigate();
   const { ready, authenticated, login, logout, user } = usePrivy();
 
+  useSeoMeta({
+    title: "1MG.live — Launch Your Own Predictions App in Minutes",
+    description: "Start a sports predictions business with your own branded app. Built-in payments, live events, and instant payouts. No coding required.",
+    ogImage: "https://1mg.live/images/1mglive-logo.png",
+  });
+
   const evmWallet = user?.linkedAccounts?.find(
     (a: any) => a.type === "wallet" && a.chainType === "ethereum"
   ) as any;
