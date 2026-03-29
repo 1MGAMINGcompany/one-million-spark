@@ -8,7 +8,12 @@ import { toast } from "sonner";
 import { Plus, Zap } from "lucide-react";
 import { getTeamLogo } from "@/lib/teamLogos";
 
-const SPORTS = ["Soccer", "MMA", "Boxing", "NFL", "NBA", "NHL", "MLB", "NCAA", "Tennis", "Golf", "Muay Thai", "Bare Knuckle"];
+const SPORTS = [
+  "Soccer", "MMA", "UFC", "Boxing", "Kickboxing", "Muay Thai", "Bare Knuckle", "Wrestling",
+  "NFL", "NBA", "NHL", "MLB", "NCAA",
+  "Tennis", "Golf", "Cricket", "Rugby", "Table Tennis",
+  "Formula 1",
+];
 
 const VISIBILITY_OPTIONS = [
   { value: "flagship", label: "1MGAMING.com only" },
