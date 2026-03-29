@@ -255,6 +255,12 @@ const LEAGUE_SOURCES: Record<string, LeagueSource> = {
   "wta":    { key: "wta",    label: "WTA",    sportType: "tennis", fetchStrategy: "tag", tagId: "102123" },
   // ─── Golf ───
   "golf":   { key: "golf",   label: "Golf",   sportType: "golf",   fetchStrategy: "search", searchSeed: ["PGA", "golf", "PGA Tour", "Masters golf"] },
+  // ─── Motorsport ───
+  "f1":     { key: "f1",     label: "Formula 1", sportType: "golf", fetchStrategy: "search", searchSeed: ["Formula 1", "F1", "Grand Prix"] },
+  // ─── Other ───
+  "cricket":  { key: "cricket",  label: "Cricket",  sportType: "tennis", fetchStrategy: "search", searchSeed: ["cricket", "IPL", "T20"] },
+  "rugby":    { key: "rugby",    label: "Rugby",    sportType: "tennis", fetchStrategy: "search", searchSeed: ["rugby", "Six Nations", "rugby union"] },
+  "table-tennis": { key: "table-tennis", label: "Table Tennis", sportType: "tennis", fetchStrategy: "search", searchSeed: ["table tennis", "ping pong"] },
 };
 
 // Slug → league key mapping for URL parsing
