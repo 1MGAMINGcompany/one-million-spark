@@ -57,6 +57,9 @@ export default function PredictionModal({
   tradeResult,
   approvalStep,
   approvalError,
+  operatorBrandName,
+  operatorLogoUrl,
+  operatorSubdomain,
 }: {
   fight: Fight;
   pick: "fighter_a" | "fighter_b";
@@ -68,6 +71,9 @@ export default function PredictionModal({
   tradeResult?: TradeResult | null;
   approvalStep?: ApprovalStep;
   approvalError?: string | null;
+  operatorBrandName?: string;
+  operatorLogoUrl?: string | null;
+  operatorSubdomain?: string;
 }) {
   const referralCode = useMyReferralCode(wallet ?? null);
   const { usdc_balance, usdc_balance_formatted, is_loading: balanceLoading } = usePolygonUSDC();
