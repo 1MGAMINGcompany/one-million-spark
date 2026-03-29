@@ -173,6 +173,9 @@ export default function PlatformAdmin() {
   const [bulkImporting, setBulkImporting] = useState(false);
   const [bulkProgress, setBulkProgress] = useState(0);
   const [bulkTotal, setBulkTotal] = useState(0);
+  const [failedBatchIds, setFailedBatchIds] = useState<string[]>([]);
+  const [bulkSummary, setBulkSummary] = useState("");
+  const [cleanupBusy, setCleanupBusy] = useState(false);
 
   // Check admin
   useEffect(() => {
