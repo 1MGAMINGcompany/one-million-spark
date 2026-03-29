@@ -80,7 +80,7 @@ const NHL_TEAMS: Record<string, string> = {
   islanders: "nyi", devils: "njd", capitals: "wsh",
   ducks: "ana", kraken: "sea", knights: "vgk", "vegas": "vgk",
   coyotes: "ari", sharks: "sj", "san jose": "sj",
-  sabres: "buf", flyers: "phi", blue jackets: "cbj", columbus: "cbj",
+  sabres: "buf", flyers: "phi", "blue jackets": "cbj", columbus: "cbj",
 };
 
 /**
