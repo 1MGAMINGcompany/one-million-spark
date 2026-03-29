@@ -48,6 +48,9 @@ export interface ShareModalProps {
   opponentType?: string;
   streak?: number;
   gameName?: string;
+  operatorBrandName?: string;
+  operatorLogoUrl?: string | null;
+  operatorSubdomain?: string;
 }
 
 function logShareAction(variant: ShareVariant, method: string, wallet?: string) {
