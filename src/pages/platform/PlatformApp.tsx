@@ -6,6 +6,7 @@ import OperatorOnboarding from "./OperatorOnboarding";
 import OperatorDashboard from "./OperatorDashboard";
 import OperatorApp from "./OperatorApp";
 import PurchasePage from "./PurchasePage";
+import BuyPredictionsApp from "./BuyPredictionsApp";
 import HelpCenter from "@/pages/HelpCenter";
 import HelpArticle from "@/pages/HelpArticle";
 
