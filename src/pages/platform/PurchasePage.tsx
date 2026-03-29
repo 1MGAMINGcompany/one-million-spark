@@ -188,8 +188,20 @@ export default function PurchasePage() {
         <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-6 sm:p-8">
           {/* Price */}
           <div className="text-center mb-6 pb-6 border-b border-white/5">
-            <div className="text-4xl font-bold text-white mb-1">$2,400</div>
-            <div className="text-white/40 text-sm">USDC on Polygon • One-time payment</div>
+            {promoResult?.valid && effectivePrice < BASE_PRICE ? (
+              <>
+                <div className="text-lg text-white/30 line-through">${BASE_PRICE.toLocaleString()}</div>
+                <div className="text-4xl font-bold text-green-400 mb-1">
+                  {effectivePrice === 0 ? "FREE" : `$${effectivePrice.toLocaleString()}`}
+                </div>
+                <div className="text-green-400/60 text-sm">Promo applied ✓</div>
+              </>
+            ) : (
+              <>
+                <div className="text-4xl font-bold text-white mb-1">${BASE_PRICE.toLocaleString()}</div>
+                <div className="text-white/40 text-sm">USDC on Polygon • One-time payment</div>
+              </>
+            )}
           </div>
 
           {/* What's included */}
@@ -220,6 +232,38 @@ export default function PurchasePage() {
             </p>
           </div>
 
+          {/* Promo Code */}
+          <div className="mb-6">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Tag size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+                <Input
+                  value={promoCode}
+                  onChange={e => { setPromoCode(e.target.value); setPromoResult(null); }}
+                  placeholder="Promo code"
+                  className="pl-9 bg-white/5 border-white/10 text-white placeholder:text-white/20 uppercase font-mono"
+                />
+              </div>
+              <Button
+                onClick={validatePromo}
+                disabled={!promoCode.trim() || validatingPromo}
+                variant="outline"
+                className="border-white/10 text-white hover:bg-white/5"
+              >
+                {validatingPromo ? <Loader2 size={14} className="animate-spin" /> : "Apply"}
+              </Button>
+            </div>
+            {promoResult && (
+              <p className={`text-xs mt-2 ${promoResult.valid ? "text-green-400" : "text-red-400"}`}>
+                {promoResult.valid
+                  ? effectivePrice === 0
+                    ? "✓ Full discount — no payment needed!"
+                    : `✓ Discount applied — new price: $${effectivePrice}`
+                  : `✗ ${promoResult.error || "Invalid code"}`}
+              </p>
+            )}
+          </div>
+
           {/* Agreement Checkbox */}
           <div className="flex items-start gap-3 mb-6">
             <Checkbox
@@ -234,22 +278,24 @@ export default function PurchasePage() {
           </div>
 
           {/* Balance */}
-          <div className="bg-white/[0.02] rounded-xl p-4 mb-6 border border-white/5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-white/50">
-                <Wallet size={16} />
-                <span>USDC Balance (Polygon)</span>
+          {effectivePrice > 0 && (
+            <div className="bg-white/[0.02] rounded-xl p-4 mb-6 border border-white/5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm text-white/50">
+                  <Wallet size={16} />
+                  <span>USDC Balance (Polygon)</span>
+                </div>
+                <div className={`text-sm font-mono font-semibold ${hasEnoughBalance ? "text-green-400" : "text-red-400"}`}>
+                  {balanceLoading ? "..." : usdc_balance_formatted ? `$${usdc_balance_formatted}` : "$0.00"}
+                </div>
               </div>
-              <div className={`text-sm font-mono font-semibold ${hasEnoughBalance ? "text-green-400" : "text-red-400"}`}>
-                {balanceLoading ? "..." : usdc_balance_formatted ? `$${usdc_balance_formatted}` : "$0.00"}
-              </div>
+              {!balanceLoading && !hasEnoughBalance && usdc_balance !== null && (
+                <p className="text-xs text-red-400/70 mt-2">
+                  Insufficient balance. You need ${effectivePrice} USDC on Polygon.
+                </p>
+              )}
             </div>
-            {!balanceLoading && !hasEnoughBalance && usdc_balance !== null && (
-              <p className="text-xs text-red-400/70 mt-2">
-                Insufficient balance. You need ${PURCHASE_AMOUNT} USDC on Polygon.
-              </p>
-            )}
-          </div>
+          )}
 
           {/* Error */}
           {error && (
