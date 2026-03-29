@@ -6,6 +6,7 @@ import { Swords, Trophy, Loader2, HelpCircle, ChevronRight, Newspaper, ArrowUp, 
 import { detectSport, isOverSide, type SportType } from "@/lib/detectSport";
 import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
 import PredictionInsightsPanel from "./PredictionInsightsPanel";
+import SmartMoneyTracker from "./SmartMoneyTracker";
 
 export interface Fight {
   id: string;
@@ -448,6 +449,7 @@ export default function FightCard({
         {/* Insights Panel (soccer) */}
         <div className="mx-4 sm:mx-6 mb-3">
           <PredictionInsightsPanel fight={fight} />
+          <SmartMoneyTracker fight={fight} />
         </div>
 
         {/* Draw info */}
@@ -633,6 +635,7 @@ export default function FightCard({
 
         {/* Insights Panel (non-soccer) */}
         <PredictionInsightsPanel fight={fight} />
+        <SmartMoneyTracker fight={fight} />
 
         {/* Draw info */}
         {["draw", "refund_pending", "refunds_processing", "refunds_complete"].includes(fight.status) && (

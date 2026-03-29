@@ -13,13 +13,14 @@ export interface MarketData {
   priceB: number;
   poolAUsd: number;
   poolBUsd: number;
-  polymarketVolumeUsd?: number;
+  /** Aggregated market volume (internal) */
+  externalVolumeUsd?: number;
 }
 
 /* ── Derived metrics ── */
 
 export function getTotalVolume(m: MarketData): number {
-  if ((m.polymarketVolumeUsd ?? 0) > 0) return m.polymarketVolumeUsd!;
+  if ((m.externalVolumeUsd ?? 0) > 0) return m.externalVolumeUsd!;
   return m.poolAUsd + m.poolBUsd;
 }
 
@@ -181,6 +182,6 @@ export function fightToMarketData(fight: {
     priceB: fight.price_b ?? 0,
     poolAUsd: fight.pool_a_usd ?? 0,
     poolBUsd: fight.pool_b_usd ?? 0,
-    polymarketVolumeUsd: fight.polymarket_volume_usd ?? undefined,
+    externalVolumeUsd: fight.polymarket_volume_usd ?? undefined,
   };
 }
