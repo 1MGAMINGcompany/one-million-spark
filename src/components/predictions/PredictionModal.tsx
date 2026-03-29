@@ -109,6 +109,9 @@ export default function PredictionModal({
         showShare={showShare}
         setShowShare={setShowShare}
         tradeResult={tradeResult}
+        operatorBrandName={operatorBrandName}
+        operatorLogoUrl={operatorLogoUrl}
+        operatorSubdomain={operatorSubdomain}
       />
     );
   }

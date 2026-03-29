@@ -325,6 +325,9 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           tradeResult={lastTradeResult}
           approvalStep={allowanceState.step}
           approvalError={allowanceState.errorReason}
+          operatorBrandName={operator?.brand_name}
+          operatorLogoUrl={operator?.logo_url}
+          operatorSubdomain={operator?.subdomain}
         />
       )}
 
