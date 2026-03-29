@@ -20,6 +20,9 @@ interface Props {
   showShare: boolean;
   setShowShare: (v: boolean) => void;
   tradeResult?: TradeResult | null;
+  operatorBrandName?: string;
+  operatorLogoUrl?: string | null;
+  operatorSubdomain?: string;
 }
 
 /* ── Status display helpers ── */
