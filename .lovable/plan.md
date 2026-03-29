@@ -1,84 +1,69 @@
 
 
-## Plan: Event Date Fix, Auto-Claim Clarity, and Operator-Branded Sharing
+## Plan: Separate 1MG.live Admin Section and Event Visibility
 
-### Problem Analysis
+### Problem
+Events created for 1mg.live currently also appear on 1mgaming.com. The admin needs a dedicated section for managing 1mg.live platform events separately from flagship events, while sharing the same admin authentication.
 
-**1. Date categorization bug (lines 310-315 of FightPredictions.tsx)**
-The current logic only moves events to "past" if they're >24h old AND on a different calendar day (line 312). A March 28th event viewed on March 29th morning is <24h old, so it falls through to line 315 where `hasOpenFights` keeps it in "TODAY". Fix: any event whose `event_date` calendar day is before today should go to "past", regardless of age or open fights.
+### Solution
 
-**2. Claim behavior**
-Auto-claim is already implemented (`prediction-auto-claim` edge function). The UI already states "Winnings are automatically sent to your wallet." The `handleClaim` button exists as a manual fallback. No backend changes needed — just ensure messaging is consistent.
+**1. Add `visibility` column to `prediction_fights`**
 
-**3. Operator-branded sharing**
-`SocialShareModal` hardcodes "1MGAMING" logo, "1mgaming.com" URL, and "1MGAMING" text. When used from an operator app (`*.1mg.live`), it should show the operator's brand name, logo, and link to their subdomain.
+New column: `visibility text NOT NULL DEFAULT 'all'`
 
----
+Values:
+- `flagship` — only appears on 1mgaming.com
+- `platform` — only appears on 1mg.live (and operator apps)
+- `all` — appears everywhere (current default, backward compatible)
 
-### Changes
-
-**File 1: `src/pages/FightPredictions.tsx`** — Fix date categorization
-
-Replace the event categorization block (lines ~310-321) so that events whose `event_date` is on a previous calendar day are always categorized as "past", even if they have open fights:
-
-```text
-Current (buggy):
-  line 312: if eventMs > 24h ago AND different day → past
-  line 315: if hasOpenFights → today  ← THIS IS THE BUG
-
-Fixed:
-  NEW CHECK: if event_date's calendar day < today's calendar day → past
-  Then: if hasOpenFights or same calendar day → today
+Migration:
+```sql
+ALTER TABLE prediction_fights 
+ADD COLUMN visibility text NOT NULL DEFAULT 'all';
 ```
 
-**File 2: `src/components/SocialShareModal.tsx`** — Accept operator branding props
+**2. Filter events by visibility on each frontend**
 
-- Add optional props: `operatorBrandName`, `operatorLogoUrl`, `operatorSubdomain`
-- When present, replace "1MGAMING" with operator brand name
-- Replace pyramid logo with operator logo (fallback to pyramid)
-- Change share URL from `1mgaming.com/predictions` to `{subdomain}.1mg.live`
-- Update download filename to use operator brand
+- **1mgaming.com** (`FightPredictions.tsx`): Add `.in('visibility', ['flagship', 'all'])` to the fights query and also filter out fights with non-null `operator_id`
+- **1mg.live / operator apps**: Already filter by operator — platform events query adds `.in('visibility', ['platform', 'all'])`
 
-**File 3: `src/pages/platform/OperatorApp.tsx`** — Pass operator branding to share modal
+**3. Create dedicated 1MG.live admin section**
 
-- Pass `operator.brand_name`, `operator.logo_url`, and `operator.subdomain` through to `PredictionSuccessScreen` and `SocialShareModal`
+New file: `src/components/admin/PlatformAdminSection.tsx`
 
-**File 4: `src/components/predictions/PredictionSuccessScreen.tsx`** — Forward operator props
+A collapsible card section in the existing admin page (like Referrals/Operators sections) containing:
+- Platform Event Creator (modified to set `visibility: 'platform'`)
+- List of platform-visibility fights with status, pool, and quick actions (close, settle, delete)
+- Filter tabs: Active / Settled / All
 
-- Accept and forward `operatorBrandName`, `operatorLogoUrl`, `operatorSubdomain` to `SocialShareModal`
+**4. Update existing admin page layout**
 
-**File 5: `src/components/predictions/PredictionModal.tsx`** — Thread operator props through
+In `FightPredictionAdmin.tsx`:
+- Add "1MG.live" nav button next to "Referrals" button
+- OR embed the `PlatformAdminSection` as a collapsible section (like Operators)
+- Rename current `PlatformEventCreator` to clarify it creates events for the **flagship** site (visibility = `flagship`)
 
-- Accept and forward operator branding props to `PredictionSuccessScreen`
+**5. Update `PlatformEventCreator` component**
 
----
+Add a visibility selector:
+- "1MGAMING.com only" → `flagship`
+- "1MG.live only" → `platform`  
+- "Both" → `all`
 
-### Technical Details
+Pass the selected visibility to the `createPlatformFight` edge function.
 
-**Date fix logic:**
-```typescript
-// Before the hasOpenFights check, add:
-const eventDay = eventMs ? new Date(eventMs).toDateString() : null;
-const isPastDay = eventDay != null && eventDay !== todayStr && eventMs! < nowMs;
+**6. Update `prediction-admin` edge function**
 
-// Then in the categorization:
-} else if (isPastDay) {
-  past.push([eventName, group]);
-} else if (hasOpenFights || ...) {
-  today.push([eventName, group]);
-}
-```
+- Accept `visibility` param in `createPlatformFight` action
+- Default to `'all'` if not provided (backward compatible)
+- Store it on the inserted fight row
 
-**Operator share URL:**
-```typescript
-function buildShareUrl(referralCode?: string, operatorSubdomain?: string): string {
-  const base = operatorSubdomain
-    ? `https://${operatorSubdomain}.1mg.live`
-    : "https://1mgaming.com/predictions";
-  if (referralCode) return `${base}?ref=${referralCode}`;
-  return base;
-}
-```
+### Files Changed
 
-**Auto-claim messaging:** Already correct in `PastEventsSection`. The claim button is a manual safety fallback — no changes needed.
+1. **Migration** — Add `visibility` column to `prediction_fights`
+2. `supabase/functions/prediction-admin/index.ts` — Accept and store `visibility`
+3. `src/pages/FightPredictions.tsx` — Filter fights by visibility for flagship
+4. `src/components/admin/PlatformEventCreator.tsx` — Add visibility selector
+5. `src/components/admin/PlatformAdminSection.tsx` (new) — Dedicated 1mg.live event management panel
+6. `src/pages/FightPredictionAdmin.tsx` — Add Platform Admin section and nav button
 
