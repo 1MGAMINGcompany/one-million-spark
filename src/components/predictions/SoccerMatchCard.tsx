@@ -185,6 +185,7 @@ export default function SoccerMatchCard({
       {/* Insights Panel */}
       <div className="px-4 pb-3">
         <PredictionInsightsPanel fight={homeFight} />
+        <SmartMoneyTracker fight={homeFight} />
       </div>
 
       {/* Footer: volume + detail link */}

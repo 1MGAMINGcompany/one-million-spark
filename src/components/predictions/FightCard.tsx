@@ -635,6 +635,7 @@ export default function FightCard({
 
         {/* Insights Panel (non-soccer) */}
         <PredictionInsightsPanel fight={fight} />
+        <SmartMoneyTracker fight={fight} />
 
         {/* Draw info */}
         {["draw", "refund_pending", "refunds_processing", "refunds_complete"].includes(fight.status) && (
