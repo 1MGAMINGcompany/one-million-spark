@@ -723,6 +723,33 @@ export type Database = {
           },
         ]
       }
+      operator_payouts: {
+        Row: {
+          amount_usdc: number
+          created_at: string
+          id: string
+          operator_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount_usdc?: number
+          created_at?: string
+          id?: string
+          operator_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount_usdc?: number
+          created_at?: string
+          id?: string
+          operator_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       operator_revenue: {
         Row: {
           created_at: string

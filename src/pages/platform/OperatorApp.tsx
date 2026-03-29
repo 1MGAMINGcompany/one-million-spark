@@ -95,22 +95,25 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
   useEffect(() => { loadUserEntries(); }, [loadUserEntries]);
 
-  // Combine and filter fights
+  // Combine and filter fights with proper ordering:
+  // 1. Featured operator events  2. Other operator events  3. Platform events
   const allFights = useMemo(() => {
     const opFights = (operatorFights || []).filter(f => !isPropMarket(f));
+    const featuredOp = opFights.filter(f => f.featured);
+    const normalOp = opFights.filter(f => !f.featured);
+
     const platFights = (platformFights || []).filter(f => {
       if (isPropMarket(f)) return false;
-      // Filter by allowed sports
       if (allowedSports.length > 0) {
         const sport = parseSport(f.event_name, null, null);
-        // Allow through if sport matches or if ALL is implied
         const sportLower = sport.toLowerCase();
         const allowed = allowedSports.some(s => s.toLowerCase() === sportLower || sportLower.includes(s.toLowerCase()));
-        if (!allowed && allowedSports.length > 0) return false;
+        if (!allowed) return false;
       }
       return true;
     });
-    return [...opFights, ...platFights];
+
+    return [...featuredOp, ...normalOp, ...platFights];
   }, [operatorFights, platformFights, allowedSports]);
 
   // Group fights by event
