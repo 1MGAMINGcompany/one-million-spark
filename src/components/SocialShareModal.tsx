@@ -109,7 +109,7 @@ export default function SocialShareModal(props: ShareModalProps) {
       const { toPng } = await import("html-to-image");
       const dataUrl = await toPng(cardRef.current, { pixelRatio: 2, cacheBust: true });
       const link = document.createElement("a");
-      link.download = `1mgaming-${variant}.png`;
+      link.download = `${brandName.toLowerCase().replace(/\s+/g, "-")}-${variant}.png`;
       link.href = dataUrl;
       link.click();
       logShareAction(variant, "download", wallet);
