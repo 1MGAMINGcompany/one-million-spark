@@ -1419,6 +1419,32 @@ Deno.serve(async (req) => {
     }
 
     // ══════════════════════════════════════════════════
+    // ACTION: import_bulk — Import multiple events at once
+    // ══════════════════════════════════════════════════
+    if (action === "import_bulk") {
+      const { event_ids, import_source, sport_type, visibility } = body;
+      if (!event_ids || !Array.isArray(event_ids) || event_ids.length === 0) {
+        return json({ error: "Missing or empty event_ids array" }, 400);
+      }
+      const results: { id: string; success: boolean; imported?: number; error?: string }[] = [];
+      for (const eid of event_ids.slice(0, 50)) { // Max 50 at once
+        try {
+          const gEvent = await fetchEventById(eid);
+          if (!gEvent) {
+            results.push({ id: eid, success: false, error: "Event not found" });
+            continue;
+          }
+          const r = await importSingleEvent(supabase, gEvent, wallet, import_source || "bulk_import", sport_type || null, visibility || null);
+          results.push({ id: eid, success: true, imported: r.imported });
+        } catch (err: any) {
+          results.push({ id: eid, success: false, error: err.message });
+        }
+      }
+      const totalImported = results.filter(r => r.success).reduce((sum, r) => sum + (r.imported || 0), 0);
+      return json({ success: true, total_events: results.length, total_imported: totalImported, results });
+    }
+
+    // ══════════════════════════════════════════════════
     // ACTION: import_by_url
     // ══════════════════════════════════════════════════
     if (action === "import_by_url") {
