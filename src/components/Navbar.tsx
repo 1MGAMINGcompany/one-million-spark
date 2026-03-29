@@ -167,15 +167,6 @@ const Navbar = () => {
               {isDark ? <Sun size={20} /> : <Moon size={20} />}
             </button>
 
-            {/* Money AI Helper Button */}
-            <button
-              onClick={() => { play('ui_click'); window.dispatchEvent(new Event("aihelper-show")); }}
-              className="p-2 rounded-lg text-primary hover:text-primary/80 hover:bg-secondary transition-all duration-200 drop-shadow-[0_0_6px_hsl(45_93%_54%_/_0.3)]"
-              aria-label="Money AI Helper"
-              title="Money AI Helper"
-            >
-              <Sparkles size={20} />
-            </button>
 
             {/* My Profile Button (desktop) */}
             {isPrivyUser && walletAddress && (
