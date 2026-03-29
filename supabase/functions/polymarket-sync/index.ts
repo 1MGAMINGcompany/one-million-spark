@@ -389,7 +389,7 @@ function buildTelemetry(partial: Partial<QueryTelemetry>): QueryTelemetry {
 
 // ── Fetch functions ──
 
-/** Fetch events by tag_id — reliable for soccer league discovery. Supports pagination. */
+/** Fetch events by tag_id — reliable for soccer league discovery. Supports pagination up to 500 events. */
 async function fetchEventsByTagId(tagId: string, limit = 100): Promise<GammaEvent[]> {
   const allEvents: GammaEvent[] = [];
   const seen = new Set<string>();
@@ -398,7 +398,7 @@ async function fetchEventsByTagId(tagId: string, limit = 100): Promise<GammaEven
   
   for (let page = 0; page < maxPages; page++) {
     try {
-      const url = `${GAMMA_BASE}/events?tag_id=${tagId}&active=true&closed=false&limit=${limit}&offset=${offset}&order=startDate&ascending=false`;
+      const url = `${GAMMA_BASE}/events?tag_id=${tagId}&closed=false&upcoming=true&limit=${limit}&offset=${offset}&order=startDate&ascending=true`;
       const res = await fetch(url);
       if (!res.ok) break;
       const data = await res.json();
@@ -425,7 +425,7 @@ async function fetchEventsByTagId(tagId: string, limit = 100): Promise<GammaEven
 /** Fetch ALL active events from Gamma (no tag filter) with pagination */
 async function fetchAllActiveEvents(limit = 50, offset = 0): Promise<GammaEvent[]> {
   try {
-    const url = `${GAMMA_BASE}/events?active=true&closed=false&limit=${limit}&offset=${offset}&order=startDate&ascending=false`;
+    const url = `${GAMMA_BASE}/events?closed=false&upcoming=true&limit=${limit}&offset=${offset}&order=startDate&ascending=true`;
     const res = await fetch(url);
     if (!res.ok) return [];
     const data = await res.json();
