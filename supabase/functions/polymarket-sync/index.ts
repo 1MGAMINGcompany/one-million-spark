@@ -795,6 +795,9 @@ const SPORT_TYPE_TO_CATEGORY: Record<string, string> = {
   mlb: "MLB",
   tennis: "TENNIS",
   golf: "GOLF",
+  cricket: "CRICKET",
+  f1: "F1",
+  rugby: "RUGBY",
 };
 
 /** Country name → ISO 3166-1 alpha-2 code for flag CDN */
