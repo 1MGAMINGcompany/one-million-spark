@@ -80,15 +80,19 @@ export default function SocialShareModal(props: ShareModalProps) {
     open, onClose, variant,
     eventTitle, sport, fighterPick, amountUsd, poolUsd,
     gameTitle, amountWon, solWon, wallet, referralCode, opponentType, streak, gameName,
+    operatorBrandName, operatorLogoUrl, operatorSubdomain,
   } = props;
 
   const winAmount = amountWon ?? solWon;
   const isSolWin = amountWon == null && solWon != null;
 
+  const brandName = operatorBrandName || "1MGAMING";
+  const brandLogo = operatorLogoUrl || pyramidLogo;
+
   const cardRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
 
-  const shareUrl = buildShareUrl(referralCode);
+  const shareUrl = buildShareUrl(referralCode, operatorSubdomain);
   const caption = buildCaption(props, shareUrl);
 
   const handleCopyLink = useCallback(() => {
