@@ -497,6 +497,9 @@ export default function PlatformAdmin() {
           )}
         </Card>
 
+        {/* ═══ Promo Codes ═══ */}
+        <PromoCodeManager wallet={address!} />
+
         {/* ═══ Section C: Manual Fight Creator ═══ */}
         <Card className="bg-card border-border/50 p-4">
           <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
