@@ -15,8 +15,9 @@ import { Link } from "react-router-dom";
 import {
   Shield, Loader2, Trash2, Lock, Play, CheckCircle, Trophy,
   Download, Globe, Calendar, Users, RefreshCw, ArrowLeft,
-  BarChart3, TrendingUp, ChevronRight,
+  BarChart3, TrendingUp, ChevronRight, ChevronDown,
 } from "lucide-react";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 
 // ── Types ──
 
