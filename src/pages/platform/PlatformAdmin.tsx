@@ -509,7 +509,29 @@ export default function PlatformAdmin() {
               </div>
             </div>
 
-            {/* Bulk import bar */}
+            {/* Debug stats panel */}
+            {browseDebugStats && (
+              <Collapsible className="mt-2">
+                <CollapsibleTrigger className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+                  <ChevronDown className="w-3 h-3" />
+                  Debug: {browseDebugStats.raw_fetched} raw → {browseDebugStats.after_all_filters} shown
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-1 p-2 rounded-md bg-muted/30 border border-border/30 text-[10px] text-muted-foreground space-y-0.5">
+                  <p>📥 Raw events fetched: <span className="text-foreground font-medium">{browseDebugStats.raw_fetched}</span></p>
+                  <p>🔍 After prop filter: <span className="text-foreground font-medium">{browseDebugStats.after_prop_filter}</span></p>
+                  <p>📅 After date filter: <span className="text-foreground font-medium">{browseDebugStats.after_date_filter}</span></p>
+                  <p>✅ Final shown: <span className="text-foreground font-medium">{browseDebugStats.after_all_filters}</span></p>
+                  {Object.keys(browseDebugStats.rejection_breakdown).length > 0 && (
+                    <div className="pt-1 border-t border-border/30 mt-1">
+                      <p className="font-medium text-foreground">Rejection reasons:</p>
+                      {Object.entries(browseDebugStats.rejection_breakdown).map(([reason, count]) => (
+                        <p key={reason}>  • {reason}: {count}</p>
+                      ))}
+                    </div>
+                  )}
+                </CollapsibleContent>
+              </Collapsible>
+            )}
             {selectedEvents.size > 0 && (
               <div className="flex items-center gap-3 mt-3 p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
                 <span className="text-xs text-blue-400 font-medium">{selectedEvents.size} selected</span>
