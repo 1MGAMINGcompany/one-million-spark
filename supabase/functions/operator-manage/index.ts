@@ -56,20 +56,15 @@ async function verifyTxOnChain(txHash: string): Promise<{ valid: boolean; error?
       if (json.error || !json.result) continue;
 
       const receipt = json.result;
-
-      // Check tx succeeded
       if (receipt.status !== "0x1") {
         return { valid: false, error: "tx_reverted" };
       }
 
-      // Find USDC Transfer log to treasury with >= 2400 USDC
       const transferLog = (receipt.logs || []).find((log: any) => {
         if (log.address?.toLowerCase() !== USDC_CONTRACT) return false;
         if (!log.topics || log.topics[0] !== TRANSFER_TOPIC) return false;
-        // topics[2] = recipient (padded)
         const recipient = "0x" + (log.topics[2] || "").slice(26).toLowerCase();
         if (recipient !== TREASURY) return false;
-        // data = amount
         const amount = BigInt(log.data || "0x0");
         return amount >= MIN_AMOUNT_RAW;
       });
@@ -113,13 +108,11 @@ Deno.serve(async (req) => {
         return jsonResp({ error: "invalid_tx_hash" }, 400);
       }
 
-      // Verify on-chain
       const verification = await verifyTxOnChain(txHash);
       if (!verification.valid) {
         return jsonResp({ error: verification.error || "verification_failed" }, 400);
       }
 
-      // Create or update operator to active
       const { data: existing } = await sb
         .from("operators")
         .select("id, status")
@@ -132,7 +125,6 @@ Deno.serve(async (req) => {
           updated_at: new Date().toISOString(),
         }).eq("id", existing.id);
       } else {
-        // Create a minimal operator record — will be completed in onboarding
         await sb.from("operators").insert({
           user_id: privyDid,
           brand_name: "My App",
@@ -142,6 +134,20 @@ Deno.serve(async (req) => {
       }
 
       return jsonResp({ success: true, status: "active" });
+    }
+
+    // ── check_subdomain ──
+    if (action === "check_subdomain") {
+      const sub = body.subdomain;
+      if (!sub || typeof sub !== "string" || sub.length < 3) {
+        return jsonResp({ available: false, error: "too_short" });
+      }
+      const reserved = ["www", "api", "admin", "app", "dashboard", "help", "support", "mail"];
+      if (reserved.includes(sub)) {
+        return jsonResp({ available: false, error: "reserved" });
+      }
+      const { data } = await sb.from("operators").select("id").eq("subdomain", sub).maybeSingle();
+      return jsonResp({ available: !data });
     }
 
     // ── get_my_operator ──
@@ -156,7 +162,6 @@ Deno.serve(async (req) => {
 
     // ── create_operator ──
     if (action === "create_operator") {
-      // Check if already exists and is active (paid)
       const { data: existing } = await sb
         .from("operators")
         .select("id, status")
@@ -168,7 +173,6 @@ Deno.serve(async (req) => {
       }
 
       if (existing) {
-        // Update existing operator with full details
         const { error } = await sb.from("operators").update({
           brand_name: body.brand_name,
           subdomain: body.subdomain,
@@ -179,7 +183,6 @@ Deno.serve(async (req) => {
         }).eq("id", existing.id);
         if (error) throw error;
 
-        // Upsert settings
         await sb.from("operator_settings").upsert({
           operator_id: existing.id,
           allowed_sports: body.allowed_sports || ["Soccer", "MMA", "Boxing"],
@@ -190,7 +193,6 @@ Deno.serve(async (req) => {
         return jsonResp({ operator: { id: existing.id } });
       }
 
-      // Subdomain availability
       const { data: subCheck } = await sb
         .from("operators")
         .select("id")
@@ -209,13 +211,12 @@ Deno.serve(async (req) => {
           logo_url: body.logo_url || null,
           theme: body.theme || "blue",
           fee_percent: body.fee_percent ?? 5,
-          status: "pending", // Not paid yet
+          status: "pending",
         })
         .select()
         .single();
       if (error) throw error;
 
-      // Default settings
       await sb.from("operator_settings").insert({
         operator_id: operator.id,
         allowed_sports: body.allowed_sports || ["Soccer", "MMA", "Boxing"],
@@ -269,16 +270,17 @@ Deno.serve(async (req) => {
       return jsonResp({ success: true });
     }
 
-    // ── create_event ──
+    // ── create_event ── (now auto-creates a prediction_fight)
     if (action === "create_event") {
       const { data: op } = await sb
         .from("operators")
-        .select("id")
+        .select("id, fee_percent, brand_name")
         .eq("user_id", privyDid)
         .single();
       if (!op) return jsonResp({ error: "not_found" }, 404);
 
-      const { data: event, error } = await sb
+      // Create operator event
+      const { data: event, error: evErr } = await sb
         .from("operator_events")
         .insert({
           operator_id: op.id,
@@ -289,12 +291,48 @@ Deno.serve(async (req) => {
           event_date: body.event_date || null,
           image_url: body.image_url || null,
           is_featured: body.is_featured || false,
-          status: "draft",
+          status: "open", // Go live immediately
         })
         .select()
         .single();
-      if (error) throw error;
-      return jsonResp({ event });
+      if (evErr) throw evErr;
+
+      // Auto-create corresponding prediction_fight (market bridge)
+      // This makes the operator event a real tradeable market
+      const commissionBps = Math.round((op.fee_percent + 1) * 100); // operator fee + 1% platform
+      const { data: fight, error: fightErr } = await sb
+        .from("prediction_fights")
+        .insert({
+          title: body.title,
+          fighter_a_name: body.team_a,
+          fighter_b_name: body.team_b,
+          event_name: body.title,
+          status: "open",
+          source: "operator",
+          trading_allowed: true,
+          operator_id: op.id,
+          operator_event_id: event.id,
+          commission_bps: commissionBps,
+          featured: body.is_featured || false,
+        })
+        .select("id")
+        .single();
+
+      if (fightErr) {
+        console.error("[operator-manage] Failed to create prediction_fight:", fightErr);
+      }
+
+      return jsonResp({ event, fight_id: fight?.id || null });
+    }
+
+    // ── list_all_operators (admin) ──
+    if (action === "list_all_operators") {
+      // Simple admin listing — no auth check beyond privy (add admin check if needed)
+      const { data } = await sb
+        .from("operators")
+        .select("*, operator_settings(*)")
+        .order("created_at", { ascending: false });
+      return jsonResp({ operators: data || [] });
     }
 
     return jsonResp({ error: "unknown_action" }, 400);
