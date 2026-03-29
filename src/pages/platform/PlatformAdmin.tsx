@@ -113,9 +113,15 @@ const BROWSE_LEAGUES = [
   { key: "cfb", label: "CFB" },
   { key: "atp", label: "ATP" },
   { key: "wta", label: "WTA" },
+  { key: "tennis-atp", label: "Tennis ATP" },
+  { key: "tennis-wta", label: "Tennis WTA" },
+  { key: "tennis-grand-slam", label: "Grand Slams" },
   { key: "golf", label: "Golf" },
   { key: "f1", label: "F1" },
   { key: "cricket", label: "Cricket" },
+  { key: "cricket-ipl", label: "IPL" },
+  { key: "cricket-psl", label: "PSL" },
+  { key: "cricket-intl", label: "Cricket Intl" },
   { key: "rugby", label: "Rugby" },
 ];
 
@@ -167,6 +173,9 @@ export default function PlatformAdmin() {
   const [bulkImporting, setBulkImporting] = useState(false);
   const [bulkProgress, setBulkProgress] = useState(0);
   const [bulkTotal, setBulkTotal] = useState(0);
+  const [failedBatchIds, setFailedBatchIds] = useState<string[]>([]);
+  const [bulkSummary, setBulkSummary] = useState("");
+  const [cleanupBusy, setCleanupBusy] = useState(false);
 
   // Check admin
   useEffect(() => {
@@ -255,35 +264,81 @@ export default function PlatformAdmin() {
     }
   };
 
-  // Bulk import
-  const handleBulkImport = async () => {
-    const ids = Array.from(selectedEvents);
+  // Bulk import — chunked into batches of 10 with error resilience
+  const handleBulkImport = async (retryIds?: string[]) => {
+    const ids = retryIds || Array.from(selectedEvents);
     if (ids.length === 0) { toast.error("No events selected"); return; }
+    const BATCH_SIZE = 10;
+    const batches: string[][] = [];
+    for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+      batches.push(ids.slice(i, i + BATCH_SIZE));
+    }
     setBulkImporting(true);
-    setBulkTotal(ids.length);
+    setBulkTotal(batches.length);
     setBulkProgress(0);
-    try {
-      const { data, error } = await supabase.functions.invoke("polymarket-sync", {
-        body: {
-          action: "import_bulk",
-          wallet: address,
-          event_ids: ids,
-          import_source: "platform_admin_bulk",
-          sport_type: browseLeague,
-          visibility: "platform",
-        },
-      });
-      if (error || data?.error) throw new Error(data?.error || error?.message);
-      const imported = data?.total_imported || 0;
-      toast.success(`Imported ${imported} markets from ${ids.length} events`);
+    setBulkSummary("");
+    setFailedBatchIds([]);
+    let totalImported = 0;
+    let totalFailed = 0;
+    const failed: string[] = [];
+    for (let i = 0; i < batches.length; i++) {
+      try {
+        const { data, error } = await supabase.functions.invoke("polymarket-sync", {
+          body: {
+            action: "import_bulk",
+            wallet: address,
+            event_ids: batches[i],
+            import_source: "platform_admin_bulk",
+            sport_type: browseLeague,
+            visibility: "platform",
+          },
+        });
+        if (error || data?.error) throw new Error(data?.error || error?.message);
+        totalImported += data?.total_imported || 0;
+      } catch (err: any) {
+        totalFailed += batches[i].length;
+        failed.push(...batches[i]);
+        toast.error(`Batch ${i + 1} failed: ${err.message}`);
+      }
+      setBulkProgress(i + 1);
+    }
+    setFailedBatchIds(failed);
+    setBulkSummary(`${totalImported} imported, ${totalFailed} failed`);
+    if (totalImported > 0) {
+      toast.success(`Imported ${totalImported} markets`);
       setSelectedEvents(new Set());
       loadFights();
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally {
-      setBulkImporting(false);
-      setBulkProgress(0);
     }
+    setBulkImporting(false);
+  };
+
+  // Cleanup junk events
+  const JUNK_KEYWORDS = ["over", "under", "o/u", "cba", "mvp", "award", "champion", "will they", "how many", "total", "by dec"];
+  const handleCleanup = async () => {
+    const junkFights = fights.filter(f => {
+      const title = f.title.toLowerCase();
+      if (JUNK_KEYWORDS.some(kw => title.includes(kw))) return true;
+      if (f.event_date) {
+        const days = getDaysUntil(f.event_date);
+        if (days !== null && days < -3 && (entryCounts[f.id] || 0) === 0) return true;
+      }
+      return false;
+    });
+    if (junkFights.length === 0) { toast.info("No junk events found"); return; }
+    if (!confirm(`Found ${junkFights.length} junk events. Delete them all?`)) return;
+    setCleanupBusy(true);
+    let deleted = 0;
+    for (const f of junkFights) {
+      try {
+        await supabase.functions.invoke("prediction-admin", {
+          body: { action: "deleteFight", wallet: address, fight_id: f.id },
+        });
+        deleted++;
+      } catch {}
+    }
+    toast.success(`Deleted ${deleted} junk events`);
+    setCleanupBusy(false);
+    loadFights();
   };
 
   // Toggle single event selection
@@ -451,7 +506,7 @@ export default function PlatformAdmin() {
                 <Button
                   size="sm"
                   className="h-7 text-[10px] px-4 gap-1"
-                  onClick={handleBulkImport}
+                  onClick={() => handleBulkImport()}
                   disabled={bulkImporting}
                 >
                   {bulkImporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
@@ -468,8 +523,19 @@ export default function PlatformAdmin() {
 
             {bulkImporting && (
               <div className="mt-2">
-                <Progress value={50} className="h-1.5" />
-                <p className="text-[10px] text-muted-foreground mt-1">Importing events...</p>
+                <Progress value={bulkTotal > 0 ? (bulkProgress / bulkTotal) * 100 : 0} className="h-1.5" />
+                <p className="text-[10px] text-muted-foreground mt-1">Importing batch {bulkProgress}/{bulkTotal}...</p>
+              </div>
+            )}
+
+            {bulkSummary && !bulkImporting && (
+              <div className="mt-2 flex items-center gap-2">
+                <p className="text-[10px] text-muted-foreground">{bulkSummary}</p>
+                {failedBatchIds.length > 0 && (
+                  <Button size="sm" variant="outline" className="h-6 text-[10px] px-3" onClick={() => handleBulkImport(failedBatchIds)}>
+                    Retry {failedBatchIds.length} Failed
+                  </Button>
+                )}
               </div>
             )}
 
@@ -557,9 +623,14 @@ export default function PlatformAdmin() {
                 <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full ml-1">{fights.length} total</span>
                 <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">${analytics.totalPool.toFixed(0)} pool</span>
               </h2>
-              <Button variant="outline" size="sm" onClick={() => loadFights()} className="gap-1 h-7 text-[10px]">
-                <RefreshCw className="w-3 h-3" /> Refresh
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="sm" onClick={handleCleanup} disabled={cleanupBusy} className="gap-1 h-7 text-[10px] text-red-400">
+                  <Trash2 className="w-3 h-3" /> {cleanupBusy ? "Cleaning..." : "Remove Junk"}
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => loadFights()} className="gap-1 h-7 text-[10px]">
+                  <RefreshCw className="w-3 h-3" /> Refresh
+                </Button>
+              </div>
             </div>
 
             {/* Filter row */}

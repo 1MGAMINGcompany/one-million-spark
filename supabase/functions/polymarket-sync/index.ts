@@ -205,7 +205,7 @@ type FetchStrategy = "tag" | "series" | "search";
 interface LeagueSource {
   key: string;
   label: string;
-  sportType: "soccer" | "mma" | "boxing" | "bkfc" | "nfl" | "nba" | "nhl" | "ncaa" | "mlb" | "tennis" | "golf";
+  sportType: "soccer" | "mma" | "boxing" | "bkfc" | "nfl" | "nba" | "nhl" | "ncaa" | "mlb" | "tennis" | "golf" | "cricket" | "f1" | "rugby";
   fetchStrategy: FetchStrategy;
   tagId?: string;
   tagSlug?: string;
@@ -238,9 +238,10 @@ const LEAGUE_SOURCES: Record<string, LeagueSource> = {
   "concacaf":           { key: "concacaf",           label: "CONCACAF",           sportType: "soccer", fetchStrategy: "tag", tagId: "100787" },
   "conmebol":           { key: "conmebol",           label: "CONMEBOL",           sportType: "soccer", fetchStrategy: "tag", tagId: "101280" },
   // ─── Combat (search-seeded — Polymarket combat tags are unreliable) ───
-  "ufc":    { key: "ufc",    label: "UFC",    sportType: "mma",    fetchStrategy: "search", searchSeed: ["UFC", "UFC fight"] },
-  "mma":    { key: "mma",    label: "MMA",    sportType: "mma",    fetchStrategy: "search", searchSeed: ["MMA", "MMA fight", "UFC"] },
-  "boxing": { key: "boxing", label: "Boxing", sportType: "boxing", fetchStrategy: "search", searchSeed: ["boxing", "boxing fight", "boxing match"] },
+  // ─── Combat (search-seeded — Polymarket combat tags are unreliable) ───
+  "ufc":    { key: "ufc",    label: "UFC",    sportType: "mma",    fetchStrategy: "search", searchSeed: ["UFC vs", "UFC Fight Night", "UFC"] },
+  "mma":    { key: "mma",    label: "MMA",    sportType: "mma",    fetchStrategy: "search", searchSeed: ["MMA vs", "MMA fight", "UFC vs"] },
+  "boxing": { key: "boxing", label: "Boxing", sportType: "boxing", fetchStrategy: "search", searchSeed: ["boxing vs", "WBC", "WBA", "IBF title", "boxing match"] },
   "bkfc":   { key: "bkfc",   label: "BKFC",   sportType: "bkfc",   fetchStrategy: "search", searchSeed: ["BKFC", "bare knuckle"] },
   // ─── American Sports ───
   "nfl":    { key: "nfl",    label: "NFL",    sportType: "nfl",    fetchStrategy: "tag", tagId: "450" },
@@ -253,13 +254,22 @@ const LEAGUE_SOURCES: Record<string, LeagueSource> = {
   // ─── Tennis ───
   "atp":    { key: "atp",    label: "ATP",    sportType: "tennis", fetchStrategy: "tag", tagId: "101232" },
   "wta":    { key: "wta",    label: "WTA",    sportType: "tennis", fetchStrategy: "tag", tagId: "102123" },
+  "tennis":        { key: "tennis",        label: "Tennis",        sportType: "tennis", fetchStrategy: "search", searchSeed: ["ATP vs", "WTA vs", "Wimbledon", "US Open vs", "Roland Garros vs", "Australian Open vs", "tennis vs"] },
+  "tennis-atp":    { key: "tennis-atp",    label: "Tennis ATP",    sportType: "tennis", fetchStrategy: "search", searchSeed: ["ATP vs", "ATP Tour"] },
+  "tennis-wta":    { key: "tennis-wta",    label: "Tennis WTA",    sportType: "tennis", fetchStrategy: "search", searchSeed: ["WTA vs", "WTA Tour"] },
+  "tennis-grand-slam": { key: "tennis-grand-slam", label: "Grand Slams", sportType: "tennis", fetchStrategy: "search", searchSeed: ["Wimbledon", "US Open vs", "Roland Garros vs", "Australian Open vs"] },
   // ─── Golf ───
   "golf":   { key: "golf",   label: "Golf",   sportType: "golf",   fetchStrategy: "search", searchSeed: ["PGA", "golf", "PGA Tour", "Masters golf"] },
   // ─── Motorsport ───
-  "f1":     { key: "f1",     label: "Formula 1", sportType: "golf", fetchStrategy: "search", searchSeed: ["Formula 1", "F1", "Grand Prix"] },
+  "f1":     { key: "f1",     label: "Formula 1", sportType: "f1", fetchStrategy: "search", searchSeed: ["Formula 1 Grand Prix", "F1 vs", "Grand Prix winner"] },
+  // ─── Cricket ───
+  "cricket":       { key: "cricket",       label: "Cricket",       sportType: "cricket", fetchStrategy: "search", searchSeed: ["Indian Premier League", "IPL vs", "PSL vs", "cricket vs", "T20 cricket vs"] },
+  "cricket-ipl":   { key: "cricket-ipl",   label: "IPL",           sportType: "cricket", fetchStrategy: "search", searchSeed: ["Indian Premier League", "IPL vs", "IPL 2026"] },
+  "cricket-psl":   { key: "cricket-psl",   label: "PSL",           sportType: "cricket", fetchStrategy: "search", searchSeed: ["Pakistan Super League", "PSL vs"] },
+  "cricket-intl":  { key: "cricket-intl",  label: "Cricket Intl",  sportType: "cricket", fetchStrategy: "search", searchSeed: ["cricket international", "cricket vs", "T20 international"] },
+  // ─── Rugby ───
+  "rugby":    { key: "rugby",    label: "Rugby",    sportType: "rugby", fetchStrategy: "search", searchSeed: ["rugby vs", "Six Nations", "rugby union"] },
   // ─── Other ───
-  "cricket":  { key: "cricket",  label: "Cricket",  sportType: "tennis", fetchStrategy: "search", searchSeed: ["cricket", "IPL", "T20"] },
-  "rugby":    { key: "rugby",    label: "Rugby",    sportType: "tennis", fetchStrategy: "search", searchSeed: ["rugby", "Six Nations", "rugby union"] },
   "table-tennis": { key: "table-tennis", label: "Table Tennis", sportType: "tennis", fetchStrategy: "search", searchSeed: ["table tennis", "ping pong"] },
 };
 
@@ -785,6 +795,9 @@ const SPORT_TYPE_TO_CATEGORY: Record<string, string> = {
   mlb: "MLB",
   tennis: "TENNIS",
   golf: "GOLF",
+  cricket: "CRICKET",
+  f1: "F1",
+  rugby: "RUGBY",
 };
 
 /** Country name → ISO 3166-1 alpha-2 code for flag CDN */
@@ -1445,8 +1458,10 @@ Deno.serve(async (req) => {
       if (!event_ids || !Array.isArray(event_ids) || event_ids.length === 0) {
         return json({ error: "Missing or empty event_ids array" }, 400);
       }
+      // Cap at 15 per call to avoid timeout
+      const batch = event_ids.slice(0, 15);
       const results: { id: string; success: boolean; imported?: number; error?: string }[] = [];
-      for (const eid of event_ids.slice(0, 50)) { // Max 50 at once
+      for (const eid of batch) {
         try {
           const gEvent = await fetchEventById(eid);
           if (!gEvent) {
@@ -1460,7 +1475,7 @@ Deno.serve(async (req) => {
         }
       }
       const totalImported = results.filter(r => r.success).reduce((sum, r) => sum + (r.imported || 0), 0);
-      return json({ success: true, total_events: results.length, total_imported: totalImported, results });
+      return json({ success: true, total_events: results.length, total_imported: totalImported, results, has_more: event_ids.length > 15 });
     }
 
     // ══════════════════════════════════════════════════
