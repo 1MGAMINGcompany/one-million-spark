@@ -897,6 +897,19 @@ async function importSingleEvent(
     }
     if (skipMarket) continue;
 
+    // Reject already-settled markets (0%/100% probability)
+    const priceA = parseFloat(outcomePrices[0] || "0");
+    const priceB = parseFloat(outcomePrices[1] || "0");
+    if ((priceA <= 0.01 && priceB >= 0.99) || (priceB <= 0.01 && priceA >= 0.99)) continue;
+
+    // Dedup: skip if conditionId already exists in prediction_fights
+    const { data: existingByCondition } = await supabase
+      .from("prediction_fights")
+      .select("id")
+      .eq("polymarket_condition_id", market.conditionId)
+      .maybeSingle();
+    if (existingByCondition) { imported++; continue; }
+
     const { data: existingFight } = await supabase
       .from("prediction_fights")
       .select("id")
