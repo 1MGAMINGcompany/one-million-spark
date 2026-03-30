@@ -27,6 +27,34 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (action === "validatePromoCode") {
+  const { code } = body;
+  if (!code) return new Response(JSON.stringify({ error: "Missing code" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  const { data: promo } = await supabase
+    .from("promo_codes")
+    .select("*")
+    .eq("code", code.toUpperCase())
+    .maybeSingle();
+  if (!promo) return new Response(JSON.stringify({ valid: false, error: "Code not found" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  if (promo.uses_count >= promo.max_uses) return new Response(JSON.stringify({ valid: false, error: "Code fully redeemed" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  if (promo.expires_at && new Date(promo.expires_at) < new Date()) return new Response(JSON.stringify({ valid: false, error: "Code expired" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  let discounted_price = 2400;
+  if (promo.discount_type === "full") discounted_price = 0;
+  else if (promo.discount_type === "percent") discounted_price = Math.max(0, 2400 * (1 - promo.discount_value / 100));
+  else if (promo.discount_type === "fixed") discounted_price = Math.max(0, 2400 - promo.discount_value);
+  return new Response(JSON.stringify({ valid: true, discount_type: promo.discount_type, discount_value: promo.discount_value, discounted_price, promo_id: promo.id }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+}
+```
+
+So the file will look like:
+```
+line 29: (blank)
+line 30: if (action === "validatePromoCode") {  ← YOUR PASTE STARTS HERE
+...
+line 44: }  ← YOUR PASTE ENDS HERE
+line 45: (blank)
+line 46: // Verify admin  ← THIS STAYS HERE, pushed down
+line 47: const { data: admin } = await supabase
     // Verify admin
     const { data: admin } = await supabase
       .from("prediction_admins")
@@ -1085,19 +1113,6 @@ Deno.serve(async (req) => {
       });
 
       return json({ fight_id: fight.id, success: true });
-    }
-
-    if (action === "logActivity") {
-      const { activity_action, description: desc } = body;
-      if (!activity_action || !desc) return json({ error: "Missing activity_action or description" }, 400);
-
-      const { error } = await supabase.from("admin_activity_log").insert({
-        action: activity_action,
-        description: desc,
-        admin_wallet: wallet,
-      });
-      if (error) throw error;
-      return json({ logged: true });
     }
 
     return json({ error: "Unknown action" }, 400);
