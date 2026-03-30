@@ -22,8 +22,9 @@ export function shareInvite(link: string, gameName?: string) {
 }
 
 export function whatsappInvite(link: string, gameName?: string) {
+  const brand = getBrandName();
   const message = gameName 
-    ? `🎮 Join my ${gameName} game on 1M Gaming: ${link}`
+    ? `🎮 Join my ${gameName} game on ${brand}: ${link}`
     : `🎮 Join my game room: ${link}`;
   const text = encodeURIComponent(message);
   window.open(`https://wa.me/?text=${text}`, "_blank");
