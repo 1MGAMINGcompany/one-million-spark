@@ -270,21 +270,29 @@ export default function FightPredictions() {
 
     fightsRequestInFlight.current = true;
 
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("loadFights timeout (10 s)")), 10_000),
+    );
+
     try {
-      const [fightsRes, eventsRes] = await Promise.all([
-        supabase
-          .from("prediction_fights")
-          .select(FIGHTS_SELECT)
-          .not("status", "eq", "draft")
-          .in("visibility", PREDICTION_VISIBILITY_VALUES as unknown as string[])
-          .is("operator_id", null)
-          .not("status", "eq", "settled")
-          .limit(200),
-        supabase
-          .from("prediction_events")
-          .select(EVENTS_SELECT)
-          .eq("status", "approved")
-          .limit(100),
+      const [fightsRes, eventsRes] = await Promise.race([
+        Promise.all([
+          supabase
+            .from("prediction_fights")
+            .select(FIGHTS_SELECT)
+            .not("status", "eq", "draft")
+            .in("visibility", PREDICTION_VISIBILITY_VALUES as unknown as string[])
+            .is("operator_id", null)
+            .not("status", "eq", "settled")
+            .order("event_date", { ascending: true })
+            .limit(500),
+          supabase
+            .from("prediction_events")
+            .select(EVENTS_SELECT)
+            .eq("status", "approved")
+            .limit(100),
+        ]),
+        timeout.then(() => { throw new Error("loadFights timeout (10 s)"); }) as never,
       ]);
 
       if (fightsRes.error) throw fightsRes.error;

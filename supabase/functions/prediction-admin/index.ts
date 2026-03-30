@@ -1043,27 +1043,6 @@ Deno.serve(async (req) => {
       return json({ success: true });
     }
 
-    if (action === "validatePromoCode") {
-      const { code } = body;
-      if (!code) return json({ error: "Missing code" }, 400);
-      const { data: promo } = await supabase
-        .from("promo_codes")
-        .select("*")
-        .eq("code", code.toUpperCase())
-        .maybeSingle();
-
-      if (!promo) return json({ valid: false, error: "Code not found" });
-      if (promo.uses_count >= promo.max_uses) return json({ valid: false, error: "Code fully redeemed" });
-      if (promo.expires_at && new Date(promo.expires_at) < new Date()) return json({ valid: false, error: "Code expired" });
-
-      let discounted_price = 2400;
-      if (promo.discount_type === "full") discounted_price = 0;
-      else if (promo.discount_type === "percent") discounted_price = Math.max(0, 2400 * (1 - promo.discount_value / 100));
-      else if (promo.discount_type === "fixed") discounted_price = Math.max(0, 2400 - promo.discount_value);
-
-      return json({ valid: true, discount_type: promo.discount_type, discount_value: promo.discount_value, discounted_price, promo_id: promo.id });
-    }
-
     // ── Quick Platform Event Creation ──
 
     if (action === "createPlatformFight") {
