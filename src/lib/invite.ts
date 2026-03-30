@@ -1,3 +1,5 @@
+import { getBrandName } from "@/lib/brandName";
+
 // Solana-based invite links (placeholder for future Solana program integration)
 
 export function buildInviteLink(params: {
