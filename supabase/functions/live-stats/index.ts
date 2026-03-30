@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
       const todayDate = now.split("T")[0]; // "YYYY-MM-DD"
 
       // Step 1: Try INSERT for brand-new sessions (silently ignored on conflict)
-      await supabase.from("presence_heartbeats").insert({
+      await supabase.from("presence_heartbeats").upsert({
         session_id: sessionId,
         last_seen: now,
         page: page ?? null,
@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
         lang: lang ?? null,
         device: device ?? null,
         referrer: referrer ?? null,
-      });
+      }, { onConflict: "session_id", ignoreDuplicates: true });
 
       // Step 2: UPDATE — always set page & game (including null) to fix sticky game bug
       const { error } = await supabase
