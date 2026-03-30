@@ -55,7 +55,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [userEntries, setUserEntries] = useState<any[]>([]);
   const [claiming, setClaiming] = useState(false);
 
-  const { data: operatorFights } = useQuery({
+  const { data: operatorFights, isError: opFightsError } = useQuery({
     queryKey: ["operator_fights", operator?.id],
     queryFn: async () => {
       const { data } = await (supabase as any)
