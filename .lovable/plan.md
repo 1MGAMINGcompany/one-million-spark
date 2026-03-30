@@ -1,49 +1,33 @@
 
 
-## Plan: 1MG.live Logo Everywhere — Full Brand Consistency
+## Plan: Fix Text Visibility in Light Mode + Restore Live Stats Display
 
-### What's Already Working
-The `index.html` inline script already swaps these for 1mg.live domains:
-- Favicon → `/images/1mglive-logo.png`
-- PWA manifest → `/site-1mg.webmanifest`
-- Apple touch icon → `/images/1mglive-logo.png`
-- App name → "1MG.live"
+### Problem 1: Text not readable in light mode
+The hero section uses a dark gradient background (`from-background via-background to-midnight-light`) and `text-muted-foreground` for trust indicators and live stats. In light mode, `midnight-light` is a dark color, making the overlaid light-themed text nearly invisible.
 
-The `BrandLogo.tsx` navbar logo is already domain-aware. The `site-1mg.webmanifest` exists with correct icons.
-
-### What's Missing
-Several components have **hardcoded "1M Gaming"** text that users on 1mg.live will see — in notifications, share dialogs, install prompts, etc.
+### Problem 2: Live stats not showing
+The `live-stats` edge function is returning 500 errors (`{"error":"{\"message\":\"\"}"}` and schema cache errors). This is a transient database connectivity issue. However, the `useLiveStats` hook silently swallows errors and sets `loading=false` with all zeros — then `LiveActivityIndicator` shows "Be the first to start a match" but with poor contrast. The fix should:
+- Make the hook more resilient (still show the indicator even on error)
+- Ensure the text is actually visible in light mode
 
 ### Changes
 
-#### 1. Make MobileAppPrompt domain-aware
-**File:** `src/components/MobileAppPrompt.tsx`
-- Import `detectDomain` and show "1MG.live" instead of generic text when on platform/operator domain
+#### 1. Fix hero background for light mode
+**File:** `src/pages/Home.tsx`
+- Line 92: Change the hero gradient to use theme-aware colors. Replace `to-midnight-light` with `to-muted` so in light mode it stays light, and in dark mode it uses the muted dark tone.
+- Line 215: Add `text-foreground/70` to the trust indicators section so text is readable against both light and dark backgrounds.
 
-#### 2. Make NotificationToggle iOS dialog domain-aware
-**File:** `src/components/NotificationToggle.tsx`
-- Update the hardcoded default values referencing "1M Gaming" to dynamically use "1MG.live" when on the 1mg.live domain
+#### 2. Fix LiveActivityIndicator contrast
+**File:** `src/components/LiveActivityIndicator.tsx`
+- Change `text-muted-foreground` to `text-foreground/70` on the container so the text is visible against the hero gradient in both themes.
+- Change `text-muted-foreground/70` on the visitors row to `text-foreground/60`.
 
-#### 3. Make turn notifications domain-aware
-**File:** `src/hooks/useTurnNotifications.ts`
-- Change `"1M GAMING — Your Turn"` to use the correct brand name based on domain
-
-#### 4. Make share/invite text domain-aware
-**File:** `src/components/ReferralSection.tsx`
-- Update share text from "1M Gaming" to correct brand
-**File:** `src/pages/Room.tsx`
-- Update rematch share text
-**File:** `src/lib/invite.ts`
-- Update invite message branding
-
-#### 5. Make SeoMeta consistent (already partially done)
-**File:** `src/components/seo/SeoMeta.tsx` — already handles `og:site_name`, no change needed
+#### 3. Make useLiveStats resilient to errors
+**File:** `src/hooks/useLiveStats.ts`
+- When the edge function returns an error, still set `loading=false` so the component renders (showing "Be the first" rather than nothing).
+- This is already happening correctly — the issue is the 500 from the edge function. The transient DB schema cache error should self-resolve, but the display should still work.
 
 ### Files Changed
-1. `src/components/MobileAppPrompt.tsx` — domain-aware app name
-2. `src/components/NotificationToggle.tsx` — domain-aware iOS install dialog text
-3. `src/hooks/useTurnNotifications.ts` — domain-aware notification title
-4. `src/components/ReferralSection.tsx` — domain-aware share text
-5. `src/pages/Room.tsx` — domain-aware rematch share text
-6. `src/lib/invite.ts` — domain-aware invite text
+1. `src/pages/Home.tsx` — fix hero gradient + trust indicator text colors for light mode
+2. `src/components/LiveActivityIndicator.tsx` — improve text contrast for light mode
 
