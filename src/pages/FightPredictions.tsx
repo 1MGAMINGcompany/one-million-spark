@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Swords, TrendingUp, ChevronDown, ChevronUp, Loader2, Radio, Clock, Trophy, History } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -34,6 +34,70 @@ const FEE_RATE = 0.05;
 // const PREDICTION_POOL_WALLET = ...
 
 const ALL_SPORTS = ["ALL", "MUAY THAI", "BARE KNUCKLE", "MMA", "BOXING", "FUTBOL"];
+const FEED_REFRESH_MIN_MS = 15_000;
+const FIGHTS_SELECT = [
+  "id",
+  "title",
+  "fighter_a_name",
+  "fighter_b_name",
+  "pool_a_lamports",
+  "pool_b_lamports",
+  "pool_a_usd",
+  "pool_b_usd",
+  "shares_a",
+  "shares_b",
+  "status",
+  "winner",
+  "resolved_at",
+  "claims_open_at",
+  "event_name",
+  "event_id",
+  "event_date",
+  "method",
+  "weight_class",
+  "fight_class",
+  "refund_status",
+  "home_logo",
+  "away_logo",
+  "source",
+  "commission_bps",
+  "price_a",
+  "price_b",
+  "polymarket_question",
+  "fighter_a_photo",
+  "fighter_b_photo",
+  "explainer_card",
+  "stats_json",
+  "featured",
+  "fighter_a_record",
+  "fighter_b_record",
+  "venue",
+  "referee",
+  "polymarket_volume_usd",
+  "has_updates",
+].join(",");
+const EVENTS_SELECT = [
+  "id",
+  "event_name",
+  "organization",
+  "event_date",
+  "location",
+  "status",
+  "is_test",
+  "source_provider",
+  "league_logo",
+  "category",
+].join(",");
+
+function sortByNullableDateAsc<T>(items: T[], getDate: (item: T) => string | null | undefined) {
+  return [...items].sort((a, b) => {
+    const aValue = getDate(a);
+    const bValue = getDate(b);
+    const aMs = aValue ? new Date(aValue).getTime() : Number.POSITIVE_INFINITY;
+    const bMs = bValue ? new Date(bValue).getTime() : Number.POSITIVE_INFINITY;
+    return aMs - bMs;
+  });
+}
 
 interface PredictionEvent {
   id: string;
@@ -165,13 +229,14 @@ export default function FightPredictions() {
   const { state: allowanceState, ensureAllowance, reset: resetAllowance } = useAllowanceGate();
   const { relayer_allowance } = usePolygonUSDC();
   const { hasSession, canTrade, loading: pmSessionLoading, setupTradingWallet } = usePolymarketSession();
-  usePolymarketPrices();
   const referralCode = useMyReferralCode(address ?? null);
   const { t } = useTranslation();
   const [fights, setFights] = useState<Fight[]>([]);
   const [events, setEvents] = useState<PredictionEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [feed, setFeed] = useState<FeedEntry[]>([]);
+  const [feedUnavailable, setFeedUnavailable] = useState(false);
+  const [backendDegraded, setBackendDegraded] = useState(false);
   const [showFeed, setShowFeed] = useState(true);
   const [userEntries, setUserEntries] = useState<any[]>([]);
   const [selectedFight, setSelectedFight] = useState<Fight | null>(null);
@@ -185,47 +250,132 @@ export default function FightPredictions() {
   const [claimShareData, setClaimShareData] = useState<{ eventTitle: string; amountWon: number; fighterName?: string; sport?: string } | null>(null);
   const [geoBlocked, setGeoBlocked] = useState(false);
   const [geoBlockDismissed, setGeoBlockDismissed] = useState(false);
+  const fightsRequestInFlight = useRef(false);
+  const queuedFightsReload = useRef(false);
+  const feedRequestInFlight = useRef(false);
+  const lastFeedLoadAt = useRef(0);
   const readOnly = geoBlocked && geoBlockDismissed;
+
+  usePolymarketPrices(!backendDegraded);
 
   const isConnected = authenticated && isPrivyUser;
 
   const loadFights = useCallback(async () => {
-    const [fightsRes, eventsRes] = await Promise.all([
-      supabase.from("prediction_fights").select("*").not("status", "eq", "draft").in("visibility", ["flagship", "all"]).is("operator_id", null).not("status", "eq", "settled").order("event_date", { ascending: true }).limit(200),
-      supabase.from("prediction_events").select("*").eq("status", "approved").order("event_date", { ascending: true }).limit(100),
-    ]);
-    if (fightsRes.data) setFights(fightsRes.data as any);
-    if (eventsRes.data) setEvents(eventsRes.data as any);
-    setLoading(false);
+    if (fightsRequestInFlight.current) {
+      queuedFightsReload.current = true;
+      return;
+    }
+
+    fightsRequestInFlight.current = true;
+
+    try {
+      const [fightsRes, eventsRes] = await Promise.all([
+        supabase
+          .from("prediction_fights")
+          .select(FIGHTS_SELECT)
+          .not("status", "eq", "draft")
+          .in("visibility", ["flagship", "all"])
+          .is("operator_id", null)
+          .not("status", "eq", "settled")
+          .limit(200),
+        supabase
+          .from("prediction_events")
+          .select(EVENTS_SELECT)
+          .eq("status", "approved")
+          .limit(100),
+      ]);
+
+      if (fightsRes.error) throw fightsRes.error;
+      if (eventsRes.error) throw eventsRes.error;
+
+      if (fightsRes.data) {
+        setFights(sortByNullableDateAsc((fightsRes.data ?? []) as unknown as any[], (fight: any) => fight.event_date) as any);
+      }
+
+      if (eventsRes.data) {
+        setEvents(sortByNullableDateAsc((eventsRes.data ?? []) as unknown as PredictionEvent[], (event) => event.event_date));
+      }
+
+      setBackendDegraded(false);
+    } catch (err) {
+      console.error("[FightPredictions] loadFights failed:", err);
+      setBackendDegraded(true);
+    } finally {
+      setLoading(false);
+      fightsRequestInFlight.current = false;
+
+      if (queuedFightsReload.current) {
+        queuedFightsReload.current = false;
+        void loadFights();
+      }
+    }
   }, []);
 
   const loadUserEntries = useCallback(async () => {
     if (!address) return;
-    const { data } = await supabase.from("prediction_entries").select("*").eq("wallet", address);
-    if (data) setUserEntries(data);
+    try {
+      const { data } = await supabase.from("prediction_entries").select("*").eq("wallet", address);
+      if (data) setUserEntries(data);
+    } catch (err) {
+      console.warn("[FightPredictions] loadUserEntries failed:", err);
+    }
   }, [address]);
 
-  const loadFeed = useCallback(async () => {
-    const { data } = await supabase.functions.invoke("prediction-feed");
-    if (data?.feed) setFeed(data.feed);
+  const loadFeed = useCallback(async (force = false) => {
+    const now = Date.now();
+
+    if (!force && now - lastFeedLoadAt.current < FEED_REFRESH_MIN_MS) return;
+    if (feedRequestInFlight.current) return;
+
+    feedRequestInFlight.current = true;
+    lastFeedLoadAt.current = now;
+
+    try {
+      const { data, error } = await supabase.functions.invoke("prediction-feed");
+      if (error) throw error;
+
+      if (Array.isArray(data?.feed)) {
+        setFeed(data.feed);
+      }
+
+      setFeedUnavailable(Boolean(data?.degraded));
+    } catch (err) {
+      console.warn("[FightPredictions] loadFeed failed:", err);
+      setFeed([]);
+      setFeedUnavailable(true);
+    } finally {
+      feedRequestInFlight.current = false;
+    }
   }, []);
 
-  useEffect(() => { loadFights(); loadFeed(); }, [loadFights, loadFeed]);
-  useEffect(() => { loadUserEntries(); }, [loadUserEntries]);
+  useEffect(() => {
+    void loadFights();
+    void loadFeed(true);
+  }, [loadFights, loadFeed]);
+
+  useEffect(() => {
+    void loadUserEntries();
+  }, [loadUserEntries]);
 
   useEffect(() => {
     const channel = supabase
       .channel("prediction-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "prediction_fights" }, () => loadFights())
+      .on("postgres_changes", { event: "*", schema: "public", table: "prediction_fights" }, () => {
+        void loadFights();
+      })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "prediction_entries" }, () => {
-        loadFeed(); loadFights(); if (address) loadUserEntries();
+        void loadFeed(true);
+        void loadFights();
+        if (address) void loadUserEntries();
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [loadFights, loadFeed, loadUserEntries, address]);
 
   useEffect(() => {
-    const interval = setInterval(() => { loadFights(); }, 15_000);
+    const interval = setInterval(() => {
+      void loadFights();
+    }, 15_000);
     return () => clearInterval(interval);
   }, [loadFights]);
 
@@ -694,6 +844,24 @@ export default function FightPredictions() {
           <div className="flex justify-center py-12">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
           </div>
+        ) : backendDegraded && !hasContent ? (
+          <div className="rounded-lg border border-border/50 bg-card px-6 py-10 text-center">
+            <Swords className="w-12 h-12 mx-auto mb-3 text-muted-foreground opacity-40" />
+            <p className="text-base font-semibold text-foreground">Live predictions are temporarily unavailable.</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Your events haven&apos;t been deleted — the backend timed out while loading them.
+            </p>
+            <button
+              onClick={() => {
+                setLoading(true);
+                void loadFights();
+                void loadFeed(true);
+              }}
+              className="mt-4 inline-flex items-center rounded-md bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground transition-opacity hover:opacity-80"
+            >
+              Retry
+            </button>
+          </div>
         ) : !hasContent && activeSport !== "MUAY THAI" ? (
           <div className="text-center py-12 text-muted-foreground">
             <Swords className="w-12 h-12 mx-auto mb-3 opacity-40" />
@@ -762,7 +930,9 @@ export default function FightPredictions() {
           {showFeed && (
             <div className="mt-2 bg-card border border-border/50 rounded-lg divide-y divide-border/20 max-h-64 overflow-y-auto">
               {feed.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">No predictions yet. Be the first!</p>
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  {feedUnavailable ? "Live feed temporarily unavailable." : "No predictions yet. Be the first!"}
+                </p>
               ) : (
                 feed.map((entry) => (
                   <div key={entry.id} className="px-4 py-2.5 flex items-center justify-between">

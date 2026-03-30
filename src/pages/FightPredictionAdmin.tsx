@@ -216,50 +216,73 @@ export default function FightPredictionAdmin() {
 
   const [entryCounts, setEntryCounts] = useState<Record<string, number>>({});
   const [botConfirmData, setBotConfirmData] = useState<Record<string, { confidence: number; provider: string; confirmed_at: string; claims_open_at: string }>>({});
+  const dataRequestInFlight = useRef(false);
+  const queuedDataReload = useRef(false);
 
   const loadData = useCallback(async () => {
-    const [eventsRes, fightsRes, entriesRes, settingsRes, logsRes] = await Promise.all([
-      supabase.from("prediction_events").select("*").order("created_at", { ascending: false }).limit(200),
-      supabase.from("prediction_fights").select("*").order("created_at", { ascending: false }).limit(500),
-      supabase.from("prediction_entries").select("fight_id").limit(1000),
-      supabase.functions.invoke("prediction-admin", { body: { action: "getSettings", wallet: address } }),
-      supabase.from("automation_logs").select("fight_id, confidence, details, created_at").in("action", ["bot_auto_confirm", "soccer_result_confirmed"]).order("created_at", { ascending: false }).limit(200),
-    ]);
-    if (eventsRes.data) setEvents(eventsRes.data as any);
-    if (fightsRes.data) setFights(fightsRes.data as any);
-    if (settingsRes.data?.settings) setKillSwitches(settingsRes.data.settings);
-    if (entriesRes.data) {
-      const counts: Record<string, number> = {};
-      entriesRes.data.forEach((e: any) => { counts[e.fight_id] = (counts[e.fight_id] || 0) + 1; });
-      setEntryCounts(counts);
+    if (dataRequestInFlight.current) {
+      queuedDataReload.current = true;
+      return;
     }
-    if (logsRes.data) {
-      const bcd: Record<string, any> = {};
-      for (const log of logsRes.data as any[]) {
-        if (log.fight_id && !bcd[log.fight_id]) {
-          const d = log.details || {};
-          bcd[log.fight_id] = {
-            confidence: log.confidence ?? 0,
-            provider: d.provider || "unknown",
-            confirmed_at: d.claims_open_at ? new Date(new Date(d.claims_open_at).getTime() - 3 * 60 * 1000).toISOString() : log.created_at,
-            claims_open_at: d.claims_open_at || null,
-          };
-        }
+
+    dataRequestInFlight.current = true;
+
+    try {
+      const [eventsRes, fightsRes, entriesRes, settingsRes, logsRes] = await Promise.all([
+        supabase.from("prediction_events").select("*").order("created_at", { ascending: false }).limit(200),
+        supabase.from("prediction_fights").select("*").order("created_at", { ascending: false }).limit(500),
+        supabase.from("prediction_entries").select("fight_id").limit(1000),
+        supabase.functions.invoke("prediction-admin", { body: { action: "getSettings", wallet: address } }),
+        supabase.from("automation_logs").select("fight_id, confidence, details, created_at").in("action", ["bot_auto_confirm", "soccer_result_confirmed"]).order("created_at", { ascending: false }).limit(200),
+      ]);
+
+      if (eventsRes.data) setEvents(eventsRes.data as any);
+      if (fightsRes.data) setFights(fightsRes.data as any);
+      if (settingsRes.data?.settings) setKillSwitches(settingsRes.data.settings);
+      if (entriesRes.data) {
+        const counts: Record<string, number> = {};
+        entriesRes.data.forEach((e: any) => { counts[e.fight_id] = (counts[e.fight_id] || 0) + 1; });
+        setEntryCounts(counts);
       }
-      setBotConfirmData(bcd);
+      if (logsRes.data) {
+        const bcd: Record<string, any> = {};
+        for (const log of logsRes.data as any[]) {
+          if (log.fight_id && !bcd[log.fight_id]) {
+            const d = log.details || {};
+            bcd[log.fight_id] = {
+              confidence: log.confidence ?? 0,
+              provider: d.provider || "unknown",
+              confirmed_at: d.claims_open_at ? new Date(new Date(d.claims_open_at).getTime() - 3 * 60 * 1000).toISOString() : log.created_at,
+              claims_open_at: d.claims_open_at || null,
+            };
+          }
+        }
+        setBotConfirmData(bcd);
+      }
+    } catch (err) {
+      console.error("[FightPredictionAdmin] loadData failed:", err);
+    } finally {
+      dataRequestInFlight.current = false;
+
+      if (queuedDataReload.current) {
+        queuedDataReload.current = false;
+        void loadData();
+      }
     }
-  }, []);
+  }, [address]);
 
   // Initial load + 5-second polling for admin freshness
   useEffect(() => {
     if (!isAdmin) return;
-    loadData();
-    const interval = setInterval(loadData, 5000);
+    void loadData();
+    const interval = setInterval(() => {
+      void loadData();
+    }, 15_000);
     return () => clearInterval(interval);
   }, [isAdmin, loadData]);
 
   // Force immediate refresh helper
-  const refreshNow = useCallback(() => { loadData(); }, [loadData]);
+  const refreshNow = useCallback(() => { void loadData(); }, [loadData]);
 
   const callAdmin = async (action: string, extra: Record<string, any> = {}) => {
     setBusy(true);
