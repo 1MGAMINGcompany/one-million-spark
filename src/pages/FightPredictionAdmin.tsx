@@ -164,6 +164,7 @@ export default function FightPredictionAdmin() {
   const { address } = useWallet();
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [backendDegraded, setBackendDegraded] = useState(false);
   const [events, setEvents] = useState<PredictionEvent[]>([]);
   const [fights, setFights] = useState<Fight[]>([]);
   const [busy, setBusy] = useState(false);
@@ -261,6 +262,7 @@ export default function FightPredictionAdmin() {
       }
     } catch (err) {
       console.error("[FightPredictionAdmin] loadData failed:", err);
+      setBackendDegraded(true);
     } finally {
       dataRequestInFlight.current = false;
 
@@ -377,10 +379,30 @@ export default function FightPredictionAdmin() {
     } catch (err: any) { toast.error(err.message); }
   };
 
-  if (loading) {
+  if (loading && !backendDegraded) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center pt-16">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (loading && backendDegraded) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center pt-16">
+        <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-6 py-12 text-center max-w-md">
+          <Shield className="w-14 h-14 mx-auto mb-4 text-amber-400" />
+          <h3 className="text-lg font-bold text-foreground">All Predictions Are Temporarily On Hold</h3>
+          <p className="mt-2 text-sm text-muted-foreground">
+            We're experiencing a brief issue with one of our providers. Your funds and existing predictions are completely safe.
+          </p>
+          <button
+            onClick={() => { setLoading(true); setBackendDegraded(false); loadData(); }}
+            className="mt-5 inline-flex items-center gap-2 rounded-lg bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-80"
+          >
+            Retry Connection
+          </button>
+        </div>
       </div>
     );
   }
