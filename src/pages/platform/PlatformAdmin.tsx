@@ -826,23 +826,25 @@ export default function PlatformAdmin() {
         </div>
 
         {/* ── Top-level tabs ── */}
-        <div className="flex gap-2">
-          {([
-            { key: "browser", label: "Polymarket Browser", icon: <Download className="w-3 h-3" /> },
-            { key: "dashboard", label: "Events Dashboard", icon: <Globe className="w-3 h-3" /> },
-            { key: "analytics", label: "Analytics", icon: <BarChart3 className="w-3 h-3" /> },
-            { key: "activity", label: "Activity Log", icon: <Activity className="w-3 h-3" /> },
-          ] as const).map(t => (
-            <button
-              key={t.key}
-              onClick={() => setActiveTab(t.key)}
-              className={`flex items-center gap-1.5 text-xs px-4 py-2 rounded-lg transition-colors ${
-                activeTab === t.key ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {t.icon} {t.label}
-            </button>
-          ))}
+        <div className="overflow-x-auto -mx-4 px-4">
+          <div className="flex gap-1.5 min-w-max">
+            {([
+              { key: "browser", label: "Browser", fullLabel: "Polymarket Browser", icon: <Download className="w-3 h-3" /> },
+              { key: "dashboard", label: "Dashboard", fullLabel: "Events Dashboard", icon: <Globe className="w-3 h-3" /> },
+              { key: "analytics", label: "Analytics", fullLabel: "Analytics", icon: <BarChart3 className="w-3 h-3" /> },
+              { key: "activity", label: "Activity", fullLabel: "Activity Log", icon: <Activity className="w-3 h-3" /> },
+            ] as const).map(t => (
+              <button
+                key={t.key}
+                onClick={() => setActiveTab(t.key)}
+                className={`flex items-center gap-1 text-[11px] sm:text-xs px-3 sm:px-4 py-2 rounded-lg transition-colors whitespace-nowrap ${
+                  activeTab === t.key ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {t.icon} <span className="sm:hidden">{t.label}</span><span className="hidden sm:inline">{t.fullLabel}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* ══════ TAB: Polymarket Browser ══════ */}
