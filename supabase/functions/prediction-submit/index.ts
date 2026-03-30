@@ -114,6 +114,7 @@ async function buildAndSubmitClobOrder(
   tokenId: string,
   price: number,
   netAmountUsdc: number,
+  dynamicFeeRateBps: number = 0,
 ): Promise<{ orderId: string | null; status: string; error?: string }> {
   try {
     const account = privateKeyToAccount(session.pm_trading_key as `0x${string}`);
