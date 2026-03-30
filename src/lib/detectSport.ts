@@ -6,6 +6,10 @@ const SOCCER_KEYWORDS = [
   "MLS", "SOCCER", "FUTBOL", "FÚTBOL", "PREMIER LEAGUE", "LA LIGA",
   "CHAMPIONS LEAGUE", "SERIE A", "BUNDESLIGA", "LIGUE 1", "EREDIVISIE",
   "LIGA MX", "EPL", "COPA", "EURO", "FIFA", "WORLD CUP",
+  "CONCACAF", "CONMEBOL", "A-LEAGUE", "K-LEAGUE", "J-LEAGUE",
+  "PRIMEIRA LIGA", "SÜPER LIG", "SUPER LIG", "BRAZIL SÉRIE A",
+  "SAUDI PRO LEAGUE", "COPA LIBERTADORES", "COPA SUDAMERICANA",
+  "EUROPA LEAGUE", "UEL", "UCL", "EUROPA CONFERENCE",
 ];
 
 // NHL team names for accurate sport detection
@@ -48,7 +52,26 @@ const MLB_TEAMS = [
   "RANGERS",
 ];
 
-export type SportType = "soccer" | "over_under" | "combat" | "nfl" | "nba" | "ncaa" | "nhl" | "mlb" | "tennis" | "golf" | "f1" | "cricket" | "rugby";
+// Cricket teams — IPL, PSL, International
+const CRICKET_TEAMS = [
+  // IPL
+  "MUMBAI INDIANS", "CHENNAI SUPER KINGS", "ROYAL CHALLENGERS",
+  "KOLKATA KNIGHT RIDERS", "SUNRISERS HYDERABAD", "RAJASTHAN ROYALS",
+  "DELHI CAPITALS", "PUNJAB KINGS", "LUCKNOW SUPER GIANTS",
+  "GUJARAT TITANS",
+  // PSL
+  "LAHORE QALANDARS", "KARACHI KINGS", "ISLAMABAD UNITED",
+  "PESHAWAR ZALMI", "QUETTA GLADIATORS", "MULTAN SULTANS",
+  // International teams
+  "INDIA", "AUSTRALIA", "ENGLAND", "NEW ZEALAND", "SOUTH AFRICA",
+  "PAKISTAN", "SRI LANKA", "WEST INDIES", "BANGLADESH", "AFGHANISTAN",
+  "ZIMBABWE", "IRELAND", "SCOTLAND", "NETHERLANDS", "NAMIBIA",
+];
+
+export type SportType =
+  | "soccer" | "over_under" | "combat" | "nfl" | "nba" | "ncaa" | "nhl" | "mlb"
+  | "tennis" | "golf" | "f1" | "cricket" | "rugby" | "table_tennis" | "chess"
+  | "pickleball" | "khl" | "shl" | "ahl" | "cwbb" | "euroleague";
 
 function hasTeamName(text: string, teams: string[]): boolean {
   const upper = text.toUpperCase();
@@ -69,7 +92,6 @@ export function detectSport(fight: {
   const titleUpper = (fight.title || "").toUpperCase();
   const nameA = (fight.fighter_a_name || "").toUpperCase();
   const nameB = (fight.fighter_b_name || "").toUpperCase();
-  const allText = `${upper} ${titleUpper} ${nameA} ${nameB}`;
 
   // Check event name for sport keywords
   if (SOCCER_KEYWORDS.some((k) => upper.includes(k))) return "soccer";
@@ -78,13 +100,21 @@ export function detectSport(fight: {
   if (upper.includes("NFL") || upper.includes("SUPER BOWL")) return "nfl";
   if (upper.includes("NBA") || upper.includes("WNBA")) return "nba";
   if (upper.includes("NCAA") || upper.includes("MARCH MADNESS") || upper.includes("COLLEGE FOOTBALL")) return "ncaa";
+  if (upper.includes("CWBB") || upper.includes("COLLEGE WOMEN'S BASKETBALL")) return "cwbb";
   if (upper.includes("NHL") || upper.includes("STANLEY CUP")) return "nhl";
+  if (upper.includes("KHL")) return "khl";
+  if (upper.includes("SHL") || upper.includes("SWEDISH HOCKEY")) return "shl";
+  if (upper.includes("AHL")) return "ahl";
   if (upper.includes("MLB") || upper.includes("WORLD SERIES")) return "mlb";
+  if (upper.includes("EUROLEAGUE") || upper.includes("EURO LEAGUE")) return "euroleague";
   if (upper.includes("ATP") || upper.includes("WTA") || upper.includes("TENNIS") || upper.includes("WIMBLEDON")) return "tennis";
+  if (upper.includes("TABLE TENNIS") || upper.includes("PING PONG")) return "table_tennis";
   if (upper.includes("PGA") || upper.includes("GOLF") || upper.includes("MASTERS GOLF")) return "golf";
   if (upper.includes("FORMULA 1") || upper.includes("F1") || upper.includes("GRAND PRIX")) return "f1";
-  if (upper.includes("CRICKET") || upper.includes("IPL") || upper.includes("T20")) return "cricket";
-  if (upper.includes("RUGBY") || upper.includes("SIX NATIONS")) return "rugby";
+  if (upper.includes("CRICKET") || upper.includes("IPL") || upper.includes("T20") || upper.includes("PSL")) return "cricket";
+  if (upper.includes("RUGBY") || upper.includes("SIX NATIONS") || upper.includes("SUPER RUGBY") || upper.includes("PREMIERSHIP RUGBY") || upper.includes("TOP 14") || upper.includes("UNITED RUGBY")) return "rugby";
+  if (upper.includes("CHESS")) return "chess";
+  if (upper.includes("PICKLEBALL")) return "pickleball";
 
   // Over/Under detection
   const lowerA = (fight.fighter_a_name || "").toLowerCase().trim();
@@ -99,6 +129,8 @@ export function detectSport(fight: {
   }
 
   // Team name detection — check fighter names against known team rosters
+  // Cricket first (IPL/PSL teams might conflict with generic names)
+  if (hasTeamName(nameA, CRICKET_TEAMS) || hasTeamName(nameB, CRICKET_TEAMS)) return "cricket";
   // NHL first (most commonly misdetected)
   if (hasTeamName(nameA, NHL_TEAMS) || hasTeamName(nameB, NHL_TEAMS)) return "nhl";
   if (hasTeamName(nameA, NBA_TEAMS) || hasTeamName(nameB, NBA_TEAMS)) return "nba";
