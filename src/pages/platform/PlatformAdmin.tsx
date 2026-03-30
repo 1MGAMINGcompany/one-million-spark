@@ -1038,35 +1038,38 @@ export default function PlatformAdmin() {
             </div>
 
             {/* Filter row + Search */}
-            <div className="flex gap-2 mb-3 flex-wrap items-center">
-              {(["active", "settled", "all"] as const).map(f => (
-                <button
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  className={`text-xs px-3 py-1 rounded-full transition-colors ${
-                    filter === f ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {f.charAt(0).toUpperCase() + f.slice(1)}
-                </button>
-              ))}
-              <div className="border-l border-border/50 mx-1" />
-              <div className="overflow-x-auto flex gap-1">
-                <button
-                  onClick={() => setSportFilter("all")}
-                  className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${sportFilter === "all" ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}
-                >
-                  All Sports
-                </button>
-                {DASHBOARD_SPORTS.map(s => (
+            <div className="space-y-2 mb-3">
+              <div className="flex gap-1.5 flex-wrap">
+                {(["active", "settled", "all"] as const).map(f => (
                   <button
-                    key={s}
-                    onClick={() => setSportFilter(s)}
-                    className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${sportFilter === s ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}
+                    key={f}
+                    onClick={() => setFilter(f)}
+                    className={`text-[11px] px-2.5 py-1 rounded-full transition-colors ${
+                      filter === f ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground hover:text-foreground"
+                    }`}
                   >
-                    {SPORT_BADGE[s]?.label || s}
+                    {f.charAt(0).toUpperCase() + f.slice(1)}
                   </button>
                 ))}
+              </div>
+              <div className="overflow-x-auto -mx-4 px-4">
+                <div className="flex gap-1 min-w-max">
+                  <button
+                    onClick={() => setSportFilter("all")}
+                    className={`text-[11px] px-2 py-1 rounded-full whitespace-nowrap ${sportFilter === "all" ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}
+                  >
+                    All
+                  </button>
+                  {DASHBOARD_SPORTS.map(s => (
+                    <button
+                      key={s}
+                      onClick={() => setSportFilter(s)}
+                      className={`text-[11px] px-2 py-1 rounded-full whitespace-nowrap ${sportFilter === s ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}
+                    >
+                      {SPORT_BADGE[s]?.label || s}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
