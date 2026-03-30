@@ -222,7 +222,20 @@ interface LeagueSource {
   seriesId?: string;
   /** For search-based discovery, append these keywords */
   searchSeed?: string[];
+  /** If true, this is a manual sport (UFC/Boxing/Golf) — skip tag_id=100639 game filter */
+  manualSport?: boolean;
 }
+
+// Manual sport tag IDs for sports NOT in /sports endpoint
+const MANUAL_SPORT_TAGS: Record<string, string> = {
+  ufc: "1637",
+  boxing: "267",
+  golf: "1349",
+  f1: "1351",
+  chess: "1376",
+  mma: "1637",
+  bkfc: "267",
+};
 
 const LEAGUE_SOURCES: Record<string, LeagueSource> = {
   // ─── Soccer (tag-based) ───
