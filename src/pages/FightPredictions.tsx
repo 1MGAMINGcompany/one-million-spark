@@ -25,6 +25,7 @@ import { useMyReferralCode } from "@/hooks/useMyReferralCode";
 import type { Fight } from "@/components/predictions/FightCard";
 import type { TradeResult } from "@/components/predictions/tradeResultTypes";
 import { usePolymarketPrices } from "@/hooks/usePolymarketPrices";
+import { PREDICTION_VISIBILITY_VALUES } from "@/lib/predictionVisibility";
 
 const FEE_RATE = 0.05;
 
