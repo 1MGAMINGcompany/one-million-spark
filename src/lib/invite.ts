@@ -36,11 +36,12 @@ export function facebookInvite(link: string) {
 }
 
 export function emailInvite(link: string, gameName?: string) {
+  const brand = getBrandName();
   const subject = encodeURIComponent(
-    gameName ? `Join my ${gameName} game on 1M Gaming` : "Game room invite"
+    gameName ? `Join my ${gameName} game on ${brand}` : "Game room invite"
   );
   const body = encodeURIComponent(
-    `Hey!\n\nI've created a game room on 1M Gaming and I'd love for you to join.\n\nClick here to join: ${link}\n\nSee you there!`
+    `Hey!\n\nI've created a game room on ${brand} and I'd love for you to join.\n\nClick here to join: ${link}\n\nSee you there!`
   );
   window.open(`mailto:?subject=${subject}&body=${body}`);
 }

@@ -183,7 +183,7 @@ export function useTurnNotifications({
       // Show browser notification
       const playerCount = players.filter((p) => p.status === "active").length;
       showBrowserNotification(
-        "1M GAMING — Your Turn",
+        `${getBrandName().toUpperCase()} — Your Turn`,
         `It's your move in ${gameName}. ${playerCount}-player game.`,
         {
           tag: `turn-${roomId}`,

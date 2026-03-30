@@ -197,7 +197,7 @@ function IOSInstallDialog({
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              {t('common.openFromHomeScreen', { defaultValue: 'Once installed, open 1M Gaming from your Home Screen and enable notifications.' })}
+              {t('common.openFromHomeScreen', { defaultValue: `Once installed, open ${getBrandName()} from your Home Screen and enable notifications.` })}
             </p>
           </DialogDescription>
         </DialogHeader>
