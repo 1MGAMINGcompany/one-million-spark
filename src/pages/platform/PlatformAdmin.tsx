@@ -391,6 +391,118 @@ export default function PlatformAdmin() {
     loadFights();
   };
 
+  // ── Deduplicate logic ──
+  const duplicateSet = useMemo(() => {
+    const ids = new Set<string>();
+    const byMatchup = new Map<string, string[]>();
+    const byTitle = new Map<string, string[]>();
+    for (const f of fights) {
+      const mk = dedupKey(f.fighter_a_name, f.fighter_b_name, f.event_date);
+      const arr = byMatchup.get(mk) || [];
+      arr.push(f.id);
+      byMatchup.set(mk, arr);
+
+      const tk = titleDedupKey(f.title);
+      const tarr = byTitle.get(tk) || [];
+      tarr.push(f.id);
+      byTitle.set(tk, tarr);
+    }
+    for (const group of byMatchup.values()) {
+      if (group.length > 1) group.forEach(id => ids.add(id));
+    }
+    for (const group of byTitle.values()) {
+      if (group.length > 1) group.forEach(id => ids.add(id));
+    }
+    return ids;
+  }, [fights]);
+
+  const handleDeduplicate = () => {
+    const groupMap = new Map<string, PlatformFight[]>();
+    for (const f of fights) {
+      // Group by matchup key
+      const mk = dedupKey(f.fighter_a_name, f.fighter_b_name, f.event_date);
+      const arr = groupMap.get(mk) || [];
+      arr.push(f);
+      groupMap.set(mk, arr);
+    }
+    // Also group by title
+    const titleMap = new Map<string, PlatformFight[]>();
+    for (const f of fights) {
+      const tk = titleDedupKey(f.title);
+      const arr = titleMap.get(tk) || [];
+      arr.push(f);
+      titleMap.set(tk, arr);
+    }
+    // Merge: for title groups, merge into matchup groups if not already covered
+    for (const [tk, titleFights] of titleMap) {
+      if (titleFights.length <= 1) continue;
+      const ids = new Set(titleFights.map(f => f.id));
+      // Check if these are already in an existing group
+      let alreadyCovered = false;
+      for (const group of groupMap.values()) {
+        if (group.length > 1 && group.some(f => ids.has(f.id))) {
+          // Merge missing fights into existing group
+          for (const f of titleFights) {
+            if (!group.some(g => g.id === f.id)) group.push(f);
+          }
+          alreadyCovered = true;
+          break;
+        }
+      }
+      if (!alreadyCovered) {
+        groupMap.set(`title::${tk}`, titleFights);
+      }
+    }
+
+    const groups: DuplicateGroup[] = [];
+    for (const [key, gFights] of groupMap) {
+      if (gFights.length <= 1) continue;
+      // Determine keeper: most predictions, then earliest created_at
+      const sorted = [...gFights].sort((a, b) => {
+        const ca = entryCounts[a.id] || 0;
+        const cb = entryCounts[b.id] || 0;
+        if (cb !== ca) return cb - ca;
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
+      const keepId = sorted[0].id;
+      groups.push({
+        key,
+        label: `${sorted[0].fighter_a_name} vs ${sorted[0].fighter_b_name}`,
+        fights: sorted,
+        keepId,
+        deleteIds: sorted.slice(1).map(f => f.id),
+      });
+    }
+
+    if (groups.length === 0) {
+      toast.info("No duplicates found");
+      return;
+    }
+    setDedupGroups(groups);
+    setDedupDialogOpen(true);
+  };
+
+  const handleConfirmDedup = async () => {
+    setDedupBusy(true);
+    setDedupProgress(0);
+    const allDeleteIds = dedupGroups.flatMap(g => g.deleteIds);
+    let deleted = 0;
+    for (let i = 0; i < allDeleteIds.length; i++) {
+      try {
+        await supabase.functions.invoke("prediction-admin", {
+          body: { action: "deleteFight", wallet: address, fight_id: allDeleteIds[i] },
+        });
+        deleted++;
+      } catch {}
+      setDedupProgress(i + 1);
+    }
+    toast.success(`Deleted ${deleted} duplicate events`);
+    setDedupBusy(false);
+    setDedupDialogOpen(false);
+    setDedupGroups([]);
+    loadFights();
+  };
+
   // Toggle single event selection
   const toggleEventSelection = (id: string) => {
     setSelectedEvents(prev => {
