@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useTranslation } from "react-i18next";
+import { getBrandName } from "@/lib/brandName";
 
 interface NotificationToggleProps {
   enabled: boolean;
@@ -167,7 +168,7 @@ function IOSInstallDialog({
           </DialogTitle>
           <DialogDescription className="pt-2 space-y-4">
             <p>
-              {t('common.installAppForNotifications', { defaultValue: 'To receive turn notifications on iOS, please add 1M Gaming to your Home Screen.' })}
+              {t('common.installAppForNotifications', { defaultValue: `To receive turn notifications on iOS, please add ${getBrandName()} to your Home Screen.` })}
             </p>
             <div className="bg-muted/50 rounded-lg p-4 space-y-3 text-sm">
               <div className="flex items-start gap-3">
@@ -196,7 +197,7 @@ function IOSInstallDialog({
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              {t('common.openFromHomeScreen', { defaultValue: 'Once installed, open 1M Gaming from your Home Screen and enable notifications.' })}
+              {t('common.openFromHomeScreen', { defaultValue: `Once installed, open ${getBrandName()} from your Home Screen and enable notifications.` })}
             </p>
           </DialogDescription>
         </DialogHeader>

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { getBrandName } from "@/lib/brandName";
 
 interface ReferralStats {
   referralCode: string;
@@ -123,10 +124,11 @@ export default function ReferralSection({ wallet }: { wallet: string }) {
   const handleShare = async () => {
     if (!stats?.referralCode) return;
     const link = `${window.location.origin}/?ref=${stats.referralCode}`;
-    const text = `🎮 Join me on 1M Gaming! Play chess, checkers, backgammon & more for SOL. Use my invite link: ${link}`;
+    const brand = getBrandName();
+    const text = `🎮 Join me on ${brand}! Play chess, checkers, backgammon & more for SOL. Use my invite link: ${link}`;
     if (navigator.share) {
       try {
-        await navigator.share({ title: "1M Gaming Invite", text, url: link });
+        await navigator.share({ title: `${brand} Invite`, text, url: link });
       } catch {
         // User cancelled share
       }

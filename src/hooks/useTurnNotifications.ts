@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { showBrowserNotification, requestNotificationPermission } from "@/lib/pushNotifications";
+import { getBrandName } from "@/lib/brandName";
 import { useSound } from "@/contexts/SoundContext";
 import { toast } from "@/hooks/use-toast";
 
@@ -182,7 +183,7 @@ export function useTurnNotifications({
       // Show browser notification
       const playerCount = players.filter((p) => p.status === "active").length;
       showBrowserNotification(
-        "1M GAMING — Your Turn",
+        `${getBrandName().toUpperCase()} — Your Turn`,
         `It's your move in ${gameName}. ${playerCount}-player game.`,
         {
           tag: `turn-${roomId}`,

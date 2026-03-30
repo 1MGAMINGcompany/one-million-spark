@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { X, Download, Share } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useTranslation } from 'react-i18next';
+import { getBrandName } from '@/lib/brandName';
 
 const SESSION_KEY = 'app_prompt_dismissed';
 

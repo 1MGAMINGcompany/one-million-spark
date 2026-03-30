@@ -123,7 +123,7 @@ export default function Room() {
       try {
         await navigator.share({
           title: 'Join my game!',
-          text: 'Join my rematch game on 1M Gaming',
+          text: `Join my rematch game on ${(await import("@/lib/brandName")).getBrandName()}`,
           url: roomLink,
         });
       } catch (err) {
