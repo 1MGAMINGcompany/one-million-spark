@@ -275,7 +275,7 @@ export default function FightPredictions() {
           .from("prediction_fights")
           .select(FIGHTS_SELECT)
           .not("status", "eq", "draft")
-          .in("visibility", ["flagship", "all"])
+          .in("visibility", PREDICTION_VISIBILITY_VALUES as unknown as string[])
           .is("operator_id", null)
           .not("status", "eq", "settled")
           .limit(200),
