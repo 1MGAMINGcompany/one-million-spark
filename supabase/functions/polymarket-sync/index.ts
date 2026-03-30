@@ -78,7 +78,17 @@ const NON_SPORT_KEYWORDS = [
   "fed rate", "interest rate",
 ];
 
-const MATCHUP_RE = /\bvs\.?\b|\sv\s|\bat\b/i;
+/** Normalize team/fighter name for dedup comparison */
+function normalizeTeamName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/^(the |fc |afc |cf |as |ac |rc |cd |club |sc )/i, "")
+    .replace(/ (fc|sc|cf|afc|city|united|rovers|wanderers|athletic)$/i, "")
+    .replace(/[^a-z0-9]/g, "")
+    .trim();
+}
+
+
 
 function hasMatchupPattern(texts: string[]): boolean {
   return texts.some(t => MATCHUP_RE.test(t));
@@ -923,6 +933,41 @@ async function importSingleEvent(
       .maybeSingle();
     if (existingByCondition) { imported++; continue; }
 
+    // Dedup: title-only match (case-insensitive, whitespace-stripped)
+    const candidateTitle = (market.groupItemTitle || market.question || "").trim();
+    const normalizedTitle = candidateTitle.toLowerCase().replace(/\s+/g, "");
+    if (normalizedTitle.length > 3) {
+      const { data: titleMatch } = await supabase
+        .from("prediction_fights")
+        .select("id")
+        .filter("title", "ilike", candidateTitle)
+        .limit(1);
+      if (titleMatch && titleMatch.length > 0) { imported++; continue; }
+    }
+
+    // Dedup: normalized team names + event_date
+    const candA = normalizeTeamName(outcomes[0]);
+    const candB = normalizeTeamName(outcomes[1]);
+    const candDate = timeInfo.chosen || gEvent.startDate || null;
+    if (candA && candB && candDate) {
+      const dateStr = new Date(candDate).toISOString().slice(0, 10);
+      // Query fights with same date, then check normalized names in-memory
+      const { data: sameDateFights } = await supabase
+        .from("prediction_fights")
+        .select("id, fighter_a_name, fighter_b_name")
+        .gte("event_date", `${dateStr}T00:00:00Z`)
+        .lte("event_date", `${dateStr}T23:59:59Z`)
+        .limit(200);
+      if (sameDateFights && sameDateFights.length > 0) {
+        const matchupExists = sameDateFights.some((f: any) => {
+          const nA = normalizeTeamName(f.fighter_a_name);
+          const nB = normalizeTeamName(f.fighter_b_name);
+          return (nA === candA && nB === candB) || (nA === candB && nB === candA);
+        });
+        if (matchupExists) { imported++; continue; }
+      }
+    }
+
     const { data: existingFight } = await supabase
       .from("prediction_fights")
       .select("id")
@@ -982,30 +1027,40 @@ async function importSingleEvent(
 
       const fightVisibility = visibility || "all";
 
-      await supabase.from("prediction_fights").insert({
-        title: market.groupItemTitle || market.question,
-        fighter_a_name: outcomes[0],
-        fighter_b_name: outcomes[1],
-        event_name: gEvent.title,
-        event_id: eventId,
-        source: "polymarket",
-        commission_bps: 200,
-        polymarket_market_id: market.id,
-        polymarket_condition_id: market.conditionId,
-        polymarket_slug: market.slug,
-        polymarket_outcome_a_token: tokenIds[0],
-        polymarket_outcome_b_token: tokenIds[1],
-        polymarket_active: market.active && !market.closed,
-        polymarket_end_date: market.endDate || null,
-        polymarket_question: market.question,
-        polymarket_last_synced_at: new Date().toISOString(),
-        polymarket_volume_usd: volumeUsd > 0 ? volumeUsd : null,
-        price_a: parseFloat(outcomePrices[0] || "0"),
-        price_b: parseFloat(outcomePrices[1] || "0"),
-        status: "open",
-        visibility: fightVisibility,
-        event_date: timeInfo.chosen || gEvent.startDate || null,
-      });
+      try {
+        await supabase.from("prediction_fights").insert({
+          title: market.groupItemTitle || market.question,
+          fighter_a_name: outcomes[0],
+          fighter_b_name: outcomes[1],
+          event_name: gEvent.title,
+          event_id: eventId,
+          source: "polymarket",
+          commission_bps: 200,
+          polymarket_market_id: market.id,
+          polymarket_condition_id: market.conditionId,
+          polymarket_slug: market.slug,
+          polymarket_outcome_a_token: tokenIds[0],
+          polymarket_outcome_b_token: tokenIds[1],
+          polymarket_active: market.active && !market.closed,
+          polymarket_end_date: market.endDate || null,
+          polymarket_question: market.question,
+          polymarket_last_synced_at: new Date().toISOString(),
+          polymarket_volume_usd: volumeUsd > 0 ? volumeUsd : null,
+          price_a: parseFloat(outcomePrices[0] || "0"),
+          price_b: parseFloat(outcomePrices[1] || "0"),
+          status: "open",
+          visibility: fightVisibility,
+          event_date: timeInfo.chosen || gEvent.startDate || null,
+        });
+      } catch (insertErr: any) {
+        // Handle unique constraint violation (23505) gracefully — treat as skip
+        if (insertErr?.code === "23505" || insertErr?.message?.includes("duplicate key")) {
+          console.log(`[polymarket-sync] Duplicate constraint skip: ${gEvent.title}`);
+          imported++;
+          continue;
+        }
+        throw insertErr;
+      }
     }
     imported++;
   }

@@ -15,9 +15,13 @@ import { Link } from "react-router-dom";
 import {
   Shield, Loader2, Trash2, Lock, Play, CheckCircle, Trophy,
   Download, Globe, Calendar, Users, RefreshCw, ArrowLeft,
-  BarChart3, TrendingUp, ChevronRight, ChevronDown,
+  BarChart3, TrendingUp, ChevronRight, ChevronDown, AlertTriangle, Copy,
 } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 // ── Types ──
 
@@ -131,6 +135,38 @@ const DASHBOARD_SPORTS = ["soccer", "nfl", "nba", "nhl", "mlb", "ncaa", "combat"
 
 // ── Helpers ──
 
+/** Normalize team/fighter name for dedup comparison */
+function normalizeTeamName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/^(the |fc |afc |cf |as |ac |rc |cd |club |sc )/i, "")
+    .replace(/ (fc|sc|cf|afc|city|united|rovers|wanderers|athletic)$/i, "")
+    .replace(/[^a-z0-9]/g, "")
+    .trim();
+}
+
+/** Build a dedup key from normalized names (sorted) + date */
+function dedupKey(a: string, b: string, dateStr: string | null): string {
+  const nA = normalizeTeamName(a);
+  const nB = normalizeTeamName(b);
+  const sorted = [nA, nB].sort().join("|");
+  const d = dateStr ? new Date(dateStr).toISOString().slice(0, 10) : "nodate";
+  return `${sorted}::${d}`;
+}
+
+/** Build a title-based dedup key */
+function titleDedupKey(title: string): string {
+  return title.toLowerCase().replace(/\s+/g, "");
+}
+
+interface DuplicateGroup {
+  key: string;
+  label: string;
+  fights: PlatformFight[];
+  keepId: string;
+  deleteIds: string[];
+}
+
 function getDaysUntil(dateStr: string | null): number | null {
   if (!dateStr) return null;
   const diff = new Date(dateStr).getTime() - Date.now();
@@ -184,6 +220,10 @@ export default function PlatformAdmin() {
   const [failedBatchIds, setFailedBatchIds] = useState<string[]>([]);
   const [bulkSummary, setBulkSummary] = useState("");
   const [cleanupBusy, setCleanupBusy] = useState(false);
+  const [dedupDialogOpen, setDedupDialogOpen] = useState(false);
+  const [dedupGroups, setDedupGroups] = useState<DuplicateGroup[]>([]);
+  const [dedupBusy, setDedupBusy] = useState(false);
+  const [dedupProgress, setDedupProgress] = useState(0);
 
   // Check admin
   useEffect(() => {
@@ -348,6 +388,118 @@ export default function PlatformAdmin() {
     }
     toast.success(`Deleted ${deleted} junk events`);
     setCleanupBusy(false);
+    loadFights();
+  };
+
+  // ── Deduplicate logic ──
+  const duplicateSet = useMemo(() => {
+    const ids = new Set<string>();
+    const byMatchup = new Map<string, string[]>();
+    const byTitle = new Map<string, string[]>();
+    for (const f of fights) {
+      const mk = dedupKey(f.fighter_a_name, f.fighter_b_name, f.event_date);
+      const arr = byMatchup.get(mk) || [];
+      arr.push(f.id);
+      byMatchup.set(mk, arr);
+
+      const tk = titleDedupKey(f.title);
+      const tarr = byTitle.get(tk) || [];
+      tarr.push(f.id);
+      byTitle.set(tk, tarr);
+    }
+    for (const group of byMatchup.values()) {
+      if (group.length > 1) group.forEach(id => ids.add(id));
+    }
+    for (const group of byTitle.values()) {
+      if (group.length > 1) group.forEach(id => ids.add(id));
+    }
+    return ids;
+  }, [fights]);
+
+  const handleDeduplicate = () => {
+    const groupMap = new Map<string, PlatformFight[]>();
+    for (const f of fights) {
+      // Group by matchup key
+      const mk = dedupKey(f.fighter_a_name, f.fighter_b_name, f.event_date);
+      const arr = groupMap.get(mk) || [];
+      arr.push(f);
+      groupMap.set(mk, arr);
+    }
+    // Also group by title
+    const titleMap = new Map<string, PlatformFight[]>();
+    for (const f of fights) {
+      const tk = titleDedupKey(f.title);
+      const arr = titleMap.get(tk) || [];
+      arr.push(f);
+      titleMap.set(tk, arr);
+    }
+    // Merge: for title groups, merge into matchup groups if not already covered
+    for (const [tk, titleFights] of titleMap) {
+      if (titleFights.length <= 1) continue;
+      const ids = new Set(titleFights.map(f => f.id));
+      // Check if these are already in an existing group
+      let alreadyCovered = false;
+      for (const group of groupMap.values()) {
+        if (group.length > 1 && group.some(f => ids.has(f.id))) {
+          // Merge missing fights into existing group
+          for (const f of titleFights) {
+            if (!group.some(g => g.id === f.id)) group.push(f);
+          }
+          alreadyCovered = true;
+          break;
+        }
+      }
+      if (!alreadyCovered) {
+        groupMap.set(`title::${tk}`, titleFights);
+      }
+    }
+
+    const groups: DuplicateGroup[] = [];
+    for (const [key, gFights] of groupMap) {
+      if (gFights.length <= 1) continue;
+      // Determine keeper: most predictions, then earliest created_at
+      const sorted = [...gFights].sort((a, b) => {
+        const ca = entryCounts[a.id] || 0;
+        const cb = entryCounts[b.id] || 0;
+        if (cb !== ca) return cb - ca;
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
+      const keepId = sorted[0].id;
+      groups.push({
+        key,
+        label: `${sorted[0].fighter_a_name} vs ${sorted[0].fighter_b_name}`,
+        fights: sorted,
+        keepId,
+        deleteIds: sorted.slice(1).map(f => f.id),
+      });
+    }
+
+    if (groups.length === 0) {
+      toast.info("No duplicates found");
+      return;
+    }
+    setDedupGroups(groups);
+    setDedupDialogOpen(true);
+  };
+
+  const handleConfirmDedup = async () => {
+    setDedupBusy(true);
+    setDedupProgress(0);
+    const allDeleteIds = dedupGroups.flatMap(g => g.deleteIds);
+    let deleted = 0;
+    for (let i = 0; i < allDeleteIds.length; i++) {
+      try {
+        await supabase.functions.invoke("prediction-admin", {
+          body: { action: "deleteFight", wallet: address, fight_id: allDeleteIds[i] },
+        });
+        deleted++;
+      } catch {}
+      setDedupProgress(i + 1);
+    }
+    toast.success(`Deleted ${deleted} duplicate events`);
+    setDedupBusy(false);
+    setDedupDialogOpen(false);
+    setDedupGroups([]);
     loadFights();
   };
 
@@ -656,6 +808,9 @@ export default function PlatformAdmin() {
                 <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">${analytics.totalPool.toFixed(0)} pool</span>
               </h2>
               <div className="flex items-center gap-1">
+                <Button variant="outline" size="sm" onClick={handleDeduplicate} className="gap-1 h-7 text-[10px] text-yellow-400">
+                  <Copy className="w-3 h-3" /> Deduplicate {duplicateSet.size > 0 ? `(${duplicateSet.size})` : ""}
+                </Button>
                 <Button variant="outline" size="sm" onClick={handleCleanup} disabled={cleanupBusy} className="gap-1 h-7 text-[10px] text-red-400">
                   <Trash2 className="w-3 h-3" /> {cleanupBusy ? "Cleaning..." : "Remove Junk"}
                 </Button>
@@ -724,6 +879,11 @@ export default function PlatformAdmin() {
                             <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${vis.color}`}>{vis.label}</span>
                             {f.polymarket_condition_id && (
                               <span className="text-[10px] text-purple-400/70">PM ✓</span>
+                            )}
+                            {duplicateSet.has(f.id) && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-yellow-500/20 text-yellow-400 flex items-center gap-0.5">
+                                <AlertTriangle className="w-2.5 h-2.5" /> Duplicate
+                              </span>
                             )}
                             {f.event_date && (
                               <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
@@ -896,6 +1056,80 @@ export default function PlatformAdmin() {
           </p>
           <PlatformEventCreator wallet={address!} defaultVisibility="platform" />
         </Card>
+
+        {/* ═══ Deduplicate Dialog ═══ */}
+        <Dialog open={dedupDialogOpen} onOpenChange={setDedupDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-yellow-400" /> Deduplicate Events
+              </DialogTitle>
+              <DialogDescription>
+                Found {dedupGroups.length} duplicate groups ({dedupGroups.reduce((s, g) => s + g.deleteIds.length, 0)} events to delete).
+                Review below — the event with the most predictions (or earliest) will be kept.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3 mt-2">
+              {dedupGroups.map(group => (
+                <div key={group.key} className="p-3 rounded-lg bg-muted/30 border border-border/30">
+                  <p className="text-sm font-medium text-foreground mb-2">{group.label}</p>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-[10px] h-8">Title</TableHead>
+                        <TableHead className="text-[10px] h-8">Date</TableHead>
+                        <TableHead className="text-[10px] h-8">Predictions</TableHead>
+                        <TableHead className="text-[10px] h-8">Action</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {group.fights.map(f => (
+                        <TableRow key={f.id}>
+                          <TableCell className="text-[10px] py-1.5 max-w-[200px] truncate">{f.title}</TableCell>
+                          <TableCell className="text-[10px] py-1.5">
+                            {f.event_date ? formatEventDateTime(f.event_date) : "—"}
+                          </TableCell>
+                          <TableCell className="text-[10px] py-1.5">{entryCounts[f.id] || 0}</TableCell>
+                          <TableCell className="text-[10px] py-1.5">
+                            {f.id === group.keepId ? (
+                              <span className="text-green-400 font-medium">✓ Keep</span>
+                            ) : (
+                              <span className="text-red-400">🗑 Delete</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ))}
+            </div>
+
+            {dedupBusy && (
+              <div className="mt-3">
+                <Progress value={dedupGroups.reduce((s, g) => s + g.deleteIds.length, 0) > 0 ? (dedupProgress / dedupGroups.reduce((s, g) => s + g.deleteIds.length, 0)) * 100 : 0} className="h-1.5" />
+                <p className="text-[10px] text-muted-foreground mt-1">Deleting {dedupProgress}/{dedupGroups.reduce((s, g) => s + g.deleteIds.length, 0)}...</p>
+              </div>
+            )}
+
+            <DialogFooter className="mt-4">
+              <Button variant="outline" size="sm" onClick={() => setDedupDialogOpen(false)} disabled={dedupBusy}>
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={handleConfirmDedup}
+                disabled={dedupBusy}
+                className="gap-1"
+              >
+                {dedupBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                Delete {dedupGroups.reduce((s, g) => s + g.deleteIds.length, 0)} Duplicates
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
