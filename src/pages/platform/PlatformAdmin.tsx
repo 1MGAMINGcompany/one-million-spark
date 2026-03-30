@@ -96,12 +96,20 @@ const SPORT_BADGE: Record<string, { label: string; color: string }> = {
   nhl: { label: "🏒 NHL", color: "bg-cyan-500/20 text-cyan-400" },
   mlb: { label: "⚾ MLB", color: "bg-red-500/20 text-red-400" },
   ncaa: { label: "🎓 NCAA", color: "bg-yellow-500/20 text-yellow-400" },
+  cwbb: { label: "🏀 CWBB", color: "bg-pink-500/20 text-pink-400" },
   combat: { label: "🥊 Combat", color: "bg-red-500/20 text-red-400" },
   tennis: { label: "🎾 Tennis", color: "bg-lime-500/20 text-lime-400" },
+  table_tennis: { label: "🏓 Table Tennis", color: "bg-orange-500/20 text-orange-400" },
   golf: { label: "⛳ Golf", color: "bg-emerald-500/20 text-emerald-400" },
   f1: { label: "🏎️ F1", color: "bg-red-500/20 text-red-400" },
   cricket: { label: "🏏 Cricket", color: "bg-green-500/20 text-green-400" },
   rugby: { label: "🏉 Rugby", color: "bg-green-500/20 text-green-400" },
+  khl: { label: "🏒 KHL", color: "bg-blue-500/20 text-blue-400" },
+  shl: { label: "🏒 SHL", color: "bg-yellow-500/20 text-yellow-400" },
+  ahl: { label: "🏒 AHL", color: "bg-teal-500/20 text-teal-400" },
+  euroleague: { label: "🏀 EuroLeague", color: "bg-indigo-500/20 text-indigo-400" },
+  chess: { label: "♟️ Chess", color: "bg-amber-500/20 text-amber-400" },
+  pickleball: { label: "🏓 Pickleball", color: "bg-lime-500/20 text-lime-400" },
   over_under: { label: "📊 O/U", color: "bg-muted text-muted-foreground" },
 };
 
@@ -111,41 +119,82 @@ const VIS_BADGE: Record<string, { label: string; color: string }> = {
   flagship: { label: "Flagship", color: "bg-yellow-500/20 text-yellow-400" },
 };
 
-const BROWSE_LEAGUES = [
-  { key: "nfl", label: "NFL" },
-  { key: "nhl", label: "NHL" },
-  { key: "nba", label: "NBA" },
-  { key: "wnba", label: "WNBA" },
-  { key: "mlb", label: "MLB" },
-  { key: "epl", label: "EPL" },
-  { key: "ucl", label: "UCL" },
-  { key: "la-liga", label: "La Liga" },
-  { key: "bundesliga", label: "Bundesliga" },
-  { key: "serie-a", label: "Serie A" },
-  { key: "ligue-1", label: "Ligue 1" },
-  { key: "mls", label: "MLS" },
-  { key: "liga-mx", label: "Liga MX" },
-  { key: "ufc", label: "UFC" },
-  { key: "mma", label: "MMA" },
-  { key: "boxing", label: "Boxing" },
-  { key: "bkfc", label: "BKFC" },
-  { key: "ncaab", label: "NCAAB" },
-  { key: "cfb", label: "CFB" },
-  { key: "atp", label: "ATP" },
-  { key: "wta", label: "WTA" },
-  { key: "tennis-atp", label: "Tennis ATP" },
-  { key: "tennis-wta", label: "Tennis WTA" },
-  { key: "tennis-grand-slam", label: "Grand Slams" },
-  { key: "golf", label: "Golf" },
-  { key: "f1", label: "F1" },
-  { key: "cricket", label: "Cricket" },
-  { key: "cricket-ipl", label: "IPL" },
-  { key: "cricket-psl", label: "PSL" },
-  { key: "cricket-intl", label: "Cricket Intl" },
-  { key: "rugby", label: "Rugby" },
+const BROWSE_LEAGUE_GROUPS = [
+  {
+    label: "🇺🇸 American",
+    leagues: [
+      { key: "nba", label: "NBA" },
+      { key: "nhl", label: "NHL" },
+      { key: "mlb", label: "MLB" },
+      { key: "ncaab", label: "NCAAB" },
+      { key: "cwbb", label: "CWBB" },
+      { key: "mls", label: "MLS" },
+      { key: "nfl", label: "NFL ⏸️" },
+    ],
+  },
+  {
+    label: "⚽ Soccer",
+    leagues: [
+      { key: "epl", label: "EPL" },
+      { key: "la-liga", label: "La Liga" },
+      { key: "bundesliga", label: "Bundesliga" },
+      { key: "serie-a", label: "Serie A" },
+      { key: "ligue-1", label: "Ligue 1" },
+      { key: "ucl", label: "UCL" },
+      { key: "uel", label: "UEL" },
+      { key: "copa-libertadores", label: "Copa Lib" },
+      { key: "liga-mx", label: "Liga MX" },
+      { key: "brazil-serie-a", label: "Brazil" },
+      { key: "eredivisie", label: "Eredivisie" },
+      { key: "primeira-liga", label: "Primeira" },
+    ],
+  },
+  {
+    label: "🥊 Combat",
+    leagues: [
+      { key: "ufc", label: "UFC" },
+      { key: "boxing", label: "Boxing" },
+      { key: "mma", label: "MMA" },
+      { key: "bkfc", label: "BKFC" },
+    ],
+  },
+  {
+    label: "🏒 Hockey",
+    leagues: [
+      { key: "khl", label: "KHL" },
+      { key: "shl", label: "SHL" },
+      { key: "ahl", label: "AHL" },
+    ],
+  },
+  {
+    label: "🏀 Basketball",
+    leagues: [
+      { key: "wnba", label: "WNBA" },
+      { key: "euroleague", label: "EuroLeague" },
+    ],
+  },
+  {
+    label: "🎾🏏 Other",
+    leagues: [
+      { key: "atp", label: "ATP" },
+      { key: "wta", label: "WTA" },
+      { key: "cricket-ipl", label: "IPL" },
+      { key: "cricket-psl", label: "PSL" },
+      { key: "cricket-intl", label: "Cricket Intl" },
+      { key: "rugby", label: "Rugby" },
+      { key: "golf", label: "Golf" },
+      { key: "f1", label: "F1" },
+      { key: "chess", label: "Chess" },
+      { key: "pickleball", label: "Pickleball" },
+    ],
+  },
 ];
 
-const DASHBOARD_SPORTS = ["soccer", "nfl", "nba", "nhl", "mlb", "ncaa", "combat", "tennis", "golf", "f1", "cricket", "rugby"];
+const BROWSE_LEAGUES = BROWSE_LEAGUE_GROUPS.flatMap(g => g.leagues);
+
+const NFL_OFFSEASON_KEY = "nfl";
+
+const DASHBOARD_SPORTS = ["soccer", "nfl", "nba", "nhl", "mlb", "ncaa", "cwbb", "combat", "tennis", "table_tennis", "golf", "f1", "cricket", "rugby", "khl", "shl", "ahl", "euroleague", "chess", "pickleball"];
 
 // ── Helpers ──
 
@@ -857,22 +906,42 @@ export default function PlatformAdmin() {
               Browse upcoming events by sport. Select multiple and bulk import with visibility <span className="text-blue-400 font-medium">Platform only</span>.
             </p>
 
-            {/* Scrollable sport tabs */}
-            <div className="overflow-x-auto pb-2 -mx-1">
-              <div className="flex gap-1 px-1 min-w-max">
-                {BROWSE_LEAGUES.map(l => (
-                  <button
-                    key={l.key}
-                    onClick={() => handleBrowse(l.key)}
-                    className={`text-xs px-3 py-1.5 rounded-md whitespace-nowrap transition-colors ${
-                      browseLeague === l.key ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {l.label}
-                  </button>
-                ))}
-              </div>
+            {/* Grouped sport tabs */}
+            <div className="space-y-1.5">
+              {BROWSE_LEAGUE_GROUPS.map(group => (
+                <div key={group.label} className="overflow-x-auto -mx-1">
+                  <div className="flex items-center gap-1 px-1 min-w-max">
+                    <span className="text-[10px] text-muted-foreground whitespace-nowrap w-20 shrink-0">{group.label}</span>
+                    {group.leagues.map(l => (
+                      <button
+                        key={l.key}
+                        onClick={() => handleBrowse(l.key)}
+                        className={`text-xs px-2.5 py-1 rounded-md whitespace-nowrap transition-colors ${
+                          browseLeague === l.key ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {l.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
+
+            {/* NFL offseason message */}
+            {browseLeague === NFL_OFFSEASON_KEY && browseResults.length === 0 && !browseLoading && (
+              <div className="mt-4 p-4 rounded-lg bg-muted/30 border border-border/30 text-center">
+                <p className="text-sm text-muted-foreground">🏈 NFL season starts September 2026 — check back then</p>
+              </div>
+            )}
+
+            {/* No results message for other sports */}
+            {browseLeague !== NFL_OFFSEASON_KEY && browseResults.length === 0 && !browseLoading && browseMessage && (
+              <div className="mt-4 p-4 rounded-lg bg-muted/30 border border-border/30 text-center">
+                <p className="text-sm text-muted-foreground">{browseMessage}</p>
+                <p className="text-xs text-muted-foreground mt-1">Use the <span className="text-primary">Quick Platform Event</span> form to add manually instead</p>
+              </div>
+            )}
 
             {/* Debug stats panel */}
             {browseDebugStats && (
