@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useTranslation } from "react-i18next";
+import { getBrandName } from "@/lib/brandName";
 
 interface NotificationToggleProps {
   enabled: boolean;
