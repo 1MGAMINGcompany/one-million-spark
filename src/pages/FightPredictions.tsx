@@ -378,6 +378,9 @@ export default function FightPredictions() {
 
   useEffect(() => {
     const interval = setInterval(() => {
+      // Back off polling when backend is unhealthy
+      const backoffMs = Math.min(15_000 * Math.pow(2, consecutiveFailures.current), 120_000);
+      if (consecutiveFailures.current > 0 && Date.now() - lastFeedLoadAt.current < backoffMs) return;
       void loadFights();
     }, 15_000);
     return () => clearInterval(interval);

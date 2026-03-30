@@ -18,7 +18,10 @@ export function useLiveStats() {
         setVisitsToday(Math.max(0, data.visitsToday ?? 0));
       }
     } catch {
-      // silent
+      // fail silently — render zeros
+      setBrowsing(0);
+      setRoomsWaiting(0);
+      setVisitsToday(0);
     } finally {
       setLoading(false);
     }
