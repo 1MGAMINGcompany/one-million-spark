@@ -412,7 +412,75 @@ function buildTelemetry(partial: Partial<QueryTelemetry>): QueryTelemetry {
 
 // ── Fetch functions ──
 
-/** Fetch events by tag_id — reliable for soccer league discovery. Supports pagination up to 500 events. */
+// ── /sports cache (1-hour TTL) ──
+let sportsCache: { data: any[]; ts: number } | null = null;
+const SPORTS_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+/** Fetch sports metadata from Gamma (cached 1 hour) */
+async function fetchSportsCached(): Promise<any[]> {
+  if (sportsCache && Date.now() - sportsCache.ts < SPORTS_CACHE_TTL) return sportsCache.data;
+  const data = await fetchSportsRaw();
+  sportsCache = { data, ts: Date.now() };
+  return data;
+}
+
+async function fetchSportsRaw(): Promise<any[]> {
+  try {
+    const res = await fetch(`${GAMMA_BASE}/sports`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Look up series_id for a league from the /sports endpoint */
+async function resolveSeriesId(leagueKey: string, label: string): Promise<string | null> {
+  const sports = await fetchSportsCached();
+  // Try slug match first, then label match
+  const match = sports.find((s: any) =>
+    s.slug === leagueKey ||
+    s.label?.toLowerCase() === label.toLowerCase() ||
+    s.slug === label.toLowerCase().replace(/\s+/g, "-")
+  );
+  return match?.seriesId || match?.series_id || null;
+}
+
+/** Fetch events by series_id + tag_id=100639 for game-only filtering (automated leagues) */
+async function fetchEventsBySeriesId(seriesId: string, limit = 100): Promise<GammaEvent[]> {
+  const allEvents: GammaEvent[] = [];
+  const seen = new Set<string>();
+  let offset = 0;
+  const maxPages = 5;
+
+  for (let page = 0; page < maxPages; page++) {
+    try {
+      const url = `${GAMMA_BASE}/events?series_id=${seriesId}&tag_id=100639&closed=false&limit=${limit}&offset=${offset}&order=startDate&ascending=true`;
+      const res = await fetch(url);
+      if (!res.ok) break;
+      const data = await res.json();
+      const events: GammaEvent[] = Array.isArray(data) ? data : [];
+      if (events.length === 0) break;
+
+      for (const ev of events) {
+        if (!seen.has(String(ev.id))) {
+          seen.add(String(ev.id));
+          allEvents.push(ev);
+        }
+      }
+
+      if (events.length < limit) break;
+      offset += limit;
+    } catch {
+      break;
+    }
+  }
+
+  return allEvents;
+}
+
+/** Fetch events by tag_id — for manual sports or fallback. Supports pagination up to 500 events. */
 async function fetchEventsByTagId(tagId: string, limit = 100): Promise<GammaEvent[]> {
   const allEvents: GammaEvent[] = [];
   const seen = new Set<string>();
@@ -421,7 +489,7 @@ async function fetchEventsByTagId(tagId: string, limit = 100): Promise<GammaEven
   
   for (let page = 0; page < maxPages; page++) {
     try {
-      const url = `${GAMMA_BASE}/events?tag_id=${tagId}&closed=false&upcoming=true&limit=${limit}&offset=${offset}&order=startDate&ascending=true`;
+      const url = `${GAMMA_BASE}/events?tag_id=${tagId}&closed=false&limit=${limit}&offset=${offset}&order=startDate&ascending=true`;
       const res = await fetch(url);
       if (!res.ok) break;
       const data = await res.json();
@@ -448,7 +516,7 @@ async function fetchEventsByTagId(tagId: string, limit = 100): Promise<GammaEven
 /** Fetch ALL active events from Gamma (no tag filter) with pagination */
 async function fetchAllActiveEvents(limit = 50, offset = 0): Promise<GammaEvent[]> {
   try {
-    const url = `${GAMMA_BASE}/events?closed=false&upcoming=true&limit=${limit}&offset=${offset}&order=startDate&ascending=true`;
+    const url = `${GAMMA_BASE}/events?closed=false&limit=${limit}&offset=${offset}&order=startDate&ascending=true`;
     const res = await fetch(url);
     if (!res.ok) return [];
     const data = await res.json();
@@ -458,16 +526,9 @@ async function fetchAllActiveEvents(limit = 50, offset = 0): Promise<GammaEvent[
   }
 }
 
-/** Fetch sports metadata from Gamma */
+/** @deprecated Use fetchSportsCached() instead */
 async function fetchSports(): Promise<any[]> {
-  try {
-    const res = await fetch(`${GAMMA_BASE}/sports`);
-    if (!res.ok) return [];
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return [];
-  }
+  return fetchSportsCached();
 }
 
 /** Search via /public-search — for exact fixture names only */
