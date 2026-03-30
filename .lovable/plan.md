@@ -1,70 +1,45 @@
 
 
-## Plan: Dynamic Polymarket Fee Rate + UI Cost Breakdown + Referral Tag
+## Plan: Change Platform Fee from 1% to 1.5% (Backend + Frontend)
 
-### What Changed
-Polymarket now charges up to 0.75% probability-based fees on all sports markets (as of March 30, 2026). Our code currently hardcodes `feeRateBps: 0n` / `"0"` in the EIP-712 order. This must be fetched dynamically per order.
+### Summary
+Update the platform fee from 1% (100 bps) to 1.5% (150 bps) across all backend fee logic and frontend UI text. Also update the default Polymarket fee from 2% to 2.25% (since 1.5% platform + 0.75% exchange = 2.25%).
 
 ### Changes
 
-#### 1. Backend: Fetch Polymarket fee rate before every order
+#### 1. Backend: Update fee constants
 **File:** `supabase/functions/prediction-submit/index.ts`
 
-- Before calling `buildAndSubmitClobOrder`, fetch the fee rate from `https://clob.polymarket.com/fee-rate?token_id={tokenId}`
-- Pass the fetched `feeRateBps` into `buildAndSubmitClobOrder` as a new parameter
-- Inside `buildAndSubmitClobOrder`, use the dynamic value instead of `0n`/`"0"` in both the EIP-712 message and the POST body
-- Store the Polymarket exchange fee in the trade order record (`pm_fee_rate_bps` field — new column)
-- Return `pm_fee_rate_bps` in the response so the frontend can display it
+- **Line 878**: Change default Polymarket fee from `200` (2%) to `225` (2.25%) — this is 1.5% platform + 0.75% exchange
+- **Line 1476**: Change `platformFeeBps = 100` to `platformFeeBps = 150` (operator revenue split)
 
-#### 2. Backend: Add Polymarket referral/affiliate tag to orders
-**File:** `supabase/functions/prediction-submit/index.ts`
+#### 2. Frontend: Update PredictionModal fee defaults
+**File:** `src/components/predictions/PredictionModal.tsx`
 
-- Add our affiliate address to the order body: `"affiliateAddress": "0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d"` (treasury wallet) — this registers us for Polymarket's 30% fee referral share on $10K+ volume
-- The affiliate address goes in the POST body alongside the `order` object, not inside the EIP-712 signed message
+- **Line 21**: Change `0.02` → `0.0225` (Polymarket default)
+- **Line 25**: Change `200` → `225` (Polymarket default bps)
 
-#### 3. Database: Track Polymarket exchange fee per order
-**Migration:** Add `pm_fee_rate_bps` column to `prediction_trade_orders`
+#### 3. Frontend: Update SoccerMatchCard fee defaults
+**File:** `src/components/predictions/SoccerMatchCard.tsx`
 
-```sql
-ALTER TABLE prediction_trade_orders 
-ADD COLUMN IF NOT EXISTS pm_fee_rate_bps integer DEFAULT 0;
-```
+- **Line 50**: Change `0.02` → `0.0225`
+- **Line 119**: Change default `0.02` → `0.0225`
 
-#### 4. Frontend: Show split cost breakdown
-**Files:** `PredictionModal.tsx`, `TradeTicket.tsx`, `SoccerMatchCard.tsx`, `FightCard.tsx`
+#### 4. Frontend: Update TradeTicket fee label
+**File:** `src/components/predictions/TradeTicket.tsx`
 
-Currently the UI shows a single "Platform Fee (2%)" line. Update to show:
-- **Polymarket Fee (0.XX%)** — from the market's dynamic fee rate (displayed from cached price data or response)
-- **Platform Fee (1%)** — our platform fee (for Polymarket sources, the 2% is split: ~0.75% exchange + 1% platform + 0.25% buffer)
-- **Total Fees** — sum of both
+- Update the "Exchange Fee (~0.75%)" line text and "Platform Fee" display to show the 1.5% correctly
 
-For the inline prediction cards (`SoccerMatchCard`, `FightCard`), update `estimateWin` to factor in both fees.
-
-Note: The Polymarket fee is baked into the CLOB order execution (it's taken from the order amount by the exchange), so from the user's perspective our displayed "Platform Fee" remains the same. The new line item is informational — showing users the exchange fee that Polymarket charges.
-
-### Technical Details
-
-**Fee rate API response format:**
-```json
-{ "fee_rate_bps": 75 }
-```
-This means 0.75% = 75 basis points. The value varies by market probability.
-
-**Order body with affiliate:**
-```json
-{
-  "order": { ... "feeRateBps": "75" ... },
-  "owner": "0x...",
-  "orderType": "GTC",
-  "affiliateAddress": "0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d"
-}
-```
+#### 5. Purchase/Onboarding pages: Update 1% → 1.5% text
+**Files:**
+- `src/pages/platform/PurchasePage.tsx` — Lines 228-231, 277: Change "1%" to "1.5%"
+- `src/pages/platform/OperatorOnboarding.tsx` — Line 198: Change "1%" to "1.5%"
 
 ### Files Changed
-1. `supabase/functions/prediction-submit/index.ts` — dynamic fee fetch, affiliate tag, pass to order builder
-2. `src/components/predictions/PredictionModal.tsx` — split fee display
-3. `src/components/predictions/TradeTicket.tsx` — add Polymarket fee line item
-4. `src/components/predictions/SoccerMatchCard.tsx` — update fee display
-5. `src/components/predictions/FightCard.tsx` — update fee display
-6. New migration — `pm_fee_rate_bps` column on `prediction_trade_orders`
+1. `supabase/functions/prediction-submit/index.ts` — fee constants (200→225 bps default, 100→150 bps platform split)
+2. `src/components/predictions/PredictionModal.tsx` — fee rate defaults
+3. `src/components/predictions/SoccerMatchCard.tsx` — fee rate defaults
+4. `src/components/predictions/TradeTicket.tsx` — fee label text
+5. `src/pages/platform/PurchasePage.tsx` — UI text 1% → 1.5%
+6. `src/pages/platform/OperatorOnboarding.tsx` — UI text 1% → 1.5%
 
