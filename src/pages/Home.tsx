@@ -39,8 +39,8 @@ const Home = () => {
   useEffect(() => {
     const load = async () => {
       const [fightsRes, eventsRes] = await Promise.all([
-        supabase.from("prediction_fights").select("*").order("created_at", { ascending: true }),
-        supabase.from("prediction_events").select("*").eq("status", "approved").order("event_date", { ascending: true }),
+        supabase.from("prediction_fights").select("id,title,fighter_a_name,fighter_b_name,price_a,price_b,status,event_date,event_name,home_logo,away_logo,fighter_a_image,fighter_b_image,visibility,event_id").not("status", "eq", "draft").in("visibility", ["flagship", "all"]).is("operator_id", null).order("event_date", { ascending: true }).limit(20),
+        supabase.from("prediction_events").select("*").eq("status", "approved").order("event_date", { ascending: true }).limit(20),
       ]);
       if (fightsRes.data) setPredFights(fightsRes.data as any);
       if (eventsRes.data) setPredEvents(eventsRes.data as any);
