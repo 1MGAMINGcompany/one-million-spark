@@ -876,6 +876,14 @@ export default function FightPredictions() {
           </div>
         ) : (
           <>
+            {backendDegraded && (
+              <div className="rounded-lg border border-amber-500/20 bg-amber-950/10 px-4 py-3 flex items-center gap-3 mb-4">
+                <Info className="w-4 h-4 text-amber-400 shrink-0" />
+                <p className="text-xs text-amber-200/80">
+                  Some data may be delayed — we're resolving an issue with our providers. Your funds are safe.
+                </p>
+              </div>
+            )}
             {/* LIVE NOW */}
             {liveEvents.length > 0 && (
               <div>
