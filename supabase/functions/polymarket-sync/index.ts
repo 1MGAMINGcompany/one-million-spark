@@ -1076,8 +1076,12 @@ async function importSingleEvent(
     eventId = newEvt!.id;
   }
 
+  // Use winner-only market filter instead of iterating all markets
+  const winnerMarket = findWinnerMarket(gEvent);
+  const marketsToImport = winnerMarket ? [winnerMarket] : [];
+
   let imported = 0;
-  for (const market of (gEvent.markets || [])) {
+  for (const market of marketsToImport) {
     let outcomes: string[], tokenIds: string[], outcomePrices: string[];
     try {
       outcomes = JSON.parse(market.outcomes || "[]");
@@ -1085,18 +1089,8 @@ async function importSingleEvent(
       tokenIds = JSON.parse(market.clobTokenIds || "[]");
     } catch { continue; }
 
-    // Reject markets with more than 3 outcomes (prop markets)
     if (outcomes.length > 3) continue;
     if (outcomes.length < 2 || tokenIds.length < 2) continue;
-
-    // Skip prop/more-markets at market level
-    const mq = (market.question || "").toLowerCase();
-    if (MORE_MARKETS_RE.test(mq)) continue;
-    let skipMarket = false;
-    for (const pk of PROP_KEYWORDS) {
-      if (mq.includes(pk)) { skipMarket = true; break; }
-    }
-    if (skipMarket) continue;
 
     // Reject already-settled markets (0%/100% probability)
     const priceA = parseFloat(outcomePrices[0] || "0");
