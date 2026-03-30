@@ -801,23 +801,25 @@ export default function PlatformAdmin() {
           <span className="text-foreground">1MG.live Platform</span>
         </div>
 
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-foreground font-['Cinzel'] flex items-center gap-2">
-            <Globe className="w-6 h-6 text-blue-400" /> 1MG.live Admin
-          </h1>
-          <div className="flex items-center gap-2">
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h1 className="text-lg sm:text-2xl font-bold text-foreground font-['Cinzel'] flex items-center gap-2">
+              <Globe className="w-5 h-5 sm:w-6 sm:h-6 text-blue-400" /> 1MG.live Admin
+            </h1>
             <Link to="/predictions/admin">
-              <Button variant="outline" size="sm" className="gap-1">
+              <Button variant="outline" size="sm" className="gap-1 h-7 text-[10px] sm:text-xs sm:h-8">
                 <ArrowLeft className="w-3 h-3" /> Main Admin
               </Button>
             </Link>
-            <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded-full">
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-1 rounded-full">
               {activePlatformCount} active
             </span>
-            <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded-full">
+            <span className="text-[10px] bg-primary/20 text-primary px-2 py-1 rounded-full">
               ${analytics.totalPool.toFixed(0)} pool
             </span>
-            <Button variant="outline" size="sm" onClick={() => loadFights()} className="gap-1">
+            <Button variant="outline" size="sm" onClick={() => loadFights()} className="gap-1 h-7 text-[10px] ml-auto">
               <RefreshCw className="w-3 h-3" /> Refresh
             </Button>
           </div>
