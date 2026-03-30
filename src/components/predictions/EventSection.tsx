@@ -29,10 +29,21 @@ const SPORT_CONFIG: Record<string, SportConfig> = {
   "NFL": { icon: "🏈", color: "text-amber-400", bgColor: "bg-amber-500/10", borderColor: "border-amber-500/30" },
   "NBA": { icon: "🏀", color: "text-orange-400", bgColor: "bg-orange-500/10", borderColor: "border-orange-500/30" },
   "NCAA": { icon: "🎓", color: "text-sky-400", bgColor: "bg-sky-500/10", borderColor: "border-sky-500/30" },
+  "CWBB": { icon: "🏀", color: "text-pink-400", bgColor: "bg-pink-500/10", borderColor: "border-pink-500/30" },
   "NHL": { icon: "🏒", color: "text-cyan-400", bgColor: "bg-cyan-500/10", borderColor: "border-cyan-500/30" },
+  "KHL": { icon: "🏒", color: "text-blue-400", bgColor: "bg-blue-500/10", borderColor: "border-blue-500/30" },
+  "SHL": { icon: "🏒", color: "text-yellow-400", bgColor: "bg-yellow-500/10", borderColor: "border-yellow-500/30" },
+  "AHL": { icon: "🏒", color: "text-teal-400", bgColor: "bg-teal-500/10", borderColor: "border-teal-500/30" },
   "MLB": { icon: "⚾", color: "text-red-400", bgColor: "bg-red-500/10", borderColor: "border-red-500/30" },
+  "EUROLEAGUE": { icon: "🏀", color: "text-indigo-400", bgColor: "bg-indigo-500/10", borderColor: "border-indigo-500/30" },
   "TENNIS": { icon: "🎾", color: "text-lime-400", bgColor: "bg-lime-500/10", borderColor: "border-lime-500/30" },
+  "TABLE TENNIS": { icon: "🏓", color: "text-orange-400", bgColor: "bg-orange-500/10", borderColor: "border-orange-500/30" },
   "GOLF": { icon: "⛳", color: "text-emerald-400", bgColor: "bg-emerald-500/10", borderColor: "border-emerald-500/30" },
+  "F1": { icon: "🏎️", color: "text-red-400", bgColor: "bg-red-500/10", borderColor: "border-red-500/30" },
+  "CRICKET": { icon: "🏏", color: "text-green-400", bgColor: "bg-green-500/10", borderColor: "border-green-500/30" },
+  "RUGBY": { icon: "🏉", color: "text-emerald-400", bgColor: "bg-emerald-500/10", borderColor: "border-emerald-500/30" },
+  "CHESS": { icon: "♟️", color: "text-amber-400", bgColor: "bg-amber-500/10", borderColor: "border-amber-500/30" },
+  "PICKLEBALL": { icon: "🏓", color: "text-lime-400", bgColor: "bg-lime-500/10", borderColor: "border-lime-500/30" },
 };
 
 interface PredictionEvent {
