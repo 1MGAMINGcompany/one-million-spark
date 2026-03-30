@@ -296,7 +296,14 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err: any) {
-    const msg = err?.message || err?.toString?.() || "unknown_error";
+    let msg = "unknown_error";
+    if (err instanceof Error) {
+      msg = err.message;
+    } else if (typeof err === "string") {
+      msg = err;
+    } else if (typeof err === "object" && err !== null) {
+      msg = err.message || err.code || JSON.stringify(err).slice(0, 200);
+    }
     console.error("[live-stats]", msg, typeof err === "object" ? JSON.stringify(err).slice(0, 300) : "");
     return new Response(JSON.stringify({ error: msg }), {
       status: 500,
