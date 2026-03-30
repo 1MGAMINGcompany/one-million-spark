@@ -111,39 +111,80 @@ const VIS_BADGE: Record<string, { label: string; color: string }> = {
   flagship: { label: "Flagship", color: "bg-yellow-500/20 text-yellow-400" },
 };
 
-const BROWSE_LEAGUES = [
-  { key: "nfl", label: "NFL" },
-  { key: "nhl", label: "NHL" },
-  { key: "nba", label: "NBA" },
-  { key: "wnba", label: "WNBA" },
-  { key: "mlb", label: "MLB" },
-  { key: "epl", label: "EPL" },
-  { key: "ucl", label: "UCL" },
-  { key: "la-liga", label: "La Liga" },
-  { key: "bundesliga", label: "Bundesliga" },
-  { key: "serie-a", label: "Serie A" },
-  { key: "ligue-1", label: "Ligue 1" },
-  { key: "mls", label: "MLS" },
-  { key: "liga-mx", label: "Liga MX" },
-  { key: "ufc", label: "UFC" },
-  { key: "mma", label: "MMA" },
-  { key: "boxing", label: "Boxing" },
-  { key: "bkfc", label: "BKFC" },
-  { key: "ncaab", label: "NCAAB" },
-  { key: "cfb", label: "CFB" },
-  { key: "atp", label: "ATP" },
-  { key: "wta", label: "WTA" },
-  { key: "tennis-atp", label: "Tennis ATP" },
-  { key: "tennis-wta", label: "Tennis WTA" },
-  { key: "tennis-grand-slam", label: "Grand Slams" },
-  { key: "golf", label: "Golf" },
-  { key: "f1", label: "F1" },
-  { key: "cricket", label: "Cricket" },
-  { key: "cricket-ipl", label: "IPL" },
-  { key: "cricket-psl", label: "PSL" },
-  { key: "cricket-intl", label: "Cricket Intl" },
-  { key: "rugby", label: "Rugby" },
+const BROWSE_LEAGUE_GROUPS = [
+  {
+    label: "🇺🇸 American",
+    leagues: [
+      { key: "nba", label: "NBA" },
+      { key: "nhl", label: "NHL" },
+      { key: "mlb", label: "MLB" },
+      { key: "ncaab", label: "NCAAB" },
+      { key: "cwbb", label: "CWBB" },
+      { key: "mls", label: "MLS" },
+      { key: "nfl", label: "NFL ⏸️" },
+    ],
+  },
+  {
+    label: "⚽ Soccer",
+    leagues: [
+      { key: "epl", label: "EPL" },
+      { key: "la-liga", label: "La Liga" },
+      { key: "bundesliga", label: "Bundesliga" },
+      { key: "serie-a", label: "Serie A" },
+      { key: "ligue-1", label: "Ligue 1" },
+      { key: "ucl", label: "UCL" },
+      { key: "uel", label: "UEL" },
+      { key: "copa-libertadores", label: "Copa Lib" },
+      { key: "liga-mx", label: "Liga MX" },
+      { key: "brazil-serie-a", label: "Brazil" },
+      { key: "eredivisie", label: "Eredivisie" },
+      { key: "primeira-liga", label: "Primeira" },
+    ],
+  },
+  {
+    label: "🥊 Combat",
+    leagues: [
+      { key: "ufc", label: "UFC" },
+      { key: "boxing", label: "Boxing" },
+      { key: "mma", label: "MMA" },
+      { key: "bkfc", label: "BKFC" },
+    ],
+  },
+  {
+    label: "🏒 Hockey",
+    leagues: [
+      { key: "khl", label: "KHL" },
+      { key: "shl", label: "SHL" },
+      { key: "ahl", label: "AHL" },
+    ],
+  },
+  {
+    label: "🏀 Basketball",
+    leagues: [
+      { key: "wnba", label: "WNBA" },
+      { key: "euroleague", label: "EuroLeague" },
+    ],
+  },
+  {
+    label: "🎾🏏 Other",
+    leagues: [
+      { key: "atp", label: "ATP" },
+      { key: "wta", label: "WTA" },
+      { key: "cricket-ipl", label: "IPL" },
+      { key: "cricket-psl", label: "PSL" },
+      { key: "cricket-intl", label: "Cricket Intl" },
+      { key: "rugby", label: "Rugby" },
+      { key: "golf", label: "Golf" },
+      { key: "f1", label: "F1" },
+      { key: "chess", label: "Chess" },
+      { key: "pickleball", label: "Pickleball" },
+    ],
+  },
 ];
+
+const BROWSE_LEAGUES = BROWSE_LEAGUE_GROUPS.flatMap(g => g.leagues);
+
+const NFL_OFFSEASON_KEY = "nfl";
 
 const DASHBOARD_SPORTS = ["soccer", "nfl", "nba", "nhl", "mlb", "ncaa", "combat", "tennis", "golf", "f1", "cricket", "rugby"];
 
