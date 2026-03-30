@@ -201,6 +201,12 @@ export default function TradeTicket({
             <span className="text-muted-foreground">Amount</span>
             <span className="text-foreground font-medium">${amountNum.toFixed(2)}</span>
           </div>
+          {isPolymarket && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Exchange Fee (~0.75%)</span>
+              <span className="text-muted-foreground font-medium">included in odds</span>
+            </div>
+          )}
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Platform Fee ({feeLabel})</span>
             <span className="text-destructive font-medium">-${fee.toFixed(2)}</span>
@@ -214,7 +220,9 @@ export default function TradeTicket({
             <span className="text-primary font-bold">${estimatedReward.toFixed(2)}</span>
           </div>
           <p className="text-[10px] text-muted-foreground/60 mt-1">
-            *Based on current odds. Final reward depends on pool at close.
+            {isPolymarket
+              ? "*Polymarket exchange fee (~0.75%) is deducted from trade execution. Platform fee is separate."
+              : "*Based on current odds. Final reward depends on pool at close."}
           </p>
         </div>
       )}

@@ -1199,7 +1199,7 @@ Deno.serve(async (req) => {
         });
 
         // ── Fetch dynamic Polymarket fee rate ──
-        let pmFeeRateBps = 0;
+        pmFeeRateBps = 0;
         try {
           const feeRes = await fetch(`${CLOB_BASE}/fee-rate?token_id=${tokenId}`);
           if (feeRes.ok) {
