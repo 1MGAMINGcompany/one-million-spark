@@ -148,6 +148,7 @@ export default function PredictionModal({
           approvalError={approvalError}
           fundingState={fundingState}
           nativeUsdcFormatted={nativeUsdcFormatted}
+          isPolymarket={fight.source === "polymarket"}
         />
       </div>
     </div>

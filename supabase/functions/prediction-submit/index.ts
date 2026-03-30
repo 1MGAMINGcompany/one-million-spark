@@ -114,6 +114,7 @@ async function buildAndSubmitClobOrder(
   tokenId: string,
   price: number,
   netAmountUsdc: number,
+  dynamicFeeRateBps: number = 0,
 ): Promise<{ orderId: string | null; status: string; error?: string }> {
   try {
     const account = privateKeyToAccount(session.pm_trading_key as `0x${string}`);
@@ -140,7 +141,7 @@ async function buildAndSubmitClobOrder(
       takerAmount: takerAmountRaw,
       expiration: 0n,
       nonce: 0n,
-      feeRateBps: 0n,
+      feeRateBps: BigInt(dynamicFeeRateBps),
       side: 0, // BUY
       signatureType: 0, // EOA
     };
@@ -165,13 +166,14 @@ async function buildAndSubmitClobOrder(
         takerAmount: takerAmountRaw.toString(),
         expiration: "0",
         nonce: "0",
-        feeRateBps: "0",
+        feeRateBps: dynamicFeeRateBps.toString(),
         side: "BUY",
         signatureType: 0,
         signature,
       },
       owner: account.address,
       orderType: "GTC",
+      affiliateAddress: TREASURY_WALLET,
     });
 
     // L2 HMAC authentication headers
@@ -1096,6 +1098,7 @@ Deno.serve(async (req) => {
     let filledShares = 0;
     let avgFillPrice: number | null = null;
     let tradeStatus = "requested";
+    let pmFeeRateBps = 0;
 
     if (isPolymarketBacked) {
       // ── Per-user CLOB credentials (Model A) — NO shared fallback ──
@@ -1195,6 +1198,21 @@ Deno.serve(async (req) => {
           cred_source: credSource,
         });
 
+        // ── Fetch dynamic Polymarket fee rate ──
+        pmFeeRateBps = 0;
+        try {
+          const feeRes = await fetch(`${CLOB_BASE}/fee-rate?token_id=${tokenId}`);
+          if (feeRes.ok) {
+            const feeData = await feeRes.json();
+            pmFeeRateBps = Number(feeData.fee_rate_bps ?? feeData.feeRateBps ?? 0);
+            console.log(`[prediction-submit] Polymarket fee rate for token ${tokenId}: ${pmFeeRateBps} bps`);
+          } else {
+            console.warn(`[prediction-submit] Fee rate fetch failed (${feeRes.status}), using 0 bps`);
+          }
+        } catch (feeErr) {
+          console.warn("[prediction-submit] Fee rate fetch error:", feeErr);
+        }
+
         // ── EIP-712 signed CLOB order submission ──
         const orderResult = await buildAndSubmitClobOrder(
           {
@@ -1206,6 +1224,7 @@ Deno.serve(async (req) => {
           tokenId!,
           expectedPrice!,
           net_amount_usdc,
+          pmFeeRateBps,
         );
 
         polymarket_order_id = orderResult.orderId;
@@ -1231,6 +1250,7 @@ Deno.serve(async (req) => {
             polymarket_order_id: orderResult.orderId,
             expected_price: expectedPrice,
             expected_shares: shares,
+            pm_fee_rate_bps: pmFeeRateBps,
           });
 
           // ── Post-submit targeted reconciliation (best-effort, 2s timeout) ──
@@ -1516,13 +1536,13 @@ Deno.serve(async (req) => {
 
     return json({
       success: true,
-      // New canonical fields
       trade_order_id: tradeOrderId,
       trade_status: tradeStatus,
       requested_amount_usdc: parsedAmount,
       fee_usdc: fee_usd,
       net_amount_usdc,
       fee_bps: effectiveFeeBps,
+      pm_fee_rate_bps: isPolymarketBacked ? (typeof pmFeeRateBps !== "undefined" ? pmFeeRateBps : 0) : undefined,
       // Legacy compat fields
       entry,
       pool_contribution_usd: net_amount_usdc,
