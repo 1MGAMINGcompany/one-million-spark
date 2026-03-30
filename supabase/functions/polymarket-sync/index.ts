@@ -1027,30 +1027,40 @@ async function importSingleEvent(
 
       const fightVisibility = visibility || "all";
 
-      await supabase.from("prediction_fights").insert({
-        title: market.groupItemTitle || market.question,
-        fighter_a_name: outcomes[0],
-        fighter_b_name: outcomes[1],
-        event_name: gEvent.title,
-        event_id: eventId,
-        source: "polymarket",
-        commission_bps: 200,
-        polymarket_market_id: market.id,
-        polymarket_condition_id: market.conditionId,
-        polymarket_slug: market.slug,
-        polymarket_outcome_a_token: tokenIds[0],
-        polymarket_outcome_b_token: tokenIds[1],
-        polymarket_active: market.active && !market.closed,
-        polymarket_end_date: market.endDate || null,
-        polymarket_question: market.question,
-        polymarket_last_synced_at: new Date().toISOString(),
-        polymarket_volume_usd: volumeUsd > 0 ? volumeUsd : null,
-        price_a: parseFloat(outcomePrices[0] || "0"),
-        price_b: parseFloat(outcomePrices[1] || "0"),
-        status: "open",
-        visibility: fightVisibility,
-        event_date: timeInfo.chosen || gEvent.startDate || null,
-      });
+      try {
+        await supabase.from("prediction_fights").insert({
+          title: market.groupItemTitle || market.question,
+          fighter_a_name: outcomes[0],
+          fighter_b_name: outcomes[1],
+          event_name: gEvent.title,
+          event_id: eventId,
+          source: "polymarket",
+          commission_bps: 200,
+          polymarket_market_id: market.id,
+          polymarket_condition_id: market.conditionId,
+          polymarket_slug: market.slug,
+          polymarket_outcome_a_token: tokenIds[0],
+          polymarket_outcome_b_token: tokenIds[1],
+          polymarket_active: market.active && !market.closed,
+          polymarket_end_date: market.endDate || null,
+          polymarket_question: market.question,
+          polymarket_last_synced_at: new Date().toISOString(),
+          polymarket_volume_usd: volumeUsd > 0 ? volumeUsd : null,
+          price_a: parseFloat(outcomePrices[0] || "0"),
+          price_b: parseFloat(outcomePrices[1] || "0"),
+          status: "open",
+          visibility: fightVisibility,
+          event_date: timeInfo.chosen || gEvent.startDate || null,
+        });
+      } catch (insertErr: any) {
+        // Handle unique constraint violation (23505) gracefully — treat as skip
+        if (insertErr?.code === "23505" || insertErr?.message?.includes("duplicate key")) {
+          console.log(`[polymarket-sync] Duplicate constraint skip: ${gEvent.title}`);
+          imported++;
+          continue;
+        }
+        throw insertErr;
+      }
     }
     imported++;
   }
