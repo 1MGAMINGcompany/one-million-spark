@@ -168,7 +168,7 @@ function IOSInstallDialog({
           </DialogTitle>
           <DialogDescription className="pt-2 space-y-4">
             <p>
-              {t('common.installAppForNotifications', { defaultValue: 'To receive turn notifications on iOS, please add 1M Gaming to your Home Screen.' })}
+              {t('common.installAppForNotifications', { defaultValue: `To receive turn notifications on iOS, please add ${getBrandName()} to your Home Screen.` })}
             </p>
             <div className="bg-muted/50 rounded-lg p-4 space-y-3 text-sm">
               <div className="flex items-start gap-3">
