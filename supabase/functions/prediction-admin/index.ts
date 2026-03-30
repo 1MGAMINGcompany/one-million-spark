@@ -1087,6 +1087,19 @@ Deno.serve(async (req) => {
       return json({ fight_id: fight.id, success: true });
     }
 
+    if (action === "logActivity") {
+      const { activity_action, description: desc } = body;
+      if (!activity_action || !desc) return json({ error: "Missing activity_action or description" }, 400);
+
+      const { error } = await supabase.from("admin_activity_log").insert({
+        action: activity_action,
+        description: desc,
+        admin_wallet: wallet,
+      });
+      if (error) throw error;
+      return json({ logged: true });
+    }
+
     return json({ error: "Unknown action" }, 400);
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), {
