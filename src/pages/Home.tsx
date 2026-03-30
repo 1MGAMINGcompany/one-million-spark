@@ -40,7 +40,14 @@ const Home = () => {
   useEffect(() => {
     const load = async () => {
       const [fightsRes, eventsRes] = await Promise.all([
-        supabase.from("prediction_fights").select("id,title,fighter_a_name,fighter_b_name,price_a,price_b,status,event_date,event_name,home_logo,away_logo,fighter_a_image,fighter_b_image,visibility,event_id").not("status", "eq", "draft").in("visibility", PREDICTION_VISIBILITY_VALUES as unknown as string[]).is("operator_id", null).order("event_date", { ascending: true }).limit(20),
+        supabase
+          .from("prediction_fights")
+          .select("id, title, fighter_a_name, fighter_b_name, status, visibility, event_date, pool_a_usd, pool_b_usd, price_a, price_b, source, polymarket_active, featured, event_name, winner, draw_allowed")
+          .in("visibility", ["flagship", "platform", "all"])
+          .not("status", "in", '("settled","cancelled")')
+          .gt("event_date", new Date(Date.now() - 3600000).toISOString())
+          .order("event_date", { ascending: true })
+          .limit(200),
         supabase.from("prediction_events").select("*").eq("status", "approved").order("event_date", { ascending: true }).limit(20),
       ]);
       if (fightsRes.data) setPredFights(fightsRes.data as any);
