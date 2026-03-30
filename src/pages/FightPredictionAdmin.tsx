@@ -164,6 +164,7 @@ export default function FightPredictionAdmin() {
   const { address } = useWallet();
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [backendDegraded, setBackendDegraded] = useState(false);
   const [events, setEvents] = useState<PredictionEvent[]>([]);
   const [fights, setFights] = useState<Fight[]>([]);
   const [busy, setBusy] = useState(false);
