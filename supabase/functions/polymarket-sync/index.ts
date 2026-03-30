@@ -594,20 +594,106 @@ async function fetchMarketVolume(marketId: string): Promise<{ volume: number; tr
   }
 }
 
-/** Execute the fetch strategy for a league source */
+/**
+ * Winner-only market filter.
+ * Finds the primary "who wins" market from a multi-market event.
+ * Returns the winner market or null if none found.
+ */
+function findWinnerMarket(ev: GammaEvent): GammaMarketExt | null {
+  const rejectWords = [
+    "over", "under", "total", "spread", "ko", "knockout",
+    "goals", "points", "rounds", "margin", "first", "how many",
+    "mvp", "award", "draft", "score", "yards", "assists",
+    "rebounds", "hits", "innings", "method", "stoppage",
+    "submission", "decision", "o/u", "handicap", "player props",
+    "most", "top scorer", "batting average", "home runs",
+    "touchdowns", "will they", "will .* make", "season wins",
+    "trade", "signed", "contract", "agreement", "champion",
+  ];
+
+  for (const m of ev.markets || []) {
+    const outcomes = safeJsonParse(m.outcomes);
+    const question = (m.question || "").toLowerCase();
+
+    // Must have 2 or 3 outcomes only (team A, team B, optional draw)
+    if (outcomes.length < 2 || outcomes.length > 3) continue;
+
+    // Reject prop keywords in the question
+    if (rejectWords.some(w => question.includes(w))) continue;
+
+    // Must contain "win" or "vs" pattern
+    if (question.includes("win") || question.includes("vs") || MATCHUP_RE.test(question)) {
+      return m as GammaMarketExt;
+    }
+  }
+
+  // Fallback: if only 1 market with 2-3 outcomes and no reject words, accept it
+  const markets = ev.markets || [];
+  if (markets.length === 1) {
+    const m = markets[0];
+    const outcomes = safeJsonParse(m.outcomes);
+    const question = (m.question || "").toLowerCase();
+    if (outcomes.length >= 2 && outcomes.length <= 3) {
+      if (!rejectWords.some(w => question.includes(w))) {
+        return m as GammaMarketExt;
+      }
+    }
+  }
+
+  return null;
+}
+
+/** Execute the fetch strategy for a league source — now uses series_id + tag_id=100639 when available */
 async function fetchByLeagueSource(src: LeagueSource): Promise<{ events: GammaEvent[]; endpoints: string[] }> {
   const endpoints: string[] = [];
 
+  // Step 1: For tag-based leagues, try to resolve series_id from /sports cache
   if (src.fetchStrategy === "tag" && src.tagId) {
+    // Try series_id + tag_id=100639 first (best filtering)
+    const seriesId = src.seriesId || await resolveSeriesId(src.key, src.label);
+    if (seriesId) {
+      endpoints.push(`events?series_id=${seriesId}&tag_id=100639`);
+      const events = await fetchEventsBySeriesId(seriesId);
+      if (events.length > 0) return { events, endpoints };
+      // Fall through to tag-only if series_id returned nothing
+    }
+
+    // Fallback: tag_id only (without 100639 game filter)
     endpoints.push(`events?tag_id=${src.tagId}`);
     const events = await fetchEventsByTagId(src.tagId);
     return { events, endpoints };
   }
 
-  if (src.fetchStrategy === "search" && src.searchSeed) {
-    endpoints.push(...src.searchSeed.map(s => `public-search?q=${s}`));
-    const events = await fetchSearchEvents(src.searchSeed);
-    return { events, endpoints };
+  // Step 2: For search-based sports (UFC, Boxing, Golf, etc.), try manual tag ID first
+  if (src.fetchStrategy === "search") {
+    const manualTagId = MANUAL_SPORT_TAGS[src.key];
+    if (manualTagId) {
+      endpoints.push(`events?tag_id=${manualTagId}`);
+      const tagEvents = await fetchEventsByTagId(manualTagId);
+      if (tagEvents.length > 0) {
+        // Also do search to supplement
+        if (src.searchSeed) {
+          endpoints.push(...src.searchSeed.map(s => `public-search?q=${s}`));
+          const searchEvents = await fetchSearchEvents(src.searchSeed);
+          // Merge, dedup by id
+          const seen = new Set(tagEvents.map(e => String(e.id)));
+          for (const ev of searchEvents) {
+            if (!seen.has(String(ev.id))) {
+              seen.add(String(ev.id));
+              tagEvents.push(ev);
+            }
+          }
+        }
+        return { events: tagEvents, endpoints };
+      }
+    }
+
+    // Fallback to search only
+    if (src.searchSeed) {
+      endpoints.push(...src.searchSeed.map(s => `public-search?q=${s}`));
+      const events = await fetchSearchEvents(src.searchSeed);
+      return { events, endpoints };
+    }
   }
 
   // Fallback: try tag if available, else search by label
