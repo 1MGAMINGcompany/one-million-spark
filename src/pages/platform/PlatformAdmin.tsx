@@ -1056,6 +1056,80 @@ export default function PlatformAdmin() {
           </p>
           <PlatformEventCreator wallet={address!} defaultVisibility="platform" />
         </Card>
+
+        {/* ═══ Deduplicate Dialog ═══ */}
+        <Dialog open={dedupDialogOpen} onOpenChange={setDedupDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-yellow-400" /> Deduplicate Events
+              </DialogTitle>
+              <DialogDescription>
+                Found {dedupGroups.length} duplicate groups ({dedupGroups.reduce((s, g) => s + g.deleteIds.length, 0)} events to delete).
+                Review below — the event with the most predictions (or earliest) will be kept.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3 mt-2">
+              {dedupGroups.map(group => (
+                <div key={group.key} className="p-3 rounded-lg bg-muted/30 border border-border/30">
+                  <p className="text-sm font-medium text-foreground mb-2">{group.label}</p>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-[10px] h-8">Title</TableHead>
+                        <TableHead className="text-[10px] h-8">Date</TableHead>
+                        <TableHead className="text-[10px] h-8">Predictions</TableHead>
+                        <TableHead className="text-[10px] h-8">Action</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {group.fights.map(f => (
+                        <TableRow key={f.id}>
+                          <TableCell className="text-[10px] py-1.5 max-w-[200px] truncate">{f.title}</TableCell>
+                          <TableCell className="text-[10px] py-1.5">
+                            {f.event_date ? formatEventDateTime(f.event_date) : "—"}
+                          </TableCell>
+                          <TableCell className="text-[10px] py-1.5">{entryCounts[f.id] || 0}</TableCell>
+                          <TableCell className="text-[10px] py-1.5">
+                            {f.id === group.keepId ? (
+                              <span className="text-green-400 font-medium">✓ Keep</span>
+                            ) : (
+                              <span className="text-red-400">🗑 Delete</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ))}
+            </div>
+
+            {dedupBusy && (
+              <div className="mt-3">
+                <Progress value={dedupGroups.reduce((s, g) => s + g.deleteIds.length, 0) > 0 ? (dedupProgress / dedupGroups.reduce((s, g) => s + g.deleteIds.length, 0)) * 100 : 0} className="h-1.5" />
+                <p className="text-[10px] text-muted-foreground mt-1">Deleting {dedupProgress}/{dedupGroups.reduce((s, g) => s + g.deleteIds.length, 0)}...</p>
+              </div>
+            )}
+
+            <DialogFooter className="mt-4">
+              <Button variant="outline" size="sm" onClick={() => setDedupDialogOpen(false)} disabled={dedupBusy}>
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={handleConfirmDedup}
+                disabled={dedupBusy}
+                className="gap-1"
+              >
+                {dedupBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                Delete {dedupGroups.reduce((s, g) => s + g.deleteIds.length, 0)} Duplicates
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
