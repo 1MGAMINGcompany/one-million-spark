@@ -289,11 +289,11 @@ export default function FightPredictions() {
       if (eventsRes.error) throw eventsRes.error;
 
       if (fightsRes.data) {
-        setFights(sortByNullableDateAsc(fightsRes.data as any[], (fight: any) => fight.event_date) as any);
+        setFights(sortByNullableDateAsc((fightsRes.data ?? []) as unknown as any[], (fight: any) => fight.event_date) as any);
       }
 
       if (eventsRes.data) {
-        setEvents(sortByNullableDateAsc(eventsRes.data as PredictionEvent[], (event) => event.event_date));
+        setEvents(sortByNullableDateAsc((eventsRes.data ?? []) as unknown as PredictionEvent[], (event) => event.event_date));
       }
 
       setBackendDegraded(false);
