@@ -79,7 +79,11 @@ const SOCCER_KEYWORDS = [
   "COPA", "EURO", "FIFA", "WORLD CUP",
 ];
 
-const VALID_CATEGORIES = ["MMA", "BOXING", "MUAY THAI", "BARE KNUCKLE", "FUTBOL", "NFL", "NBA", "NCAA", "NHL", "MLB", "TENNIS", "GOLF", "BASKETBALL"];
+const VALID_CATEGORIES = [
+  "MMA", "BOXING", "MUAY THAI", "BARE KNUCKLE", "FUTBOL", "NFL", "NBA", "NCAA", "CWBB",
+  "NHL", "KHL", "SHL", "AHL", "MLB", "EUROLEAGUE", "TENNIS", "TABLE TENNIS", "GOLF",
+  "F1", "CRICKET", "RUGBY", "CHESS", "PICKLEBALL", "BASKETBALL",
+];
 
 function parseSport(eventName: string, sourceProvider?: string | null, category?: string | null): string {
   // Admin manual override takes priority
