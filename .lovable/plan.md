@@ -1,40 +1,28 @@
 
 
-## Plan: Add Polite "On Hold" Banner for Backend/Provider Issues
+## Plan: Fix Prediction Admin + Predictions Query + Loading Timeout
 
-### What Changes
+### Summary of findings
 
-Replace the current technical-sounding "backend timed out" degraded message with a polished, user-friendly banner that reassures users their funds and predictions are safe.
+After reviewing the full files:
+
+1. **`prediction-admin/index.ts`**: `validatePromoCode` already exists before the admin check (line 30) — this is correct. But there's a **duplicate** `validatePromoCode` handler at line 1046 (after admin check) that is dead code and should be removed. The `createPromoCode` validation line at line 1018 is intact. No syntax errors found.
+
+2. **`FightPredictions.tsx`**: The fights query (line 282) uses `.limit(200)` with no `.order()` — this is why future soccer events can be missed. Needs `.order('event_date', { ascending: true })` and limit bumped to 500. Also needs a 10-second client-side timeout wrapper.
 
 ### Changes
 
-**1. `src/pages/FightPredictions.tsx` (lines 854-871)**
+**File 1: `supabase/functions/prediction-admin/index.ts`**
+- Remove the duplicate `validatePromoCode` block at lines 1046-1065 (dead code — the working copy is already at line 30 before the admin check)
+- Fix indentation of the line-30 block to match the rest of the file
+- No other changes
 
-Replace the current `backendDegraded && !hasContent` block with a friendlier message:
+**File 2: `src/pages/FightPredictions.tsx`**
+- Add `.order('event_date', { ascending: true })` to the fights query (line 278)
+- Increase `.limit(200)` to `.limit(500)` (line 282)
+- Wrap the `Promise.all` inside `loadFights()` with a 10-second `AbortController` timeout so the page never spins forever — on timeout, treat as failure (set `backendDegraded`, increment `consecutiveFailures`)
 
-- Headline: **"All Predictions Are Temporarily On Hold"**
-- Body: *"We're experiencing a brief issue with one of our providers. Your funds and existing predictions are completely safe. We're actively working to resolve this — please check back shortly."*
-- Keep the Retry button
-- Use a shield/lock icon instead of the Swords icon to convey safety
-- Add a subtle amber/yellow border to signal "maintenance" rather than "error"
-
-**2. `src/pages/FightPredictions.tsx` — degraded banner when content IS available**
-
-When `backendDegraded && hasContent` (data loaded from before the outage), add a small dismissible banner at the top of the content area:
-
-- *"Some data may be delayed — we're resolving an issue with our providers. Your funds are safe."*
-- This way the page still shows cached/stale events but alerts the user
-
-**3. `src/pages/FightPredictionAdmin.tsx`**
-
-Add the same degraded-state handling so the admin panel also shows a polite message instead of infinite loading.
-
-**4. `src/pages/platform/OperatorApp.tsx`**
-
-Add similar degraded-state message for operator white-label apps that hit the same backend.
-
-### Files Changed
+### Files changed
+- `supabase/functions/prediction-admin/index.ts`
 - `src/pages/FightPredictions.tsx`
-- `src/pages/FightPredictionAdmin.tsx`
-- `src/pages/platform/OperatorApp.tsx`
 
