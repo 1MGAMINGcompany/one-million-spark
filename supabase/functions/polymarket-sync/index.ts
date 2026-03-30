@@ -87,7 +87,7 @@ function normalizeTeamName(name: string): string {
     .replace(/[^a-z0-9]/g, "")
     .trim();
 }
-
+const MATCHUP_RE = /\bvs\.?\b|\sv\s/i;
 
 
 function hasMatchupPattern(texts: string[]): boolean {
@@ -222,7 +222,20 @@ interface LeagueSource {
   seriesId?: string;
   /** For search-based discovery, append these keywords */
   searchSeed?: string[];
+  /** If true, this is a manual sport (UFC/Boxing/Golf) — skip tag_id=100639 game filter */
+  manualSport?: boolean;
 }
+
+// Manual sport tag IDs for sports NOT in /sports endpoint
+const MANUAL_SPORT_TAGS: Record<string, string> = {
+  ufc: "1637",
+  boxing: "267",
+  golf: "1349",
+  f1: "1351",
+  chess: "1376",
+  mma: "1637",
+  bkfc: "267",
+};
 
 const LEAGUE_SOURCES: Record<string, LeagueSource> = {
   // ─── Soccer (tag-based) ───
@@ -399,7 +412,75 @@ function buildTelemetry(partial: Partial<QueryTelemetry>): QueryTelemetry {
 
 // ── Fetch functions ──
 
-/** Fetch events by tag_id — reliable for soccer league discovery. Supports pagination up to 500 events. */
+// ── /sports cache (1-hour TTL) ──
+let sportsCache: { data: any[]; ts: number } | null = null;
+const SPORTS_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+/** Fetch sports metadata from Gamma (cached 1 hour) */
+async function fetchSportsCached(): Promise<any[]> {
+  if (sportsCache && Date.now() - sportsCache.ts < SPORTS_CACHE_TTL) return sportsCache.data;
+  const data = await fetchSportsRaw();
+  sportsCache = { data, ts: Date.now() };
+  return data;
+}
+
+async function fetchSportsRaw(): Promise<any[]> {
+  try {
+    const res = await fetch(`${GAMMA_BASE}/sports`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Look up series_id for a league from the /sports endpoint */
+async function resolveSeriesId(leagueKey: string, label: string): Promise<string | null> {
+  const sports = await fetchSportsCached();
+  // Try slug match first, then label match
+  const match = sports.find((s: any) =>
+    s.slug === leagueKey ||
+    s.label?.toLowerCase() === label.toLowerCase() ||
+    s.slug === label.toLowerCase().replace(/\s+/g, "-")
+  );
+  return match?.seriesId || match?.series_id || null;
+}
+
+/** Fetch events by series_id + tag_id=100639 for game-only filtering (automated leagues) */
+async function fetchEventsBySeriesId(seriesId: string, limit = 100): Promise<GammaEvent[]> {
+  const allEvents: GammaEvent[] = [];
+  const seen = new Set<string>();
+  let offset = 0;
+  const maxPages = 5;
+
+  for (let page = 0; page < maxPages; page++) {
+    try {
+      const url = `${GAMMA_BASE}/events?series_id=${seriesId}&tag_id=100639&closed=false&limit=${limit}&offset=${offset}&order=startDate&ascending=true`;
+      const res = await fetch(url);
+      if (!res.ok) break;
+      const data = await res.json();
+      const events: GammaEvent[] = Array.isArray(data) ? data : [];
+      if (events.length === 0) break;
+
+      for (const ev of events) {
+        if (!seen.has(String(ev.id))) {
+          seen.add(String(ev.id));
+          allEvents.push(ev);
+        }
+      }
+
+      if (events.length < limit) break;
+      offset += limit;
+    } catch {
+      break;
+    }
+  }
+
+  return allEvents;
+}
+
+/** Fetch events by tag_id — for manual sports or fallback. Supports pagination up to 500 events. */
 async function fetchEventsByTagId(tagId: string, limit = 100): Promise<GammaEvent[]> {
   const allEvents: GammaEvent[] = [];
   const seen = new Set<string>();
@@ -408,7 +489,7 @@ async function fetchEventsByTagId(tagId: string, limit = 100): Promise<GammaEven
   
   for (let page = 0; page < maxPages; page++) {
     try {
-      const url = `${GAMMA_BASE}/events?tag_id=${tagId}&closed=false&upcoming=true&limit=${limit}&offset=${offset}&order=startDate&ascending=true`;
+      const url = `${GAMMA_BASE}/events?tag_id=${tagId}&closed=false&limit=${limit}&offset=${offset}&order=startDate&ascending=true`;
       const res = await fetch(url);
       if (!res.ok) break;
       const data = await res.json();
@@ -435,7 +516,7 @@ async function fetchEventsByTagId(tagId: string, limit = 100): Promise<GammaEven
 /** Fetch ALL active events from Gamma (no tag filter) with pagination */
 async function fetchAllActiveEvents(limit = 50, offset = 0): Promise<GammaEvent[]> {
   try {
-    const url = `${GAMMA_BASE}/events?closed=false&upcoming=true&limit=${limit}&offset=${offset}&order=startDate&ascending=true`;
+    const url = `${GAMMA_BASE}/events?closed=false&limit=${limit}&offset=${offset}&order=startDate&ascending=true`;
     const res = await fetch(url);
     if (!res.ok) return [];
     const data = await res.json();
@@ -445,16 +526,9 @@ async function fetchAllActiveEvents(limit = 50, offset = 0): Promise<GammaEvent[
   }
 }
 
-/** Fetch sports metadata from Gamma */
+/** @deprecated Use fetchSportsCached() instead */
 async function fetchSports(): Promise<any[]> {
-  try {
-    const res = await fetch(`${GAMMA_BASE}/sports`);
-    if (!res.ok) return [];
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return [];
-  }
+  return fetchSportsCached();
 }
 
 /** Search via /public-search — for exact fixture names only */
@@ -520,20 +594,106 @@ async function fetchMarketVolume(marketId: string): Promise<{ volume: number; tr
   }
 }
 
-/** Execute the fetch strategy for a league source */
+/**
+ * Winner-only market filter.
+ * Finds the primary "who wins" market from a multi-market event.
+ * Returns the winner market or null if none found.
+ */
+function findWinnerMarket(ev: GammaEvent): GammaMarketExt | null {
+  const rejectWords = [
+    "over", "under", "total", "spread", "ko", "knockout",
+    "goals", "points", "rounds", "margin", "first", "how many",
+    "mvp", "award", "draft", "score", "yards", "assists",
+    "rebounds", "hits", "innings", "method", "stoppage",
+    "submission", "decision", "o/u", "handicap", "player props",
+    "most", "top scorer", "batting average", "home runs",
+    "touchdowns", "will they", "will .* make", "season wins",
+    "trade", "signed", "contract", "agreement", "champion",
+  ];
+
+  for (const m of ev.markets || []) {
+    const outcomes = safeJsonParse(m.outcomes);
+    const question = (m.question || "").toLowerCase();
+
+    // Must have 2 or 3 outcomes only (team A, team B, optional draw)
+    if (outcomes.length < 2 || outcomes.length > 3) continue;
+
+    // Reject prop keywords in the question
+    if (rejectWords.some(w => question.includes(w))) continue;
+
+    // Must contain "win" or "vs" pattern
+    if (question.includes("win") || question.includes("vs") || MATCHUP_RE.test(question)) {
+      return m as GammaMarketExt;
+    }
+  }
+
+  // Fallback: if only 1 market with 2-3 outcomes and no reject words, accept it
+  const markets = ev.markets || [];
+  if (markets.length === 1) {
+    const m = markets[0];
+    const outcomes = safeJsonParse(m.outcomes);
+    const question = (m.question || "").toLowerCase();
+    if (outcomes.length >= 2 && outcomes.length <= 3) {
+      if (!rejectWords.some(w => question.includes(w))) {
+        return m as GammaMarketExt;
+      }
+    }
+  }
+
+  return null;
+}
+
+/** Execute the fetch strategy for a league source — now uses series_id + tag_id=100639 when available */
 async function fetchByLeagueSource(src: LeagueSource): Promise<{ events: GammaEvent[]; endpoints: string[] }> {
   const endpoints: string[] = [];
 
+  // Step 1: For tag-based leagues, try to resolve series_id from /sports cache
   if (src.fetchStrategy === "tag" && src.tagId) {
+    // Try series_id + tag_id=100639 first (best filtering)
+    const seriesId = src.seriesId || await resolveSeriesId(src.key, src.label);
+    if (seriesId) {
+      endpoints.push(`events?series_id=${seriesId}&tag_id=100639`);
+      const events = await fetchEventsBySeriesId(seriesId);
+      if (events.length > 0) return { events, endpoints };
+      // Fall through to tag-only if series_id returned nothing
+    }
+
+    // Fallback: tag_id only (without 100639 game filter)
     endpoints.push(`events?tag_id=${src.tagId}`);
     const events = await fetchEventsByTagId(src.tagId);
     return { events, endpoints };
   }
 
-  if (src.fetchStrategy === "search" && src.searchSeed) {
-    endpoints.push(...src.searchSeed.map(s => `public-search?q=${s}`));
-    const events = await fetchSearchEvents(src.searchSeed);
-    return { events, endpoints };
+  // Step 2: For search-based sports (UFC, Boxing, Golf, etc.), try manual tag ID first
+  if (src.fetchStrategy === "search") {
+    const manualTagId = MANUAL_SPORT_TAGS[src.key];
+    if (manualTagId) {
+      endpoints.push(`events?tag_id=${manualTagId}`);
+      const tagEvents = await fetchEventsByTagId(manualTagId);
+      if (tagEvents.length > 0) {
+        // Also do search to supplement
+        if (src.searchSeed) {
+          endpoints.push(...src.searchSeed.map(s => `public-search?q=${s}`));
+          const searchEvents = await fetchSearchEvents(src.searchSeed);
+          // Merge, dedup by id
+          const seen = new Set(tagEvents.map(e => String(e.id)));
+          for (const ev of searchEvents) {
+            if (!seen.has(String(ev.id))) {
+              seen.add(String(ev.id));
+              tagEvents.push(ev);
+            }
+          }
+        }
+        return { events: tagEvents, endpoints };
+      }
+    }
+
+    // Fallback to search only
+    if (src.searchSeed) {
+      endpoints.push(...src.searchSeed.map(s => `public-search?q=${s}`));
+      const events = await fetchSearchEvents(src.searchSeed);
+      return { events, endpoints };
+    }
   }
 
   // Fallback: try tag if available, else search by label
@@ -659,6 +819,23 @@ function filterFixtures(events: GammaEvent[], hasTagFilter = false): FilterResul
       continue;
     }
 
+    // Winner-only market check — must have at least one winner market
+    const winnerMarket = findWinnerMarket(ev);
+    if (!winnerMarket) {
+      rejected.push({ event: ev, fixtureReason: "no_winner_market" });
+      if (debugReport.length < 10) {
+        debugReport.push({
+          title: ev.title,
+          chosen_field: timeInfo.field,
+          chosen_value: timeInfo.chosen,
+          all_timestamps: timeInfo.all,
+          accepted: false,
+          reason: "no_winner_market",
+        });
+      }
+      continue;
+    }
+
     accepted.push(ev);
     if (debugReport.length < 10) {
       debugReport.push({
@@ -668,6 +845,7 @@ function filterFixtures(events: GammaEvent[], hasTagFilter = false): FilterResul
         all_timestamps: timeInfo.all,
         accepted: true,
         reason: isLiveEvent ? `live_event + ${fixtureCheck.reason}` : fixtureCheck.reason,
+        winner_market_question: winnerMarket.question,
       });
     }
   }
@@ -898,8 +1076,12 @@ async function importSingleEvent(
     eventId = newEvt!.id;
   }
 
+  // Use winner-only market filter instead of iterating all markets
+  const winnerMarket = findWinnerMarket(gEvent);
+  const marketsToImport = winnerMarket ? [winnerMarket] : [];
+
   let imported = 0;
-  for (const market of (gEvent.markets || [])) {
+  for (const market of marketsToImport) {
     let outcomes: string[], tokenIds: string[], outcomePrices: string[];
     try {
       outcomes = JSON.parse(market.outcomes || "[]");
@@ -907,18 +1089,8 @@ async function importSingleEvent(
       tokenIds = JSON.parse(market.clobTokenIds || "[]");
     } catch { continue; }
 
-    // Reject markets with more than 3 outcomes (prop markets)
     if (outcomes.length > 3) continue;
     if (outcomes.length < 2 || tokenIds.length < 2) continue;
-
-    // Skip prop/more-markets at market level
-    const mq = (market.question || "").toLowerCase();
-    if (MORE_MARKETS_RE.test(mq)) continue;
-    let skipMarket = false;
-    for (const pk of PROP_KEYWORDS) {
-      if (mq.includes(pk)) { skipMarket = true; break; }
-    }
-    if (skipMarket) continue;
 
     // Reject already-settled markets (0%/100% probability)
     const priceA = parseFloat(outcomePrices[0] || "0");
