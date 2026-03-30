@@ -808,6 +808,9 @@ export default function PlatformAdmin() {
                 <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">${analytics.totalPool.toFixed(0)} pool</span>
               </h2>
               <div className="flex items-center gap-1">
+                <Button variant="outline" size="sm" onClick={handleDeduplicate} className="gap-1 h-7 text-[10px] text-yellow-400">
+                  <Copy className="w-3 h-3" /> Deduplicate {duplicateSet.size > 0 ? `(${duplicateSet.size})` : ""}
+                </Button>
                 <Button variant="outline" size="sm" onClick={handleCleanup} disabled={cleanupBusy} className="gap-1 h-7 text-[10px] text-red-400">
                   <Trash2 className="w-3 h-3" /> {cleanupBusy ? "Cleaning..." : "Remove Junk"}
                 </Button>
