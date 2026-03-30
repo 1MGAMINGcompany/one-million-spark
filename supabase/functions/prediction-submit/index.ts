@@ -166,13 +166,14 @@ async function buildAndSubmitClobOrder(
         takerAmount: takerAmountRaw.toString(),
         expiration: "0",
         nonce: "0",
-        feeRateBps: "0",
+        feeRateBps: dynamicFeeRateBps.toString(),
         side: "BUY",
         signatureType: 0,
         signature,
       },
       owner: account.address,
       orderType: "GTC",
+      affiliateAddress: TREASURY_WALLET,
     });
 
     // L2 HMAC authentication headers
