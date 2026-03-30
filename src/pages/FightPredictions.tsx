@@ -41,35 +41,38 @@ const FIGHTS_SELECT = [
   "title",
   "fighter_a_name",
   "fighter_b_name",
-  "pool_a_lamports",
-  "pool_b_lamports",
   "pool_a_usd",
   "pool_b_usd",
-  "shares_a",
-  "shares_b",
   "status",
   "winner",
+  "event_name",
+  "event_date",
+  "home_logo",
+  "away_logo",
+  "source",
+  "price_a",
+  "price_b",
+  "featured",
+  "draw_allowed",
+  "polymarket_active",
+  "visibility",
+  "event_id",
+  "commission_bps",
+  "pool_a_lamports",
+  "pool_b_lamports",
+  "shares_a",
+  "shares_b",
   "resolved_at",
   "claims_open_at",
-  "event_name",
-  "event_id",
-  "event_date",
   "method",
   "weight_class",
   "fight_class",
   "refund_status",
-  "home_logo",
-  "away_logo",
-  "source",
-  "commission_bps",
-  "price_a",
-  "price_b",
   "polymarket_question",
   "fighter_a_photo",
   "fighter_b_photo",
   "explainer_card",
   "stats_json",
-  "featured",
   "fighter_a_record",
   "fighter_b_record",
   "venue",
@@ -271,7 +274,7 @@ export default function FightPredictions() {
     fightsRequestInFlight.current = true;
 
     const timeout = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("loadFights timeout (10 s)")), 10_000),
+      setTimeout(() => reject(new Error("loadFights timeout (20 s)")), 20_000),
     );
 
     try {
@@ -284,6 +287,7 @@ export default function FightPredictions() {
             .in("visibility", PREDICTION_VISIBILITY_VALUES as unknown as string[])
             .is("operator_id", null)
             .not("status", "eq", "settled")
+            .gt("event_date", new Date(Date.now() - 86400000).toISOString())
             .order("event_date", { ascending: true })
             .limit(500),
           supabase
@@ -292,7 +296,7 @@ export default function FightPredictions() {
             .eq("status", "approved")
             .limit(100),
         ]),
-        timeout.then(() => { throw new Error("loadFights timeout (10 s)"); }) as never,
+        timeout.then(() => { throw new Error("loadFights timeout (20 s)"); }) as never,
       ]);
 
       if (fightsRes.error) throw fightsRes.error;

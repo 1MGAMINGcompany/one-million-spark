@@ -8,7 +8,7 @@ const corsHeaders = {
 
 const FEED_LIMIT = 25;
 const FEED_CACHE_TTL_MS = 15_000;
-const FEED_QUERY_TIMEOUT_MS = 2_500;
+const FEED_QUERY_TIMEOUT_MS = 25_000;
 
 type FeedRow = {
   id: string;
@@ -48,6 +48,10 @@ async function fetchRecentFeed(supabaseUrl: string, serviceRoleKey: string, figh
     if (fightId) {
       params.set("fight_id", `eq.${fightId}`);
     }
+
+    // Only include entries from the last 24 hours to reduce result set
+    const oneDayAgo = new Date(Date.now() - 86400000).toISOString();
+    params.set("created_at", `gte.${oneDayAgo}`);
 
     const response = await fetch(`${supabaseUrl}/rest/v1/prediction_entries?${params.toString()}`, {
       headers: {
