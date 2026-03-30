@@ -298,9 +298,11 @@ export default function FightPredictions() {
       }
 
       setBackendDegraded(false);
+      consecutiveFailures.current = 0;
     } catch (err) {
       console.error("[FightPredictions] loadFights failed:", err);
       setBackendDegraded(true);
+      consecutiveFailures.current += 1;
     } finally {
       setLoading(false);
       fightsRequestInFlight.current = false;
