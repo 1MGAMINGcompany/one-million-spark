@@ -281,7 +281,15 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
       {/* Events */}
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
-        {allFights.length === 0 ? (
+        {backendDegraded && allFights.length === 0 ? (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-6 py-12 text-center">
+            <ShieldCheck className="w-14 h-14 mx-auto mb-4 text-amber-400" />
+            <h3 className="text-lg font-bold text-white">{t("operator.onHoldTitle", "All Predictions Are Temporarily On Hold")}</h3>
+            <p className="mt-2 text-sm text-white/60 max-w-md mx-auto">
+              {t("operator.onHoldDesc", "We're experiencing a brief issue with one of our providers. Your funds and existing predictions are completely safe. We're actively working to resolve this — please check back shortly.")}
+            </p>
+          </div>
+        ) : allFights.length === 0 ? (
           <div className="text-center py-20 text-white/30">
             {t("operator.noEvents")}
           </div>
