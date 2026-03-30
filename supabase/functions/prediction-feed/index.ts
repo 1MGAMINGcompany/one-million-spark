@@ -6,7 +6,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const FEED_LIMIT = 25;
+const FEED_LIMIT = 200;
 const FEED_CACHE_TTL_MS = 15_000;
 const FEED_QUERY_TIMEOUT_MS = 25_000;
 
@@ -49,9 +49,8 @@ async function fetchRecentFeed(supabaseUrl: string, serviceRoleKey: string, figh
       params.set("fight_id", `eq.${fightId}`);
     }
 
-    // Only include entries from the last 24 hours to reduce result set
-    const oneDayAgo = new Date(Date.now() - 86400000).toISOString();
-    params.set("created_at", `gte.${oneDayAgo}`);
+    const oneHourAgo = new Date(Date.now() - 3600000).toISOString();
+    params.set("created_at", `gte.${oneHourAgo}`);
 
     const response = await fetch(`${supabaseUrl}/rest/v1/prediction_entries?${params.toString()}`, {
       headers: {

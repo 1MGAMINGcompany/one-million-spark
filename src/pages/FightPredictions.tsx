@@ -36,50 +36,7 @@ const FEE_RATE = 0.05;
 
 const ALL_SPORTS = ["ALL", "MUAY THAI", "BARE KNUCKLE", "MMA", "BOXING", "FUTBOL"];
 const FEED_REFRESH_MIN_MS = 15_000;
-const FIGHTS_SELECT = [
-  "id",
-  "title",
-  "fighter_a_name",
-  "fighter_b_name",
-  "pool_a_usd",
-  "pool_b_usd",
-  "status",
-  "winner",
-  "event_name",
-  "event_date",
-  "home_logo",
-  "away_logo",
-  "source",
-  "price_a",
-  "price_b",
-  "featured",
-  "draw_allowed",
-  "polymarket_active",
-  "visibility",
-  "event_id",
-  "commission_bps",
-  "pool_a_lamports",
-  "pool_b_lamports",
-  "shares_a",
-  "shares_b",
-  "resolved_at",
-  "claims_open_at",
-  "method",
-  "weight_class",
-  "fight_class",
-  "refund_status",
-  "polymarket_question",
-  "fighter_a_photo",
-  "fighter_b_photo",
-  "explainer_card",
-  "stats_json",
-  "fighter_a_record",
-  "fighter_b_record",
-  "venue",
-  "referee",
-  "polymarket_volume_usd",
-  "has_updates",
-].join(",");
+const FIGHTS_SELECT = "id, title, fighter_a_name, fighter_b_name, status, visibility, event_date, pool_a_usd, pool_b_usd, price_a, price_b, source, polymarket_active, featured, event_name, winner, draw_allowed";
 const EVENTS_SELECT = [
   "id",
   "event_name",
@@ -274,7 +231,7 @@ export default function FightPredictions() {
     fightsRequestInFlight.current = true;
 
     const timeout = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("loadFights timeout (20 s)")), 20_000),
+      setTimeout(() => reject(new Error("loadFights timeout (30 s)")), 30_000),
     );
 
     try {
@@ -283,20 +240,18 @@ export default function FightPredictions() {
           supabase
             .from("prediction_fights")
             .select(FIGHTS_SELECT)
-            .not("status", "eq", "draft")
-            .in("visibility", PREDICTION_VISIBILITY_VALUES as unknown as string[])
-            .is("operator_id", null)
-            .not("status", "eq", "settled")
-            .gt("event_date", new Date(Date.now() - 86400000).toISOString())
+            .in("visibility", ["flagship", "platform", "all"])
+            .not("status", "in", '("settled","cancelled")')
+            .gt("event_date", new Date(Date.now() - 3600000).toISOString())
             .order("event_date", { ascending: true })
-            .limit(500),
+            .limit(200),
           supabase
             .from("prediction_events")
             .select(EVENTS_SELECT)
             .eq("status", "approved")
             .limit(100),
         ]),
-        timeout.then(() => { throw new Error("loadFights timeout (20 s)"); }) as never,
+        timeout.then(() => { throw new Error("loadFights timeout (30 s)"); }) as never,
       ]);
 
       if (fightsRes.error) throw fightsRes.error;
