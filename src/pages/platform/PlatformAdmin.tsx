@@ -135,6 +135,38 @@ const DASHBOARD_SPORTS = ["soccer", "nfl", "nba", "nhl", "mlb", "ncaa", "combat"
 
 // ── Helpers ──
 
+/** Normalize team/fighter name for dedup comparison */
+function normalizeTeamName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/^(the |fc |afc |cf |as |ac |rc |cd |club |sc )/i, "")
+    .replace(/ (fc|sc|cf|afc|city|united|rovers|wanderers|athletic)$/i, "")
+    .replace(/[^a-z0-9]/g, "")
+    .trim();
+}
+
+/** Build a dedup key from normalized names (sorted) + date */
+function dedupKey(a: string, b: string, dateStr: string | null): string {
+  const nA = normalizeTeamName(a);
+  const nB = normalizeTeamName(b);
+  const sorted = [nA, nB].sort().join("|");
+  const d = dateStr ? new Date(dateStr).toISOString().slice(0, 10) : "nodate";
+  return `${sorted}::${d}`;
+}
+
+/** Build a title-based dedup key */
+function titleDedupKey(title: string): string {
+  return title.toLowerCase().replace(/\s+/g, "");
+}
+
+interface DuplicateGroup {
+  key: string;
+  label: string;
+  fights: PlatformFight[];
+  keepId: string;
+  deleteIds: string[];
+}
+
 function getDaysUntil(dateStr: string | null): number | null {
   if (!dateStr) return null;
   const diff = new Date(dateStr).getTime() - Date.now();
