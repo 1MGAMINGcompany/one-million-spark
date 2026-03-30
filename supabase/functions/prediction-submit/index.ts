@@ -1534,13 +1534,13 @@ Deno.serve(async (req) => {
 
     return json({
       success: true,
-      // New canonical fields
       trade_order_id: tradeOrderId,
       trade_status: tradeStatus,
       requested_amount_usdc: parsedAmount,
       fee_usdc: fee_usd,
       net_amount_usdc,
       fee_bps: effectiveFeeBps,
+      pm_fee_rate_bps: isPolymarketBacked ? (typeof pmFeeRateBps !== "undefined" ? pmFeeRateBps : 0) : undefined,
       // Legacy compat fields
       entry,
       pool_contribution_usd: net_amount_usdc,
