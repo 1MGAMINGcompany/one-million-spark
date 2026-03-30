@@ -852,11 +852,11 @@ export default function FightPredictions() {
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
           </div>
         ) : backendDegraded && !hasContent ? (
-          <div className="rounded-lg border border-border/50 bg-card px-6 py-10 text-center">
-            <Swords className="w-12 h-12 mx-auto mb-3 text-muted-foreground opacity-40" />
-            <p className="text-base font-semibold text-foreground">Live predictions are temporarily unavailable.</p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Your events haven&apos;t been deleted — the backend timed out while loading them.
+          <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-6 py-12 text-center">
+            <ShieldCheck className="w-14 h-14 mx-auto mb-4 text-amber-400" />
+            <h3 className="text-lg font-bold text-foreground">All Predictions Are Temporarily On Hold</h3>
+            <p className="mt-2 text-sm text-muted-foreground max-w-md mx-auto">
+              We're experiencing a brief issue with one of our providers. Your funds and existing predictions are completely safe. We're actively working to resolve this — please check back shortly.
             </p>
             <button
               onClick={() => {
@@ -864,9 +864,9 @@ export default function FightPredictions() {
                 void loadFights();
                 void loadFeed(true);
               }}
-              className="mt-4 inline-flex items-center rounded-md bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground transition-opacity hover:opacity-80"
+              className="mt-5 inline-flex items-center gap-2 rounded-lg bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-80"
             >
-              Retry
+              Retry Connection
             </button>
           </div>
         ) : !hasContent && activeSport !== "MUAY THAI" ? (
