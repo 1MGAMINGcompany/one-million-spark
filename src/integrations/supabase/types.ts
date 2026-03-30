@@ -2404,6 +2404,17 @@ export type Database = {
         }
         Returns: undefined
       }
+      validate_promo_code: {
+        Args: { input_code: string }
+        Returns: {
+          code: string
+          discount_type: string
+          discount_value: number
+          id: string
+          max_uses: number
+          uses_count: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
