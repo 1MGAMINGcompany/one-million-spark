@@ -262,6 +262,7 @@ export default function FightPredictionAdmin() {
       }
     } catch (err) {
       console.error("[FightPredictionAdmin] loadData failed:", err);
+      setBackendDegraded(true);
     } finally {
       dataRequestInFlight.current = false;
 
