@@ -274,7 +274,7 @@ export default function PurchasePage() {
               className="mt-0.5 border-white/20 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
             />
             <label htmlFor="agree-fee" className="text-sm text-white/50 cursor-pointer leading-relaxed">
-              I understand the 1% platform fee on all predictions and agree to the terms.
+              I understand the 1.5% platform fee on all predictions and agree to the terms.
             </label>
           </div>
 

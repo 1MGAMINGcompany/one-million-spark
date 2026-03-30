@@ -1472,8 +1472,8 @@ Deno.serve(async (req) => {
     const resolvedOperatorId = source_operator_id || fight.operator_id || null;
     if (resolvedOperatorId && entry) {
       try {
-        // Split: 1% platform (100bps), remainder is operator fee
-        const platformFeeBps = 100;
+        // Split: 1.5% platform (150bps), remainder is operator fee
+        const platformFeeBps = 150;
         const platformFeeUsd = Number(((parsedAmount * platformFeeBps) / 10_000).toFixed(6));
         const operatorFeeUsd = Math.max(0, Number((fee_usd - platformFeeUsd).toFixed(6)));
 

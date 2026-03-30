@@ -116,7 +116,7 @@ export default function SoccerMatchCard({
       : selectedFight.id === awayFight.id ? awayPrice
       : drawPrice)
     : null;
-  const feeRate = selectedFight ? getFeeRate(selectedFight) : 0.02;
+  const feeRate = selectedFight ? getFeeRate(selectedFight) : 0.0225;
   const estimatedWin = estimateWin(selectedPrice, amountNum, feeRate);
 
   const handleSelect = (fight: Fight) => {
