@@ -102,8 +102,19 @@ function parseSport(eventName: string, sourceProvider?: string | null, category?
   if (upper.includes("NCAA") || upper.includes("MARCH MADNESS") || upper.includes("COLLEGE FOOTBALL")) return "NCAA";
   if (upper.includes("NHL") || upper.includes("STANLEY CUP")) return "NHL";
   if (upper.includes("MLB") || upper.includes("WORLD SERIES")) return "MLB";
+  if (upper.includes("KHL")) return "KHL";
+  if (upper.includes("SHL") || upper.includes("SWEDISH HOCKEY")) return "SHL";
+  if (upper.includes("AHL")) return "AHL";
+  if (upper.includes("CWBB") || upper.includes("COLLEGE WOMEN")) return "CWBB";
+  if (upper.includes("EUROLEAGUE") || upper.includes("EURO LEAGUE")) return "EUROLEAGUE";
   if (upper.includes("ATP") || upper.includes("WTA") || upper.includes("TENNIS") || upper.includes("WIMBLEDON") || upper.includes("US OPEN TENNIS") || upper.includes("ROLAND GARROS") || upper.includes("AUSTRALIAN OPEN")) return "TENNIS";
+  if (upper.includes("TABLE TENNIS") || upper.includes("PING PONG")) return "TABLE TENNIS";
   if (upper.includes("PGA") || upper.includes("GOLF") || upper.includes("MASTERS GOLF") || upper.includes("RYDER CUP")) return "GOLF";
+  if (upper.includes("FORMULA 1") || upper.includes("F1") || upper.includes("GRAND PRIX")) return "F1";
+  if (upper.includes("CRICKET") || upper.includes("IPL") || upper.includes("T20") || upper.includes("PSL")) return "CRICKET";
+  if (upper.includes("RUGBY") || upper.includes("SIX NATIONS") || upper.includes("SUPER RUGBY") || upper.includes("TOP 14")) return "RUGBY";
+  if (upper.includes("CHESS")) return "CHESS";
+  if (upper.includes("PICKLEBALL")) return "PICKLEBALL";
   const parts = eventName.split(' — ');
   return parts[0] || "OTHER";
 }
