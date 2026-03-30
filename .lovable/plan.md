@@ -1,108 +1,70 @@
 
 
-## Plan: Platform Admin — Pagination, RPC Stats, Settlement, CSV Export, Activity Log, Bulk Actions
+## Plan: Dynamic Polymarket Fee Rate + UI Cost Breakdown + Referral Tag
 
-### 1. Database: Create RPC functions + activity log table
+### What Changed
+Polymarket now charges up to 0.75% probability-based fees on all sports markets (as of March 30, 2026). Our code currently hardcodes `feeRateBps: 0n` / `"0"` in the EIP-712 order. This must be fetched dynamically per order.
 
-**New migration** with:
+### Changes
+
+#### 1. Backend: Fetch Polymarket fee rate before every order
+**File:** `supabase/functions/prediction-submit/index.ts`
+
+- Before calling `buildAndSubmitClobOrder`, fetch the fee rate from `https://clob.polymarket.com/fee-rate?token_id={tokenId}`
+- Pass the fetched `feeRateBps` into `buildAndSubmitClobOrder` as a new parameter
+- Inside `buildAndSubmitClobOrder`, use the dynamic value instead of `0n`/`"0"` in both the EIP-712 message and the POST body
+- Store the Polymarket exchange fee in the trade order record (`pm_fee_rate_bps` field — new column)
+- Return `pm_fee_rate_bps` in the response so the frontend can display it
+
+#### 2. Backend: Add Polymarket referral/affiliate tag to orders
+**File:** `supabase/functions/prediction-submit/index.ts`
+
+- Add our affiliate address to the order body: `"affiliateAddress": "0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d"` (treasury wallet) — this registers us for Polymarket's 30% fee referral share on $10K+ volume
+- The affiliate address goes in the POST body alongside the `order` object, not inside the EIP-712 signed message
+
+#### 3. Database: Track Polymarket exchange fee per order
+**Migration:** Add `pm_fee_rate_bps` column to `prediction_trade_orders`
 
 ```sql
--- RPC: fight stats (entry counts, unique predictors, total USD per fight)
-CREATE OR REPLACE FUNCTION get_platform_fight_stats()
-RETURNS TABLE (fight_id uuid, entry_count bigint, unique_predictors bigint, total_amount_usd numeric)
-AS $$ SELECT fight_id, COUNT(*), COUNT(DISTINCT wallet), COALESCE(SUM(amount_usd),0)
-FROM prediction_entries pe JOIN prediction_fights pf ON pe.fight_id = pf.id
-WHERE pf.visibility IN ('platform','all') AND pf.operator_id IS NULL
-GROUP BY fight_id; $$ LANGUAGE sql STABLE;
-
--- RPC: unique users
-CREATE OR REPLACE FUNCTION get_platform_unique_users()
-RETURNS bigint AS $$ SELECT COUNT(DISTINCT pe.wallet)
-FROM prediction_entries pe JOIN prediction_fights pf ON pe.fight_id = pf.id
-WHERE pf.visibility IN ('platform','all') AND pf.operator_id IS NULL; $$ LANGUAGE sql STABLE;
-
--- Activity log table
-CREATE TABLE admin_activity_log (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  action text NOT NULL,
-  description text NOT NULL,
-  admin_wallet text NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-ALTER TABLE admin_activity_log ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "deny_client_writes" ON admin_activity_log FOR ALL USING (false) WITH CHECK (false);
-CREATE POLICY "public_read" ON admin_activity_log FOR SELECT USING (true);
+ALTER TABLE prediction_trade_orders 
+ADD COLUMN IF NOT EXISTS pm_fee_rate_bps integer DEFAULT 0;
 ```
 
-### 2. Server-side pagination for Events Dashboard
+#### 4. Frontend: Show split cost breakdown
+**Files:** `PredictionModal.tsx`, `TradeTicket.tsx`, `SoccerMatchCard.tsx`, `FightCard.tsx`
 
-**File: `src/pages/platform/PlatformAdmin.tsx`**
+Currently the UI shows a single "Platform Fee (2%)" line. Update to show:
+- **Polymarket Fee (0.XX%)** — from the market's dynamic fee rate (displayed from cached price data or response)
+- **Platform Fee (1%)** — our platform fee (for Polymarket sources, the 2% is split: ~0.75% exchange + 1% platform + 0.25% buffer)
+- **Total Fees** — sum of both
 
-Replace `loadFights` with paginated loading:
-- Add state: `page` (default 0), `pageSize` (50), `totalFightsCount` (0)
-- First query: `SELECT count` via `.select('id', { count: 'exact', head: true })` with same filters
-- Second query: `.range(page * 50, (page + 1) * 50 - 1)` for the current page
-- Replace `entryCounts` fetch with `supabase.rpc('get_platform_fight_stats')` — store as map of `fight_id -> { entry_count, unique_predictors, total_amount_usd }`
-- Show "Showing 50 of 256 events" + Previous/Next buttons below the list
-- All filters (status, sport, search) applied server-side via `.eq`/`.ilike` before `.range()`
+For the inline prediction cards (`SoccerMatchCard`, `FightCard`), update `estimateWin` to factor in both fees.
 
-### 3. Add search bar to Events Dashboard
-
-Add an `Input` field in the filter row. State: `searchQuery`. Apply as `.or()` filter on the Supabase query: `title.ilike.%query%,fighter_a_name.ilike.%query%,fighter_b_name.ilike.%query%`.
-
-### 4. Fix Analytics: unique users + settlement rate
-
-- Call `supabase.rpc('get_platform_unique_users')` and display as a KPI card
-- Settlement rate denominator: exclude events where `created_at > now() - 24h`
-
-### 5. Settlement confirmation modal
-
-When clicking settle buttons (A/B), show a Dialog:
-- "Settle [Event Name]? Winner: [Fighter A Name]. This will distribute the pool. Cannot be undone."
-- On confirm: call `callAdmin("selectResult", ...)`, then log to `admin_activity_log` via `prediction-admin`
-- After settling, show winner name next to status badge on event row (already has `winner` field)
-
-### 6. CSV Export
-
-**Events Dashboard**: "Export CSV" button that builds CSV from currently filtered events with columns: Title, Fighter A, Fighter B, Sport, Date, Status, Winner, Predictions, Pool USD, Created At. Uses `Blob` + `URL.createObjectURL` for download.
-
-**Analytics tab**: "Export 30-day Volume" button exporting daily prediction counts.
-
-### 7. Activity Log tab
-
-Add a 4th top-level tab: "Activity Log". On mount, query `admin_activity_log` ordered by `created_at DESC` limit 100. Display as a simple list with timestamp, action icon, and description.
-
-Log entries are written by the `prediction-admin` edge function (will add logging calls for import, settle, delete actions). For now, also log client-side via a new `logAdminAction` helper that inserts via the edge function.
-
-### 8. Bulk status actions
-
-Add checkboxes to event rows in the dashboard. State: `selectedDashboardIds: Set<string>`.
-
-When selections exist, show a toolbar:
-- "Lock Selected" — calls `callAdmin("lockPredictions")` for each selected open event
-- "Delete Selected" — filters to events with 0 predictions, deletes those, shows toast with count of skipped events that have predictions
-
-### 9. Move Promo Codes + Manual Creator into dashboard tab
-
-Only render `<PromoCodeManager>` and `<PlatformEventCreator>` when `activeTab === "dashboard"`.
-
-### 10. Allow delete on locked events with 0 predictions
-
-Extend delete button visibility from just `f.status === "open"` to include `"locked"` when entry count is 0.
-
----
+Note: The Polymarket fee is baked into the CLOB order execution (it's taken from the order amount by the exchange), so from the user's perspective our displayed "Platform Fee" remains the same. The new line item is informational — showing users the exchange fee that Polymarket charges.
 
 ### Technical Details
 
-- Pagination uses Supabase `.range()` with `{ count: 'exact' }` for total count
-- Search filter uses `.or()` with `ilike` patterns server-side
-- RPC functions run as `STABLE` SQL functions — no security definer needed since they only read public-readable tables
-- CSV export is pure client-side using filtered data already in memory
-- Activity log inserts go through the existing `prediction-admin` edge function (new action: `logActivity`)
+**Fee rate API response format:**
+```json
+{ "fee_rate_bps": 75 }
+```
+This means 0.75% = 75 basis points. The value varies by market probability.
+
+**Order body with affiliate:**
+```json
+{
+  "order": { ... "feeRateBps": "75" ... },
+  "owner": "0x...",
+  "orderType": "GTC",
+  "affiliateAddress": "0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d"
+}
+```
 
 ### Files Changed
-
-1. New migration — `get_platform_fight_stats` RPC, `get_platform_unique_users` RPC, `admin_activity_log` table
-2. `src/pages/platform/PlatformAdmin.tsx` — All UI changes (pagination, search, settlement modal, CSV, activity log tab, bulk actions, tab reorganization)
-3. `supabase/functions/prediction-admin/index.ts` — Add `logActivity` action for admin activity logging
+1. `supabase/functions/prediction-submit/index.ts` — dynamic fee fetch, affiliate tag, pass to order builder
+2. `src/components/predictions/PredictionModal.tsx` — split fee display
+3. `src/components/predictions/TradeTicket.tsx` — add Polymarket fee line item
+4. `src/components/predictions/SoccerMatchCard.tsx` — update fee display
+5. `src/components/predictions/FightCard.tsx` — update fee display
+6. New migration — `pm_fee_rate_bps` column on `prediction_trade_orders`
 
