@@ -194,7 +194,7 @@ const BROWSE_LEAGUES = BROWSE_LEAGUE_GROUPS.flatMap(g => g.leagues);
 
 const NFL_OFFSEASON_KEY = "nfl";
 
-const DASHBOARD_SPORTS = ["soccer", "nfl", "nba", "nhl", "mlb", "ncaa", "combat", "tennis", "golf", "f1", "cricket", "rugby"];
+const DASHBOARD_SPORTS = ["soccer", "nfl", "nba", "nhl", "mlb", "ncaa", "cwbb", "combat", "tennis", "table_tennis", "golf", "f1", "cricket", "rugby", "khl", "shl", "ahl", "euroleague", "chess", "pickleball"];
 
 // ── Helpers ──
 
