@@ -30,6 +30,7 @@ interface TradeTicketProps {
   approvalError?: string | null;
   fundingState?: FundingState;
   nativeUsdcFormatted?: string | null;
+  isPolymarket?: boolean;
 }
 
 export default function TradeTicket({
