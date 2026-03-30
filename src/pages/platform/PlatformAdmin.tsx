@@ -880,6 +880,11 @@ export default function PlatformAdmin() {
                             {f.polymarket_condition_id && (
                               <span className="text-[10px] text-purple-400/70">PM ✓</span>
                             )}
+                            {duplicateSet.has(f.id) && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-yellow-500/20 text-yellow-400 flex items-center gap-0.5">
+                                <AlertTriangle className="w-2.5 h-2.5" /> Duplicate
+                              </span>
+                            )}
                             {f.event_date && (
                               <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
                                 <Calendar className="w-2.5 h-2.5" />
