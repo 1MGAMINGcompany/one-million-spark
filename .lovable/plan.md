@@ -1,45 +1,27 @@
 
 
-## Plan: Change Platform Fee from 1% to 1.5% (Backend + Frontend)
-
-### Summary
-Update the platform fee from 1% (100 bps) to 1.5% (150 bps) across all backend fee logic and frontend UI text. Also update the default Polymarket fee from 2% to 2.25% (since 1.5% platform + 0.75% exchange = 2.25%).
+## Plan: Change Badge Text to "PREMIUM PREDICTIONS" + Default to Light Mode
 
 ### Changes
 
-#### 1. Backend: Update fee constants
-**File:** `supabase/functions/prediction-submit/index.ts`
+#### 1. Update badge text in all locale files
+Change `hero.badge` from `"PREMIUM SKILL GAMING"` to `"PREMIUM PREDICTIONS"` in `src/i18n/locales/en.json` (and equivalent translations in ar, de, es, fr, hi, it, ja, pt, zh).
 
-- **Line 878**: Change default Polymarket fee from `200` (2%) to `225` (2.25%) — this is 1.5% platform + 0.75% exchange
-- **Line 1476**: Change `platformFeeBps = 100` to `platformFeeBps = 150` (operator revenue split)
+#### 2. Update SEO meta tags
+**File:** `index.html`
+- Change `<title>` from "Premium Skill Gaming Platform" to "Premium Predictions Platform"
+- Update `og:title`, `og:description`, `twitter:title`, `twitter:description` similarly
 
-#### 2. Frontend: Update PredictionModal fee defaults
-**File:** `src/components/predictions/PredictionModal.tsx`
+#### 3. Default theme to light mode
+**File:** `src/hooks/useTheme.ts`
+- Change the default from `"dark"` to `"light"` (line 8: fallback when no localStorage value exists)
 
-- **Line 21**: Change `0.02` → `0.0225` (Polymarket default)
-- **Line 25**: Change `200` → `225` (Polymarket default bps)
-
-#### 3. Frontend: Update SoccerMatchCard fee defaults
-**File:** `src/components/predictions/SoccerMatchCard.tsx`
-
-- **Line 50**: Change `0.02` → `0.0225`
-- **Line 119**: Change default `0.02` → `0.0225`
-
-#### 4. Frontend: Update TradeTicket fee label
-**File:** `src/components/predictions/TradeTicket.tsx`
-
-- Update the "Exchange Fee (~0.75%)" line text and "Platform Fee" display to show the 1.5% correctly
-
-#### 5. Purchase/Onboarding pages: Update 1% → 1.5% text
-**Files:**
-- `src/pages/platform/PurchasePage.tsx` — Lines 228-231, 277: Change "1%" to "1.5%"
-- `src/pages/platform/OperatorOnboarding.tsx` — Line 198: Change "1%" to "1.5%"
+**File:** `index.html`
+- Change the inline theme script (line 5) to default to `"light"` instead of `"dark"` — so the first paint is light mode for new visitors. Existing users who chose dark keep their preference via localStorage.
 
 ### Files Changed
-1. `supabase/functions/prediction-submit/index.ts` — fee constants (200→225 bps default, 100→150 bps platform split)
-2. `src/components/predictions/PredictionModal.tsx` — fee rate defaults
-3. `src/components/predictions/SoccerMatchCard.tsx` — fee rate defaults
-4. `src/components/predictions/TradeTicket.tsx` — fee label text
-5. `src/pages/platform/PurchasePage.tsx` — UI text 1% → 1.5%
-6. `src/pages/platform/OperatorOnboarding.tsx` — UI text 1% → 1.5%
+1. `src/i18n/locales/en.json` — badge text
+2. `src/i18n/locales/ar.json` through `zh.json` (9 files) — translated badge text
+3. `index.html` — SEO meta tags + default theme script
+4. `src/hooks/useTheme.ts` — default to `"light"`
 
