@@ -212,7 +212,7 @@ const Home = () => {
                   </div>
 
               {/* Stats/Trust indicators */}
-              <div className="flex flex-wrap justify-center lg:justify-start gap-6 mt-6 text-sm text-muted-foreground">
+              <div className="flex flex-wrap justify-center lg:justify-start gap-6 mt-6 text-sm text-foreground/70">
                     <div className="flex items-center gap-2">
                       <Shield className="w-4 h-4 text-primary" />
                       <span>{t("home.secureFair")}</span>

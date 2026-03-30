@@ -56,7 +56,7 @@ export function LiveActivityIndicator() {
 
           {/* Visitors today row */}
           {hasToday && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground/70">
+            <div className="flex items-center gap-1 text-xs text-foreground/60">
               <span className="transition-all duration-300 font-medium text-primary/80">{visitsToday.toLocaleString()}</span>
               {" "}
               <span>{t("liveStats.visitsToday", "visitors in the last 24h")}</span>
