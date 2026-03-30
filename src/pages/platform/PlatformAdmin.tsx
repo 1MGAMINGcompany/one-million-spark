@@ -220,6 +220,10 @@ export default function PlatformAdmin() {
   const [failedBatchIds, setFailedBatchIds] = useState<string[]>([]);
   const [bulkSummary, setBulkSummary] = useState("");
   const [cleanupBusy, setCleanupBusy] = useState(false);
+  const [dedupDialogOpen, setDedupDialogOpen] = useState(false);
+  const [dedupGroups, setDedupGroups] = useState<DuplicateGroup[]>([]);
+  const [dedupBusy, setDedupBusy] = useState(false);
+  const [dedupProgress, setDedupProgress] = useState(0);
 
   // Check admin
   useEffect(() => {
