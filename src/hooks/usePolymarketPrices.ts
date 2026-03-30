@@ -11,18 +11,28 @@ const PRICE_POLL_MS = 45_000; // 45s
 
 export function usePolymarketPrices(enabled = true) {
   const lastRefresh = useRef<number>(0);
+  const inFlight = useRef(false);
+  const cooldownUntil = useRef(0);
 
   const refreshPrices = useCallback(async () => {
+    const now = Date.now();
+
     // Debounce: skip if last refresh was < 30s ago
-    if (Date.now() - lastRefresh.current < 30_000) return;
+    if (inFlight.current || now < cooldownUntil.current || now - lastRefresh.current < 30_000) return;
 
     try {
-      lastRefresh.current = Date.now();
-      await supabase.functions.invoke("polymarket-prices", {
+      inFlight.current = true;
+      lastRefresh.current = now;
+      const { error } = await supabase.functions.invoke("polymarket-prices", {
         body: {},
       });
+      if (error) throw error;
+      cooldownUntil.current = 0;
     } catch (err) {
+      cooldownUntil.current = Date.now() + 120_000;
       console.warn("[usePolymarketPrices] refresh error:", err);
+    } finally {
+      inFlight.current = false;
     }
   }, []);
 
