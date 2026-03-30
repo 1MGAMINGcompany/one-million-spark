@@ -1250,6 +1250,7 @@ Deno.serve(async (req) => {
             polymarket_order_id: orderResult.orderId,
             expected_price: expectedPrice,
             expected_shares: shares,
+            pm_fee_rate_bps: pmFeeRateBps,
           });
 
           // ── Post-submit targeted reconciliation (best-effort, 2s timeout) ──
