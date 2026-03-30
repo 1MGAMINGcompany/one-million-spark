@@ -19,6 +19,7 @@ import type { PredictionEvent } from "@/components/predictions/PredictionHighlig
 import type { Fight } from "@/components/predictions/FightCard";
 import { supabase } from "@/integrations/supabase/client";
 import { useWallet } from "@/hooks/useWallet";
+import { PREDICTION_VISIBILITY_VALUES } from "@/lib/predictionVisibility";
 import { WalletGateModal } from "@/components/WalletGateModal";
 
 const Home = () => {
