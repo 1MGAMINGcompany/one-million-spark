@@ -15,9 +15,13 @@ import { Link } from "react-router-dom";
 import {
   Shield, Loader2, Trash2, Lock, Play, CheckCircle, Trophy,
   Download, Globe, Calendar, Users, RefreshCw, ArrowLeft,
-  BarChart3, TrendingUp, ChevronRight, ChevronDown,
+  BarChart3, TrendingUp, ChevronRight, ChevronDown, AlertTriangle, Copy,
 } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 // ── Types ──
 
