@@ -8,12 +8,47 @@ import { toast } from "sonner";
 import { Plus, Zap } from "lucide-react";
 import { getTeamLogo } from "@/lib/teamLogos";
 
-const SPORTS = [
-  "Soccer", "MMA", "UFC", "Boxing", "Kickboxing", "Muay Thai", "Bare Knuckle", "Wrestling",
-  "NFL", "NBA", "NHL", "MLB", "NCAA",
-  "Tennis", "Golf", "Cricket", "Rugby", "Table Tennis",
-  "Formula 1",
+const SPORT_GROUPS = [
+  {
+    label: "🇺🇸 American Sports",
+    sports: ["NBA", "NFL", "NHL", "MLB", "MLS", "NCAAB", "CWBB"],
+  },
+  {
+    label: "⚽ Soccer",
+    sports: [
+      "Soccer", "EPL", "La Liga", "Bundesliga", "Serie A", "Ligue 1",
+      "UCL", "UEL", "Copa Libertadores", "Liga MX", "Brazil Série A",
+      "Eredivisie", "Primeira Liga", "Saudi Pro League", "K-League",
+      "J-League", "A-League",
+    ],
+  },
+  {
+    label: "🥊 Combat",
+    sports: ["UFC", "MMA", "Boxing", "Muay Thai", "Bare Knuckle", "Kickboxing", "BKFC"],
+  },
+  {
+    label: "🎾 Racket & Individual",
+    sports: ["Tennis", "Table Tennis", "Golf", "Pickleball"],
+  },
+  {
+    label: "🏏 Cricket & Rugby",
+    sports: ["Cricket IPL", "Cricket PSL", "Cricket International", "Rugby"],
+  },
+  {
+    label: "🏒 Hockey (Other)",
+    sports: ["KHL", "SHL", "AHL"],
+  },
+  {
+    label: "🏀 Basketball (Other)",
+    sports: ["EuroLeague"],
+  },
+  {
+    label: "🏎️ Motorsport & Other",
+    sports: ["Formula 1", "Chess", "Wrestling"],
+  },
 ];
+
+const ALL_SPORTS = SPORT_GROUPS.flatMap(g => g.sports);
 
 const VISIBILITY_OPTIONS = [
   { value: "flagship", label: "1MGAMING.com only" },
@@ -95,7 +130,11 @@ export default function PlatformEventCreator({ wallet, defaultVisibility = "all"
             onChange={e => setSport(e.target.value)}
             className="bg-background border border-border rounded-md h-10 px-3 text-sm text-foreground"
           >
-            {SPORTS.map(s => <option key={s} value={s}>{s}</option>)}
+            {SPORT_GROUPS.map(group => (
+              <optgroup key={group.label} label={group.label}>
+                {group.sports.map(s => <option key={s} value={s}>{s}</option>)}
+              </optgroup>
+            ))}
           </select>
           <Input
             value={league}
