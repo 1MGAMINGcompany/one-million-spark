@@ -1183,7 +1183,7 @@ export default function PlatformAdmin() {
                           </div>
 
                           {/* Action buttons */}
-                          <div className="flex gap-1 flex-shrink-0 flex-wrap justify-end">
+                          <div className="flex gap-1 flex-shrink-0 flex-wrap justify-end mt-1 sm:mt-0">
                             {f.status === "open" && (
                               <>
                                 <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" disabled={busy}
