@@ -1098,6 +1098,7 @@ Deno.serve(async (req) => {
     let filledShares = 0;
     let avgFillPrice: number | null = null;
     let tradeStatus = "requested";
+    let pmFeeRateBps = 0;
 
     if (isPolymarketBacked) {
       // ── Per-user CLOB credentials (Model A) — NO shared fallback ──
