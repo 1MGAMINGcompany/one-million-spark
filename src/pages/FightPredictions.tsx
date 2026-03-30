@@ -25,6 +25,7 @@ import { useMyReferralCode } from "@/hooks/useMyReferralCode";
 import type { Fight } from "@/components/predictions/FightCard";
 import type { TradeResult } from "@/components/predictions/tradeResultTypes";
 import { usePolymarketPrices } from "@/hooks/usePolymarketPrices";
+import { PREDICTION_VISIBILITY_VALUES } from "@/lib/predictionVisibility";
 
 const FEE_RATE = 0.05;
 
@@ -254,6 +255,7 @@ export default function FightPredictions() {
   const queuedFightsReload = useRef(false);
   const feedRequestInFlight = useRef(false);
   const lastFeedLoadAt = useRef(0);
+  const consecutiveFailures = useRef(0);
   const readOnly = geoBlocked && geoBlockDismissed;
 
   usePolymarketPrices(!backendDegraded);
@@ -274,7 +276,7 @@ export default function FightPredictions() {
           .from("prediction_fights")
           .select(FIGHTS_SELECT)
           .not("status", "eq", "draft")
-          .in("visibility", ["flagship", "all"])
+          .in("visibility", PREDICTION_VISIBILITY_VALUES as unknown as string[])
           .is("operator_id", null)
           .not("status", "eq", "settled")
           .limit(200),
@@ -297,9 +299,11 @@ export default function FightPredictions() {
       }
 
       setBackendDegraded(false);
+      consecutiveFailures.current = 0;
     } catch (err) {
       console.error("[FightPredictions] loadFights failed:", err);
       setBackendDegraded(true);
+      consecutiveFailures.current += 1;
     } finally {
       setLoading(false);
       fightsRequestInFlight.current = false;
@@ -374,6 +378,9 @@ export default function FightPredictions() {
 
   useEffect(() => {
     const interval = setInterval(() => {
+      // Back off polling when backend is unhealthy
+      const backoffMs = Math.min(15_000 * Math.pow(2, consecutiveFailures.current), 120_000);
+      if (consecutiveFailures.current > 0 && Date.now() - lastFeedLoadAt.current < backoffMs) return;
       void loadFights();
     }, 15_000);
     return () => clearInterval(interval);
