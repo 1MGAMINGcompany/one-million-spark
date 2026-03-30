@@ -43,18 +43,8 @@ Deno.serve(async (req) => {
   else if (promo.discount_type === "percent") discounted_price = Math.max(0, 2400 * (1 - promo.discount_value / 100));
   else if (promo.discount_type === "fixed") discounted_price = Math.max(0, 2400 - promo.discount_value);
   return new Response(JSON.stringify({ valid: true, discount_type: promo.discount_type, discount_value: promo.discount_value, discounted_price, promo_id: promo.id }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-}
-```
+    }
 
-So the file will look like:
-```
-line 29: (blank)
-line 30: if (action === "validatePromoCode") {  ← YOUR PASTE STARTS HERE
-...
-line 44: }  ← YOUR PASTE ENDS HERE
-line 45: (blank)
-line 46: // Verify admin  ← THIS STAYS HERE, pushed down
-line 47: const { data: admin } = await supabase
     // Verify admin
     const { data: admin } = await supabase
       .from("prediction_admins")
