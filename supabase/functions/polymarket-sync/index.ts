@@ -923,6 +923,41 @@ async function importSingleEvent(
       .maybeSingle();
     if (existingByCondition) { imported++; continue; }
 
+    // Dedup: title-only match (case-insensitive, whitespace-stripped)
+    const candidateTitle = (market.groupItemTitle || market.question || "").trim();
+    const normalizedTitle = candidateTitle.toLowerCase().replace(/\s+/g, "");
+    if (normalizedTitle.length > 3) {
+      const { data: titleMatch } = await supabase
+        .from("prediction_fights")
+        .select("id")
+        .filter("title", "ilike", candidateTitle)
+        .limit(1);
+      if (titleMatch && titleMatch.length > 0) { imported++; continue; }
+    }
+
+    // Dedup: normalized team names + event_date
+    const candA = normalizeTeamName(outcomes[0]);
+    const candB = normalizeTeamName(outcomes[1]);
+    const candDate = timeInfo.chosen || gEvent.startDate || null;
+    if (candA && candB && candDate) {
+      const dateStr = new Date(candDate).toISOString().slice(0, 10);
+      // Query fights with same date, then check normalized names in-memory
+      const { data: sameDateFights } = await supabase
+        .from("prediction_fights")
+        .select("id, fighter_a_name, fighter_b_name")
+        .gte("event_date", `${dateStr}T00:00:00Z`)
+        .lte("event_date", `${dateStr}T23:59:59Z`)
+        .limit(200);
+      if (sameDateFights && sameDateFights.length > 0) {
+        const matchupExists = sameDateFights.some((f: any) => {
+          const nA = normalizeTeamName(f.fighter_a_name);
+          const nB = normalizeTeamName(f.fighter_b_name);
+          return (nA === candA && nB === candB) || (nA === candB && nB === candA);
+        });
+        if (matchupExists) { imported++; continue; }
+      }
+    }
+
     const { data: existingFight } = await supabase
       .from("prediction_fights")
       .select("id")
