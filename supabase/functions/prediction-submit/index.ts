@@ -875,7 +875,7 @@ Deno.serve(async (req) => {
       fight.commission_bps != null
         ? Number(fight.commission_bps)
         : isPolymarketSource
-          ? 200   // 2% for Polymarket-routed
+          ? 225   // 2.25% for Polymarket-routed (1.5% platform + 0.75% exchange)
           : 500;  // 5% for native 1MGAMING events
     const fee_usd = Number(
       ((parsedAmount * effectiveFeeBps) / 10_000).toFixed(6),
