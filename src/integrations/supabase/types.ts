@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_activity_log: {
+        Row: {
+          action: string
+          admin_wallet: string
+          created_at: string
+          description: string
+          id: string
+        }
+        Insert: {
+          action: string
+          admin_wallet: string
+          created_at?: string
+          description: string
+          id?: string
+        }
+        Update: {
+          action?: string
+          admin_wallet?: string
+          created_at?: string
+          description?: string
+          id?: string
+        }
+        Relationships: []
+      }
       ai_game_events: {
         Row: {
           created_at: string
@@ -2245,6 +2269,16 @@ export type Database = {
         }
         Returns: undefined
       }
+      get_platform_fight_stats: {
+        Args: never
+        Returns: {
+          entry_count: number
+          fight_id: string
+          total_amount_usd: number
+          unique_predictors: number
+        }[]
+      }
+      get_platform_unique_users: { Args: never; Returns: number }
       issue_nonce: {
         Args: { p_room_pda: string; p_rules_hash: string; p_wallet: string }
         Returns: string
