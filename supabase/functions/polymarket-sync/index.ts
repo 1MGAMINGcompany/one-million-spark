@@ -78,7 +78,17 @@ const NON_SPORT_KEYWORDS = [
   "fed rate", "interest rate",
 ];
 
-const MATCHUP_RE = /\bvs\.?\b|\sv\s|\bat\b/i;
+/** Normalize team/fighter name for dedup comparison */
+function normalizeTeamName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/^(the |fc |afc |cf |as |ac |rc |cd |club |sc )/i, "")
+    .replace(/ (fc|sc|cf|afc|city|united|rovers|wanderers|athletic)$/i, "")
+    .replace(/[^a-z0-9]/g, "")
+    .trim();
+}
+
+
 
 function hasMatchupPattern(texts: string[]): boolean {
   return texts.some(t => MATCHUP_RE.test(t));
