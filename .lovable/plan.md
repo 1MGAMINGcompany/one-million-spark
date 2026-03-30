@@ -1,101 +1,84 @@
 
 
-## Plan: Fix Cricket/Tennis/F1/UFC/Boxing Seeds, Bulk Import Resilience, Cleanup Tool, Pagination
+## Plan: Fix Duplicate Events — Dedup on Import + Cleanup Tool + DB Constraint
 
-### 1. Fix Search Seeds for Empty-Returning Sports
+### 1. Add team-name-normalized dedup check in `importSingleEvent`
 
-**File: `supabase/functions/polymarket-sync/index.ts` (lines 241-263)**
+**File: `supabase/functions/polymarket-sync/index.ts` (after line 924)**
 
-Update `LEAGUE_SOURCES` entries and add sub-leagues:
+Add a `normalizeTeamName` helper function and a second dedup check after the `conditionId` check. Before inserting a new fight:
 
-**Cricket** — Replace generic seeds, add sub-leagues, fix `sportType` from `"tennis"` to `"cricket"`:
-- `"cricket"`: seeds `["Indian Premier League", "IPL vs", "PSL vs", "cricket vs", "T20 cricket vs"]`, sportType `"cricket"`
-- `"cricket-ipl"`: seeds `["Indian Premier League", "IPL vs", "IPL 2026"]`
-- `"cricket-psl"`: seeds `["Pakistan Super League", "PSL vs"]`
-- `"cricket-intl"`: seeds `["cricket international", "cricket vs", "T20 international"]`
+1. Normalize `fighter_a_name` and `fighter_b_name` using the provided function (strip prefixes like "the", "fc", "afc", suffixes like "city", "united", etc., lowercase, remove non-alphanumeric)
+2. Query `prediction_fights` for any existing fight where:
+   - `lower(title) = lower(new_title)` (title-only dedup), OR
+   - Same normalized team names in either order AND same `event_date::date`
+3. If found, increment `imported` count and `continue` — return success, not error
+4. On the `import_bulk` response, mark these as `{ success: true, imported: 0, skipped: "already_exists" }` so the frontend shows them as successful (no error toast)
 
-**Tennis** — Add sub-leagues, fix sportType on existing entries if needed:
-- `"tennis"`: seeds `["ATP vs", "WTA vs", "Wimbledon", "US Open vs", "Roland Garros vs", "Australian Open vs", "tennis vs"]`
-- `"tennis-atp"`: seeds `["ATP vs", "ATP Tour"]`
-- `"tennis-wta"`: seeds `["WTA vs", "WTA Tour"]`
-- `"tennis-grand-slam"`: seeds `["Wimbledon", "US Open vs", "Roland Garros vs", "Australian Open vs"]`
-
-**Formula 1** — Fix `sportType` from `"golf"` to `"f1"`, improve seeds:
-- Seeds: `["Formula 1 Grand Prix", "F1 vs", "Grand Prix winner"]`
-
-**UFC** — Improve seeds:
-- Seeds: `["UFC vs", "UFC Fight Night", "UFC"]`
-
-**Boxing** — Improve seeds:
-- Seeds: `["boxing vs", "WBC", "WBA", "IBF title", "boxing match"]`
-
-**Rugby** — Fix sportType from `"tennis"` to `"rugby"`
-
-Add `"cricket"`, `"f1"`, `"rugby"` to `SPORT_TYPE_TO_CATEGORY` (line ~776-788):
-```
-cricket: "CRICKET",
-f1: "F1",
-rugby: "RUGBY",
-```
-
-Also add `"f1"` to the `LeagueSource.sportType` union (line 208).
-
-### 2. Add Sub-League Tabs to Frontend
-
-**File: `src/pages/platform/PlatformAdmin.tsx` (lines 94-120)**
-
-Add to `BROWSE_LEAGUES` array:
-- `cricket-ipl`, `cricket-psl`, `cricket-intl`
-- `tennis-atp`, `tennis-wta`, `tennis-grand-slam`
-
-### 3. Fix Bulk Import — Chunked with Error Resilience
-
-**File: `src/pages/platform/PlatformAdmin.tsx` (lines 258-287)**
-
-Rewrite `handleBulkImport` to:
-- Chunk selected events into batches of 10
-- Call `import_bulk` sequentially per batch
-- Track per-batch success/failure in state
-- On batch failure: record the error, continue with remaining batches
-- Show progress as `(completed batches / total batches)` on the Progress bar
-- After completion, show summary: "X imported, Y failed"
-- Add `failedBatches` state and a "Retry Failed" button that re-submits only the failed event IDs
-- Keep successfully imported IDs in `importedIds` so they show "Already imported"
-
-**File: `supabase/functions/polymarket-sync/index.ts` (lines 1443-1464)**
-
-Cap `import_bulk` at 15 events. Skip `fetchMarketVolume` call during bulk to reduce latency. Batch dedup check: before the loop, query all `polymarket_condition_id` values for the incoming markets in one call and use an in-memory Set.
-
-### 4. Cleanup Tool — "Remove Junk Events"
+### 2. Add "Deduplicate Existing" button with preview table
 
 **File: `src/pages/platform/PlatformAdmin.tsx`**
 
-Add a "Remove Junk Events" button in the Events Dashboard tab header area. On click:
-1. Scan `fights` array client-side for matches against junk keywords in title: `over, under, o/u, CBA, MVP, award, champion, will they, how many, total, by Dec`
-2. Also find fights with `event_date` > 3 days in the past AND `entryCounts[id] === 0`
-3. Show a confirmation modal/toast with count: "Found X junk events. Delete?"
-4. On confirm, call `prediction-admin` `deleteFight` for each junk fight ID (sequentially, with progress)
-5. Reload fights after completion
+Add a "Deduplicate" button next to "Remove Junk" in the Events Dashboard header. On click:
 
-### 5. Pagination / Load More for Polymarket Browser
+1. Client-side: group all `fights` by `normalizeTeamName(a) + normalizeTeamName(b)` (sorted) + `event_date::date`
+2. Also group by `title.toLowerCase().replace(/\s+/g, '')`
+3. Merge both grouping strategies
+4. For groups with >1 fight: identify the "keeper" (most predictions via `entryCounts`, or earliest `created_at` if tied)
+5. Show a dialog/modal with a preview table: matchup name, duplicate count, which will be kept, which will be deleted
+6. On "Confirm", delete duplicates via `prediction-admin` `deleteFight` calls with progress
+7. Reload fights after completion
 
-**File: `supabase/functions/polymarket-sync/index.ts` (browse_league action, lines 1275-1318)**
-
-The `fetchEventsByTagId` already paginates up to 500 events (5 pages x 100). For search-based strategies, update `fetchSearchEvents` to accept a higher limit (default 30 instead of current behavior which deduplicates across seeds).
-
-Add `limit` and `offset` params to `browse_league` action body. Pass to `fetchEventsByTagId`. Return `has_more` flag.
+### 3. Add duplicate indicator badges on dashboard rows
 
 **File: `src/pages/platform/PlatformAdmin.tsx`**
 
-- Add `browseOffset` state (default 0)
-- When clicking a sport tab, reset offset to 0
-- Add "Load More" button at bottom of results that increments offset and appends new results (not replaces)
-- Show result count: "Showing X events"
+Compute a `duplicateSet` (Set of fight IDs that have duplicates) using the same normalization logic. In the events list rendering (line ~721), if a fight's ID is in `duplicateSet`, show a yellow warning badge: `⚠ Duplicate`.
+
+### 4. Database unique constraint migration
+
+**New file: `supabase/migrations/` (new migration)**
+
+```sql
+CREATE UNIQUE INDEX IF NOT EXISTS idx_fights_unique_matchup
+ON prediction_fights (
+  lower(fighter_a_name),
+  lower(fighter_b_name),
+  event_date::date
+)
+WHERE operator_id IS NULL 
+AND visibility IN ('platform', 'all');
+```
+
+This is a partial unique index as a last-resort guard. The application-level check catches it first; this prevents edge cases.
+
+### 5. Handle constraint violations gracefully in edge function
+
+In `importSingleEvent`, wrap the fight insert in a try/catch. If the insert fails with a unique constraint violation (code `23505`), treat it as a successful skip (not an error). Return `{ imported: 0, skipped: "duplicate_constraint" }`.
 
 ---
 
+### Technical Details
+
+**`normalizeTeamName` function** (used in both edge function and frontend):
+```typescript
+function normalizeTeamName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/^(the |fc |afc |cf |as |ac |rc |cd |club |sc )/i, '')
+    .replace(/ (fc|sc|cf|afc|city|united|rovers|wanderers|athletic)$/i, '')
+    .replace(/[^a-z0-9]/g, '')
+    .trim();
+}
+```
+
+**Title-only dedup**: Two fights with identical `title` (case-insensitive, whitespace-stripped) are treated as duplicates regardless of fighter name fields.
+
+**Import error fix**: Currently duplicate detection via DB query errors may cause import failures. After this change, all dedup scenarios return success with a skip note.
+
 ### Files Changed
 
-1. `supabase/functions/polymarket-sync/index.ts` — Fix seeds for cricket/tennis/F1/UFC/boxing/rugby, fix sportType mappings, add sub-league entries, add SPORT_TYPE_TO_CATEGORY entries, cap bulk at 15 with batch dedup, add offset/limit to browse_league, skip fetchMarketVolume in bulk
-2. `src/pages/platform/PlatformAdmin.tsx` — Add sub-league tabs, chunked bulk import with retry, cleanup tool, Load More pagination
+1. `supabase/functions/polymarket-sync/index.ts` — Add `normalizeTeamName`, title+team dedup check, graceful constraint handling
+2. `src/pages/platform/PlatformAdmin.tsx` — Add Deduplicate button with preview dialog, duplicate badges on dashboard rows, shared `normalizeTeamName`
+3. New migration file — Add partial unique index `idx_fights_unique_matchup`
 
