@@ -1197,6 +1197,21 @@ Deno.serve(async (req) => {
           cred_source: credSource,
         });
 
+        // ── Fetch dynamic Polymarket fee rate ──
+        let pmFeeRateBps = 0;
+        try {
+          const feeRes = await fetch(`${CLOB_BASE}/fee-rate?token_id=${tokenId}`);
+          if (feeRes.ok) {
+            const feeData = await feeRes.json();
+            pmFeeRateBps = Number(feeData.fee_rate_bps ?? feeData.feeRateBps ?? 0);
+            console.log(`[prediction-submit] Polymarket fee rate for token ${tokenId}: ${pmFeeRateBps} bps`);
+          } else {
+            console.warn(`[prediction-submit] Fee rate fetch failed (${feeRes.status}), using 0 bps`);
+          }
+        } catch (feeErr) {
+          console.warn("[prediction-submit] Fee rate fetch error:", feeErr);
+        }
+
         // ── EIP-712 signed CLOB order submission ──
         const orderResult = await buildAndSubmitClobOrder(
           {
@@ -1208,6 +1223,7 @@ Deno.serve(async (req) => {
           tokenId!,
           expectedPrice!,
           net_amount_usdc,
+          pmFeeRateBps,
         );
 
         polymarket_order_id = orderResult.orderId;
