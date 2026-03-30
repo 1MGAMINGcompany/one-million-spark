@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { showBrowserNotification, requestNotificationPermission } from "@/lib/pushNotifications";
+import { getBrandName } from "@/lib/brandName";
 import { useSound } from "@/contexts/SoundContext";
 import { toast } from "@/hooks/use-toast";
 
