@@ -255,6 +255,7 @@ export default function FightPredictions() {
   const queuedFightsReload = useRef(false);
   const feedRequestInFlight = useRef(false);
   const lastFeedLoadAt = useRef(0);
+  const consecutiveFailures = useRef(0);
   const readOnly = geoBlocked && geoBlockDismissed;
 
   usePolymarketPrices(!backendDegraded);
