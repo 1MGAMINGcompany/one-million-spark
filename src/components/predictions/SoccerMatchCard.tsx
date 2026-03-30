@@ -47,7 +47,7 @@ function estimateWin(price: number | null | undefined, amount: number, feeRate: 
 
 function getFeeRate(fight: Fight): number {
   if (fight.commission_bps != null) return fight.commission_bps / 10_000;
-  return fight.source === "polymarket" ? 0.02 : 0.05;
+  return fight.source === "polymarket" ? 0.0225 : 0.05;
 }
 
 interface SoccerMatchCardProps {
@@ -116,7 +116,7 @@ export default function SoccerMatchCard({
       : selectedFight.id === awayFight.id ? awayPrice
       : drawPrice)
     : null;
-  const feeRate = selectedFight ? getFeeRate(selectedFight) : 0.02;
+  const feeRate = selectedFight ? getFeeRate(selectedFight) : 0.0225;
   const estimatedWin = estimateWin(selectedPrice, amountNum, feeRate);
 
   const handleSelect = (fight: Fight) => {

@@ -195,7 +195,7 @@ export default function OperatorOnboarding() {
             <span className="text-white/40">%</span>
           </div>
           <p className="text-xs text-white/30">
-            Platform takes 1% fee on every prediction (covers gas, support, backend &amp; money flow). Your fee is added on top.
+            Platform takes 1.5% fee on every prediction (covers gas, support, backend &amp; money flow). Your fee is added on top.
           </p>
         </div>
       ),

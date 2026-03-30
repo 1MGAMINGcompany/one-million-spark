@@ -875,7 +875,7 @@ Deno.serve(async (req) => {
       fight.commission_bps != null
         ? Number(fight.commission_bps)
         : isPolymarketSource
-          ? 200   // 2% for Polymarket-routed
+          ? 225   // 2.25% for Polymarket-routed (1.5% platform + 0.75% exchange)
           : 500;  // 5% for native 1MGAMING events
     const fee_usd = Number(
       ((parsedAmount * effectiveFeeBps) / 10_000).toFixed(6),
@@ -1472,8 +1472,8 @@ Deno.serve(async (req) => {
     const resolvedOperatorId = source_operator_id || fight.operator_id || null;
     if (resolvedOperatorId && entry) {
       try {
-        // Split: 1% platform (100bps), remainder is operator fee
-        const platformFeeBps = 100;
+        // Split: 1.5% platform (150bps), remainder is operator fee
+        const platformFeeBps = 150;
         const platformFeeUsd = Number(((parsedAmount * platformFeeBps) / 10_000).toFixed(6));
         const operatorFeeUsd = Math.max(0, Number((fee_usd - platformFeeUsd).toFixed(6)));
 

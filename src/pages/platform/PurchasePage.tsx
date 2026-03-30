@@ -225,9 +225,9 @@ export default function PurchasePage() {
 
           {/* Fee Disclosure */}
           <div className="bg-blue-500/5 border border-blue-500/10 rounded-xl p-4 mb-6">
-            <h4 className="text-sm font-semibold text-blue-300 mb-2">Platform Fee: 1% per prediction</h4>
+            <h4 className="text-sm font-semibold text-blue-300 mb-2">Platform Fee: 1.5% per prediction</h4>
             <p className="text-xs text-white/40 leading-relaxed">
-              We charge a 1% platform fee on every prediction to cover transaction fees (gas),
+              We charge a 1.5% platform fee on every prediction to cover transaction fees (gas),
               24/7 support, backend infrastructure, and sports money flow management.
               Your custom operator fee is added on top.
             </p>
@@ -274,7 +274,7 @@ export default function PurchasePage() {
               className="mt-0.5 border-white/20 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
             />
             <label htmlFor="agree-fee" className="text-sm text-white/50 cursor-pointer leading-relaxed">
-              I understand the 1% platform fee on all predictions and agree to the terms.
+              I understand the 1.5% platform fee on all predictions and agree to the terms.
             </label>
           </div>
 

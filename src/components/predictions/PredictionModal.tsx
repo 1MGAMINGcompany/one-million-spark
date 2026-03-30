@@ -15,15 +15,15 @@ import type { ApprovalStep } from "@/hooks/useAllowanceGate";
 
 const MIN_USD = 1.0;
 
-/** Source-aware fee rate: 2% for Polymarket, 5% for native */
+/** Source-aware fee rate: 2.25% for Polymarket (1.5% platform + 0.75% exchange), 5% for native */
 function getFeeRate(fight: Fight): number {
   if (fight.commission_bps != null) return fight.commission_bps / 10_000;
-  return fight.source === "polymarket" ? 0.02 : 0.05;
+  return fight.source === "polymarket" ? 0.0225 : 0.05;
 }
 
 function getFeeLabel(fight: Fight): string {
-  const bps = fight.commission_bps ?? (fight.source === "polymarket" ? 200 : 500);
-  return `${(bps / 100).toFixed(0)}%`;
+  const bps = fight.commission_bps ?? (fight.source === "polymarket" ? 225 : 500);
+  return `${(bps / 100).toFixed(1)}%`;
 }
 
 function estimateReward(
