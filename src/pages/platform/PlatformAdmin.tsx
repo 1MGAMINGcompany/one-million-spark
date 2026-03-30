@@ -906,22 +906,42 @@ export default function PlatformAdmin() {
               Browse upcoming events by sport. Select multiple and bulk import with visibility <span className="text-blue-400 font-medium">Platform only</span>.
             </p>
 
-            {/* Scrollable sport tabs */}
-            <div className="overflow-x-auto pb-2 -mx-1">
-              <div className="flex gap-1 px-1 min-w-max">
-                {BROWSE_LEAGUES.map(l => (
-                  <button
-                    key={l.key}
-                    onClick={() => handleBrowse(l.key)}
-                    className={`text-xs px-3 py-1.5 rounded-md whitespace-nowrap transition-colors ${
-                      browseLeague === l.key ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {l.label}
-                  </button>
-                ))}
-              </div>
+            {/* Grouped sport tabs */}
+            <div className="space-y-1.5">
+              {BROWSE_LEAGUE_GROUPS.map(group => (
+                <div key={group.label} className="overflow-x-auto -mx-1">
+                  <div className="flex items-center gap-1 px-1 min-w-max">
+                    <span className="text-[10px] text-muted-foreground whitespace-nowrap w-20 shrink-0">{group.label}</span>
+                    {group.leagues.map(l => (
+                      <button
+                        key={l.key}
+                        onClick={() => handleBrowse(l.key)}
+                        className={`text-xs px-2.5 py-1 rounded-md whitespace-nowrap transition-colors ${
+                          browseLeague === l.key ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {l.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
+
+            {/* NFL offseason message */}
+            {browseLeague === NFL_OFFSEASON_KEY && browseResults.length === 0 && !browseLoading && (
+              <div className="mt-4 p-4 rounded-lg bg-muted/30 border border-border/30 text-center">
+                <p className="text-sm text-muted-foreground">🏈 NFL season starts September 2026 — check back then</p>
+              </div>
+            )}
+
+            {/* No results message for other sports */}
+            {browseLeague !== NFL_OFFSEASON_KEY && browseResults.length === 0 && !browseLoading && browseMessage && (
+              <div className="mt-4 p-4 rounded-lg bg-muted/30 border border-border/30 text-center">
+                <p className="text-sm text-muted-foreground">{browseMessage}</p>
+                <p className="text-xs text-muted-foreground mt-1">Use the <span className="text-primary">Quick Platform Event</span> form to add manually instead</p>
+              </div>
+            )}
 
             {/* Debug stats panel */}
             {browseDebugStats && (
