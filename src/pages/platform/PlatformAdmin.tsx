@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
@@ -16,6 +17,7 @@ import {
   Shield, Loader2, Trash2, Lock, Play, CheckCircle, Trophy,
   Download, Globe, Calendar, Users, RefreshCw, ArrowLeft,
   BarChart3, TrendingUp, ChevronRight, ChevronDown, AlertTriangle, Copy,
+  Search, FileDown, Activity, ChevronLeft,
 } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import {
@@ -47,6 +49,12 @@ interface PlatformFight {
   price_b: number | null;
 }
 
+interface FightStats {
+  entry_count: number;
+  unique_predictors: number;
+  total_amount_usd: number;
+}
+
 interface PolymarketPreview {
   id: string;
   title: string;
@@ -61,6 +69,14 @@ interface PolymarketPreview {
     active: boolean;
     closed: boolean;
   }[];
+}
+
+interface ActivityLogEntry {
+  id: string;
+  action: string;
+  description: string;
+  admin_wallet: string;
+  created_at: string;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -95,7 +111,6 @@ const VIS_BADGE: Record<string, { label: string; color: string }> = {
   flagship: { label: "Flagship", color: "bg-yellow-500/20 text-yellow-400" },
 };
 
-// Full sport tab list for Polymarket browser
 const BROWSE_LEAGUES = [
   { key: "nfl", label: "NFL" },
   { key: "nhl", label: "NHL" },
@@ -130,12 +145,10 @@ const BROWSE_LEAGUES = [
   { key: "rugby", label: "Rugby" },
 ];
 
-// All sport filter keys for dashboard
 const DASHBOARD_SPORTS = ["soccer", "nfl", "nba", "nhl", "mlb", "ncaa", "combat", "tennis", "golf", "f1", "cricket", "rugby"];
 
 // ── Helpers ──
 
-/** Normalize team/fighter name for dedup comparison */
 function normalizeTeamName(name: string): string {
   return name
     .toLowerCase()
@@ -145,7 +158,6 @@ function normalizeTeamName(name: string): string {
     .trim();
 }
 
-/** Build a dedup key from normalized names (sorted) + date */
 function dedupKey(a: string, b: string, dateStr: string | null): string {
   const nA = normalizeTeamName(a);
   const nB = normalizeTeamName(b);
@@ -154,7 +166,6 @@ function dedupKey(a: string, b: string, dateStr: string | null): string {
   return `${sorted}::${d}`;
 }
 
-/** Build a title-based dedup key */
 function titleDedupKey(title: string): string {
   return title.toLowerCase().replace(/\s+/g, "");
 }
@@ -183,6 +194,27 @@ function getEventRowColor(fight: PlatformFight): string {
   return "";
 }
 
+function downloadCSV(filename: string, csvContent: string) {
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+const ACTION_ICONS: Record<string, string> = {
+  import: "📥",
+  settle: "⚖️",
+  delete: "🗑️",
+  lock: "🔒",
+  create: "➕",
+  default: "📋",
+};
+
+const PAGE_SIZE = 50;
+
 // ══════════════════════════════════════════════════
 // COMPONENT
 // ══════════════════════════════════════════════════
@@ -192,11 +224,16 @@ export default function PlatformAdmin() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [fights, setFights] = useState<PlatformFight[]>([]);
-  const [entryCounts, setEntryCounts] = useState<Record<string, number>>({});
+  const [fightStatsMap, setFightStatsMap] = useState<Record<string, FightStats>>({});
   const [busy, setBusy] = useState(false);
   const [filter, setFilter] = useState<"active" | "settled" | "all">("active");
   const [sportFilter, setSportFilter] = useState<string>("all");
-  const [activeTab, setActiveTab] = useState<"browser" | "dashboard" | "analytics">("browser");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<"browser" | "dashboard" | "analytics" | "activity">("browser");
+
+  // Pagination
+  const [page, setPage] = useState(0);
+  const [totalFightsCount, setTotalFightsCount] = useState(0);
 
   // Polymarket browser state
   const [browseLeague, setBrowseLeague] = useState("nfl");
@@ -225,6 +262,19 @@ export default function PlatformAdmin() {
   const [dedupBusy, setDedupBusy] = useState(false);
   const [dedupProgress, setDedupProgress] = useState(0);
 
+  // Bulk dashboard actions
+  const [selectedDashboardIds, setSelectedDashboardIds] = useState<Set<string>>(new Set());
+
+  // Settlement modal
+  const [settleModal, setSettleModal] = useState<{ fight: PlatformFight; winner: "fighter_a" | "fighter_b" } | null>(null);
+
+  // Activity log
+  const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+
+  // Unique users KPI
+  const [uniqueUsers, setUniqueUsers] = useState<number | null>(null);
+
   // Check admin
   useEffect(() => {
     if (!address) { setIsAdmin(false); setLoading(false); return; }
@@ -239,36 +289,95 @@ export default function PlatformAdmin() {
     })();
   }, [address]);
 
+  // Helper to get sport
+  const getSport = useCallback((f: PlatformFight): SportType =>
+    detectSport({ event_name: f.event_name, fighter_a_name: f.fighter_a_name, fighter_b_name: f.fighter_b_name, source: f.source }), []);
+
+  // ── Load fights with server-side pagination ──
   const loadFights = useCallback(async () => {
-    const [fightsRes, entriesRes] = await Promise.all([
-      supabase
-        .from("prediction_fights")
+    // Build filter query
+    const buildQuery = (base: any) => {
+      let q = base.in("visibility", ["platform", "all"]).is("operator_id", null);
+      if (filter === "active") q = q.in("status", ["open", "locked", "live", "result_selected", "confirmed"]);
+      if (filter === "settled") q = q.in("status", ["settled", "draw", "refunds_complete", "cancelled"]);
+      if (searchQuery.trim()) {
+        const s = `%${searchQuery.trim()}%`;
+        q = q.or(`title.ilike.${s},fighter_a_name.ilike.${s},fighter_b_name.ilike.${s}`);
+      }
+      return q;
+    };
+
+    // Count query
+    const countQ = buildQuery(
+      supabase.from("prediction_fights").select("id", { count: "exact", head: true })
+    );
+    const { count } = await countQ;
+    setTotalFightsCount(count || 0);
+
+    // Data query with pagination
+    const dataQ = buildQuery(
+      supabase.from("prediction_fights")
         .select("id, title, status, pool_a_usd, pool_b_usd, visibility, created_at, event_date, fighter_a_name, fighter_b_name, winner, event_name, source, polymarket_active, polymarket_condition_id, featured, trading_allowed, price_a, price_b")
-        .in("visibility", ["platform", "all"])
-        .is("operator_id", null)
-        .order("created_at", { ascending: false }),
-      supabase.from("prediction_entries").select("fight_id"),
-    ]);
+    )
+      .order("created_at", { ascending: false })
+      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
-    if (fightsRes.data) setFights(fightsRes.data as PlatformFight[]);
-    if (entriesRes.data) {
-      const counts: Record<string, number> = {};
-      entriesRes.data.forEach((e: any) => { counts[e.fight_id] = (counts[e.fight_id] || 0) + 1; });
-      setEntryCounts(counts);
-    }
-
-    if (fightsRes.data) {
+    const { data: fightsData } = await dataQ;
+    if (fightsData) {
+      setFights(fightsData as PlatformFight[]);
       const ids = new Set<string>();
-      fightsRes.data.forEach((f: any) => {
+      fightsData.forEach((f: any) => {
         if (f.polymarket_condition_id) ids.add(f.polymarket_condition_id);
       });
       setImportedIds(ids);
     }
-  }, []);
+
+    // Load fight stats via RPC
+    const { data: statsData } = await supabase.rpc("get_platform_fight_stats");
+    if (statsData) {
+      const map: Record<string, FightStats> = {};
+      (statsData as any[]).forEach((row: any) => {
+        map[row.fight_id] = {
+          entry_count: Number(row.entry_count) || 0,
+          unique_predictors: Number(row.unique_predictors) || 0,
+          total_amount_usd: Number(row.total_amount_usd) || 0,
+        };
+      });
+      setFightStatsMap(map);
+    }
+  }, [filter, searchQuery, page]);
 
   useEffect(() => {
     if (isAdmin) loadFights();
   }, [isAdmin, loadFights]);
+
+  // Reset page when filters change
+  useEffect(() => { setPage(0); }, [filter, sportFilter, searchQuery]);
+
+  // Load unique users for analytics
+  useEffect(() => {
+    if (isAdmin && activeTab === "analytics") {
+      supabase.rpc("get_platform_unique_users").then(({ data }) => {
+        setUniqueUsers(data != null ? Number(data) : null);
+      });
+    }
+  }, [isAdmin, activeTab]);
+
+  // Load activity log
+  useEffect(() => {
+    if (isAdmin && activeTab === "activity") {
+      setActivityLoading(true);
+      supabase
+        .from("admin_activity_log")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(100)
+        .then(({ data }) => {
+          setActivityLog((data as ActivityLogEntry[]) || []);
+          setActivityLoading(false);
+        });
+    }
+  }, [isAdmin, activeTab]);
 
   // Admin action helper
   const callAdmin = async (action: string, extra: Record<string, any>) => {
@@ -285,6 +394,15 @@ export default function PlatformAdmin() {
     } finally {
       setBusy(false);
     }
+  };
+
+  // Log admin activity
+  const logActivity = async (activity_action: string, description: string) => {
+    try {
+      await supabase.functions.invoke("prediction-admin", {
+        body: { action: "logActivity", wallet: address, activity_action, description },
+      });
+    } catch {}
   };
 
   // Polymarket browse
@@ -314,7 +432,7 @@ export default function PlatformAdmin() {
     }
   };
 
-  // Bulk import — chunked into batches of 10 with error resilience
+  // Bulk import
   const handleBulkImport = async (retryIds?: string[]) => {
     const ids = retryIds || Array.from(selectedEvents);
     if (ids.length === 0) { toast.error("No events selected"); return; }
@@ -357,6 +475,7 @@ export default function PlatformAdmin() {
     if (totalImported > 0) {
       toast.success(`Imported ${totalImported} markets`);
       setSelectedEvents(new Set());
+      logActivity("import", `Imported ${totalImported} ${browseLeague.toUpperCase()} events from Polymarket`);
       loadFights();
     }
     setBulkImporting(false);
@@ -370,7 +489,7 @@ export default function PlatformAdmin() {
       if (JUNK_KEYWORDS.some(kw => title.includes(kw))) return true;
       if (f.event_date) {
         const days = getDaysUntil(f.event_date);
-        if (days !== null && days < -3 && (entryCounts[f.id] || 0) === 0) return true;
+        if (days !== null && days < -3 && (fightStatsMap[f.id]?.entry_count || 0) === 0) return true;
       }
       return false;
     });
@@ -387,6 +506,7 @@ export default function PlatformAdmin() {
       } catch {}
     }
     toast.success(`Deleted ${deleted} junk events`);
+    logActivity("delete", `Cleaned up ${deleted} junk events`);
     setCleanupBusy(false);
     loadFights();
   };
@@ -401,7 +521,6 @@ export default function PlatformAdmin() {
       const arr = byMatchup.get(mk) || [];
       arr.push(f.id);
       byMatchup.set(mk, arr);
-
       const tk = titleDedupKey(f.title);
       const tarr = byTitle.get(tk) || [];
       tarr.push(f.id);
@@ -419,13 +538,11 @@ export default function PlatformAdmin() {
   const handleDeduplicate = () => {
     const groupMap = new Map<string, PlatformFight[]>();
     for (const f of fights) {
-      // Group by matchup key
       const mk = dedupKey(f.fighter_a_name, f.fighter_b_name, f.event_date);
       const arr = groupMap.get(mk) || [];
       arr.push(f);
       groupMap.set(mk, arr);
     }
-    // Also group by title
     const titleMap = new Map<string, PlatformFight[]>();
     for (const f of fights) {
       const tk = titleDedupKey(f.title);
@@ -433,15 +550,12 @@ export default function PlatformAdmin() {
       arr.push(f);
       titleMap.set(tk, arr);
     }
-    // Merge: for title groups, merge into matchup groups if not already covered
     for (const [tk, titleFights] of titleMap) {
       if (titleFights.length <= 1) continue;
       const ids = new Set(titleFights.map(f => f.id));
-      // Check if these are already in an existing group
       let alreadyCovered = false;
       for (const group of groupMap.values()) {
         if (group.length > 1 && group.some(f => ids.has(f.id))) {
-          // Merge missing fights into existing group
           for (const f of titleFights) {
             if (!group.some(g => g.id === f.id)) group.push(f);
           }
@@ -457,10 +571,9 @@ export default function PlatformAdmin() {
     const groups: DuplicateGroup[] = [];
     for (const [key, gFights] of groupMap) {
       if (gFights.length <= 1) continue;
-      // Determine keeper: most predictions, then earliest created_at
       const sorted = [...gFights].sort((a, b) => {
-        const ca = entryCounts[a.id] || 0;
-        const cb = entryCounts[b.id] || 0;
+        const ca = fightStatsMap[a.id]?.entry_count || 0;
+        const cb = fightStatsMap[b.id]?.entry_count || 0;
         if (cb !== ca) return cb - ca;
         return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
       });
@@ -497,13 +610,14 @@ export default function PlatformAdmin() {
       setDedupProgress(i + 1);
     }
     toast.success(`Deleted ${deleted} duplicate events`);
+    logActivity("delete", `Deduplicated: removed ${deleted} duplicate events`);
     setDedupBusy(false);
     setDedupDialogOpen(false);
     setDedupGroups([]);
     loadFights();
   };
 
-  // Toggle single event selection
+  // Toggle single event selection (browser)
   const toggleEventSelection = (id: string) => {
     setSelectedEvents(prev => {
       const next = new Set(prev);
@@ -512,7 +626,6 @@ export default function PlatformAdmin() {
     });
   };
 
-  // Select all importable events
   const importableEvents = browseResults.filter(ev => !ev.markets?.some(m => importedIds.has(m.conditionId)));
   const allSelected = importableEvents.length > 0 && importableEvents.every(ev => selectedEvents.has(ev.id));
 
@@ -524,43 +637,137 @@ export default function PlatformAdmin() {
     }
   };
 
-  // Filter fights
-  const getSport = (f: PlatformFight): SportType =>
-    detectSport({ event_name: f.event_name, fighter_a_name: f.fighter_a_name, fighter_b_name: f.fighter_b_name, source: f.source });
-
+  // Filter fights (sport filter is client-side on current page)
   const filtered = fights.filter(f => {
-    if (filter === "active" && !["open", "locked", "live", "result_selected", "confirmed"].includes(f.status)) return false;
-    if (filter === "settled" && !["settled", "draw", "refunds_complete", "cancelled"].includes(f.status)) return false;
     if (sportFilter !== "all" && getSport(f) !== sportFilter) return false;
     return true;
   });
 
-  // ── Analytics computations ──
+  // ── Bulk dashboard actions ──
+  const toggleDashboardSelection = (id: string) => {
+    setSelectedDashboardIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkLock = async () => {
+    const ids = Array.from(selectedDashboardIds).filter(id => {
+      const f = fights.find(fi => fi.id === id);
+      return f && f.status === "open";
+    });
+    if (ids.length === 0) { toast.info("No open events selected"); return; }
+    setBusy(true);
+    let locked = 0;
+    for (const id of ids) {
+      try {
+        await supabase.functions.invoke("prediction-admin", {
+          body: { action: "lockPredictions", wallet: address, fight_id: id },
+        });
+        locked++;
+      } catch {}
+    }
+    toast.success(`Locked ${locked} events`);
+    logActivity("lock", `Bulk locked ${locked} events`);
+    setSelectedDashboardIds(new Set());
+    setBusy(false);
+    loadFights();
+  };
+
+  const handleBulkDelete = async () => {
+    const deletable: string[] = [];
+    let skipped = 0;
+    for (const id of selectedDashboardIds) {
+      if ((fightStatsMap[id]?.entry_count || 0) > 0) {
+        skipped++;
+      } else {
+        deletable.push(id);
+      }
+    }
+    if (deletable.length === 0) {
+      toast.error(`All ${skipped} selected events have predictions and cannot be deleted`);
+      return;
+    }
+    if (!confirm(`Delete ${deletable.length} events? ${skipped > 0 ? `(${skipped} skipped — have predictions)` : ""}`)) return;
+    setBusy(true);
+    let deleted = 0;
+    for (const id of deletable) {
+      try {
+        await supabase.functions.invoke("prediction-admin", {
+          body: { action: "deleteFight", wallet: address, fight_id: id },
+        });
+        deleted++;
+      } catch {}
+    }
+    toast.success(`Deleted ${deleted} events${skipped > 0 ? `, ${skipped} skipped (have predictions)` : ""}`);
+    logActivity("delete", `Bulk deleted ${deleted} events`);
+    setSelectedDashboardIds(new Set());
+    setBusy(false);
+    loadFights();
+  };
+
+  // ── Settlement modal handler ──
+  const handleSettleConfirm = async () => {
+    if (!settleModal) return;
+    const { fight, winner } = settleModal;
+    setSettleModal(null);
+    await callAdmin("selectResult", { fight_id: fight.id, winner });
+    const winnerName = winner === "fighter_a" ? fight.fighter_a_name : fight.fighter_b_name;
+    logActivity("settle", `Settled "${fight.fighter_a_name} vs ${fight.fighter_b_name}" — Winner: ${winnerName}`);
+  };
+
+  // ── CSV Export ──
+  const handleExportCSV = () => {
+    const rows = filtered.map(f => {
+      const stats = fightStatsMap[f.id];
+      const pool = (f.pool_a_usd || 0) + (f.pool_b_usd || 0);
+      return [
+        `"${f.title.replace(/"/g, '""')}"`,
+        `"${f.fighter_a_name}"`,
+        `"${f.fighter_b_name}"`,
+        getSport(f),
+        f.event_date || "",
+        f.status,
+        f.winner || "",
+        stats?.entry_count || 0,
+        pool.toFixed(2),
+        f.created_at,
+      ].join(",");
+    });
+    const csv = ["Title,Fighter A,Fighter B,Sport,Date,Status,Winner,Predictions,Pool USD,Created At", ...rows].join("\n");
+    downloadCSV(`1mg-events-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+    toast.success("CSV exported");
+  };
+
+  // ── Analytics ──
   const analytics = useMemo(() => {
     const active = fights.filter(f => ["open", "locked", "live"].includes(f.status)).length;
     const settled = fights.filter(f => ["settled", "draw"].includes(f.status)).length;
     const pending = fights.filter(f => ["result_selected", "confirmed"].includes(f.status)).length;
     const totalPool = fights.reduce((sum, f) => sum + (f.pool_a_usd || 0) + (f.pool_b_usd || 0), 0);
-    const totalPredictions = Object.values(entryCounts).reduce((s, c) => s + c, 0);
-    const uniqueEvents = fights.length;
-    const avgPool = uniqueEvents > 0 ? totalPool / uniqueEvents : 0;
-    const settlementRate = uniqueEvents > 0 ? ((settled / uniqueEvents) * 100) : 0;
+    const totalPredictions = Object.values(fightStatsMap).reduce((s, c) => s + c.entry_count, 0);
+    const uniqueEventsTotal = fights.length;
+    const avgPool = uniqueEventsTotal > 0 ? totalPool / uniqueEventsTotal : 0;
 
-    // Top 5 most predicted
+    // Settlement rate: exclude events created in last 24h
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const eligibleForSettlement = fights.filter(f => f.created_at < cutoff).length;
+    const settlementRate = eligibleForSettlement > 0 ? ((settled / eligibleForSettlement) * 100) : 0;
+
     const top5 = fights
-      .map(f => ({ name: `${f.fighter_a_name} vs ${f.fighter_b_name}`, count: entryCounts[f.id] || 0 }))
+      .map(f => ({ name: `${f.fighter_a_name} vs ${f.fighter_b_name}`, count: fightStatsMap[f.id]?.entry_count || 0 }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
 
-    // Predictions per sport
     const perSport: Record<string, number> = {};
     fights.forEach(f => {
       const s = getSport(f);
-      perSport[s] = (perSport[s] || 0) + (entryCounts[f.id] || 0);
+      perSport[s] = (perSport[s] || 0) + (fightStatsMap[f.id]?.entry_count || 0);
     });
 
     return { active, settled, pending, totalPool, totalPredictions, avgPool, settlementRate, top5, perSport };
-  }, [fights, entryCounts]);
+  }, [fights, fightStatsMap, getSport]);
 
   if (loading) {
     return (
@@ -582,6 +789,7 @@ export default function PlatformAdmin() {
   }
 
   const activePlatformCount = fights.filter(f => ["open", "locked", "live"].includes(f.status)).length;
+  const totalPages = Math.ceil(totalFightsCount / PAGE_SIZE);
 
   return (
     <div className="min-h-screen bg-background pt-20 px-4 pb-8">
@@ -621,6 +829,7 @@ export default function PlatformAdmin() {
             { key: "browser", label: "Polymarket Browser", icon: <Download className="w-3 h-3" /> },
             { key: "dashboard", label: "Events Dashboard", icon: <Globe className="w-3 h-3" /> },
             { key: "analytics", label: "Analytics", icon: <BarChart3 className="w-3 h-3" /> },
+            { key: "activity", label: "Activity Log", icon: <Activity className="w-3 h-3" /> },
           ] as const).map(t => (
             <button
               key={t.key}
@@ -738,7 +947,6 @@ export default function PlatformAdmin() {
                 </div>
               ) : (
                 <>
-                  {/* Select all header */}
                   {importableEvents.length > 0 && (
                     <div className="flex items-center gap-2 mb-2 px-1">
                       <Checkbox
@@ -804,10 +1012,13 @@ export default function PlatformAdmin() {
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
                 <Globe className="w-4 h-4 text-blue-400" /> 1MG.live Events
-                <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full ml-1">{fights.length} total</span>
+                <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full ml-1">{totalFightsCount} total</span>
                 <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">${analytics.totalPool.toFixed(0)} pool</span>
               </h2>
               <div className="flex items-center gap-1">
+                <Button variant="outline" size="sm" onClick={handleExportCSV} className="gap-1 h-7 text-[10px]">
+                  <FileDown className="w-3 h-3" /> Export CSV
+                </Button>
                 <Button variant="outline" size="sm" onClick={handleDeduplicate} className="gap-1 h-7 text-[10px] text-yellow-400">
                   <Copy className="w-3 h-3" /> Deduplicate {duplicateSet.size > 0 ? `(${duplicateSet.size})` : ""}
                 </Button>
@@ -820,8 +1031,8 @@ export default function PlatformAdmin() {
               </div>
             </div>
 
-            {/* Filter row */}
-            <div className="flex gap-2 mb-3 flex-wrap">
+            {/* Filter row + Search */}
+            <div className="flex gap-2 mb-3 flex-wrap items-center">
               {(["active", "settled", "all"] as const).map(f => (
                 <button
                   key={f}
@@ -853,6 +1064,36 @@ export default function PlatformAdmin() {
               </div>
             </div>
 
+            {/* Search bar */}
+            <div className="relative mb-3">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Search events by team name or title..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-8 text-xs pl-8"
+              />
+            </div>
+
+            {/* Bulk actions toolbar */}
+            {selectedDashboardIds.size > 0 && (
+              <div className="flex items-center gap-3 mb-3 p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                <span className="text-xs text-blue-400 font-medium">{selectedDashboardIds.size} selected</span>
+                <Button size="sm" variant="outline" className="h-7 text-[10px] gap-1" onClick={handleBulkLock} disabled={busy}>
+                  <Lock className="w-3 h-3" /> Lock Selected
+                </Button>
+                <Button size="sm" variant="outline" className="h-7 text-[10px] gap-1 text-destructive" onClick={handleBulkDelete} disabled={busy}>
+                  <Trash2 className="w-3 h-3" /> Delete Selected
+                </Button>
+                <button
+                  onClick={() => setSelectedDashboardIds(new Set())}
+                  className="text-[10px] text-muted-foreground hover:text-foreground ml-auto"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+
             {/* Events list */}
             {filtered.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-6">No events match filters</p>
@@ -863,114 +1104,184 @@ export default function PlatformAdmin() {
                   const badge = SPORT_BADGE[sport] || { label: sport, color: "bg-muted text-muted-foreground" };
                   const vis = VIS_BADGE[f.visibility] || VIS_BADGE.all;
                   const pool = (f.pool_a_usd || 0) + (f.pool_b_usd || 0);
-                  const entries = entryCounts[f.id] || 0;
+                  const stats = fightStatsMap[f.id];
+                  const entries = stats?.entry_count || 0;
                   const daysUntil = getDaysUntil(f.event_date);
                   const rowColor = getEventRowColor(f);
+                  const isChecked = selectedDashboardIds.has(f.id);
 
                   return (
-                    <div key={f.id} className={`p-3 rounded-lg bg-muted/30 border border-border/30 ${rowColor}`}>
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">{f.fighter_a_name} vs {f.fighter_b_name}</p>
-                          <p className="text-[10px] text-muted-foreground truncate">{f.event_name}</p>
-                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${badge.color}`}>{badge.label}</span>
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${STATUS_COLORS[f.status] || "bg-muted text-muted-foreground"}`}>{f.status}</span>
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${vis.color}`}>{vis.label}</span>
-                            {f.polymarket_condition_id && (
-                              <span className="text-[10px] text-purple-400/70">PM ✓</span>
-                            )}
-                            {duplicateSet.has(f.id) && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-yellow-500/20 text-yellow-400 flex items-center gap-0.5">
-                                <AlertTriangle className="w-2.5 h-2.5" /> Duplicate
-                              </span>
-                            )}
-                            {f.event_date && (
-                              <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
-                                <Calendar className="w-2.5 h-2.5" />
-                                {formatEventDateTime(f.event_date)}
-                              </span>
-                            )}
-                            {daysUntil !== null && (
-                              <span className={`text-[10px] font-medium ${
-                                daysUntil < 0 ? "text-red-400" : daysUntil === 0 ? "text-green-400" : daysUntil <= 3 ? "text-yellow-400" : "text-muted-foreground"
-                              }`}>
-                                {daysUntil < 0 ? `${Math.abs(daysUntil)}d ago` : daysUntil === 0 ? "Today" : `in ${daysUntil}d`}
-                              </span>
-                            )}
+                    <Collapsible key={f.id}>
+                      <div className={`p-3 rounded-lg bg-muted/30 border border-border/30 ${rowColor} ${isChecked ? "ring-1 ring-blue-500/40" : ""}`}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-start gap-2 flex-1 min-w-0">
+                            <Checkbox
+                              checked={isChecked}
+                              onCheckedChange={() => toggleDashboardSelection(f.id)}
+                              className="h-3.5 w-3.5 mt-1 flex-shrink-0"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1">
+                                <p className="text-sm font-medium text-foreground truncate">{f.fighter_a_name} vs {f.fighter_b_name}</p>
+                                <CollapsibleTrigger className="text-muted-foreground hover:text-foreground">
+                                  <ChevronDown className="w-3 h-3" />
+                                </CollapsibleTrigger>
+                              </div>
+                              <p className="text-[10px] text-muted-foreground truncate">{f.event_name}</p>
+                              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${badge.color}`}>{badge.label}</span>
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${STATUS_COLORS[f.status] || "bg-muted text-muted-foreground"}`}>
+                                  {f.status}
+                                  {f.status === "settled" && f.winner && ` — ${f.winner === "fighter_a" ? f.fighter_a_name : f.fighter_b_name} won`}
+                                </span>
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${vis.color}`}>{vis.label}</span>
+                                {f.polymarket_condition_id && (
+                                  <span className="text-[10px] text-purple-400/70">PM ✓</span>
+                                )}
+                                {duplicateSet.has(f.id) && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-yellow-500/20 text-yellow-400 flex items-center gap-0.5">
+                                    <AlertTriangle className="w-2.5 h-2.5" /> Duplicate
+                                  </span>
+                                )}
+                                {f.event_date && (
+                                  <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                                    <Calendar className="w-2.5 h-2.5" />
+                                    {formatEventDateTime(f.event_date)}
+                                  </span>
+                                )}
+                                {daysUntil !== null && (
+                                  <span className={`text-[10px] font-medium ${
+                                    daysUntil < 0 ? "text-red-400" : daysUntil === 0 ? "text-green-400" : daysUntil <= 3 ? "text-yellow-400" : "text-muted-foreground"
+                                  }`}>
+                                    {daysUntil < 0 ? `${Math.abs(daysUntil)}d ago` : daysUntil === 0 ? "Today" : `in ${daysUntil}d`}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3 mt-1">
+                                <span className="text-[10px] text-muted-foreground">
+                                  <Users className="w-2.5 h-2.5 inline mr-0.5" />{entries} predictions
+                                </span>
+                                <span className="text-[10px] text-muted-foreground">
+                                  Pool: ${pool.toFixed(2)}
+                                </span>
+                                {f.price_a != null && f.price_b != null && (f.price_a > 0 || f.price_b > 0) && (
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {(f.price_a * 100).toFixed(0)}% / {(f.price_b * 100).toFixed(0)}%
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-3 mt-1">
-                            <span className="text-[10px] text-muted-foreground">
-                              <Users className="w-2.5 h-2.5 inline mr-0.5" />{entries} predictions
-                            </span>
-                            <span className="text-[10px] text-muted-foreground">
-                              Pool: ${pool.toFixed(2)}
-                            </span>
-                            {f.price_a != null && f.price_b != null && (f.price_a > 0 || f.price_b > 0) && (
-                              <span className="text-[10px] text-muted-foreground">
-                                {(f.price_a * 100).toFixed(0)}% / {(f.price_b * 100).toFixed(0)}%
-                              </span>
+
+                          {/* Action buttons */}
+                          <div className="flex gap-1 flex-shrink-0 flex-wrap justify-end">
+                            {f.status === "open" && (
+                              <>
+                                <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" disabled={busy}
+                                  onClick={() => callAdmin("lockPredictions", { fight_id: f.id })} title="Lock">
+                                  <Lock className="w-3 h-3" />
+                                </Button>
+                                <Button size="sm" variant="ghost" className="h-7 text-[10px] px-2 text-destructive" disabled={busy}
+                                  onClick={async () => {
+                                    if (entries > 0) { toast.error(`"${f.title}" has ${entries} prediction(s) and CANNOT be deleted.`); return; }
+                                    if (!confirm(`Delete "${f.title}"? This cannot be undone.`)) return;
+                                    await callAdmin("deleteFight", { fight_id: f.id });
+                                    logActivity("delete", `Deleted "${f.fighter_a_name} vs ${f.fighter_b_name}"`);
+                                  }} title="Delete">
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              </>
+                            )}
+                            {f.status === "locked" && (
+                              <>
+                                <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" disabled={busy}
+                                  onClick={() => callAdmin("markLive", { fight_id: f.id })} title="Mark Live">
+                                  <Play className="w-3 h-3" />
+                                </Button>
+                                {entries === 0 && (
+                                  <Button size="sm" variant="ghost" className="h-7 text-[10px] px-2 text-destructive" disabled={busy}
+                                    onClick={async () => {
+                                      if (!confirm(`Delete locked event "${f.title}"? This cannot be undone.`)) return;
+                                      await callAdmin("deleteFight", { fight_id: f.id });
+                                      logActivity("delete", `Deleted locked event "${f.fighter_a_name} vs ${f.fighter_b_name}"`);
+                                    }} title="Delete">
+                                    <Trash2 className="w-3 h-3" />
+                                  </Button>
+                                )}
+                              </>
+                            )}
+                            {f.status === "live" && (
+                              <>
+                                <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" disabled={busy}
+                                  onClick={() => setSettleModal({ fight: f, winner: "fighter_a" })}>
+                                  A
+                                </Button>
+                                <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" disabled={busy}
+                                  onClick={() => setSettleModal({ fight: f, winner: "fighter_b" })}>
+                                  B
+                                </Button>
+                              </>
+                            )}
+                            {f.status === "result_selected" && (
+                              <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" disabled={busy}
+                                onClick={() => callAdmin("confirmResult", { fight_id: f.id })} title="Confirm">
+                                <CheckCircle className="w-3 h-3" />
+                              </Button>
+                            )}
+                            {f.status === "confirmed" && (
+                              <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" disabled={busy}
+                                onClick={() => callAdmin("settleEvent", { fight_id: f.id })} title="Settle">
+                                <Trophy className="w-3 h-3" />
+                              </Button>
                             )}
                           </div>
                         </div>
 
-                        {/* Action buttons */}
-                        <div className="flex gap-1 flex-shrink-0 flex-wrap justify-end">
-                          {f.status === "open" && (
-                            <>
-                              <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" disabled={busy}
-                                onClick={() => callAdmin("lockPredictions", { fight_id: f.id })} title="Lock">
-                                <Lock className="w-3 h-3" />
-                              </Button>
-                              <Button size="sm" variant="ghost" className="h-7 text-[10px] px-2 text-destructive" disabled={busy}
-                                onClick={async () => {
-                                  const hasEntries = (entryCounts[f.id] || 0) > 0;
-                                  const msg = hasEntries
-                                    ? `"${f.title}" has ${entryCounts[f.id]} prediction(s) and CANNOT be deleted.`
-                                    : `Delete "${f.title}"? This cannot be undone.`;
-                                  if (hasEntries) { toast.error(msg); return; }
-                                  if (!confirm(msg)) return;
-                                  await callAdmin("deleteFight", { fight_id: f.id });
-                                }} title="Delete">
-                                <Trash2 className="w-3 h-3" />
-                              </Button>
-                            </>
-                          )}
-                          {f.status === "locked" && (
-                            <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" disabled={busy}
-                              onClick={() => callAdmin("markLive", { fight_id: f.id })} title="Mark Live">
-                              <Play className="w-3 h-3" />
-                            </Button>
-                          )}
-                          {f.status === "live" && (
-                            <>
-                              <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" disabled={busy}
-                                onClick={() => callAdmin("selectResult", { fight_id: f.id, winner: "fighter_a" })}>
-                                A
-                              </Button>
-                              <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" disabled={busy}
-                                onClick={() => callAdmin("selectResult", { fight_id: f.id, winner: "fighter_b" })}>
-                                B
-                              </Button>
-                            </>
-                          )}
-                          {f.status === "result_selected" && (
-                            <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" disabled={busy}
-                              onClick={() => callAdmin("confirmResult", { fight_id: f.id })} title="Confirm">
-                              <CheckCircle className="w-3 h-3" />
-                            </Button>
-                          )}
-                          {f.status === "confirmed" && (
-                            <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" disabled={busy}
-                              onClick={() => callAdmin("settleEvent", { fight_id: f.id })} title="Settle">
-                              <Trophy className="w-3 h-3" />
-                            </Button>
-                          )}
-                        </div>
+                        {/* Expandable detail row */}
+                        <CollapsibleContent className="mt-2 pt-2 border-t border-border/30 text-[10px] text-muted-foreground space-y-1">
+                          <div className="flex items-center gap-4 flex-wrap">
+                            <span>ID: <button onClick={() => { navigator.clipboard.writeText(f.id); toast.success("Copied ID"); }} className="text-foreground hover:underline">{f.id.slice(0, 8)}…</button></span>
+                            <span>Source: {f.source}</span>
+                            <span>Visibility: {f.visibility}</span>
+                            <span>Created: {new Date(f.created_at).toLocaleString()}</span>
+                            {f.polymarket_condition_id && <span>PM Condition: {f.polymarket_condition_id.slice(0, 12)}…</span>}
+                            {stats && <span>Unique predictors: {stats.unique_predictors}</span>}
+                            {stats && <span>Total USD: ${stats.total_amount_usd.toFixed(2)}</span>}
+                          </div>
+                        </CollapsibleContent>
                       </div>
-                    </div>
+                    </Collapsible>
                   );
                 })}
+              </div>
+            )}
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/30">
+                <span className="text-[10px] text-muted-foreground">
+                  Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalFightsCount)} of {totalFightsCount} events
+                </span>
+                <div className="flex gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-[10px] px-2 gap-1"
+                    disabled={page === 0}
+                    onClick={() => setPage(p => p - 1)}
+                  >
+                    <ChevronLeft className="w-3 h-3" /> Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-[10px] px-2 gap-1"
+                    disabled={page >= totalPages - 1}
+                    onClick={() => setPage(p => p + 1)}
+                  >
+                    Next <ChevronRight className="w-3 h-3" />
+                  </Button>
+                </div>
               </div>
             )}
           </Card>
@@ -987,9 +1298,9 @@ export default function PlatformAdmin() {
                 { label: "Pending", value: analytics.pending, color: "text-yellow-400" },
                 { label: "Total Pool", value: `$${analytics.totalPool.toFixed(0)}`, color: "text-primary" },
                 { label: "Total Predictions", value: analytics.totalPredictions, color: "text-foreground" },
+                { label: "Unique Users", value: uniqueUsers ?? "—", color: "text-purple-400" },
                 { label: "Avg Pool/Event", value: `$${analytics.avgPool.toFixed(2)}`, color: "text-muted-foreground" },
                 { label: "Settlement Rate", value: `${analytics.settlementRate.toFixed(0)}%`, color: "text-blue-400" },
-                { label: "Total Events", value: fights.length, color: "text-foreground" },
               ].map((kpi, i) => (
                 <Card key={i} className="bg-card border-border/50 p-3">
                   <p className="text-[10px] text-muted-foreground">{kpi.label}</p>
@@ -1029,10 +1340,10 @@ export default function PlatformAdmin() {
                   .sort((a, b) => b[1] - a[1])
                   .map(([sport, count]) => {
                     const maxCount = Math.max(...Object.values(analytics.perSport), 1);
-                    const badge = SPORT_BADGE[sport] || { label: sport, color: "bg-muted text-muted-foreground" };
+                    const sbadge = SPORT_BADGE[sport] || { label: sport, color: "bg-muted text-muted-foreground" };
                     return (
                       <div key={sport} className="flex items-center gap-2">
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium w-24 text-center ${badge.color}`}>{badge.label}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium w-24 text-center ${sbadge.color}`}>{sbadge.label}</span>
                         <div className="flex-1 bg-muted/30 rounded-full h-4 overflow-hidden">
                           <div
                             className="bg-primary/40 h-full rounded-full transition-all"
@@ -1051,19 +1362,81 @@ export default function PlatformAdmin() {
           </div>
         )}
 
-        {/* ═══ Promo Codes ═══ */}
-        <PromoCodeManager wallet={address!} />
+        {/* ══════ TAB: Activity Log ══════ */}
+        {activeTab === "activity" && (
+          <Card className="bg-card border-border/50 p-4">
+            <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+              <Activity className="w-4 h-4 text-blue-400" /> Activity Log
+              <span className="text-[10px] text-muted-foreground ml-1">Last 100 actions</span>
+            </h2>
+            {activityLoading ? (
+              <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+            ) : activityLog.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-8">No activity yet</p>
+            ) : (
+              <div className="space-y-1.5 max-h-[600px] overflow-y-auto">
+                {activityLog.map(entry => {
+                  const icon = ACTION_ICONS[entry.action] || ACTION_ICONS.default;
+                  return (
+                    <div key={entry.id} className="flex items-start gap-2 p-2 rounded-lg bg-muted/30 border border-border/30">
+                      <span className="text-sm mt-0.5">{icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-foreground">{entry.description}</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                          {new Date(entry.created_at).toLocaleString()} · {entry.admin_wallet.slice(0, 6)}…{entry.admin_wallet.slice(-4)}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+        )}
 
-        {/* ═══ Manual Fight Creator ═══ */}
-        <Card className="bg-card border-border/50 p-4">
-          <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
-            🥊 Manual Fight Creator
-          </h2>
-          <p className="text-xs text-muted-foreground mb-3">
-            For Muay Thai, BKFC, bare knuckle, and other combat sports not on Polymarket. Defaults to <span className="text-blue-400 font-medium">1MG.live only</span>.
-          </p>
-          <PlatformEventCreator wallet={address!} defaultVisibility="platform" />
-        </Card>
+        {/* ═══ Promo Codes + Manual Creator (dashboard tab only) ═══ */}
+        {activeTab === "dashboard" && (
+          <>
+            <PromoCodeManager wallet={address!} />
+            <Card className="bg-card border-border/50 p-4">
+              <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+                🥊 Manual Fight Creator
+              </h2>
+              <p className="text-xs text-muted-foreground mb-3">
+                For Muay Thai, BKFC, bare knuckle, and other combat sports not on Polymarket. Defaults to <span className="text-blue-400 font-medium">1MG.live only</span>.
+              </p>
+              <PlatformEventCreator wallet={address!} defaultVisibility="platform" />
+            </Card>
+          </>
+        )}
+
+        {/* ═══ Settlement Confirmation Modal ═══ */}
+        <Dialog open={!!settleModal} onOpenChange={(open) => { if (!open) setSettleModal(null); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Trophy className="w-5 h-5 text-primary" /> Settle Event
+              </DialogTitle>
+              <DialogDescription>
+                {settleModal && (
+                  <>
+                    Settle <strong>{settleModal.fight.fighter_a_name} vs {settleModal.fight.fighter_b_name}</strong>?
+                    <br /><br />
+                    Winner: <strong className="text-primary">{settleModal.winner === "fighter_a" ? settleModal.fight.fighter_a_name : settleModal.fight.fighter_b_name}</strong>
+                    <br /><br />
+                    This will distribute the pool. <span className="text-destructive font-medium">Cannot be undone.</span>
+                  </>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => setSettleModal(null)}>Cancel</Button>
+              <Button size="sm" onClick={handleSettleConfirm} className="gap-1">
+                <Trophy className="w-3 h-3" /> Confirm Settlement
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* ═══ Deduplicate Dialog ═══ */}
         <Dialog open={dedupDialogOpen} onOpenChange={setDedupDialogOpen}>
@@ -1098,7 +1471,7 @@ export default function PlatformAdmin() {
                           <TableCell className="text-[10px] py-1.5">
                             {f.event_date ? formatEventDateTime(f.event_date) : "—"}
                           </TableCell>
-                          <TableCell className="text-[10px] py-1.5">{entryCounts[f.id] || 0}</TableCell>
+                          <TableCell className="text-[10px] py-1.5">{fightStatsMap[f.id]?.entry_count || 0}</TableCell>
                           <TableCell className="text-[10px] py-1.5">
                             {f.id === group.keepId ? (
                               <span className="text-green-400 font-medium">✓ Keep</span>
