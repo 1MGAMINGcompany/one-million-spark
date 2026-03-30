@@ -141,7 +141,7 @@ async function buildAndSubmitClobOrder(
       takerAmount: takerAmountRaw,
       expiration: 0n,
       nonce: 0n,
-      feeRateBps: 0n,
+      feeRateBps: BigInt(dynamicFeeRateBps),
       side: 0, // BUY
       signatureType: 0, // EOA
     };
