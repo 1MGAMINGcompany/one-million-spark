@@ -801,46 +801,50 @@ export default function PlatformAdmin() {
           <span className="text-foreground">1MG.live Platform</span>
         </div>
 
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-foreground font-['Cinzel'] flex items-center gap-2">
-            <Globe className="w-6 h-6 text-blue-400" /> 1MG.live Admin
-          </h1>
-          <div className="flex items-center gap-2">
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h1 className="text-lg sm:text-2xl font-bold text-foreground font-['Cinzel'] flex items-center gap-2">
+              <Globe className="w-5 h-5 sm:w-6 sm:h-6 text-blue-400" /> 1MG.live Admin
+            </h1>
             <Link to="/predictions/admin">
-              <Button variant="outline" size="sm" className="gap-1">
+              <Button variant="outline" size="sm" className="gap-1 h-7 text-[10px] sm:text-xs sm:h-8">
                 <ArrowLeft className="w-3 h-3" /> Main Admin
               </Button>
             </Link>
-            <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded-full">
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-1 rounded-full">
               {activePlatformCount} active
             </span>
-            <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded-full">
+            <span className="text-[10px] bg-primary/20 text-primary px-2 py-1 rounded-full">
               ${analytics.totalPool.toFixed(0)} pool
             </span>
-            <Button variant="outline" size="sm" onClick={() => loadFights()} className="gap-1">
+            <Button variant="outline" size="sm" onClick={() => loadFights()} className="gap-1 h-7 text-[10px] ml-auto">
               <RefreshCw className="w-3 h-3" /> Refresh
             </Button>
           </div>
         </div>
 
         {/* ── Top-level tabs ── */}
-        <div className="flex gap-2">
-          {([
-            { key: "browser", label: "Polymarket Browser", icon: <Download className="w-3 h-3" /> },
-            { key: "dashboard", label: "Events Dashboard", icon: <Globe className="w-3 h-3" /> },
-            { key: "analytics", label: "Analytics", icon: <BarChart3 className="w-3 h-3" /> },
-            { key: "activity", label: "Activity Log", icon: <Activity className="w-3 h-3" /> },
-          ] as const).map(t => (
-            <button
-              key={t.key}
-              onClick={() => setActiveTab(t.key)}
-              className={`flex items-center gap-1.5 text-xs px-4 py-2 rounded-lg transition-colors ${
-                activeTab === t.key ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {t.icon} {t.label}
-            </button>
-          ))}
+        <div className="overflow-x-auto -mx-4 px-4">
+          <div className="flex gap-1.5 min-w-max">
+            {([
+              { key: "browser", label: "Browser", fullLabel: "Polymarket Browser", icon: <Download className="w-3 h-3" /> },
+              { key: "dashboard", label: "Dashboard", fullLabel: "Events Dashboard", icon: <Globe className="w-3 h-3" /> },
+              { key: "analytics", label: "Analytics", fullLabel: "Analytics", icon: <BarChart3 className="w-3 h-3" /> },
+              { key: "activity", label: "Activity", fullLabel: "Activity Log", icon: <Activity className="w-3 h-3" /> },
+            ] as const).map(t => (
+              <button
+                key={t.key}
+                onClick={() => setActiveTab(t.key)}
+                className={`flex items-center gap-1 text-[11px] sm:text-xs px-3 sm:px-4 py-2 rounded-lg transition-colors whitespace-nowrap ${
+                  activeTab === t.key ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {t.icon} <span className="sm:hidden">{t.label}</span><span className="hidden sm:inline">{t.fullLabel}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* ══════ TAB: Polymarket Browser ══════ */}
@@ -1009,58 +1013,63 @@ export default function PlatformAdmin() {
         {/* ══════ TAB: Events Dashboard ══════ */}
         {activeTab === "dashboard" && (
           <Card className="bg-card border-border/50 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-                <Globe className="w-4 h-4 text-blue-400" /> 1MG.live Events
-                <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full ml-1">{totalFightsCount} total</span>
+            <div className="space-y-2 mb-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-blue-400" /> Events
+                </h2>
+                <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full">{totalFightsCount} total</span>
                 <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">${analytics.totalPool.toFixed(0)} pool</span>
-              </h2>
-              <div className="flex items-center gap-1">
+              </div>
+              <div className="flex items-center gap-1 flex-wrap">
                 <Button variant="outline" size="sm" onClick={handleExportCSV} className="gap-1 h-7 text-[10px]">
-                  <FileDown className="w-3 h-3" /> Export CSV
+                  <FileDown className="w-3 h-3" /> CSV
                 </Button>
                 <Button variant="outline" size="sm" onClick={handleDeduplicate} className="gap-1 h-7 text-[10px] text-yellow-400">
-                  <Copy className="w-3 h-3" /> Deduplicate {duplicateSet.size > 0 ? `(${duplicateSet.size})` : ""}
+                  <Copy className="w-3 h-3" /> Dedup {duplicateSet.size > 0 ? `(${duplicateSet.size})` : ""}
                 </Button>
                 <Button variant="outline" size="sm" onClick={handleCleanup} disabled={cleanupBusy} className="gap-1 h-7 text-[10px] text-red-400">
-                  <Trash2 className="w-3 h-3" /> {cleanupBusy ? "Cleaning..." : "Remove Junk"}
+                  <Trash2 className="w-3 h-3" /> {cleanupBusy ? "..." : "Junk"}
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => loadFights()} className="gap-1 h-7 text-[10px]">
-                  <RefreshCw className="w-3 h-3" /> Refresh
+                  <RefreshCw className="w-3 h-3" />
                 </Button>
               </div>
             </div>
 
             {/* Filter row + Search */}
-            <div className="flex gap-2 mb-3 flex-wrap items-center">
-              {(["active", "settled", "all"] as const).map(f => (
-                <button
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  className={`text-xs px-3 py-1 rounded-full transition-colors ${
-                    filter === f ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {f.charAt(0).toUpperCase() + f.slice(1)}
-                </button>
-              ))}
-              <div className="border-l border-border/50 mx-1" />
-              <div className="overflow-x-auto flex gap-1">
-                <button
-                  onClick={() => setSportFilter("all")}
-                  className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${sportFilter === "all" ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}
-                >
-                  All Sports
-                </button>
-                {DASHBOARD_SPORTS.map(s => (
+            <div className="space-y-2 mb-3">
+              <div className="flex gap-1.5 flex-wrap">
+                {(["active", "settled", "all"] as const).map(f => (
                   <button
-                    key={s}
-                    onClick={() => setSportFilter(s)}
-                    className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${sportFilter === s ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}
+                    key={f}
+                    onClick={() => setFilter(f)}
+                    className={`text-[11px] px-2.5 py-1 rounded-full transition-colors ${
+                      filter === f ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground hover:text-foreground"
+                    }`}
                   >
-                    {SPORT_BADGE[s]?.label || s}
+                    {f.charAt(0).toUpperCase() + f.slice(1)}
                   </button>
                 ))}
+              </div>
+              <div className="overflow-x-auto -mx-4 px-4">
+                <div className="flex gap-1 min-w-max">
+                  <button
+                    onClick={() => setSportFilter("all")}
+                    className={`text-[11px] px-2 py-1 rounded-full whitespace-nowrap ${sportFilter === "all" ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}
+                  >
+                    All
+                  </button>
+                  {DASHBOARD_SPORTS.map(s => (
+                    <button
+                      key={s}
+                      onClick={() => setSportFilter(s)}
+                      className={`text-[11px] px-2 py-1 rounded-full whitespace-nowrap ${sportFilter === s ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}
+                    >
+                      {SPORT_BADGE[s]?.label || s}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -1113,7 +1122,7 @@ export default function PlatformAdmin() {
                   return (
                     <Collapsible key={f.id}>
                       <div className={`p-3 rounded-lg bg-muted/30 border border-border/30 ${rowColor} ${isChecked ? "ring-1 ring-blue-500/40" : ""}`}>
-                        <div className="flex items-start justify-between gap-2">
+                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-1 sm:gap-2">
                           <div className="flex items-start gap-2 flex-1 min-w-0">
                             <Checkbox
                               checked={isChecked}
@@ -1174,7 +1183,7 @@ export default function PlatformAdmin() {
                           </div>
 
                           {/* Action buttons */}
-                          <div className="flex gap-1 flex-shrink-0 flex-wrap justify-end">
+                          <div className="flex gap-1 flex-shrink-0 flex-wrap justify-end mt-1 sm:mt-0">
                             {f.status === "open" && (
                               <>
                                 <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" disabled={busy}
@@ -1440,7 +1449,7 @@ export default function PlatformAdmin() {
 
         {/* ═══ Deduplicate Dialog ═══ */}
         <Dialog open={dedupDialogOpen} onOpenChange={setDedupDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-yellow-400" /> Deduplicate Events
