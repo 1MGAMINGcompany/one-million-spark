@@ -87,7 +87,7 @@ function normalizeTeamName(name: string): string {
     .replace(/[^a-z0-9]/g, "")
     .trim();
 }
-
+const MATCHUP_RE = /\bvs\.?\b|\sv\s/i;
 
 
 function hasMatchupPattern(texts: string[]): boolean {
