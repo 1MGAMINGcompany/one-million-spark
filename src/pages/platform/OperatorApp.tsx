@@ -71,7 +71,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   });
 
   const allowedSports = settings?.allowed_sports || [];
-  const { data: platformFights } = useQuery({
+  const { data: platformFights, isError: platFightsError } = useQuery({
     queryKey: ["platform_fights_operator", settings?.show_platform_events],
     queryFn: async () => {
       const { data } = await supabase
@@ -86,6 +86,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     enabled: settings?.show_platform_events !== false,
     refetchInterval: 15000,
   });
+
+  const backendDegraded = opFightsError || platFightsError;
 
   const loadUserEntries = useCallback(async () => {
     if (!address) return;
