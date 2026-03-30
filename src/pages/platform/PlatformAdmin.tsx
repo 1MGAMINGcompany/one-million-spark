@@ -1013,24 +1013,26 @@ export default function PlatformAdmin() {
         {/* ══════ TAB: Events Dashboard ══════ */}
         {activeTab === "dashboard" && (
           <Card className="bg-card border-border/50 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-                <Globe className="w-4 h-4 text-blue-400" /> 1MG.live Events
-                <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full ml-1">{totalFightsCount} total</span>
+            <div className="space-y-2 mb-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-blue-400" /> Events
+                </h2>
+                <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full">{totalFightsCount} total</span>
                 <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">${analytics.totalPool.toFixed(0)} pool</span>
-              </h2>
-              <div className="flex items-center gap-1">
+              </div>
+              <div className="flex items-center gap-1 flex-wrap">
                 <Button variant="outline" size="sm" onClick={handleExportCSV} className="gap-1 h-7 text-[10px]">
-                  <FileDown className="w-3 h-3" /> Export CSV
+                  <FileDown className="w-3 h-3" /> CSV
                 </Button>
                 <Button variant="outline" size="sm" onClick={handleDeduplicate} className="gap-1 h-7 text-[10px] text-yellow-400">
-                  <Copy className="w-3 h-3" /> Deduplicate {duplicateSet.size > 0 ? `(${duplicateSet.size})` : ""}
+                  <Copy className="w-3 h-3" /> Dedup {duplicateSet.size > 0 ? `(${duplicateSet.size})` : ""}
                 </Button>
                 <Button variant="outline" size="sm" onClick={handleCleanup} disabled={cleanupBusy} className="gap-1 h-7 text-[10px] text-red-400">
-                  <Trash2 className="w-3 h-3" /> {cleanupBusy ? "Cleaning..." : "Remove Junk"}
+                  <Trash2 className="w-3 h-3" /> {cleanupBusy ? "..." : "Junk"}
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => loadFights()} className="gap-1 h-7 text-[10px]">
-                  <RefreshCw className="w-3 h-3" /> Refresh
+                  <RefreshCw className="w-3 h-3" />
                 </Button>
               </div>
             </div>
