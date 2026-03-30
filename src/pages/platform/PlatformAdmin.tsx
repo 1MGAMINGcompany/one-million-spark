@@ -1122,7 +1122,7 @@ export default function PlatformAdmin() {
                   return (
                     <Collapsible key={f.id}>
                       <div className={`p-3 rounded-lg bg-muted/30 border border-border/30 ${rowColor} ${isChecked ? "ring-1 ring-blue-500/40" : ""}`}>
-                        <div className="flex items-start justify-between gap-2">
+                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-1 sm:gap-2">
                           <div className="flex items-start gap-2 flex-1 min-w-0">
                             <Checkbox
                               checked={isChecked}
