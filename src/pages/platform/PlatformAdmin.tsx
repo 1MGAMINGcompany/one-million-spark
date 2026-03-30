@@ -923,7 +923,15 @@ export default function PlatformAdmin() {
                                 <Lock className="w-3 h-3" />
                               </Button>
                               <Button size="sm" variant="ghost" className="h-7 text-[10px] px-2 text-destructive" disabled={busy}
-                                onClick={() => callAdmin("deleteFight", { fight_id: f.id })} title="Delete">
+                                onClick={async () => {
+                                  const hasEntries = (entryCounts[f.id] || 0) > 0;
+                                  const msg = hasEntries
+                                    ? `"${f.title}" has ${entryCounts[f.id]} prediction(s) and CANNOT be deleted.`
+                                    : `Delete "${f.title}"? This cannot be undone.`;
+                                  if (hasEntries) { toast.error(msg); return; }
+                                  if (!confirm(msg)) return;
+                                  await callAdmin("deleteFight", { fight_id: f.id });
+                                }} title="Delete">
                                 <Trash2 className="w-3 h-3" />
                               </Button>
                             </>
