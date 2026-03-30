@@ -12,7 +12,7 @@ export function LiveActivityIndicator() {
   const isEmpty = !hasLive && !hasToday;
 
   return (
-    <div className="flex flex-col items-center justify-center gap-1 text-sm text-muted-foreground transition-opacity duration-500">
+    <div className="flex flex-col items-center justify-center gap-1 text-sm text-foreground/70 transition-opacity duration-500">
       {isEmpty ? (
         <div className="flex items-center gap-2">
           <span
@@ -56,7 +56,7 @@ export function LiveActivityIndicator() {
 
           {/* Visitors today row */}
           {hasToday && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground/70">
+            <div className="flex items-center gap-1 text-xs text-foreground/60">
               <span className="transition-all duration-300 font-medium text-primary/80">{visitsToday.toLocaleString()}</span>
               {" "}
               <span>{t("liveStats.visitsToday", "visitors in the last 24h")}</span>
