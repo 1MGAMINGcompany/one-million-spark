@@ -819,6 +819,23 @@ function filterFixtures(events: GammaEvent[], hasTagFilter = false): FilterResul
       continue;
     }
 
+    // Winner-only market check — must have at least one winner market
+    const winnerMarket = findWinnerMarket(ev);
+    if (!winnerMarket) {
+      rejected.push({ event: ev, fixtureReason: "no_winner_market" });
+      if (debugReport.length < 10) {
+        debugReport.push({
+          title: ev.title,
+          chosen_field: timeInfo.field,
+          chosen_value: timeInfo.chosen,
+          all_timestamps: timeInfo.all,
+          accepted: false,
+          reason: "no_winner_market",
+        });
+      }
+      continue;
+    }
+
     accepted.push(ev);
     if (debugReport.length < 10) {
       debugReport.push({
@@ -828,6 +845,7 @@ function filterFixtures(events: GammaEvent[], hasTagFilter = false): FilterResul
         all_timestamps: timeInfo.all,
         accepted: true,
         reason: isLiveEvent ? `live_event + ${fixtureCheck.reason}` : fixtureCheck.reason,
+        winner_market_question: winnerMarket.question,
       });
     }
   }
