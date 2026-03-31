@@ -74,11 +74,12 @@ export default function AdminAuth({ children }: AdminAuthProps) {
     setLoading(true);
     try {
       // Check if email exists in prediction_admins
-      const { data: admin } = await supabase
+      const { data: adminRows } = await supabase
         .from("prediction_admins")
         .select("wallet, email")
         .eq("email", email.trim().toLowerCase())
-        .maybeSingle();
+        .limit(1);
+      const admin = adminRows && adminRows.length > 0 ? adminRows[0] : null;
 
       if (!admin) {
         toast.error("This email is not registered as an admin.");
@@ -116,11 +117,12 @@ export default function AdminAuth({ children }: AdminAuthProps) {
       if (error) throw error;
 
       // Get admin record for wallet reference
-      const { data: admin } = await supabase
+      const { data: adminRows2 } = await supabase
         .from("prediction_admins")
         .select("wallet, email")
         .eq("email", email.trim().toLowerCase())
-        .maybeSingle();
+        .limit(1);
+      const admin = adminRows2 && adminRows2.length > 0 ? adminRows2[0] : null;
 
       if (!admin) {
         toast.error("Admin record not found");
