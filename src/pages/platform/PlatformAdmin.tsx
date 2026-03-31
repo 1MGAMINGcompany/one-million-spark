@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import AdminAuth from "@/components/admin/AdminAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,7 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
-import { useWallet } from "@/hooks/useWallet";
+
 import { toast } from "sonner";
 import { detectSport, type SportType } from "@/lib/detectSport";
 import { formatEventDateTime } from "@/lib/formatEventLocalDateTime";
@@ -269,9 +270,16 @@ const PAGE_SIZE = 50;
 // ══════════════════════════════════════════════════
 
 export default function PlatformAdmin() {
-  const { address } = useWallet();
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
+  return (
+    <AdminAuth>
+      {({ adminWallet }) => <PlatformAdminInner address={adminWallet} />}
+    </AdminAuth>
+  );
+}
+
+function PlatformAdminInner({ address }: { address: string }) {
+  const isAdmin = true;
+  const [loading, setLoading] = useState(false);
   const [fights, setFights] = useState<PlatformFight[]>([]);
   const [fightStatsMap, setFightStatsMap] = useState<Record<string, FightStats>>({});
   const [busy, setBusy] = useState(false);
@@ -324,19 +332,6 @@ export default function PlatformAdmin() {
   // Unique users KPI
   const [uniqueUsers, setUniqueUsers] = useState<number | null>(null);
 
-  // Check admin
-  useEffect(() => {
-    if (!address) { setIsAdmin(false); setLoading(false); return; }
-    (async () => {
-      const { data } = await supabase
-        .from("prediction_admins")
-        .select("wallet")
-        .eq("wallet", address)
-        .maybeSingle();
-      setIsAdmin(!!data);
-      setLoading(false);
-    })();
-  }, [address]);
 
   // Helper to get sport
   const getSport = useCallback((f: PlatformFight): SportType =>
@@ -826,16 +821,6 @@ export default function PlatformAdmin() {
     );
   }
 
-  if (!isAdmin) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center pt-16">
-        <div className="text-center">
-          <Shield className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-          <p className="text-muted-foreground">Admin access required.</p>
-        </div>
-      </div>
-    );
-  }
 
   const activePlatformCount = fights.filter(f => ["open", "locked", "live"].includes(f.status)).length;
   const totalPages = Math.ceil(totalFightsCount / PAGE_SIZE);

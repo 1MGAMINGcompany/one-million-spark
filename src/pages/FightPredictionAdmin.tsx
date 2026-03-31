@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import AdminAuth from "@/components/admin/AdminAuth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -29,7 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { useWallet } from "@/hooks/useWallet";
+
 import { toast } from "sonner";
 import { getItemLabelFromEvent } from "@/lib/sportLabels";
 import { formatEventDateTime } from "@/lib/formatEventLocalDateTime";
@@ -160,10 +161,19 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function FightPredictionAdmin() {
+  return (
+    <AdminAuth>
+      {({ adminWallet, adminEmail, onLogout }) => (
+        <FightPredictionAdminInner address={adminWallet} />
+      )}
+    </AdminAuth>
+  );
+}
+
+function FightPredictionAdminInner({ address }: { address: string }) {
   const navigate = useNavigate();
-  const { address } = useWallet();
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const isAdmin = true; // Already authenticated via AdminAuth
+  const [loading, setLoading] = useState(false);
   const [backendDegraded, setBackendDegraded] = useState(false);
   const [events, setEvents] = useState<PredictionEvent[]>([]);
   const [fights, setFights] = useState<Fight[]>([]);
@@ -201,19 +211,6 @@ export default function FightPredictionAdmin() {
     destructive?: boolean;
   } | null>(null);
 
-  // Check admin
-  useEffect(() => {
-    if (!address) { setIsAdmin(false); setLoading(false); return; }
-    (async () => {
-      const { data } = await supabase
-        .from("prediction_admins")
-        .select("wallet")
-        .eq("wallet", address)
-        .maybeSingle();
-      setIsAdmin(!!data);
-      setLoading(false);
-    })();
-  }, [address]);
 
   const [entryCounts, setEntryCounts] = useState<Record<string, number>>({});
   const [botConfirmData, setBotConfirmData] = useState<Record<string, { confidence: number; provider: string; confirmed_at: string; claims_open_at: string }>>({});
@@ -407,17 +404,6 @@ export default function FightPredictionAdmin() {
     );
   }
 
-  if (!isAdmin) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center pt-16">
-        <div className="text-center">
-          <Shield className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-          <p className="text-muted-foreground">Admin access required.</p>
-          {address && <p className="text-xs text-muted-foreground/60 mt-1 font-mono">{address}</p>}
-        </div>
-      </div>
-    );
-  }
 
   const eventFights = (eventId: string) => fights.filter(f => f.event_id === eventId);
 

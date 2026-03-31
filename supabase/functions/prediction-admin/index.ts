@@ -1084,6 +1084,68 @@ Deno.serve(async (req) => {
       return json({ fight_id: fight.id, success: true });
     }
 
+    // ── Admin Management ──
+
+    if (action === "addAdmin") {
+      const { admin_email } = body;
+      if (!admin_email) return json({ error: "Missing admin_email" }, 400);
+      
+      // Only primary admin can manage admins
+      const { data: caller } = await supabase
+        .from("prediction_admins")
+        .select("email")
+        .eq("wallet", wallet)
+        .single();
+      if (caller?.email !== "morganlaurent@live.ca") {
+        return json({ error: "Only primary admin can manage admins" }, 403);
+      }
+
+      const newWallet = `email_${admin_email.replace(/[^a-z0-9]/gi, "_")}`;
+      const { error } = await supabase
+        .from("prediction_admins")
+        .upsert({ wallet: newWallet, email: admin_email }, { onConflict: "wallet" });
+      if (error) throw error;
+
+      await supabase.from("admin_activity_log").insert({
+        action: "add_admin",
+        description: `Added admin: ${admin_email}`,
+        admin_wallet: wallet,
+      });
+
+      return json({ success: true });
+    }
+
+    if (action === "removeAdmin") {
+      const { target_wallet } = body;
+      if (!target_wallet) return json({ error: "Missing target_wallet" }, 400);
+
+      const { data: caller } = await supabase
+        .from("prediction_admins")
+        .select("email")
+        .eq("wallet", wallet)
+        .single();
+      if (caller?.email !== "morganlaurent@live.ca") {
+        return json({ error: "Only primary admin can manage admins" }, 403);
+      }
+
+      // Don't allow removing self
+      if (target_wallet === wallet) return json({ error: "Cannot remove yourself" }, 400);
+
+      const { error } = await supabase
+        .from("prediction_admins")
+        .delete()
+        .eq("wallet", target_wallet);
+      if (error) throw error;
+
+      await supabase.from("admin_activity_log").insert({
+        action: "remove_admin",
+        description: `Removed admin wallet: ${target_wallet}`,
+        admin_wallet: wallet,
+      });
+
+      return json({ success: true });
+    }
+
     return json({ error: "Unknown action" }, 400);
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), {

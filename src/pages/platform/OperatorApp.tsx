@@ -9,14 +9,16 @@ import { useAllowanceGate } from "@/hooks/useAllowanceGate";
 import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
 import { usePolymarketSession } from "@/hooks/usePolymarketSession";
 import { usePolymarketPrices } from "@/hooks/usePolymarketPrices";
-import { Globe, Trophy, Loader2, ShieldCheck } from "lucide-react";
+import { Globe, Trophy, Loader2, ShieldCheck, Search } from "lucide-react";
 import { toast } from "sonner";
 import { dbg } from "@/lib/debugLog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import EventSection, { parseSport } from "@/components/predictions/EventSection";
 import PredictionModal from "@/components/predictions/PredictionModal";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
+import ScrollableSportTabs, { type SportTabGroup } from "@/components/admin/ScrollableSportTabs";
 import type { Fight } from "@/components/predictions/FightCard";
 import type { TradeResult } from "@/components/predictions/tradeResultTypes";
 import { isPropMarket } from "@/lib/detectSport";
@@ -54,6 +56,9 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [showWalletGate, setShowWalletGate] = useState(false);
   const [userEntries, setUserEntries] = useState<any[]>([]);
   const [claiming, setClaiming] = useState(false);
+  const [sportFilter, setSportFilter] = useState("ALL");
+  const [dateFilter, setDateFilter] = useState<"all" | "today" | "week">("all");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const { data: operatorFights, isError: opFightsError } = useQuery({
     queryKey: ["operator_fights", operator?.id],
@@ -61,9 +66,9 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       const { data } = await (supabase as any)
         .from("prediction_fights")
         .select("*")
-        .eq("operator_id", operator!.id)
+        .or(`operator_id.eq.${operator!.id},and(operator_id.is.null,visibility.in.(platform,all))`)
         .not("status", "eq", "draft")
-        .order("created_at", { ascending: true });
+        .order("event_date", { ascending: true });
       return (data || []) as Fight[];
     },
     enabled: !!operator?.id,
@@ -71,23 +76,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   });
 
   const allowedSports = settings?.allowed_sports || [];
-  const { data: platformFights, isError: platFightsError } = useQuery({
-    queryKey: ["platform_fights_operator", settings?.show_platform_events],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("prediction_fights")
-        .select("*")
-        .is("operator_id", null)
-        .not("status", "eq", "draft")
-        .order("created_at", { ascending: true })
-        .limit(100);
-      return (data || []) as Fight[];
-    },
-    enabled: settings?.show_platform_events !== false,
-    refetchInterval: 15000,
-  });
-
-  const backendDegraded = opFightsError || platFightsError;
+  const backendDegraded = opFightsError;
 
   const loadUserEntries = useCallback(async () => {
     if (!address) return;
@@ -98,31 +87,88 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   useEffect(() => { loadUserEntries(); }, [loadUserEntries]);
 
   const allFights = useMemo(() => {
-    const opFights = (operatorFights || []).filter(f => !isPropMarket(f));
-    const featuredOp = opFights.filter(f => f.featured);
-    const normalOp = opFights.filter(f => !f.featured);
-    const platFights = (platformFights || []).filter(f => {
-      if (isPropMarket(f)) return false;
-      if (allowedSports.length > 0) {
+    let fights = (operatorFights || []).filter(f => !isPropMarket(f));
+    if (allowedSports.length > 0) {
+      fights = fights.filter(f => {
+        if ((f as any).operator_id === operator?.id) return true;
         const sport = parseSport(f.event_name, null, null);
         const sportLower = sport.toLowerCase();
-        const allowed = allowedSports.some(s => s.toLowerCase() === sportLower || sportLower.includes(s.toLowerCase()));
-        if (!allowed) return false;
-      }
-      return true;
+        return allowedSports.some(s => s.toLowerCase() === sportLower || sportLower.includes(s.toLowerCase()));
+      });
+    }
+    return fights;
+  }, [operatorFights, allowedSports, operator?.id]);
+
+  // Build sport tab groups
+  const sportTabGroups = useMemo<SportTabGroup[]>(() => {
+    const sportCounts: Record<string, number> = {};
+    allFights.forEach(f => {
+      const sport = parseSport(f.event_name, null, null);
+      sportCounts[sport] = (sportCounts[sport] || 0) + 1;
     });
-    return [...featuredOp, ...normalOp, ...platFights];
-  }, [operatorFights, platformFights, allowedSports]);
+    const SPORT_EMOJI: Record<string, string> = {
+      nba: "🏀", nhl: "🏒", mlb: "⚾", nfl: "🏈", mls: "⚽", soccer: "⚽",
+      ufc: "🥊", mma: "🥊", boxing: "🥊", tennis: "🎾", cricket: "🏏",
+      golf: "⛳", f1: "🏎️", rugby: "🏉", ncaa: "🎓",
+    };
+    const tabs = Object.entries(sportCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([sport, count]) => ({
+        key: sport,
+        label: sport,
+        emoji: SPORT_EMOJI[sport.toLowerCase()] || "🏆",
+        count,
+      }));
+    return [{
+      label: "Sports",
+      tabs: [{ key: "ALL", label: "All", emoji: "🔥", count: allFights.length }, ...tabs],
+    }];
+  }, [allFights]);
+
+  // Filtered fights
+  const filteredFights = useMemo(() => {
+    let fights = allFights;
+    if (sportFilter !== "ALL") {
+      fights = fights.filter(f => parseSport(f.event_name, null, null) === sportFilter);
+    }
+    if (dateFilter === "today") {
+      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+      fights = fights.filter(f => {
+        const ed = (f as any).event_date;
+        if (!ed) return false;
+        const d = new Date(ed);
+        return d >= todayStart && d <= todayEnd;
+      });
+    } else if (dateFilter === "week") {
+      const now = new Date();
+      const weekEnd = new Date(now.getTime() + 7 * 86400000);
+      fights = fights.filter(f => {
+        const ed = (f as any).event_date;
+        if (!ed) return true;
+        return new Date(ed) <= weekEnd;
+      });
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      fights = fights.filter(f =>
+        f.fighter_a_name.toLowerCase().includes(q) ||
+        f.fighter_b_name.toLowerCase().includes(q) ||
+        f.event_name.toLowerCase().includes(q)
+      );
+    }
+    return fights;
+  }, [allFights, sportFilter, dateFilter, searchQuery]);
 
   const groupedEvents = useMemo(() => {
     const groups: Record<string, { fights: Fight[] }> = {};
-    allFights.forEach(f => {
+    filteredFights.forEach(f => {
       const key = f.event_name || "Events";
       if (!groups[key]) groups[key] = { fights: [] };
       groups[key].fights.push(f);
     });
     return groups;
-  }, [allFights]);
+  }, [filteredFights]);
 
   const hotFightIds = useMemo(() => new Set<string>(), []);
 
@@ -279,9 +325,45 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         </div>
       </nav>
 
+      {/* Sport Tabs + Filters */}
+      <div className="max-w-4xl mx-auto px-4 pt-4">
+        <ScrollableSportTabs
+          groups={sportTabGroups}
+          activeTab={sportFilter}
+          onTabChange={setSportFilter}
+        />
+        <div className="flex items-center gap-2 mt-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+            <input
+              type="text"
+              placeholder={t("operator.searchTeams", "Search teams or players...")}
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-white/20"
+            />
+          </div>
+          <div className="flex gap-1">
+            {(["all", "today", "week"] as const).map(df => (
+              <button
+                key={df}
+                onClick={() => setDateFilter(df)}
+                className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  dateFilter === df
+                    ? "bg-white/10 text-white"
+                    : "text-white/40 hover:text-white/60"
+                }`}
+              >
+                {df === "all" ? t("operator.allDates", "All") : df === "today" ? t("operator.today", "Today") : t("operator.thisWeek", "This Week")}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Events */}
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
-        {backendDegraded && allFights.length === 0 ? (
+      <div className="max-w-4xl mx-auto px-4 py-4 space-y-6">
+        {backendDegraded && filteredFights.length === 0 ? (
           <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-6 py-12 text-center">
             <ShieldCheck className="w-14 h-14 mx-auto mb-4 text-amber-400" />
             <h3 className="text-lg font-bold text-white">{t("operator.onHoldTitle", "All Predictions Are Temporarily On Hold")}</h3>
@@ -289,9 +371,9 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
               {t("operator.onHoldDesc", "We're experiencing a brief issue with one of our providers. Your funds and existing predictions are completely safe. We're actively working to resolve this — please check back shortly.")}
             </p>
           </div>
-        ) : allFights.length === 0 ? (
+        ) : filteredFights.length === 0 ? (
           <div className="text-center py-20 text-white/30">
-            {t("operator.noEvents")}
+            {searchQuery ? t("operator.noSearchResults", "No events match your search") : t("operator.noEvents")}
           </div>
         ) : (
           eventEntries.map(([eventName, group]) => (
