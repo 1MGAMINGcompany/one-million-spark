@@ -1458,6 +1458,7 @@ export type Database = {
           commission_bps: number
           confirmed_at: string | null
           created_at: string
+          draw_allowed: boolean | null
           enrichment_notes: string | null
           event_banner_url: string | null
           event_date: string | null
@@ -1527,6 +1528,7 @@ export type Database = {
           commission_bps?: number
           confirmed_at?: string | null
           created_at?: string
+          draw_allowed?: boolean | null
           enrichment_notes?: string | null
           event_banner_url?: string | null
           event_date?: string | null
@@ -1596,6 +1598,7 @@ export type Database = {
           commission_bps?: number
           confirmed_at?: string | null
           created_at?: string
+          draw_allowed?: boolean | null
           enrichment_notes?: string | null
           event_banner_url?: string | null
           event_date?: string | null
