@@ -161,10 +161,19 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function FightPredictionAdmin() {
+  return (
+    <AdminAuth>
+      {({ adminWallet, adminEmail, onLogout }) => (
+        <FightPredictionAdminInner address={adminWallet} />
+      )}
+    </AdminAuth>
+  );
+}
+
+function FightPredictionAdminInner({ address }: { address: string }) {
   const navigate = useNavigate();
-  const { address } = useWallet();
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const isAdmin = true; // Already authenticated via AdminAuth
+  const [loading, setLoading] = useState(false);
   const [backendDegraded, setBackendDegraded] = useState(false);
   const [events, setEvents] = useState<PredictionEvent[]>([]);
   const [fights, setFights] = useState<Fight[]>([]);
