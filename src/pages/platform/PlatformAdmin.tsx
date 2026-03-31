@@ -821,16 +821,6 @@ function PlatformAdminInner({ address }: { address: string }) {
     );
   }
 
-  if (!isAdmin) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center pt-16">
-        <div className="text-center">
-          <Shield className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-          <p className="text-muted-foreground">Admin access required.</p>
-        </div>
-      </div>
-    );
-  }
 
   const activePlatformCount = fights.filter(f => ["open", "locked", "live"].includes(f.status)).length;
   const totalPages = Math.ceil(totalFightsCount / PAGE_SIZE);
