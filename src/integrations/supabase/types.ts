@@ -856,8 +856,10 @@ export type Database = {
       }
       operators: {
         Row: {
+          brand_color: string | null
           brand_name: string
           created_at: string
+          disabled_sports: string[] | null
           fee_percent: number
           id: string
           logo_url: string | null
@@ -866,10 +868,13 @@ export type Database = {
           theme: string
           updated_at: string
           user_id: string
+          welcome_message: string | null
         }
         Insert: {
+          brand_color?: string | null
           brand_name: string
           created_at?: string
+          disabled_sports?: string[] | null
           fee_percent?: number
           id?: string
           logo_url?: string | null
@@ -878,10 +883,13 @@ export type Database = {
           theme?: string
           updated_at?: string
           user_id: string
+          welcome_message?: string | null
         }
         Update: {
+          brand_color?: string | null
           brand_name?: string
           created_at?: string
+          disabled_sports?: string[] | null
           fee_percent?: number
           id?: string
           logo_url?: string | null
@@ -890,6 +898,7 @@ export type Database = {
           theme?: string
           updated_at?: string
           user_id?: string
+          welcome_message?: string | null
         }
         Relationships: []
       }
@@ -1203,12 +1212,15 @@ export type Database = {
       }
       prediction_admins: {
         Row: {
+          email: string | null
           wallet: string
         }
         Insert: {
+          email?: string | null
           wallet: string
         }
         Update: {
+          email?: string | null
           wallet?: string
         }
         Relationships: []
