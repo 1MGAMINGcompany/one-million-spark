@@ -45,7 +45,7 @@ const Home = () => {
           .select("id, title, fighter_a_name, fighter_b_name, status, visibility, event_date, pool_a_usd, pool_b_usd, price_a, price_b, source, polymarket_active, featured, event_name, winner, draw_allowed")
           .in("visibility", ["flagship", "platform", "all"])
           .not("status", "in", '("settled","cancelled")')
-          .gt("event_date", new Date(Date.now() - 3600000).toISOString())
+          .gt("event_date", new Date(Date.now() - 86400000 * 7).toISOString())
           .order("event_date", { ascending: true })
           .limit(200),
         supabase.from("prediction_events").select("*").eq("status", "approved").order("event_date", { ascending: true }).limit(20),
