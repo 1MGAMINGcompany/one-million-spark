@@ -332,19 +332,6 @@ function PlatformAdminInner({ address }: { address: string }) {
   // Unique users KPI
   const [uniqueUsers, setUniqueUsers] = useState<number | null>(null);
 
-  // Check admin
-  useEffect(() => {
-    if (!address) { setIsAdmin(false); setLoading(false); return; }
-    (async () => {
-      const { data } = await supabase
-        .from("prediction_admins")
-        .select("wallet")
-        .eq("wallet", address)
-        .maybeSingle();
-      setIsAdmin(!!data);
-      setLoading(false);
-    })();
-  }, [address]);
 
   // Helper to get sport
   const getSport = useCallback((f: PlatformFight): SportType =>
