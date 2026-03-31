@@ -56,6 +56,9 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [showWalletGate, setShowWalletGate] = useState(false);
   const [userEntries, setUserEntries] = useState<any[]>([]);
   const [claiming, setClaiming] = useState(false);
+  const [sportFilter, setSportFilter] = useState("ALL");
+  const [dateFilter, setDateFilter] = useState<"all" | "today" | "week">("all");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const { data: operatorFights, isError: opFightsError } = useQuery({
     queryKey: ["operator_fights", operator?.id],
@@ -63,9 +66,9 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       const { data } = await (supabase as any)
         .from("prediction_fights")
         .select("*")
-        .eq("operator_id", operator!.id)
+        .or(`operator_id.eq.${operator!.id},and(operator_id.is.null,visibility.in.(platform,all))`)
         .not("status", "eq", "draft")
-        .order("created_at", { ascending: true });
+        .order("event_date", { ascending: true });
       return (data || []) as Fight[];
     },
     enabled: !!operator?.id,
@@ -73,23 +76,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   });
 
   const allowedSports = settings?.allowed_sports || [];
-  const { data: platformFights, isError: platFightsError } = useQuery({
-    queryKey: ["platform_fights_operator", settings?.show_platform_events],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("prediction_fights")
-        .select("*")
-        .is("operator_id", null)
-        .not("status", "eq", "draft")
-        .order("created_at", { ascending: true })
-        .limit(100);
-      return (data || []) as Fight[];
-    },
-    enabled: settings?.show_platform_events !== false,
-    refetchInterval: 15000,
-  });
-
-  const backendDegraded = opFightsError || platFightsError;
+  const backendDegraded = opFightsError;
 
   const loadUserEntries = useCallback(async () => {
     if (!address) return;
@@ -100,31 +87,86 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   useEffect(() => { loadUserEntries(); }, [loadUserEntries]);
 
   const allFights = useMemo(() => {
-    const opFights = (operatorFights || []).filter(f => !isPropMarket(f));
-    const featuredOp = opFights.filter(f => f.featured);
-    const normalOp = opFights.filter(f => !f.featured);
-    const platFights = (platformFights || []).filter(f => {
-      if (isPropMarket(f)) return false;
-      if (allowedSports.length > 0) {
+    let fights = (operatorFights || []).filter(f => !isPropMarket(f));
+    if (allowedSports.length > 0) {
+      fights = fights.filter(f => {
+        if (f.operator_id === operator?.id) return true; // always show own events
         const sport = parseSport(f.event_name, null, null);
         const sportLower = sport.toLowerCase();
-        const allowed = allowedSports.some(s => s.toLowerCase() === sportLower || sportLower.includes(s.toLowerCase()));
-        if (!allowed) return false;
-      }
-      return true;
+        return allowedSports.some(s => s.toLowerCase() === sportLower || sportLower.includes(s.toLowerCase()));
+      });
+    }
+    return fights;
+  }, [operatorFights, allowedSports, operator?.id]);
+
+  // Build sport tab groups
+  const sportTabGroups = useMemo<SportTabGroup[]>(() => {
+    const sportCounts: Record<string, number> = {};
+    allFights.forEach(f => {
+      const sport = parseSport(f.event_name, null, null);
+      sportCounts[sport] = (sportCounts[sport] || 0) + 1;
     });
-    return [...featuredOp, ...normalOp, ...platFights];
-  }, [operatorFights, platformFights, allowedSports]);
+    const SPORT_EMOJI: Record<string, string> = {
+      nba: "🏀", nhl: "🏒", mlb: "⚾", nfl: "🏈", mls: "⚽", soccer: "⚽",
+      ufc: "🥊", mma: "🥊", boxing: "🥊", tennis: "🎾", cricket: "🏏",
+      golf: "⛳", f1: "🏎️", rugby: "🏉", ncaa: "🎓",
+    };
+    const tabs = Object.entries(sportCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([sport, count]) => ({
+        key: sport,
+        label: sport,
+        emoji: SPORT_EMOJI[sport.toLowerCase()] || "🏆",
+        count,
+      }));
+    return [{
+      label: "Sports",
+      tabs: [{ key: "ALL", label: "All", emoji: "🔥", count: allFights.length }, ...tabs],
+    }];
+  }, [allFights]);
+
+  // Filtered fights
+  const filteredFights = useMemo(() => {
+    let fights = allFights;
+    if (sportFilter !== "ALL") {
+      fights = fights.filter(f => parseSport(f.event_name, null, null) === sportFilter);
+    }
+    if (dateFilter === "today") {
+      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+      fights = fights.filter(f => {
+        if (!f.event_date) return false;
+        const d = new Date(f.event_date);
+        return d >= todayStart && d <= todayEnd;
+      });
+    } else if (dateFilter === "week") {
+      const now = new Date();
+      const weekEnd = new Date(now.getTime() + 7 * 86400000);
+      fights = fights.filter(f => {
+        if (!f.event_date) return true;
+        return new Date(f.event_date) <= weekEnd;
+      });
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      fights = fights.filter(f =>
+        f.fighter_a_name.toLowerCase().includes(q) ||
+        f.fighter_b_name.toLowerCase().includes(q) ||
+        f.event_name.toLowerCase().includes(q)
+      );
+    }
+    return fights;
+  }, [allFights, sportFilter, dateFilter, searchQuery]);
 
   const groupedEvents = useMemo(() => {
     const groups: Record<string, { fights: Fight[] }> = {};
-    allFights.forEach(f => {
+    filteredFights.forEach(f => {
       const key = f.event_name || "Events";
       if (!groups[key]) groups[key] = { fights: [] };
       groups[key].fights.push(f);
     });
     return groups;
-  }, [allFights]);
+  }, [filteredFights]);
 
   const hotFightIds = useMemo(() => new Set<string>(), []);
 
