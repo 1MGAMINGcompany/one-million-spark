@@ -1787,6 +1787,7 @@ export type Database = {
           finalized_at: string | null
           id: string
           order_type: string
+          pm_fee_rate_bps: number | null
           polymarket_market_id: string | null
           polymarket_order_id: string | null
           prediction_event_id: string | null
@@ -1818,6 +1819,7 @@ export type Database = {
           finalized_at?: string | null
           id?: string
           order_type?: string
+          pm_fee_rate_bps?: number | null
           polymarket_market_id?: string | null
           polymarket_order_id?: string | null
           prediction_event_id?: string | null
@@ -1849,6 +1851,7 @@ export type Database = {
           finalized_at?: string | null
           id?: string
           order_type?: string
+          pm_fee_rate_bps?: number | null
           polymarket_market_id?: string | null
           polymarket_order_id?: string | null
           prediction_event_id?: string | null
