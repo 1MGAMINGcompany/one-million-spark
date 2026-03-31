@@ -270,9 +270,16 @@ const PAGE_SIZE = 50;
 // ══════════════════════════════════════════════════
 
 export default function PlatformAdmin() {
-  const { address } = useWallet();
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
+  return (
+    <AdminAuth>
+      {({ adminWallet }) => <PlatformAdminInner address={adminWallet} />}
+    </AdminAuth>
+  );
+}
+
+function PlatformAdminInner({ address }: { address: string }) {
+  const isAdmin = true;
+  const [loading, setLoading] = useState(false);
   const [fights, setFights] = useState<PlatformFight[]>([]);
   const [fightStatsMap, setFightStatsMap] = useState<Record<string, FightStats>>({});
   const [busy, setBusy] = useState(false);
