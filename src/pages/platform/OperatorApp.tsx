@@ -90,7 +90,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     let fights = (operatorFights || []).filter(f => !isPropMarket(f));
     if (allowedSports.length > 0) {
       fights = fights.filter(f => {
-        if (f.operator_id === operator?.id) return true; // always show own events
+        if ((f as any).operator_id === operator?.id) return true;
         const sport = parseSport(f.event_name, null, null);
         const sportLower = sport.toLowerCase();
         return allowedSports.some(s => s.toLowerCase() === sportLower || sportLower.includes(s.toLowerCase()));
