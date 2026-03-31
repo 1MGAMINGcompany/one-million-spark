@@ -30,7 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { useWallet } from "@/hooks/useWallet";
+
 import { toast } from "sonner";
 import { getItemLabelFromEvent } from "@/lib/sportLabels";
 import { formatEventDateTime } from "@/lib/formatEventLocalDateTime";
