@@ -404,17 +404,6 @@ function FightPredictionAdminInner({ address }: { address: string }) {
     );
   }
 
-  if (!isAdmin) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center pt-16">
-        <div className="text-center">
-          <Shield className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-          <p className="text-muted-foreground">Admin access required.</p>
-          {address && <p className="text-xs text-muted-foreground/60 mt-1 font-mono">{address}</p>}
-        </div>
-      </div>
-    );
-  }
 
   const eventFights = (eventId: string) => fights.filter(f => f.event_id === eventId);
 
