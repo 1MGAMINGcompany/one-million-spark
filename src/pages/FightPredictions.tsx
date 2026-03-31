@@ -242,7 +242,7 @@ export default function FightPredictions() {
             .select(FIGHTS_SELECT)
             .in("visibility", ["flagship", "platform", "all"])
             .not("status", "in", '("settled","cancelled")')
-            .gt("event_date", new Date(Date.now() - 3600000).toISOString())
+            .gt("event_date", new Date(Date.now() - 86400000 * 7).toISOString())
             .order("event_date", { ascending: true })
             .limit(200),
           supabase

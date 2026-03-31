@@ -49,7 +49,7 @@ async function fetchRecentFeed(supabaseUrl: string, serviceRoleKey: string, figh
       params.set("fight_id", `eq.${fightId}`);
     }
 
-    const oneHourAgo = new Date(Date.now() - 3600000).toISOString();
+    const sevenDaysAgo = new Date(Date.now() - 86400000 * 7).toISOString();
     params.set("created_at", `gte.${oneHourAgo}`);
 
     const response = await fetch(`${supabaseUrl}/rest/v1/prediction_entries?${params.toString()}`, {
