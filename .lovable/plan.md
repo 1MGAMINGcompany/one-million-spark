@@ -1,28 +1,32 @@
 
 
-## Plan: Fix Prediction Admin + Predictions Query + Loading Timeout
+## Fix: Widen Date Filter from 1 Hour to 7 Days
 
-### Summary of findings
-
-After reviewing the full files:
-
-1. **`prediction-admin/index.ts`**: `validatePromoCode` already exists before the admin check (line 30) — this is correct. But there's a **duplicate** `validatePromoCode` handler at line 1046 (after admin check) that is dead code and should be removed. The `createPromoCode` validation line at line 1018 is intact. No syntax errors found.
-
-2. **`FightPredictions.tsx`**: The fights query (line 282) uses `.limit(200)` with no `.order()` — this is why future soccer events can be missed. Needs `.order('event_date', { ascending: true })` and limit bumped to 500. Also needs a 10-second client-side timeout wrapper.
+### Problem
+The `.gt("event_date", now - 1 hour)` filter excludes nearly all 241 future events that have `event_date` values more than 1 hour in the past. This causes empty results → `backendDegraded = true` → on-hold banner.
 
 ### Changes
 
-**File 1: `supabase/functions/prediction-admin/index.ts`**
-- Remove the duplicate `validatePromoCode` block at lines 1046-1065 (dead code — the working copy is already at line 30 before the admin check)
-- Fix indentation of the line-30 block to match the rest of the file
-- No other changes
+**File 1: `src/pages/FightPredictions.tsx` (line 245)**
+- Change `Date.now() - 3600000` → `Date.now() - 86400000 * 7` (7 days back)
 
-**File 2: `src/pages/FightPredictions.tsx`**
-- Add `.order('event_date', { ascending: true })` to the fights query (line 278)
-- Increase `.limit(200)` to `.limit(500)` (line 282)
-- Wrap the `Promise.all` inside `loadFights()` with a 10-second `AbortController` timeout so the page never spins forever — on timeout, treat as failure (set `backendDegraded`, increment `consecutiveFailures`)
+**File 2: `src/pages/Home.tsx` (line 48)**
+- Same change: `Date.now() - 3600000` → `Date.now() - 86400000 * 7`
+
+**File 3: `supabase/functions/prediction-feed/index.ts` (line 52)**
+- Change `Date.now() - 3600000` → `Date.now() - 86400000 * 7`
+
+**Timeout — already correct:**
+The client timeout in `FightPredictions.tsx` is already set to 30 seconds (line 234). No change needed there.
+
+### What this does NOT change
+- No visibility filter changes
+- No on-hold banner logic changes
+- No edge function logic changes beyond the date filter
+- No query structure changes
 
 ### Files changed
-- `supabase/functions/prediction-admin/index.ts`
 - `src/pages/FightPredictions.tsx`
+- `src/pages/Home.tsx`
+- `supabase/functions/prediction-feed/index.ts`
 
