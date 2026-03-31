@@ -74,11 +74,12 @@ export default function AdminAuth({ children }: AdminAuthProps) {
     setLoading(true);
     try {
       // Check if email exists in prediction_admins
-      const { data: admin } = await supabase
+      const { data: adminRows } = await supabase
         .from("prediction_admins")
         .select("wallet, email")
         .eq("email", email.trim().toLowerCase())
-        .maybeSingle();
+        .limit(1);
+      const admin = adminRows && adminRows.length > 0 ? adminRows[0] : null;
 
       if (!admin) {
         toast.error("This email is not registered as an admin.");
