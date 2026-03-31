@@ -325,9 +325,45 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         </div>
       </nav>
 
+      {/* Sport Tabs + Filters */}
+      <div className="max-w-4xl mx-auto px-4 pt-4">
+        <ScrollableSportTabs
+          groups={sportTabGroups}
+          activeTab={sportFilter}
+          onTabChange={setSportFilter}
+        />
+        <div className="flex items-center gap-2 mt-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+            <input
+              type="text"
+              placeholder={t("operator.searchTeams", "Search teams or players...")}
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-white/20"
+            />
+          </div>
+          <div className="flex gap-1">
+            {(["all", "today", "week"] as const).map(df => (
+              <button
+                key={df}
+                onClick={() => setDateFilter(df)}
+                className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  dateFilter === df
+                    ? "bg-white/10 text-white"
+                    : "text-white/40 hover:text-white/60"
+                }`}
+              >
+                {df === "all" ? t("operator.allDates", "All") : df === "today" ? t("operator.today", "Today") : t("operator.thisWeek", "This Week")}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Events */}
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
-        {backendDegraded && allFights.length === 0 ? (
+      <div className="max-w-4xl mx-auto px-4 py-4 space-y-6">
+        {backendDegraded && filteredFights.length === 0 ? (
           <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-6 py-12 text-center">
             <ShieldCheck className="w-14 h-14 mx-auto mb-4 text-amber-400" />
             <h3 className="text-lg font-bold text-white">{t("operator.onHoldTitle", "All Predictions Are Temporarily On Hold")}</h3>
@@ -335,9 +371,9 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
               {t("operator.onHoldDesc", "We're experiencing a brief issue with one of our providers. Your funds and existing predictions are completely safe. We're actively working to resolve this — please check back shortly.")}
             </p>
           </div>
-        ) : allFights.length === 0 ? (
+        ) : filteredFights.length === 0 ? (
           <div className="text-center py-20 text-white/30">
-            {t("operator.noEvents")}
+            {searchQuery ? t("operator.noSearchResults", "No events match your search") : t("operator.noEvents")}
           </div>
         ) : (
           eventEntries.map(([eventName, group]) => (
