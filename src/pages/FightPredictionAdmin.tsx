@@ -211,19 +211,6 @@ function FightPredictionAdminInner({ address }: { address: string }) {
     destructive?: boolean;
   } | null>(null);
 
-  // Check admin
-  useEffect(() => {
-    if (!address) { setIsAdmin(false); setLoading(false); return; }
-    (async () => {
-      const { data } = await supabase
-        .from("prediction_admins")
-        .select("wallet")
-        .eq("wallet", address)
-        .maybeSingle();
-      setIsAdmin(!!data);
-      setLoading(false);
-    })();
-  }, [address]);
 
   const [entryCounts, setEntryCounts] = useState<Record<string, number>>({});
   const [botConfirmData, setBotConfirmData] = useState<Record<string, { confidence: number; provider: string; confirmed_at: string; claims_open_at: string }>>({});
