@@ -50,7 +50,7 @@ async function fetchRecentFeed(supabaseUrl: string, serviceRoleKey: string, figh
     }
 
     const sevenDaysAgo = new Date(Date.now() - 86400000 * 7).toISOString();
-    params.set("created_at", `gte.${oneHourAgo}`);
+    params.set("created_at", `gte.${sevenDaysAgo}`);
 
     const response = await fetch(`${supabaseUrl}/rest/v1/prediction_entries?${params.toString()}`, {
       headers: {
