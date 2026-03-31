@@ -90,7 +90,7 @@ export default function AdminAuth({ children }: AdminAuthProps) {
       // Send OTP via Supabase Auth magic link (OTP mode)
       const { error } = await supabase.auth.signInWithOtp({
         email: email.trim().toLowerCase(),
-        options: { shouldCreateUser: true },
+        options: { shouldCreateUser: false, emailRedirectTo: undefined },
       });
 
       if (error) throw error;
