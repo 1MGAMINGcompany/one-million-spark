@@ -135,16 +135,18 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
       const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
       fights = fights.filter(f => {
-        if (!f.event_date) return false;
-        const d = new Date(f.event_date);
+        const ed = (f as any).event_date;
+        if (!ed) return false;
+        const d = new Date(ed);
         return d >= todayStart && d <= todayEnd;
       });
     } else if (dateFilter === "week") {
       const now = new Date();
       const weekEnd = new Date(now.getTime() + 7 * 86400000);
       fights = fights.filter(f => {
-        if (!f.event_date) return true;
-        return new Date(f.event_date) <= weekEnd;
+        const ed = (f as any).event_date;
+        if (!ed) return true;
+        return new Date(ed) <= weekEnd;
       });
     }
     if (searchQuery.trim()) {
