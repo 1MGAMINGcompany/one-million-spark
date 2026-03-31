@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from "react";
 import { Shield, Mail, Loader2, LogOut, UserPlus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -45,10 +44,8 @@ interface AdminAuthProps {
 export default function AdminAuth({ children }: AdminAuthProps) {
   const [session, setSession] = useState<AdminSession | null>(getStoredSession);
   const [email, setEmail] = useState("");
-  const [otp, setOtp] = useState("");
-  const [step, setStep] = useState<"email" | "otp">("email");
+  const [step, setStep] = useState<"email" | "waiting">("email");
   const [loading, setLoading] = useState(false);
-  const [verifying, setVerifying] = useState(false);
 
   // Manage admins state
   const [showManage, setShowManage] = useState(false);
@@ -57,6 +54,42 @@ export default function AdminAuth({ children }: AdminAuthProps) {
   const [manageLoading, setManageLoading] = useState(false);
 
   const isPrimaryAdmin = session?.email === "morganlaurent@live.ca";
+
+  // Listen for Supabase auth state changes (magic link callback)
+  useEffect(() => {
+    if (session) return; // already authenticated
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, authSession) => {
+      if (event === "SIGNED_IN" && authSession?.user?.email) {
+        const userEmail = authSession.user.email.toLowerCase().trim();
+
+        // Verify this email is in prediction_admins
+        const { data: adminRows } = await supabase
+          .from("prediction_admins")
+          .select("wallet, email")
+          .eq("email", userEmail)
+          .limit(1);
+        const admin = adminRows && adminRows.length > 0 ? adminRows[0] : null;
+
+        if (admin) {
+          const newSession: AdminSession = {
+            email: userEmail,
+            wallet: admin.wallet,
+            expiresAt: Date.now() + SESSION_DURATION_MS,
+          };
+          storeSession(newSession);
+          setSession(newSession);
+          setStep("email");
+          toast.success("Admin access granted!");
+        } else {
+          toast.error("This email is not registered as an admin.");
+          supabase.auth.signOut();
+        }
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [session]);
 
   const loadAdmins = useCallback(async () => {
     const { data } = await supabase
@@ -69,7 +102,7 @@ export default function AdminAuth({ children }: AdminAuthProps) {
     if (showManage && session) loadAdmins();
   }, [showManage, session, loadAdmins]);
 
-  const handleSendOTP = async () => {
+  const handleSendMagicLink = async () => {
     if (!email.trim()) { toast.error("Enter your email"); return; }
     setLoading(true);
     try {
@@ -87,61 +120,24 @@ export default function AdminAuth({ children }: AdminAuthProps) {
         return;
       }
 
-      // Send OTP via Supabase Auth magic link (OTP mode)
+      // Send magic link
+      const redirectUrl = `${window.location.origin}/predictions/admin`;
       const { error } = await supabase.auth.signInWithOtp({
         email: email.trim().toLowerCase(),
-        options: { shouldCreateUser: false, emailRedirectTo: undefined },
+        options: {
+          shouldCreateUser: false,
+          emailRedirectTo: redirectUrl,
+        },
       });
 
       if (error) throw error;
 
-      toast.success("Verification code sent to your email!");
-      setStep("otp");
+      toast.success("Login link sent to your email!");
+      setStep("waiting");
     } catch (err: any) {
-      toast.error(err.message || "Failed to send verification code");
+      toast.error(err.message || "Failed to send login link");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleVerifyOTP = async () => {
-    if (otp.length !== 6) { toast.error("Enter the 6-digit code"); return; }
-    setVerifying(true);
-    try {
-      const { error } = await supabase.auth.verifyOtp({
-        email: email.trim().toLowerCase(),
-        token: otp,
-        type: "email",
-      });
-
-      if (error) throw error;
-
-      // Get admin record for wallet reference
-      const { data: adminRows2 } = await supabase
-        .from("prediction_admins")
-        .select("wallet, email")
-        .eq("email", email.trim().toLowerCase())
-        .limit(1);
-      const admin = adminRows2 && adminRows2.length > 0 ? adminRows2[0] : null;
-
-      if (!admin) {
-        toast.error("Admin record not found");
-        setVerifying(false);
-        return;
-      }
-
-      const newSession: AdminSession = {
-        email: email.trim().toLowerCase(),
-        wallet: admin.wallet,
-        expiresAt: Date.now() + SESSION_DURATION_MS,
-      };
-      storeSession(newSession);
-      setSession(newSession);
-      toast.success("Admin access granted!");
-    } catch (err: any) {
-      toast.error(err.message || "Invalid verification code");
-    } finally {
-      setVerifying(false);
     }
   };
 
@@ -150,7 +146,6 @@ export default function AdminAuth({ children }: AdminAuthProps) {
     setSession(null);
     setStep("email");
     setEmail("");
-    setOtp("");
     supabase.auth.signOut();
   };
 
@@ -217,37 +212,30 @@ export default function AdminAuth({ children }: AdminAuthProps) {
                   placeholder="admin@example.com"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && handleSendOTP()}
+                  onKeyDown={e => e.key === "Enter" && handleSendMagicLink()}
                 />
               </div>
-              <Button onClick={handleSendOTP} disabled={loading} className="w-full">
+              <Button onClick={handleSendMagicLink} disabled={loading} className="w-full">
                 {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Mail className="w-4 h-4 mr-2" />}
-                Send Verification Code
+                Send Login Link
               </Button>
             </div>
           ) : (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground text-center">
-                Enter the 6-digit code sent to <span className="font-medium text-foreground">{email}</span>
-              </p>
-              <div className="flex justify-center">
-                <InputOTP maxLength={6} value={otp} onChange={setOtp}>
-                  <InputOTPGroup>
-                    <InputOTPSlot index={0} />
-                    <InputOTPSlot index={1} />
-                    <InputOTPSlot index={2} />
-                    <InputOTPSlot index={3} />
-                    <InputOTPSlot index={4} />
-                    <InputOTPSlot index={5} />
-                  </InputOTPGroup>
-                </InputOTP>
+            <div className="space-y-4 text-center">
+              <div className="p-4 rounded-lg bg-muted/50 border border-border">
+                <Mail className="w-8 h-8 text-primary mx-auto mb-3" />
+                <p className="text-sm text-foreground font-medium mb-1">
+                  Check your email
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  We sent a login link to <span className="font-medium text-foreground">{email}</span>
+                </p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Click the link in the email to sign in. You'll be redirected back here automatically.
+                </p>
               </div>
-              <Button onClick={handleVerifyOTP} disabled={verifying || otp.length !== 6} className="w-full">
-                {verifying ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                Verify & Sign In
-              </Button>
               <button
-                onClick={() => { setStep("email"); setOtp(""); }}
+                onClick={() => { setStep("email"); }}
                 className="text-xs text-muted-foreground hover:text-foreground mx-auto block"
               >
                 Use a different email
