@@ -7,7 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
-import { useWallet } from "@/hooks/useWallet";
+
 import { toast } from "sonner";
 import { detectSport, type SportType } from "@/lib/detectSport";
 import { formatEventDateTime } from "@/lib/formatEventLocalDateTime";
