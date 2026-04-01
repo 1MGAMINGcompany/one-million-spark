@@ -60,8 +60,9 @@ interface AdminAuthProps {
 export default function AdminAuth({ children }: AdminAuthProps) {
   const [session, setSession] = useState<AdminSession | null>(getStoredSession);
   const [email, setEmail] = useState("");
-  const [step, setStep] = useState<"email" | "waiting">("email");
+  const [step, setStep] = useState<"email" | "waiting" | "error">("email");
   const [loading, setLoading] = useState(false);
+  const [hashError, setHashError] = useState<string | null>(null);
 
   // Manage admins state
   const [showManage, setShowManage] = useState(false);
