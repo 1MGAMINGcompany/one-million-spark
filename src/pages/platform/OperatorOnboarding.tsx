@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { usePrivy } from "@privy-io/react-auth";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, ArrowLeft, Check } from "lucide-react";
+import { ArrowRight, ArrowLeft, Check, ExternalLink, Rocket } from "lucide-react";
 
 const THEMES = [
   { key: "blue", label: "Blue + White", primary: "#3b82f6", bg: "#0a0f1a" },
