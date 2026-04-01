@@ -439,20 +439,18 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
       {/* Prediction Modal */}
       {selectedFight && selectedPick && (
-        <PredictionModal
+        <SimplePredictionModal
           fight={selectedFight}
           pick={selectedPick}
           onClose={() => { setSelectedFight(null); setSelectedPick(null); setShowSuccess(false); setLastTradeResult(null); resetAllowance(); }}
           onSubmit={handleSubmit}
           submitting={submitting}
           showSuccess={showSuccess}
-          wallet={address || undefined}
           tradeResult={lastTradeResult}
           approvalStep={allowanceState.step}
           approvalError={allowanceState.errorReason}
+          themeColor={theme.primary}
           operatorBrandName={operator?.brand_name}
-          operatorLogoUrl={operator?.logo_url}
-          operatorSubdomain={operator?.subdomain}
         />
       )}
 

@@ -178,7 +178,7 @@ function FightPredictionAdminInner({ address }: { address: string }) {
   const [events, setEvents] = useState<PredictionEvent[]>([]);
   const [fights, setFights] = useState<Fight[]>([]);
   const [busy, setBusy] = useState(false);
-  const [adminFilter, setAdminFilter] = useState<string>("active");
+  const [adminFilter, setAdminFilter] = useState<string>("overview");
 
   // Kill switches
   const [killSwitches, setKillSwitches] = useState({
