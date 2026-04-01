@@ -181,15 +181,6 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     return fights;
   }, [allFights, sportFilter, dateFilter, searchQuery]);
 
-  // eventEntries for backwards compat (unused now — using flat SimplePredictionCard list)
-  const eventEntries = useMemo(() => Object.entries(
-    filteredFights.reduce((groups: Record<string, { fights: Fight[] }>, f) => {
-      const key = f.event_name || "Events";
-      if (!groups[key]) groups[key] = { fights: [] };
-      groups[key].fights.push(f);
-      return groups;
-    }, {} as Record<string, { fights: Fight[] }>)
-  ), [filteredFights]);
 
   const handleSubmit = async (amountUsd: number) => {
     if (!selectedFight || !selectedPick || !isConnected || !address) return;
