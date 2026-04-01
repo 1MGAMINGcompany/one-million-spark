@@ -258,6 +258,18 @@ export default function AdminAuth({ children }: AdminAuthProps) {
     }
   };
 
+  // Signing in — auth restored but admin verification in progress
+  if (!session && (verifying || (!authReady && !hashError))) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+          <p className="text-sm text-muted-foreground">Signing you in…</p>
+        </div>
+      </div>
+    );
+  }
+
   // Not authenticated — show login
   if (!session) {
     return (
