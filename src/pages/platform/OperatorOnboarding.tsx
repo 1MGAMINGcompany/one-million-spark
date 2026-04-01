@@ -232,7 +232,7 @@ export default function OperatorOnboarding() {
         setError(data.error || "Failed to create operator");
         return;
       }
-      navigate("/dashboard");
+      setCreated(true);
     } catch (e: any) {
       setError(e.message);
     } finally {
