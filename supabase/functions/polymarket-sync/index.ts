@@ -1224,6 +1224,7 @@ async function importSingleEvent(
           status: "open",
           trading_allowed: opts?.fightTradingAllowed ?? false,
           auto_resolve: opts?.fightTradingAllowed ?? false,
+          visibility: fightVisibility,
           event_date: timeInfo.chosen || gEvent.startDate || null,
         });
       } catch (insertErr: any) {
