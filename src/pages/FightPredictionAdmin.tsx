@@ -418,7 +418,7 @@ function FightPredictionAdminInner({ address }: { address: string }) {
     return ef.length > 0 && ef.every(f => ["settled", "refunds_complete", "cancelled"].includes(f.status));
   };
 
-  type AdminFilterType = "needs_action" | "active" | "pending" | "pending_review" | "live" | "review" | "archived" | "dismissed";
+  type AdminFilterType = "overview" | "needs_action" | "active" | "pending" | "pending_review" | "live" | "review" | "archived" | "dismissed";
 
   // Mutually exclusive filter assignment: each event belongs to exactly one bucket
   const getEventBucket = (e: PredictionEvent): AdminFilterType => {
