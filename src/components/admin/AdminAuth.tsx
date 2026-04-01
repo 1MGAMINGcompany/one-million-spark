@@ -64,6 +64,11 @@ export default function AdminAuth({ children }: AdminAuthProps) {
   const [loading, setLoading] = useState(false);
   const [hashError, setHashError] = useState<string | null>(null);
 
+  // Auth restoration state — avoids async deadlock in onAuthStateChange
+  const [authReady, setAuthReady] = useState(false);
+  const [authEmail, setAuthEmail] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState(false);
+
   // Manage admins state
   const [showManage, setShowManage] = useState(false);
   const [admins, setAdmins] = useState<{ wallet: string; email: string | null }[]>([]);
@@ -81,30 +86,56 @@ export default function AdminAuth({ children }: AdminAuthProps) {
         : err.description;
       setHashError(msg);
       setStep("error");
-      // Clear the hash so the error doesn't persist on refresh
       window.history.replaceState(null, "", window.location.pathname);
     }
   }, []);
 
-  // Listen for Supabase auth state changes (magic link callback)
+  // 1. Restore session on mount, then mark authReady
   useEffect(() => {
-    if (session) return; // already authenticated
+    if (session) { setAuthReady(true); return; }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, authSession) => {
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
+      if (s?.user?.email) {
+        setAuthEmail(s.user.email.toLowerCase().trim());
+      }
+      setAuthReady(true);
+    });
+  }, [session]);
+
+  // 2. Synchronous auth state listener — no async work inside callback
+  useEffect(() => {
+    if (session) return;
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, authSession) => {
       if (event === "SIGNED_IN" && authSession?.user?.email) {
-        const userEmail = authSession.user.email.toLowerCase().trim();
+        setAuthEmail(authSession.user.email.toLowerCase().trim());
+      }
+      if (event === "SIGNED_OUT") {
+        setAuthEmail(null);
+      }
+    });
 
-        // Verify this email is in prediction_admins
+    return () => subscription.unsubscribe();
+  }, [session]);
+
+  // 3. Verify admin status in a separate effect — safe to await here
+  useEffect(() => {
+    if (!authReady || !authEmail || session || verifying) return;
+
+    setVerifying(true);
+
+    (async () => {
+      try {
         const { data: adminRows } = await supabase
           .from("prediction_admins")
           .select("wallet, email")
-          .eq("email", userEmail)
+          .eq("email", authEmail)
           .limit(1);
         const admin = adminRows && adminRows.length > 0 ? adminRows[0] : null;
 
         if (admin) {
           const newSession: AdminSession = {
-            email: userEmail,
+            email: authEmail,
             wallet: admin.wallet,
             expiresAt: Date.now() + SESSION_DURATION_MS,
           };
@@ -116,11 +147,13 @@ export default function AdminAuth({ children }: AdminAuthProps) {
           toast.error("This email is not registered as an admin.");
           supabase.auth.signOut();
         }
+      } catch {
+        toast.error("Failed to verify admin status.");
+      } finally {
+        setVerifying(false);
       }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [session]);
+    })();
+  }, [authReady, authEmail, session, verifying]);
 
   const loadAdmins = useCallback(async () => {
     const { data } = await supabase
@@ -224,6 +257,18 @@ export default function AdminAuth({ children }: AdminAuthProps) {
       setManageLoading(false);
     }
   };
+
+  // Signing in — auth restored but admin verification in progress
+  if (!session && (verifying || (!authReady && !hashError))) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+          <p className="text-sm text-muted-foreground">Signing you in…</p>
+        </div>
+      </div>
+    );
+  }
 
   // Not authenticated — show login
   if (!session) {
