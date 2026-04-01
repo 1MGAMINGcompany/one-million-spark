@@ -1,15 +1,17 @@
-import { useMemo } from "react";
+import { useState } from "react";
 import { getTeamLogo } from "@/lib/teamLogos";
 import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
+import { formatEventDateTime } from "@/lib/formatEventLocalDateTime";
 import type { Fight } from "@/components/predictions/FightCard";
 
 interface SimplePredictionCardProps {
   fight: Fight;
-  onPredict: (fight: Fight, pick: "fighter_a" | "fighter_b") => void;
+  onPredict: (fight: Fight, pick: "fighter_a" | "fighter_b" | "draw") => void;
   userEntry?: { fighter_pick: string; amount_usd: number | null; claimed: boolean } | null;
   onClaim?: (fightId: string) => void;
   claiming?: boolean;
   themeColor?: string;
+  onShareWin?: (fight: Fight) => void;
 }
 
 function calcPayout(price: number | null, amount: number): number {
@@ -23,7 +25,6 @@ function getOddsFromFight(fight: Fight): { priceA: number; priceB: number } {
   if (pA > 0 && pB > 0) return { priceA: pA, priceB: pB };
   if (pA > 0) return { priceA: pA, priceB: 1 - pA };
   if (pB > 0) return { priceA: 1 - pB, priceB: pB };
-  // Pool-based fallback
   const poolA = (fight.pool_a_usd ?? 0) || fight.pool_a_lamports / 1e9;
   const poolB = (fight.pool_b_usd ?? 0) || fight.pool_b_lamports / 1e9;
   const total = poolA + poolB;
@@ -38,30 +39,44 @@ export default function SimplePredictionCard({
   onClaim,
   claiming,
   themeColor = "#3b82f6",
+  onShareWin,
 }: SimplePredictionCardProps) {
   const nameA = resolveOutcomeName(fight.fighter_a_name, "a", fight);
   const nameB = resolveOutcomeName(fight.fighter_b_name, "b", fight);
   const { priceA, priceB } = getOddsFromFight(fight);
   const payoutA = calcPayout(priceA, 10);
   const payoutB = calcPayout(priceB, 10);
+  const multiplierA = priceA > 0 ? (1 / priceA).toFixed(2) : "—";
+  const multiplierB = priceB > 0 ? (1 / priceB).toFixed(2) : "—";
 
   const logoDataA = getTeamLogo(nameA, fight.event_name);
   const logoDataB = getTeamLogo(nameB, fight.event_name);
   const logoA = logoDataA?.url || null;
   const logoB = logoDataB?.url || null;
-  const emojiA = logoDataA?.emoji || null;
-  const emojiB = logoDataB?.emoji || null;
+
+  const hasDrawOption = !!(fight as any).draw_allowed;
 
   const isOpen = fight.status === "open";
   const isSettled = ["settled", "confirmed", "result_selected"].includes(fight.status);
   const userPicked = userEntry?.fighter_pick;
   const userWon = isSettled && fight.winner === userPicked;
+  const [winShared, setWinShared] = useState(false);
+
+  const eventDateStr = (fight as any).event_date
+    ? formatEventDateTime((fight as any).event_date)
+    : null;
+
+  // League badge
+  const leagueName = fight.event_name?.split(" — ")[0] || fight.event_name;
 
   // Settled state
   if (isSettled && fight.winner) {
     const winnerName = fight.winner === "fighter_a" ? nameA : nameB;
     return (
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+        {leagueName && (
+          <div className="text-[10px] font-bold text-white/25 uppercase tracking-wider mb-2">{leagueName}</div>
+        )}
         <div className="text-center mb-3">
           <span className="text-xs font-bold text-green-400 uppercase tracking-wider">✅ Result</span>
         </div>
@@ -81,7 +96,19 @@ export default function SimplePredictionCard({
                     {claiming ? "Claiming..." : "Collect Winnings"}
                   </button>
                 )}
-                {userEntry?.claimed && <p className="text-xs text-white/40 mt-1">Winnings collected ✓</p>}
+                {userEntry?.claimed && (
+                  <div className="space-y-2 mt-2">
+                    <p className="text-xs text-white/40">Winnings collected ✓</p>
+                    {onShareWin && !winShared && (
+                      <button
+                        onClick={() => { onShareWin(fight); setWinShared(true); }}
+                        className="px-5 py-2 rounded-xl font-bold text-sm text-white transition-all border border-white/20 hover:bg-white/10"
+                      >
+                        🏆 SHARE YOUR WIN
+                      </button>
+                    )}
+                  </div>
+                )}
               </>
             ) : (
               <p className="text-red-400/70 text-sm">Better luck next time</p>
@@ -97,6 +124,9 @@ export default function SimplePredictionCard({
     const pickedName = userPicked === "fighter_a" ? nameA : nameB;
     return (
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+        {leagueName && (
+          <div className="text-[10px] font-bold text-white/25 uppercase tracking-wider mb-2">{leagueName}</div>
+        )}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             {logoA && <img src={logoA} className="w-6 h-6 object-contain" alt="" />}
@@ -108,6 +138,9 @@ export default function SimplePredictionCard({
             {logoB && <img src={logoB} className="w-6 h-6 object-contain" alt="" />}
           </div>
         </div>
+        {eventDateStr && (
+          <p className="text-xs text-white/30 text-center mb-2">{eventDateStr}</p>
+        )}
         <div className="text-center rounded-xl bg-white/5 py-3 px-4">
           <p className="text-sm text-white/60">Your Pick</p>
           <p className="text-lg font-bold text-white">🎯 {pickedName}</p>
@@ -120,8 +153,15 @@ export default function SimplePredictionCard({
   }
 
   // Open for predictions
+  const gridCols = hasDrawOption ? "grid-cols-3" : "grid-cols-2";
+
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 space-y-4">
+      {/* League badge */}
+      {leagueName && (
+        <div className="text-[10px] font-bold text-white/25 uppercase tracking-wider">{leagueName}</div>
+      )}
+
       {/* Team names */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 flex-1">
@@ -135,8 +175,13 @@ export default function SimplePredictionCard({
         </div>
       </div>
 
+      {/* Event date */}
+      {eventDateStr && (
+        <p className="text-xs text-white/30 text-center">{eventDateStr}</p>
+      )}
+
       {/* Pick buttons */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className={`grid ${gridCols} gap-3`}>
         <button
           onClick={() => isOpen && onPredict(fight, "fighter_a")}
           disabled={!isOpen}
@@ -144,9 +189,20 @@ export default function SimplePredictionCard({
         >
           <span className="block text-sm font-bold text-white">{nameA}</span>
           <span className="block text-xs mt-1" style={{ color: themeColor }}>
-            You win: ${payoutA.toFixed(2)}
+            Bet $10 → Win ${payoutA.toFixed(2)}
           </span>
+          <span className="block text-[10px] text-white/25 mt-0.5">({multiplierA}x)</span>
         </button>
+        {hasDrawOption && (
+          <button
+            onClick={() => isOpen && onPredict(fight, "draw")}
+            disabled={!isOpen}
+            className="rounded-xl py-3 px-2 text-center transition-all border border-white/10 hover:border-white/30 bg-white/5 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <span className="block text-sm font-bold text-white">Draw</span>
+            <span className="block text-xs mt-1 text-white/40">Available</span>
+          </button>
+        )}
         <button
           onClick={() => isOpen && onPredict(fight, "fighter_b")}
           disabled={!isOpen}
@@ -154,8 +210,9 @@ export default function SimplePredictionCard({
         >
           <span className="block text-sm font-bold text-white">{nameB}</span>
           <span className="block text-xs mt-1" style={{ color: themeColor }}>
-            You win: ${payoutB.toFixed(2)}
+            Bet $10 → Win ${payoutB.toFixed(2)}
           </span>
+          <span className="block text-[10px] text-white/25 mt-0.5">({multiplierB}x)</span>
         </button>
       </div>
 
