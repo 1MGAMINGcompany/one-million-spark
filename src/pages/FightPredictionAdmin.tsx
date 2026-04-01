@@ -19,7 +19,7 @@ import {
   Shield, Plus, Lock, Trophy, Loader2, Play, CheckCircle, Ban,
   ArrowDown, Trash2, Eye, AlertTriangle, RefreshCw, Power, Download,
   Archive, EyeOff, Filter, ChevronUp, ChevronDown, Users, Settings,
-  Save, Globe,
+  Save, Globe, Zap,
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import {
