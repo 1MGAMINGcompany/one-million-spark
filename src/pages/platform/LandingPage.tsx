@@ -349,6 +349,9 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ═══════════════ REVENUE CALCULATOR ═══════════════ */}
+      <RevenueCalculator />
+
       {/* ═══════════════ HOW IT WORKS — 4 STEPS ═══════════════ */}
       <section className="py-20 px-4 sm:px-6 relative z-10">
         <div className="max-w-6xl mx-auto">
