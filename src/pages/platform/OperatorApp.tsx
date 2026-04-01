@@ -14,8 +14,8 @@ import { toast } from "sonner";
 import { dbg } from "@/lib/debugLog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import EventSection, { parseSport } from "@/components/predictions/EventSection";
-import PredictionModal from "@/components/predictions/PredictionModal";
+import SimplePredictionCard from "@/components/operator/SimplePredictionCard";
+import SimplePredictionModal from "@/components/operator/SimplePredictionModal";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
 import ScrollableSportTabs, { type SportTabGroup } from "@/components/admin/ScrollableSportTabs";
@@ -23,6 +23,27 @@ import type { Fight } from "@/components/predictions/FightCard";
 import type { TradeResult } from "@/components/predictions/tradeResultTypes";
 import { isPropMarket } from "@/lib/detectSport";
 import { getTeamLogo } from "@/lib/teamLogos";
+
+/** Inline parseSport for operator app - avoids importing EventSection */
+function parseSport(eventName: string, _sp?: string | null, _cat?: string | null): string {
+  const upper = eventName.toUpperCase();
+  if (["MLS","SOCCER","FUTBOL","PREMIER LEAGUE","LA LIGA","CHAMPIONS LEAGUE","SERIE A","BUNDESLIGA","LIGUE 1","EPL","COPA","LIGA MX"].some(k => upper.includes(k))) return "FUTBOL";
+  if (["UFC","MMA","PFL","BELLATOR"].some(k => upper.includes(k))) return "MMA";
+  if (upper.includes("BOXING")) return "BOXING";
+  if (upper.includes("MUAY THAI")) return "MUAY THAI";
+  if (upper.includes("BARE KNUCKLE") || upper.includes("BKFC")) return "BARE KNUCKLE";
+  if (upper.includes("NFL")) return "NFL";
+  if (upper.includes("NBA")) return "NBA";
+  if (upper.includes("NCAA")) return "NCAA";
+  if (upper.includes("NHL")) return "NHL";
+  if (upper.includes("MLB")) return "MLB";
+  if (upper.includes("TENNIS") || upper.includes("ATP") || upper.includes("WTA")) return "TENNIS";
+  if (upper.includes("GOLF") || upper.includes("PGA")) return "GOLF";
+  if (upper.includes("F1") || upper.includes("FORMULA")) return "F1";
+  if (upper.includes("CRICKET") || upper.includes("IPL")) return "CRICKET";
+  if (upper.includes("RUGBY")) return "RUGBY";
+  return eventName.split(' — ')[0] || "OTHER";
+}
 
 const THEME_MAP: Record<string, { primary: string; bg: string; card: string }> = {
   blue: { primary: "#3b82f6", bg: "#06080f", card: "rgba(255,255,255,0.03)" },
@@ -160,17 +181,6 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     return fights;
   }, [allFights, sportFilter, dateFilter, searchQuery]);
 
-  const groupedEvents = useMemo(() => {
-    const groups: Record<string, { fights: Fight[] }> = {};
-    filteredFights.forEach(f => {
-      const key = f.event_name || "Events";
-      if (!groups[key]) groups[key] = { fights: [] };
-      groups[key].fights.push(f);
-    });
-    return groups;
-  }, [filteredFights]);
-
-  const hotFightIds = useMemo(() => new Set<string>(), []);
 
   const handleSubmit = async (amountUsd: number) => {
     if (!selectedFight || !selectedPick || !isConnected || !address) return;
@@ -292,7 +302,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   }
 
   const theme = THEME_MAP[operator.theme] || THEME_MAP.blue;
-  const eventEntries = Object.entries(groupedEvents);
+  
 
   return (
     <div className="min-h-screen text-white" style={{ backgroundColor: theme.bg }}>
@@ -361,8 +371,20 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         </div>
       </div>
 
+      {/* Hero text */}
+      {filteredFights.length > 0 && !searchQuery && sportFilter === "ALL" && (
+        <div className="max-w-4xl mx-auto px-4 pt-2 pb-0 text-center">
+          <h1 className="text-2xl sm:text-3xl font-black text-white leading-tight">
+            {t("operator.heroTitle", "Pick a Winner. Win Money.")}
+          </h1>
+          <p className="text-sm text-white/40 mt-1">
+            {t("operator.heroSubtitle", "Choose a team. Enter amount. See your payout instantly.")}
+          </p>
+        </div>
+      )}
+
       {/* Events */}
-      <div className="max-w-4xl mx-auto px-4 py-4 space-y-6">
+      <div className="max-w-4xl mx-auto px-4 py-4 space-y-4">
         {backendDegraded && filteredFights.length === 0 ? (
           <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-6 py-12 text-center">
             <ShieldCheck className="w-14 h-14 mx-auto mb-4 text-amber-400" />
@@ -376,20 +398,20 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
             {searchQuery ? t("operator.noSearchResults", "No events match your search") : t("operator.noEvents")}
           </div>
         ) : (
-          eventEntries.map(([eventName, group]) => (
-            <EventSection
-              key={eventName}
-              eventName={eventName}
-              fights={group.fights}
-              wallet={address || null}
-              userEntries={userEntries}
-              onPredict={handlePredict}
-              onClaim={handleClaim}
-              claiming={claiming}
-              hotFightIds={hotFightIds}
-              onWalletRequired={() => { if (!authenticated) login(); else setShowWalletGate(true); }}
-            />
-          ))
+          filteredFights.map(fight => {
+            const entry = userEntries.find((e: any) => e.fight_id === fight.id);
+            return (
+              <SimplePredictionCard
+                key={fight.id}
+                fight={fight}
+                onPredict={handlePredict}
+                userEntry={entry || null}
+                onClaim={handleClaim}
+                claiming={claiming}
+                themeColor={theme.primary}
+              />
+            );
+          })
         )}
       </div>
 
@@ -406,20 +428,18 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
       {/* Prediction Modal */}
       {selectedFight && selectedPick && (
-        <PredictionModal
+        <SimplePredictionModal
           fight={selectedFight}
           pick={selectedPick}
           onClose={() => { setSelectedFight(null); setSelectedPick(null); setShowSuccess(false); setLastTradeResult(null); resetAllowance(); }}
           onSubmit={handleSubmit}
           submitting={submitting}
           showSuccess={showSuccess}
-          wallet={address || undefined}
           tradeResult={lastTradeResult}
           approvalStep={allowanceState.step}
           approvalError={allowanceState.errorReason}
+          themeColor={theme.primary}
           operatorBrandName={operator?.brand_name}
-          operatorLogoUrl={operator?.logo_url}
-          operatorSubdomain={operator?.subdomain}
         />
       )}
 

@@ -37,6 +37,7 @@ import { formatEventDateTime } from "@/lib/formatEventLocalDateTime";
 import PromoCodeManager from "@/components/admin/PromoCodeManager";
 import PlatformEventCreator from "@/components/admin/PlatformEventCreator";
 import OperatorAdminSection from "@/components/admin/OperatorAdminSection";
+import AdminOverviewTab from "@/components/admin/AdminOverviewTab";
 // PlatformAdminSection removed — now at /admin/platform
 
 /** Convert a datetime-local value to a full ISO string preserving the local offset */
@@ -178,7 +179,7 @@ function FightPredictionAdminInner({ address }: { address: string }) {
   const [events, setEvents] = useState<PredictionEvent[]>([]);
   const [fights, setFights] = useState<Fight[]>([]);
   const [busy, setBusy] = useState(false);
-  const [adminFilter, setAdminFilter] = useState<string>("active");
+  const [adminFilter, setAdminFilter] = useState<string>("overview");
 
   // Kill switches
   const [killSwitches, setKillSwitches] = useState({
@@ -417,7 +418,7 @@ function FightPredictionAdminInner({ address }: { address: string }) {
     return ef.length > 0 && ef.every(f => ["settled", "refunds_complete", "cancelled"].includes(f.status));
   };
 
-  type AdminFilterType = "needs_action" | "active" | "pending" | "pending_review" | "live" | "review" | "archived" | "dismissed";
+  type AdminFilterType = "overview" | "needs_action" | "active" | "pending" | "pending_review" | "live" | "review" | "archived" | "dismissed";
 
   // Mutually exclusive filter assignment: each event belongs to exactly one bucket
   const getEventBucket = (e: PredictionEvent): AdminFilterType => {
@@ -444,10 +445,11 @@ function FightPredictionAdminInner({ address }: { address: string }) {
     return "active";
   };
 
-  const bucketCounts: Record<AdminFilterType, number> = { needs_action: 0, active: 0, pending: 0, pending_review: 0, live: 0, review: 0, archived: 0, dismissed: 0 };
-  events.forEach(e => { bucketCounts[getEventBucket(e)]++; });
+  const bucketCounts: Record<AdminFilterType, number> = { overview: 0, needs_action: 0, active: 0, pending: 0, pending_review: 0, live: 0, review: 0, archived: 0, dismissed: 0 };
+  events.forEach(e => { const b = getEventBucket(e); if (b !== "overview") bucketCounts[b]++; });
 
   const FILTER_TABS: { key: AdminFilterType; label: string; count: number }[] = [
+    { key: "overview", label: "📊 Overview", count: 0 },
     { key: "needs_action", label: "⚡ Action", count: bucketCounts.needs_action },
     { key: "active", label: "Active", count: bucketCounts.active },
     { key: "pending_review", label: "📋 Review", count: bucketCounts.pending_review },
@@ -663,6 +665,9 @@ function FightPredictionAdminInner({ address }: { address: string }) {
           ))}
         </div>
 
+        {/* ── Overview Tab ── */}
+        {adminFilter === "overview" && <AdminOverviewTab />}
+
         {/* ── Bulk Approve (pending_review tab) ── */}
         {adminFilter === "pending_review" && bucketCounts.pending_review > 0 && (
           <Button
@@ -687,68 +692,72 @@ function FightPredictionAdminInner({ address }: { address: string }) {
         )}
 
         {/* ── Events List ── */}
-        <h2 className="text-lg font-bold text-foreground font-['Cinzel']">
-          Events
-          <span className="text-sm font-normal text-muted-foreground ml-2">({filteredEvents.length})</span>
-        </h2>
-
-        {filteredEvents.length === 0 && (
-          <Card className="bg-card border-border/50 p-6 text-center">
-            <p className="text-sm text-muted-foreground">No events in this category.</p>
-          </Card>
-        )}
-
-        {filteredEvents.map(event => (
-          <AdminEventCard
-            key={event.id}
-            event={event}
-            fights={eventFights(event.id)}
-            entryCounts={entryCounts}
-            botConfirmData={botConfirmData}
-            busy={busy}
-            onFightAction={fightAction}
-            onConfirm={withConfirm}
-            onRefund={async (fightId) => {
-              try {
-                const result = await callRefundWorker(fightId);
-                toast.success(`Refunded ${result.refunded} entries`);
-                loadData();
-              } catch (e: any) { toast.error(e.message); }
-            }}
-            callAdmin={callAdmin}
-            loadData={loadData}
-            onDismiss={handleDismissEvent}
-            onArchive={handleArchiveEvent}
-            onDelete={handleDeleteEvent}
-            eventHasPredictions={eventHasPredictions(event.id)}
-            eventIsFullySettled={eventIsFullySettled(event.id)}
-          />
-        ))}
-
-        {/* ── Ungrouped Fights ── */}
-        {fights.filter(f => !f.event_id).length > 0 && (
+        {adminFilter !== "overview" && (
           <>
-            <h2 className="text-lg font-bold text-foreground font-['Cinzel']">Ungrouped Fights</h2>
-            <div className="space-y-3">
-              {fights.filter(f => !f.event_id).map(fight => (
-                <AdminFightCard
-                  key={fight.id}
-                  fight={fight}
-                  busy={busy}
-                  entryCount={entryCounts[fight.id] || 0}
-                  botConfirm={botConfirmData[fight.id] || null}
-                  onAction={(action, extra) => fightAction(action, fight.id, extra)}
-                  onConfirm={withConfirm}
-                  onRefund={async () => {
-                    try {
-                      const result = await callRefundWorker(fight.id);
-                      toast.success(`Refunded ${result.refunded} entries`);
-                      loadData();
-                    } catch (e: any) { toast.error(e.message); }
-                  }}
-                />
-              ))}
-            </div>
+            <h2 className="text-lg font-bold text-foreground font-['Cinzel']">
+              Events
+              <span className="text-sm font-normal text-muted-foreground ml-2">({filteredEvents.length})</span>
+            </h2>
+
+            {filteredEvents.length === 0 && (
+              <Card className="bg-card border-border/50 p-6 text-center">
+                <p className="text-sm text-muted-foreground">No events in this category.</p>
+              </Card>
+            )}
+
+            {filteredEvents.map(event => (
+              <AdminEventCard
+                key={event.id}
+                event={event}
+                fights={eventFights(event.id)}
+                entryCounts={entryCounts}
+                botConfirmData={botConfirmData}
+                busy={busy}
+                onFightAction={fightAction}
+                onConfirm={withConfirm}
+                onRefund={async (fightId) => {
+                  try {
+                    const result = await callRefundWorker(fightId);
+                    toast.success(`Refunded ${result.refunded} entries`);
+                    loadData();
+                  } catch (e: any) { toast.error(e.message); }
+                }}
+                callAdmin={callAdmin}
+                loadData={loadData}
+                onDismiss={handleDismissEvent}
+                onArchive={handleArchiveEvent}
+                onDelete={handleDeleteEvent}
+                eventHasPredictions={eventHasPredictions(event.id)}
+                eventIsFullySettled={eventIsFullySettled(event.id)}
+              />
+            ))}
+
+            {/* ── Ungrouped Fights ── */}
+            {fights.filter(f => !f.event_id).length > 0 && (
+              <>
+                <h2 className="text-lg font-bold text-foreground font-['Cinzel']">Ungrouped Fights</h2>
+                <div className="space-y-3">
+                  {fights.filter(f => !f.event_id).map(fight => (
+                    <AdminFightCard
+                      key={fight.id}
+                      fight={fight}
+                      busy={busy}
+                      entryCount={entryCounts[fight.id] || 0}
+                      botConfirm={botConfirmData[fight.id] || null}
+                      onAction={(action, extra) => fightAction(action, fight.id, extra)}
+                      onConfirm={withConfirm}
+                      onRefund={async () => {
+                        try {
+                          const result = await callRefundWorker(fight.id);
+                          toast.success(`Refunded ${result.refunded} entries`);
+                          loadData();
+                        } catch (e: any) { toast.error(e.message); }
+                      }}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
           </>
         )}
       </div>

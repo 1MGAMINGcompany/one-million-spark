@@ -1,0 +1,201 @@
+import { useState, useMemo } from "react";
+import { X, Loader2 } from "lucide-react";
+import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
+import { getTeamLogo } from "@/lib/teamLogos";
+import type { Fight } from "@/components/predictions/FightCard";
+import type { TradeResult } from "@/components/predictions/tradeResultTypes";
+import type { ApprovalStep } from "@/hooks/useAllowanceGate";
+import ApprovalStepIndicator from "@/components/predictions/ApprovalStepIndicator";
+
+const AMOUNTS = [5, 10, 25, 50, 100];
+const MIN_USD = 1.0;
+
+function getFeeRate(fight: Fight): number {
+  if (fight.commission_bps != null) return fight.commission_bps / 10_000;
+  return fight.source === "polymarket" ? 0.0225 : 0.05;
+}
+
+function calcPayout(fight: Fight, pick: "fighter_a" | "fighter_b", amount: number): number {
+  if (amount <= 0) return 0;
+  const fee = amount * getFeeRate(fight);
+  const net = amount - fee;
+  const pA = fight.price_a ?? 0;
+  const pB = fight.price_b ?? 0;
+  let price = pick === "fighter_a" ? pA : pB;
+  // Derive if one-sided
+  if (price <= 0) {
+    const other = pick === "fighter_a" ? pB : pA;
+    if (other > 0 && other <= 1) price = 1 - other;
+  }
+  if (price > 0) return net / price;
+  // Pool-based fallback
+  const poolA = (fight.pool_a_usd ?? 0) || fight.pool_a_lamports / 1e9;
+  const poolB = (fight.pool_b_usd ?? 0) || fight.pool_b_lamports / 1e9;
+  const pickedPool = (pick === "fighter_a" ? poolA : poolB) + net;
+  const totalPool = poolA + poolB + net;
+  return totalPool > 0 ? (net / pickedPool) * totalPool : net;
+}
+
+interface Props {
+  fight: Fight;
+  pick: "fighter_a" | "fighter_b";
+  onClose: () => void;
+  onSubmit: (amount: number) => void;
+  submitting: boolean;
+  showSuccess?: boolean;
+  tradeResult?: TradeResult | null;
+  approvalStep?: ApprovalStep;
+  approvalError?: string | null;
+  themeColor?: string;
+  operatorBrandName?: string;
+}
+
+export default function SimplePredictionModal({
+  fight,
+  pick,
+  onClose,
+  onSubmit,
+  submitting,
+  showSuccess,
+  tradeResult,
+  approvalStep,
+  approvalError,
+  themeColor = "#3b82f6",
+  operatorBrandName,
+}: Props) {
+  const [amount, setAmount] = useState(10);
+  const [customAmount, setCustomAmount] = useState("");
+
+  const pickedName = resolveOutcomeName(
+    pick === "fighter_a" ? fight.fighter_a_name : fight.fighter_b_name,
+    pick === "fighter_a" ? "a" : "b",
+    fight
+  );
+  const logoData = getTeamLogo(pickedName, fight.event_name);
+  const logo = logoData?.url || null;
+  const emoji = logoData?.emoji || null;
+  const currentAmount = customAmount ? parseFloat(customAmount) || 0 : amount;
+  const payout = calcPayout(fight, pick, currentAmount);
+  const profit = payout - currentAmount;
+
+  // Success screen
+  if (showSuccess) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
+        <div className="w-full max-w-md bg-[#0d1117] rounded-t-3xl sm:rounded-3xl p-8 text-center" onClick={e => e.stopPropagation()}>
+          <div className="text-5xl mb-4">🎯</div>
+          <h2 className="text-xl font-bold text-white mb-2">Prediction Placed!</h2>
+          <p className="text-white/60 text-sm mb-4">
+            You picked <span className="font-bold text-white">{pickedName}</span>
+          </p>
+          <div className="rounded-xl bg-white/5 p-4 mb-6">
+            <p className="text-sm text-white/50">If they win, you receive</p>
+            <p className="text-3xl font-bold mt-1" style={{ color: themeColor }}>
+              ${(tradeResult?.net_amount_usdc ? calcPayout(fight, pick, tradeResult.net_amount_usdc + (tradeResult.fee_usdc ?? 0)) : payout).toFixed(2)}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-full py-3 rounded-xl font-bold text-white bg-white/10 hover:bg-white/20 transition-all"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-md bg-[#0d1117] rounded-t-3xl sm:rounded-3xl p-6" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-bold text-white">Place Prediction</h2>
+          <button onClick={onClose} className="text-white/40 hover:text-white p-1">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Picked team */}
+        <div className="flex items-center gap-3 mb-6 p-4 rounded-xl bg-white/5">
+          {logo && <img src={logo} className="w-10 h-10 object-contain" alt="" />}
+          <div>
+            <p className="text-xs text-white/40">Your Pick</p>
+            <p className="text-lg font-bold text-white">{pickedName}</p>
+          </div>
+        </div>
+
+        {/* Amount selection */}
+        <div className="mb-4">
+          <p className="text-sm text-white/50 mb-2">Enter Amount ($)</p>
+          <div className="flex gap-2 mb-3 flex-wrap">
+            {AMOUNTS.map(a => (
+              <button
+                key={a}
+                onClick={() => { setAmount(a); setCustomAmount(""); }}
+                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all border ${
+                  !customAmount && amount === a
+                    ? "text-white border-white/40 bg-white/10"
+                    : "text-white/50 border-white/10 hover:border-white/20"
+                }`}
+              >
+                ${a}
+              </button>
+            ))}
+          </div>
+          <input
+            type="number"
+            inputMode="decimal"
+            placeholder="Custom amount"
+            value={customAmount}
+            onChange={e => setCustomAmount(e.target.value)}
+            className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white text-lg font-bold placeholder:text-white/20 focus:outline-none focus:border-white/30"
+          />
+        </div>
+
+        {/* Live payout */}
+        {currentAmount >= MIN_USD && (
+          <div className="rounded-xl bg-white/5 p-4 mb-6 space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-white/50">You Win</span>
+              <span className="font-bold text-lg" style={{ color: themeColor }}>${payout.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-white/50">Profit</span>
+              <span className="text-green-400 font-bold">+${profit.toFixed(2)}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Approval indicator */}
+        {approvalStep && approvalStep !== "idle" && (
+          <div className="mb-4">
+            <ApprovalStepIndicator step={approvalStep} errorReason={approvalError} />
+          </div>
+        )}
+
+        {/* Submit */}
+        <button
+          onClick={() => currentAmount >= MIN_USD && onSubmit(currentAmount)}
+          disabled={submitting || currentAmount < MIN_USD}
+          className="w-full py-4 rounded-xl font-bold text-lg text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          style={{ backgroundColor: submitting ? undefined : themeColor }}
+        >
+          {submitting ? (
+            <span className="flex items-center justify-center gap-2">
+              <Loader2 className="w-5 h-5 animate-spin" /> Processing...
+            </span>
+          ) : currentAmount < MIN_USD ? (
+            "Enter amount ($1 min)"
+          ) : (
+            `Place $${currentAmount.toFixed(2)} Prediction`
+          )}
+        </button>
+
+        <p className="text-center text-[10px] text-white/15 mt-3">
+          Service fee applies • {operatorBrandName || "1MG"}
+        </p>
+      </div>
+    </div>
+  );
+}
