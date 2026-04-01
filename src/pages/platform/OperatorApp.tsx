@@ -333,10 +333,30 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
   if (!operator) {
     return (
-      <div className="min-h-screen bg-[#06080f] text-white flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold mb-2">{t("operator.notFound")}</h2>
-          <p className="text-white/50">{t("operator.notFoundDesc")}</p>
+      <div className="min-h-screen bg-[#06080f] text-white flex flex-col items-center justify-center px-6">
+        <div className="text-center max-w-md space-y-6">
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-2">
+            <Globe className="w-8 h-8 text-white/20" />
+          </div>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
+            This app does not exist
+          </h1>
+          <p className="text-white/50 text-base sm:text-lg leading-relaxed">
+            Start your own predictions app in minutes — no code, no setup, just launch.
+          </p>
+          <a
+            href="https://1mg.live"
+            className="inline-flex items-center justify-center gap-2 rounded-xl px-8 py-4 text-base font-bold text-black transition-all duration-200 hover:scale-[1.02] shadow-lg"
+            style={{ background: "linear-gradient(135deg, #d4a017, #f5c842)" }}
+          >
+            BUY YOUR APP — $2,400 USDC
+          </a>
+          <p className="text-white/30 text-xs">
+            Powered by{" "}
+            <a href="https://1mg.live" className="underline hover:text-white/50">
+              1MG
+            </a>
+          </p>
         </div>
       </div>
     );
