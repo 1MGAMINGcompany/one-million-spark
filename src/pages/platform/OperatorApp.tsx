@@ -10,7 +10,7 @@ import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
 import { usePolymarketSession } from "@/hooks/usePolymarketSession";
 import { usePolymarketPrices } from "@/hooks/usePolymarketPrices";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Globe, Trophy, Loader2, ShieldCheck, Search, ChevronDown } from "lucide-react";
+import { Globe, Trophy, Loader2, ShieldCheck, Search, ChevronDown, CalendarPlus } from "lucide-react";
 import { toast } from "sonner";
 import { dbg } from "@/lib/debugLog";
 import { Button } from "@/components/ui/button";
@@ -24,41 +24,19 @@ import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
 import ScrollableSportTabs, { type SportTabGroup } from "@/components/admin/ScrollableSportTabs";
 import type { Fight } from "@/components/predictions/FightCard";
 import type { TradeResult } from "@/components/predictions/tradeResultTypes";
-import { isPropMarket } from "@/lib/detectSport";
 import { getTeamLogo } from "@/lib/teamLogos";
 import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
-
-/** Inline parseSport for operator app - avoids importing EventSection */
-function parseSport(eventName: string, _sp?: string | null, _cat?: string | null): string {
-  const upper = eventName.toUpperCase();
-  if (["MLS","SOCCER","FUTBOL","PREMIER LEAGUE","LA LIGA","CHAMPIONS LEAGUE","SERIE A","BUNDESLIGA","LIGUE 1","EPL","COPA","LIGA MX"].some(k => upper.includes(k))) return "FUTBOL";
-  if (["UFC","MMA","PFL","BELLATOR"].some(k => upper.includes(k))) return "MMA";
-  if (upper.includes("BOXING")) return "BOXING";
-  if (upper.includes("MUAY THAI")) return "MUAY THAI";
-  if (upper.includes("BARE KNUCKLE") || upper.includes("BKFC")) return "BARE KNUCKLE";
-  if (upper.includes("NFL")) return "NFL";
-  if (upper.includes("NBA")) return "NBA";
-  if (upper.includes("NCAA")) return "NCAA";
-  if (upper.includes("NHL")) return "NHL";
-  if (upper.includes("MLB")) return "MLB";
-  if (upper.includes("TENNIS") || upper.includes("ATP") || upper.includes("WTA")) return "TENNIS";
-  if (upper.includes("GOLF") || upper.includes("PGA")) return "GOLF";
-  if (upper.includes("F1") || upper.includes("FORMULA")) return "F1";
-  if (upper.includes("CRICKET") || upper.includes("IPL")) return "CRICKET";
-  if (upper.includes("RUGBY")) return "RUGBY";
-  return eventName.split(' — ')[0] || "OTHER";
-}
+import {
+  normalizeOperatorSport,
+  isValidOperatorEvent,
+  isEventDateRelevant,
+  OPERATOR_SPORT_EMOJI,
+} from "@/lib/operatorSportRules";
 
 const THEME_MAP: Record<string, { primary: string; bg: string; card: string }> = {
   blue: { primary: "#3b82f6", bg: "#06080f", card: "rgba(255,255,255,0.03)" },
   gold: { primary: "#d4a017", bg: "#0a0a0a", card: "rgba(255,255,255,0.03)" },
   red: { primary: "#ef4444", bg: "#0a0a0f", card: "rgba(255,255,255,0.03)" },
-};
-
-const SPORT_EMOJI: Record<string, string> = {
-  nba: "🏀", nhl: "🏒", mlb: "⚾", nfl: "🏈", mls: "⚽", soccer: "⚽",
-  futbol: "⚽", ufc: "🥊", mma: "🥊", boxing: "🥊", tennis: "🎾", cricket: "🏏",
-  golf: "⛳", f1: "🏎️", rugby: "🏉", ncaa: "🎓",
 };
 
 interface OperatorAppProps {
@@ -100,6 +78,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [shareFight, setShareFight] = useState<Fight | null>(null);
   const [shareAmount, setShareAmount] = useState<number | undefined>();
 
+  // ── STRICT event query ──
   const { data: operatorFights, isError: opFightsError } = useQuery({
     queryKey: ["operator_fights", operator?.id],
     queryFn: async () => {
@@ -107,8 +86,10 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         .from("prediction_fights")
         .select("*")
         .or(`operator_id.eq.${operator!.id},and(operator_id.is.null,visibility.in.(platform,all))`)
-        .not("status", "eq", "draft")
-        .order("event_date", { ascending: true });
+        .in("status", ["open", "live", "locked"])
+        .not("event_date", "is", null)
+        .order("event_date", { ascending: true })
+        .limit(200);
       return (data || []) as Fight[];
     },
     enabled: !!operator?.id,
@@ -116,6 +97,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   });
 
   const allowedSports = settings?.allowed_sports || [];
+  const disabledSports = (operator as any)?.disabled_sports || [];
   const backendDegraded = opFightsError;
 
   const loadUserEntries = useCallback(async () => {
@@ -126,24 +108,44 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
   useEffect(() => { loadUserEntries(); }, [loadUserEntries]);
 
+  // ── STRICT client-side validation pipeline ──
   const allFights = useMemo(() => {
-    let fights = (operatorFights || []).filter(f => !isPropMarket(f));
-    if (allowedSports.length > 0) {
-      fights = fights.filter(f => {
-        if ((f as any).operator_id === operator?.id) return true;
-        const sport = parseSport(f.event_name, null, null);
-        const sportLower = sport.toLowerCase();
-        return allowedSports.some(s => s.toLowerCase() === sportLower || sportLower.includes(s.toLowerCase()));
-      });
-    }
-    return fights;
-  }, [operatorFights, allowedSports, operator?.id]);
+    return (operatorFights || []).filter(f => {
+      // 1. Valid event shape (non-empty names, title, date, status)
+      if (!isValidOperatorEvent(f as any)) return false;
 
-  // Build sport tab groups
+      // 2. Event date must be relevant (not too old)
+      if (!isEventDateRelevant((f as any).event_date)) return false;
+
+      // 3. Sport must be on the allowlist
+      const sport = normalizeOperatorSport(
+        f.event_name,
+        (f as any).sport ?? null,
+      );
+      if (!sport) return false;
+
+      // 4. Check operator's disabled_sports
+      if (disabledSports.length > 0 && disabledSports.some((ds: string) => ds.toUpperCase() === sport)) return false;
+
+      // 5. If operator has an explicit allowed_sports list, apply it
+      //    (operator's own events always pass)
+      if (allowedSports.length > 0 && (f as any).operator_id !== operator?.id) {
+        const sportLower = sport.toLowerCase();
+        const match = allowedSports.some((s: string) =>
+          s.toLowerCase() === sportLower || sportLower.includes(s.toLowerCase())
+        );
+        if (!match) return false;
+      }
+
+      return true;
+    });
+  }, [operatorFights, allowedSports, disabledSports, operator?.id]);
+
+  // ── Build sport tab groups (only sports with events) ──
   const sportTabGroups = useMemo<SportTabGroup[]>(() => {
     const sportCounts: Record<string, number> = {};
     allFights.forEach(f => {
-      const sport = parseSport(f.event_name, null, null);
+      const sport = normalizeOperatorSport(f.event_name, (f as any).sport ?? null) || "OTHER";
       sportCounts[sport] = (sportCounts[sport] || 0) + 1;
     });
     const tabs = Object.entries(sportCounts)
@@ -151,12 +153,12 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       .map(([sport, count]) => ({
         key: sport,
         label: sport,
-        emoji: SPORT_EMOJI[sport.toLowerCase()] || "🏆",
+        emoji: OPERATOR_SPORT_EMOJI[sport] || "🏆",
         count,
       }));
     return [{
       label: "Sports",
-      tabs: [{ key: "ALL", label: "All", emoji: "🔥", count: allFights.length }, ...tabs],
+      tabs: [{ key: "ALL", label: "All Sports", emoji: "🔥", count: allFights.length }, ...tabs],
     }];
   }, [allFights]);
 
@@ -173,7 +175,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     }
 
     if (sportFilter !== "ALL") {
-      fights = fights.filter(f => parseSport(f.event_name, null, null) === sportFilter);
+      fights = fights.filter(f => normalizeOperatorSport(f.event_name, (f as any).sport ?? null) === sportFilter);
     }
     if (dateFilter === "today") {
       const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
@@ -527,12 +529,28 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
             </p>
           </div>
         ) : filteredFights.length === 0 ? (
-          <div className="text-center py-20 text-white/30">
-            {activeTab === "picks"
-              ? "No predictions placed yet"
-              : searchQuery
-                ? t("operator.noSearchResults", "No events match your search")
-                : t("operator.noEvents")}
+          <div className="text-center py-20 px-6">
+            {activeTab === "picks" ? (
+              <>
+                <Trophy className="w-12 h-12 mx-auto mb-4 text-white/10" />
+                <h3 className="text-lg font-bold text-white/60">No predictions placed yet</h3>
+                <p className="mt-2 text-sm text-white/30">Pick a winner from the events tab to get started.</p>
+              </>
+            ) : searchQuery ? (
+              <>
+                <Search className="w-12 h-12 mx-auto mb-4 text-white/10" />
+                <h3 className="text-lg font-bold text-white/60">{t("operator.noSearchResults", "No events match your search")}</h3>
+                <p className="mt-2 text-sm text-white/30">Try a different team or player name.</p>
+              </>
+            ) : (
+              <>
+                <CalendarPlus className="w-12 h-12 mx-auto mb-4 text-white/10" />
+                <h3 className="text-lg font-bold text-white/60">No live sports available right now</h3>
+                <p className="mt-2 text-sm text-white/30 max-w-sm mx-auto">
+                  New matchups will appear here as soon as they open. Check back soon.
+                </p>
+              </>
+            )}
           </div>
         ) : (
           filteredFights.map(fight => {

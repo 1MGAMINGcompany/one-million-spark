@@ -209,18 +209,48 @@ Deno.serve(async (req) => {
     if (action === "create_event") {
       const { data: op } = await sb.from("operators").select("id, fee_percent, brand_name").eq("user_id", privyDid).single();
       if (!op) return jsonResp({ error: "not_found" }, 404);
+
+      // ── Validation ──
+      const teamA = (body.team_a || "").trim();
+      const teamB = (body.team_b || "").trim();
+      const title = (body.title || "").trim();
+      const sport = (body.sport || "").trim().toUpperCase();
+      const eventDate = body.event_date || null;
+
+      if (!teamA || !teamB) return jsonResp({ error: "Both teams/fighters are required" }, 400);
+      if (!title) return jsonResp({ error: "Title is required" }, 400);
+      if (!eventDate) return jsonResp({ error: "Event date is required" }, 400);
+
+      const ALLOWED_SPORTS = new Set([
+        "NFL", "NBA", "NHL", "SOCCER", "MMA", "BOXING", "MLB", "TENNIS",
+        "GOLF", "NCAA", "CRICKET", "F1", "NASCAR", "MLS",
+        // Accept common aliases
+        "UFC", "FUTBOL", "PGA", "FORMULA 1", "BARE KNUCKLE", "BKFC",
+      ]);
+      if (!sport || !ALLOWED_SPORTS.has(sport)) {
+        return jsonResp({ error: `Invalid sport: "${body.sport}". Allowed: NFL, NBA, NHL, Soccer, MMA, Boxing, MLB, Tennis, Golf, NCAA, Cricket, F1, NASCAR, MLS` }, 400);
+      }
+
+      // Block prop-style markets
+      const aLower = teamA.toLowerCase();
+      const bLower = teamB.toLowerCase();
+      if ((aLower === "yes" && bLower === "no") || (aLower === "no" && bLower === "yes") ||
+          (aLower === "over" && bLower === "under") || (aLower === "under" && bLower === "over")) {
+        return jsonResp({ error: "Only match winner markets are allowed (Team A vs Team B)" }, 400);
+      }
+
       const { data: event, error: evErr } = await sb.from("operator_events").insert({
-        operator_id: op.id, title: body.title, sport: body.sport, team_a: body.team_a,
-        team_b: body.team_b, event_date: body.event_date || null, image_url: body.image_url || null,
+        operator_id: op.id, title, sport: body.sport, team_a: teamA,
+        team_b: teamB, event_date: eventDate, image_url: body.image_url || null,
         is_featured: body.is_featured || false, status: "open",
       }).select().single();
       if (evErr) throw evErr;
       const commissionBps = Math.round((op.fee_percent + 1) * 100);
       const { data: fight, error: fightErr } = await sb.from("prediction_fights").insert({
-        title: body.title, fighter_a_name: body.team_a, fighter_b_name: body.team_b,
-        event_name: body.title, status: "open", source: "operator", trading_allowed: true,
+        title, fighter_a_name: teamA, fighter_b_name: teamB,
+        event_name: title, event_date: eventDate, status: "open", source: "operator", trading_allowed: true,
         operator_id: op.id, operator_event_id: event.id, commission_bps: commissionBps,
-        featured: body.is_featured || false,
+        featured: body.is_featured || false, draw_allowed: body.draw_allowed || false,
       }).select("id").single();
       if (fightErr) console.error("[operator-manage] Failed to create prediction_fight:", fightErr);
       return jsonResp({ event, fight_id: fight?.id || null });
