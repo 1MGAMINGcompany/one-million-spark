@@ -253,6 +253,25 @@ export default function AdminAuth({ children }: AdminAuthProps) {
                 Send Login Link
               </Button>
             </div>
+          ) : step === "error" ? (
+            <div className="space-y-4 text-center">
+              <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/30">
+                <AlertTriangle className="w-8 h-8 text-destructive mx-auto mb-3" />
+                <p className="text-sm text-foreground font-medium mb-1">
+                  Login link expired
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {hashError || "The link was already used or has expired. This often happens when email providers scan links automatically."}
+                </p>
+              </div>
+              <Button
+                onClick={() => { setStep("email"); setHashError(null); }}
+                className="w-full"
+              >
+                <Mail className="w-4 h-4 mr-2" />
+                Request a new link
+              </Button>
+            </div>
           ) : (
             <div className="space-y-4 text-center">
               <div className="p-4 rounded-lg bg-muted/50 border border-border">
