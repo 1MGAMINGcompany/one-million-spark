@@ -449,6 +449,7 @@ function FightPredictionAdminInner({ address }: { address: string }) {
   events.forEach(e => { const b = getEventBucket(e); if (b !== "overview") bucketCounts[b]++; });
 
   const FILTER_TABS: { key: AdminFilterType; label: string; count: number }[] = [
+    { key: "overview", label: "📊 Overview", count: 0 },
     { key: "needs_action", label: "⚡ Action", count: bucketCounts.needs_action },
     { key: "active", label: "Active", count: bucketCounts.active },
     { key: "pending_review", label: "📋 Review", count: bucketCounts.pending_review },
