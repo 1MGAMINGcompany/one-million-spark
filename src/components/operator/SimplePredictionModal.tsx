@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { X, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { X, Loader2, Share2 } from "lucide-react";
 import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
 import { getTeamLogo } from "@/lib/teamLogos";
 import type { Fight } from "@/components/predictions/FightCard";
@@ -15,20 +15,19 @@ function getFeeRate(fight: Fight): number {
   return fight.source === "polymarket" ? 0.0225 : 0.05;
 }
 
-function calcPayout(fight: Fight, pick: "fighter_a" | "fighter_b", amount: number): number {
+function calcPayout(fight: Fight, pick: "fighter_a" | "fighter_b" | "draw", amount: number): number {
   if (amount <= 0) return 0;
   const fee = amount * getFeeRate(fight);
   const net = amount - fee;
+  if (pick === "draw") return net * 3; // simplified draw payout
   const pA = fight.price_a ?? 0;
   const pB = fight.price_b ?? 0;
   let price = pick === "fighter_a" ? pA : pB;
-  // Derive if one-sided
   if (price <= 0) {
     const other = pick === "fighter_a" ? pB : pA;
     if (other > 0 && other <= 1) price = 1 - other;
   }
   if (price > 0) return net / price;
-  // Pool-based fallback
   const poolA = (fight.pool_a_usd ?? 0) || fight.pool_a_lamports / 1e9;
   const poolB = (fight.pool_b_usd ?? 0) || fight.pool_b_lamports / 1e9;
   const pickedPool = (pick === "fighter_a" ? poolA : poolB) + net;
@@ -38,7 +37,7 @@ function calcPayout(fight: Fight, pick: "fighter_a" | "fighter_b", amount: numbe
 
 interface Props {
   fight: Fight;
-  pick: "fighter_a" | "fighter_b";
+  pick: "fighter_a" | "fighter_b" | "draw";
   onClose: () => void;
   onSubmit: (amount: number) => void;
   submitting: boolean;
@@ -48,6 +47,7 @@ interface Props {
   approvalError?: string | null;
   themeColor?: string;
   operatorBrandName?: string;
+  onSharePick?: () => void;
 }
 
 export default function SimplePredictionModal({
@@ -62,21 +62,24 @@ export default function SimplePredictionModal({
   approvalError,
   themeColor = "#3b82f6",
   operatorBrandName,
+  onSharePick,
 }: Props) {
   const [amount, setAmount] = useState(10);
   const [customAmount, setCustomAmount] = useState("");
 
-  const pickedName = resolveOutcomeName(
-    pick === "fighter_a" ? fight.fighter_a_name : fight.fighter_b_name,
-    pick === "fighter_a" ? "a" : "b",
-    fight
-  );
-  const logoData = getTeamLogo(pickedName, fight.event_name);
+  const pickedName = pick === "draw"
+    ? "Draw"
+    : resolveOutcomeName(
+        pick === "fighter_a" ? fight.fighter_a_name : fight.fighter_b_name,
+        pick === "fighter_a" ? "a" : "b",
+        fight
+      );
+  const logoData = pick !== "draw" ? getTeamLogo(pickedName, fight.event_name) : null;
   const logo = logoData?.url || null;
-  const emoji = logoData?.emoji || null;
   const currentAmount = customAmount ? parseFloat(customAmount) || 0 : amount;
   const payout = calcPayout(fight, pick, currentAmount);
   const profit = payout - currentAmount;
+  const multiplier = currentAmount > 0 ? (payout / currentAmount).toFixed(2) : "—";
 
   // Success screen
   if (showSuccess) {
@@ -94,9 +97,22 @@ export default function SimplePredictionModal({
               ${(tradeResult?.net_amount_usdc ? calcPayout(fight, pick, tradeResult.net_amount_usdc + (tradeResult.fee_usdc ?? 0)) : payout).toFixed(2)}
             </p>
           </div>
+
+          {/* Primary: Share Your Pick */}
+          {onSharePick && (
+            <button
+              onClick={onSharePick}
+              className="w-full py-3 rounded-xl font-bold text-white text-sm mb-3 flex items-center justify-center gap-2 transition-all"
+              style={{ backgroundColor: themeColor }}
+            >
+              <Share2 className="w-4 h-4" /> SHARE YOUR PICK
+            </button>
+          )}
+
+          {/* Secondary: Done */}
           <button
             onClick={onClose}
-            className="w-full py-3 rounded-xl font-bold text-white bg-white/10 hover:bg-white/20 transition-all"
+            className="text-white/40 hover:text-white/60 text-sm font-medium transition-colors"
           >
             Done
           </button>
@@ -157,12 +173,12 @@ export default function SimplePredictionModal({
         {currentAmount >= MIN_USD && (
           <div className="rounded-xl bg-white/5 p-4 mb-6 space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-white/50">You Win</span>
+              <span className="text-white/50">Bet ${currentAmount.toFixed(2)} → Win</span>
               <span className="font-bold text-lg" style={{ color: themeColor }}>${payout.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-white/50">Profit</span>
-              <span className="text-green-400 font-bold">+${profit.toFixed(2)}</span>
+              <span className="text-green-400 font-bold">+${profit.toFixed(2)} ({multiplier}x)</span>
             </div>
           </div>
         )}

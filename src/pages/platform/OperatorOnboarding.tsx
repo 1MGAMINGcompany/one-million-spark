@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { usePrivy } from "@privy-io/react-auth";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, ArrowLeft, Check } from "lucide-react";
+import { ArrowRight, ArrowLeft, Check, ExternalLink, Rocket } from "lucide-react";
 
 const THEMES = [
   { key: "blue", label: "Blue + White", primary: "#3b82f6", bg: "#0a0f1a" },
@@ -22,6 +22,7 @@ export default function OperatorOnboarding() {
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [created, setCreated] = useState(false);
 
   const [brandName, setBrandName] = useState("");
   const [subdomain, setSubdomain] = useState("");
@@ -231,7 +232,7 @@ export default function OperatorOnboarding() {
         setError(data.error || "Failed to create operator");
         return;
       }
-      navigate("/dashboard");
+      setCreated(true);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -245,6 +246,46 @@ export default function OperatorOnboarding() {
     if (step === 4) return sports.length > 0;
     return true;
   };
+
+  if (created) {
+    return (
+      <div className="min-h-screen bg-[#06080f] text-white flex items-center justify-center px-4">
+        <div className="w-full max-w-lg text-center">
+          <Rocket className="w-16 h-16 mx-auto mb-6 text-blue-400" />
+          <h2 className="text-3xl font-bold mb-3">Your App is Ready! 🎉</h2>
+          <p className="text-white/50 mb-2">
+            <span className="font-bold text-white">{brandName}</span> is now live at
+          </p>
+          <a
+            href={`https://${subdomain}.1mg.live`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 text-xl font-bold text-blue-400 hover:text-blue-300 transition-colors mb-8"
+          >
+            {subdomain}.1mg.live <ExternalLink className="w-5 h-5" />
+          </a>
+          <p className="text-sm text-white/40 mb-8">
+            Events from popular sports are already loaded. Share your app link to start earning!
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Button
+              onClick={() => window.open(`https://${subdomain}.1mg.live`, "_blank")}
+              className="bg-blue-600 hover:bg-blue-500 border-0 font-bold"
+            >
+              Open My App <ExternalLink size={16} className="ml-1" />
+            </Button>
+            <Button
+              onClick={() => navigate("/dashboard")}
+              variant="outline"
+              className="border-white/10 text-white hover:bg-white/5"
+            >
+              Go to Dashboard
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#06080f] text-white flex items-center justify-center px-4">

@@ -142,6 +142,75 @@ function AnimatedCounter({ target, suffix = "" }: { target: number; suffix?: str
   return <div ref={ref} className="text-4xl sm:text-5xl font-bold text-blue-400 mb-2">{count}{suffix}</div>;
 }
 
+/* ── Revenue Calculator ── */
+function RevenueCalculator() {
+  const [users, setUsers] = useState(100);
+  const [avgBet, setAvgBet] = useState(20);
+  const [feePct, setFeePct] = useState(5);
+
+  const weekly = users * avgBet * (feePct / 100);
+  const monthly = weekly * 4;
+  const yearly = weekly * 52;
+
+  const fmtK = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}K` : n.toFixed(0);
+
+  return (
+    <section className="py-20 px-4 sm:px-6 relative z-10">
+      <div className="max-w-4xl mx-auto">
+        <div className="bg-gradient-to-br from-blue-600/[0.08] to-cyan-600/[0.04] border border-blue-500/15 rounded-3xl p-8 sm:p-12">
+          <h2 className="text-3xl sm:text-4xl font-bold text-center mb-2">See How Much You Could Earn</h2>
+          <p className="text-white/40 text-center mb-10 max-w-lg mx-auto">Adjust the numbers to match your market</p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 mb-10">
+            <div>
+              <label className="text-sm text-white/50 block mb-2">Active Users</label>
+              <input
+                type="range" min={10} max={1000} step={10} value={users}
+                onChange={e => setUsers(Number(e.target.value))}
+                className="w-full accent-blue-500"
+              />
+              <div className="text-2xl font-bold text-white mt-1">{users}</div>
+            </div>
+            <div>
+              <label className="text-sm text-white/50 block mb-2">Avg Bet / Week ($)</label>
+              <input
+                type="range" min={5} max={100} step={5} value={avgBet}
+                onChange={e => setAvgBet(Number(e.target.value))}
+                className="w-full accent-blue-500"
+              />
+              <div className="text-2xl font-bold text-white mt-1">${avgBet}</div>
+            </div>
+            <div>
+              <label className="text-sm text-white/50 block mb-2">Your Fee %</label>
+              <input
+                type="range" min={1} max={10} step={0.5} value={feePct}
+                onChange={e => setFeePct(Number(e.target.value))}
+                className="w-full accent-blue-500"
+              />
+              <div className="text-2xl font-bold text-white mt-1">{feePct}%</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div className="bg-white/[0.04] rounded-xl p-5 border border-white/5">
+              <div className="text-3xl sm:text-4xl font-bold text-blue-400">${fmtK(weekly)}</div>
+              <div className="text-white/40 text-sm mt-1">per week</div>
+            </div>
+            <div className="bg-white/[0.04] rounded-xl p-5 border border-blue-500/20">
+              <div className="text-3xl sm:text-4xl font-bold text-blue-400">${fmtK(monthly)}</div>
+              <div className="text-white/40 text-sm mt-1">per month</div>
+            </div>
+            <div className="bg-white/[0.04] rounded-xl p-5 border border-white/5">
+              <div className="text-3xl sm:text-4xl font-bold text-blue-400">${fmtK(yearly)}</div>
+              <div className="text-white/40 text-sm mt-1">per year</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function LandingPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -305,22 +374,31 @@ export default function LandingPage() {
               </p>
 
               {/* CTA */}
-              <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mb-8">
+              <div className="flex flex-col gap-4 justify-center lg:justify-start mb-8">
                 <Button
                   onClick={handleBuyNow}
                   size="lg"
-                  className="bg-blue-600 hover:bg-blue-500 text-white text-lg px-10 h-16 border-0 btn-glow rounded-xl font-bold"
+                  className="bg-blue-600 hover:bg-blue-500 text-white text-lg px-10 h-16 border-0 btn-glow rounded-xl font-bold w-full sm:w-auto"
                 >
-                  {t("platform.cta.buyNow")} <ArrowRight size={20} className="ml-2" />
+                  BUY NOW — $2,400 USDC <ArrowRight size={20} className="ml-2" />
                 </Button>
-                <Button
-                  onClick={handleCreateAccount}
-                  variant="outline"
-                  size="lg"
-                  className="border-white/10 text-white hover:bg-white/5 text-lg px-10 h-16 rounded-xl font-bold"
+                <div className="text-sm text-white/40 space-y-1.5 max-w-md">
+                  <p className="text-white/50 font-medium">When you continue, a secure wallet is created for you.</p>
+                  <p className="text-white/40">This wallet is used to:</p>
+                  <div className="space-y-0.5 text-white/40">
+                    <p>✅ pay for your app</p>
+                    <p>✅ collect your earnings</p>
+                    <p>✅ manage your business</p>
+                  </div>
+                </div>
+                <a
+                  href="https://demo.1mg.live"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-400 hover:text-blue-300 text-sm font-medium underline underline-offset-2 transition-colors"
                 >
-                  {t("platform.cta.createAccount")}
-                </Button>
+                  View Live Demo →
+                </a>
               </div>
 
               {/* Trust */}
@@ -339,6 +417,9 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* ═══════════════ REVENUE CALCULATOR ═══════════════ */}
+      <RevenueCalculator />
 
       {/* ═══════════════ HOW IT WORKS — 4 STEPS ═══════════════ */}
       <section className="py-20 px-4 sm:px-6 relative z-10">
@@ -423,26 +504,28 @@ export default function LandingPage() {
       <section className="py-24 px-4 sm:px-6 relative z-10">
         <div className="max-w-3xl mx-auto text-center">
           <h2 className="text-3xl sm:text-4xl font-bold mb-4">{t("platform.cta.readyToStart")}</h2>
-          <p className="text-white/40 text-lg mb-10">
+          <p className="text-white/40 text-lg mb-8">
             {t("platform.cta.readyDesc")}
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button
-              onClick={handleBuyNow}
-              size="lg"
-              className="bg-blue-600 hover:bg-blue-500 text-white text-lg px-10 h-16 border-0 btn-glow rounded-xl font-bold"
-            >
-              {t("platform.cta.buyNow")} <ArrowRight size={20} className="ml-2" />
-            </Button>
-            <Button
-              onClick={handleCreateAccount}
-              variant="outline"
-              size="lg"
-              className="border-white/10 text-white hover:bg-white/5 text-lg px-10 h-16 rounded-xl font-bold"
-            >
-              {t("platform.cta.createAccount")}
-            </Button>
+          <Button
+            onClick={handleBuyNow}
+            size="lg"
+            className="bg-blue-600 hover:bg-blue-500 text-white text-lg px-10 h-16 border-0 btn-glow rounded-xl font-bold"
+          >
+            BUY NOW — $2,400 USDC <ArrowRight size={20} className="ml-2" />
+          </Button>
+          <div className="mt-4 text-sm text-white/40 space-y-1">
+            <p className="text-white/50 font-medium">When you continue, a secure wallet is created for you.</p>
+            <p>✅ pay for your app &nbsp; ✅ collect your earnings &nbsp; ✅ manage your business</p>
           </div>
+          <a
+            href="https://demo.1mg.live"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block mt-4 text-blue-400 hover:text-blue-300 text-sm font-medium underline underline-offset-2 transition-colors"
+          >
+            View Live Demo →
+          </a>
         </div>
       </section>
 
