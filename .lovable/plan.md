@@ -1,52 +1,110 @@
 
 
-## Create demo.1mg.live — Live Demo Operator App
+## Rebrand Help & Article Pages for 1mg.live Premium Identity
 
-The demo is simply an operator record in the database with subdomain `"demo"`. The existing `OperatorApp.tsx` + domain detection already handles everything. No code changes needed.
+The help center and article pages currently inherit the global light theme (beige/off-white background, gold accents), creating a visual disconnect from the dark premium 1mg.live identity. This plan fixes that with a cohesive dark theme, stronger SEO structure, safer legal language, and conversion CTAs.
 
-### Steps
+---
 
-**1. Insert demo operator record (database)**
+### 1. Force Dark Theme on Help Pages
 
-Insert into `operators` table:
-- `subdomain`: `"demo"`
-- `brand_name`: `"1MG Demo"`
-- `status`: `"active"`
-- `fee_percent`: `5`
-- `theme`: `"gold"`
-- `user_id`: your Privy DID (platform owner)
+**Files:** `HelpCenter.tsx`, `HelpArticle.tsx`, `TermsOfService.tsx`, `Support.tsx`
 
-Insert into `operator_settings`:
-- `allowed_sports`: empty array `{}` (empty = show ALL sports, since the filter skips when length is 0)
-- `show_polymarket_events`: `true`
-- `show_platform_events`: `true`
+- Wrap each page in a container with explicit dark background and text colors instead of relying on the global theme
+- Apply `bg-[#06080f]` (near-black navy) as the page background, matching the 1mg.live landing page
+- Use `text-white` as base text color
+- Accent color shifts from gold (`text-primary`) to electric blue (`text-blue-400` / `text-blue-500`) for links, headings, and highlights
+- This ensures visual consistency whether the user arrived from 1mg.live or 1mgaming.com
 
-**2. DNS setup (Cloudflare — manual or automated)**
+### 2. Restyle Article Content
 
-Add these records at your Cloudflare dashboard for the `1mg.live` zone:
-- **A record**: `demo` → `185.158.133.1` (proxied/orange cloud ON)
-- **TXT record**: `_lovable.demo` → your Lovable verification value
+**File:** `helpArticles.tsx`
 
-If you already have a wildcard `*.1mg.live` A record pointing to `185.158.133.1`, the DNS is already done and `demo.1mg.live` will resolve automatically.
+- Replace all `text-primary` heading classes with `text-blue-400` for the 1mg.live blue identity
+- Replace `text-foreground/80`, `text-foreground/70`, `text-foreground/60` with explicit `text-white/80`, `text-white/70`, `text-white/60`
+- Update `border-border` to `border-white/10`
+- Keep `prose prose-invert max-w-none` but add overrides for link colors to use blue
 
-Then add `demo.1mg.live` as a custom domain in Lovable Project Settings → Domains (with "Cloudflare proxy" option enabled).
+### 3. Add Top CTA Banner to Articles
 
-**3. Update landing page demo link**
+**File:** `HelpArticle.tsx`
 
-The landing page already has a "View Live Demo" link. We just need to make sure it points to `https://demo.1mg.live`.
+- Add a slim CTA bar between breadcrumb and article content:
+  - Text: "Launch your own predictions app"
+  - Button: "Get Started — $2,400" linking to `https://1mg.live`
+- Styled as a subtle gradient bar (`bg-gradient-to-r from-blue-600/10 to-blue-400/10 border border-blue-500/20`)
 
-**4. Fee routing**
+### 4. Upgrade ArticleCTA Component
 
-The 5% operator fee is already handled by the existing prediction flow. When a user places a prediction on an operator app, the `prediction-submit` edge function checks `source_operator_id`, looks up the operator's `fee_percent`, and records revenue in `operator_revenue`. Since this is YOUR demo operator, the fees accrue to the demo operator record. Platform fee (1.5%) is collected separately as usual.
+**File:** `ArticleCTA.tsx`
 
-### What already works (no code changes)
-- Domain detection → `demo.1mg.live` → `{ type: "operator", subdomain: "demo" }`
-- `useOperatorBySubdomain("demo")` fetches the operator record
-- All platform events + operator events display automatically
-- Empty `allowed_sports` = all sports shown
-- Privy auth, prediction placement, share buttons all work
-- Revenue tracking at 5% fee
+- Restyle with dark card background (`bg-white/5 border-blue-500/20`)
+- Change button variant from gold to blue gradient
+- Add links to: `/buy-predictions-app`, `https://demo.1mg.live`, `/help`
+- Update copy to be more conversion-focused:
+  - "Ready to launch your predictions app?"
+  - "Start earning from sports predictions in minutes"
 
-### Summary
-This is a **data-only setup** — insert 2 rows + configure DNS. No code changes required. The existing system handles everything.
+### 5. Restyle HelpCenter Grid
+
+**File:** `HelpCenter.tsx`
+
+- Dark background: `bg-[#06080f] min-h-screen`
+- Card styling: `bg-white/5 border-white/10 hover:border-blue-500/30`
+- Section headers in `text-blue-400`
+- "Read guide" link in blue
+
+### 6. Fix Legal Language (are-prediction-markets-legal article)
+
+**File:** `helpArticles.tsx` — slug `are-prediction-markets-legal`
+
+Current problematic language:
+- "Prediction markets on 1MGAMING are accessible globally" — too absolute
+
+Replace with safer, jurisdiction-aware language:
+- "Prediction market regulations vary by jurisdiction. Users should verify local rules before participating."
+- Add a disclaimer section: "This content is informational only and does not constitute legal advice."
+- Remove the "Global Access" section or rewrite it as "Availability" with proper caveats
+
+### 7. Strengthen SEO Structure
+
+**File:** `HelpArticle.tsx`
+
+- Add `datePublished` and `dateModified` to Article JSON-LD schema
+- Add `author` field to JSON-LD (Organization: "1MGAMING")
+- Ensure each article has exactly one `<h1>` (already done in content)
+- Add internal link block at bottom of every article pointing to: Buy App page, Demo, Help Center
+
+**File:** `FAQSection.tsx`
+- Already has FAQ schema — no changes needed
+
+### 8. Restyle Related Articles & FAQ
+
+**Files:** `RelatedArticles.tsx`, `FAQSection.tsx`
+
+- Dark card styling: `bg-white/5 border-white/10`
+- FAQ triggers and content in white/blue tones
+- Related article cards with blue hover border
+
+---
+
+### Files to modify
+- `src/pages/HelpCenter.tsx`
+- `src/pages/HelpArticle.tsx`
+- `src/pages/TermsOfService.tsx`
+- `src/pages/Support.tsx`
+- `src/data/helpArticles.tsx`
+- `src/components/seo/ArticleCTA.tsx`
+- `src/components/seo/RelatedArticles.tsx`
+- `src/components/seo/FAQSection.tsx`
+
+### Implementation order
+1. HelpArticle + HelpCenter dark theme wrappers
+2. helpArticles.tsx color class replacements (all 10 articles)
+3. ArticleCTA redesign with conversion links
+4. RelatedArticles + FAQSection restyle
+5. Legal language fix on the "are-prediction-markets-legal" article
+6. JSON-LD schema improvements
+7. TermsOfService + Support page dark theme
+8. Top CTA banner on article pages
 
