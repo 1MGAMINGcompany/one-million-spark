@@ -125,7 +125,8 @@ const AppContent = () => {
       <GlobalActiveRoomBanner />
       <main className="pt-16 relative flex-1 min-h-[calc(100dvh-4rem)]">
         <Routes>
-          <Route path="/" element={<Home />} />
+          {/* Redirect auth hash errors from root to admin page */}
+          <Route path="/" element={<AuthHashRedirect><Home /></AuthHashRedirect>} />
           <Route path="/add-funds" element={<AddFunds />} />
           <Route path="/create-room" element={<CreateRoom />} />
           <Route path="/room-list" element={<RoomList />} />
