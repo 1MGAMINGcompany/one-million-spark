@@ -1222,7 +1222,8 @@ async function importSingleEvent(
           price_a: parseFloat(outcomePrices[0] || "0"),
           price_b: parseFloat(outcomePrices[1] || "0"),
           status: "open",
-          visibility: fightVisibility,
+          trading_allowed: opts?.fightTradingAllowed ?? false,
+          auto_resolve: opts?.fightTradingAllowed ?? false,
           event_date: timeInfo.chosen || gEvent.startDate || null,
         });
       } catch (insertErr: any) {
