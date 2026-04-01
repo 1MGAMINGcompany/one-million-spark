@@ -367,10 +367,19 @@ export const helpArticles: HelpArticleData[] = [
           1MGAMING is a non-custodial platform. When you place a prediction, your funds go into a transparent pool. When the event resolves, winners are paid out automatically. No intermediary, no counterparty risk.
         </p>
 
-        <h2 className="text-2xl font-semibold text-blue-400 mt-10 mb-4">Global Access</h2>
+        <h2 className="text-2xl font-semibold text-blue-400 mt-10 mb-4">Availability & Jurisdiction</h2>
         <p className="text-white/60 leading-relaxed">
-          Prediction markets on 1MGAMING are accessible globally. Users can participate from most countries — no bank account or brokerage needed.
+          Prediction market regulations vary significantly by country, state, and territory. While the regulatory environment is becoming more favorable in many jurisdictions, users are solely responsible for verifying that participation is permitted under their local laws before trading.
         </p>
+        <p className="text-white/60 leading-relaxed">
+          1MGAMING does not make representations regarding the legality of prediction market participation in any specific jurisdiction. We recommend consulting local regulations or a legal professional if you are unsure.
+        </p>
+
+        <div className="mt-8 rounded-lg bg-blue-500/5 border border-blue-500/20 p-4">
+          <p className="text-white/50 text-sm italic">
+            <strong className="text-white/70">Disclaimer:</strong> This content is informational only and does not constitute legal advice. Prediction market regulations are evolving and vary by jurisdiction. Always verify local rules before participating.
+          </p>
+        </div>
 
         <div className="mt-10 pt-6 border-t border-white/10">
           <p className="text-white/40 text-sm">
