@@ -72,6 +72,20 @@ export default function AdminAuth({ children }: AdminAuthProps) {
 
   const isPrimaryAdmin = session?.email === "morganlaurent@live.ca";
 
+  // Detect auth errors in URL hash on mount (e.g. expired/consumed magic link)
+  useEffect(() => {
+    const err = parseHashError();
+    if (err) {
+      const msg = err.code === "otp_expired"
+        ? "Login link expired or was already used. This can happen if your email provider scans links. Please request a new one."
+        : err.description;
+      setHashError(msg);
+      setStep("error");
+      // Clear the hash so the error doesn't persist on refresh
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, []);
+
   // Listen for Supabase auth state changes (magic link callback)
   useEffect(() => {
     if (session) return; // already authenticated
