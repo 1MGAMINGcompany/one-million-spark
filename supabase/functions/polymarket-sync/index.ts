@@ -1068,7 +1068,7 @@ async function importSingleEvent(
         source: "polymarket",
         source_provider: "polymarket",
         source_event_id: `pm_${gEvent.id}`,
-        status: "pending_review",
+        status: opts?.eventStatusOverride || "pending_review",
         ...(category ? { category } : {}),
       })
       .select("id")
