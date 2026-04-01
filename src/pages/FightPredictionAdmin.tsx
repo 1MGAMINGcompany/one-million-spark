@@ -703,59 +703,61 @@ function FightPredictionAdminInner({ address }: { address: string }) {
               <Card className="bg-card border-border/50 p-6 text-center">
                 <p className="text-sm text-muted-foreground">No events in this category.</p>
               </Card>
-        )}
+            )}
 
-        {filteredEvents.map(event => (
-          <AdminEventCard
-            key={event.id}
-            event={event}
-            fights={eventFights(event.id)}
-            entryCounts={entryCounts}
-            botConfirmData={botConfirmData}
-            busy={busy}
-            onFightAction={fightAction}
-            onConfirm={withConfirm}
-            onRefund={async (fightId) => {
-              try {
-                const result = await callRefundWorker(fightId);
-                toast.success(`Refunded ${result.refunded} entries`);
-                loadData();
-              } catch (e: any) { toast.error(e.message); }
-            }}
-            callAdmin={callAdmin}
-            loadData={loadData}
-            onDismiss={handleDismissEvent}
-            onArchive={handleArchiveEvent}
-            onDelete={handleDeleteEvent}
-            eventHasPredictions={eventHasPredictions(event.id)}
-            eventIsFullySettled={eventIsFullySettled(event.id)}
-          />
-        ))}
+            {filteredEvents.map(event => (
+              <AdminEventCard
+                key={event.id}
+                event={event}
+                fights={eventFights(event.id)}
+                entryCounts={entryCounts}
+                botConfirmData={botConfirmData}
+                busy={busy}
+                onFightAction={fightAction}
+                onConfirm={withConfirm}
+                onRefund={async (fightId) => {
+                  try {
+                    const result = await callRefundWorker(fightId);
+                    toast.success(`Refunded ${result.refunded} entries`);
+                    loadData();
+                  } catch (e: any) { toast.error(e.message); }
+                }}
+                callAdmin={callAdmin}
+                loadData={loadData}
+                onDismiss={handleDismissEvent}
+                onArchive={handleArchiveEvent}
+                onDelete={handleDeleteEvent}
+                eventHasPredictions={eventHasPredictions(event.id)}
+                eventIsFullySettled={eventIsFullySettled(event.id)}
+              />
+            ))}
 
-        {/* ── Ungrouped Fights ── */}
-        {fights.filter(f => !f.event_id).length > 0 && (
-          <>
-            <h2 className="text-lg font-bold text-foreground font-['Cinzel']">Ungrouped Fights</h2>
-            <div className="space-y-3">
-              {fights.filter(f => !f.event_id).map(fight => (
-                <AdminFightCard
-                  key={fight.id}
-                  fight={fight}
-                  busy={busy}
-                  entryCount={entryCounts[fight.id] || 0}
-                  botConfirm={botConfirmData[fight.id] || null}
-                  onAction={(action, extra) => fightAction(action, fight.id, extra)}
-                  onConfirm={withConfirm}
-                  onRefund={async () => {
-                    try {
-                      const result = await callRefundWorker(fight.id);
-                      toast.success(`Refunded ${result.refunded} entries`);
-                      loadData();
-                    } catch (e: any) { toast.error(e.message); }
-                  }}
-                />
-              ))}
-            </div>
+            {/* ── Ungrouped Fights ── */}
+            {fights.filter(f => !f.event_id).length > 0 && (
+              <>
+                <h2 className="text-lg font-bold text-foreground font-['Cinzel']">Ungrouped Fights</h2>
+                <div className="space-y-3">
+                  {fights.filter(f => !f.event_id).map(fight => (
+                    <AdminFightCard
+                      key={fight.id}
+                      fight={fight}
+                      busy={busy}
+                      entryCount={entryCounts[fight.id] || 0}
+                      botConfirm={botConfirmData[fight.id] || null}
+                      onAction={(action, extra) => fightAction(action, fight.id, extra)}
+                      onConfirm={withConfirm}
+                      onRefund={async () => {
+                        try {
+                          const result = await callRefundWorker(fight.id);
+                          toast.success(`Refunded ${result.refunded} entries`);
+                          loadData();
+                        } catch (e: any) { toast.error(e.message); }
+                      }}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
           </>
         )}
       </div>
