@@ -59,6 +59,16 @@ import { useWallet } from "@/hooks/useWallet";
 import { detectDomain } from "@/lib/domainDetection";
 import PlatformApp from "@/pages/platform/PlatformApp";
 
+/** Catches auth hash errors on "/" and redirects to admin page so AdminAuth can display them */
+function AuthHashRedirect({ children }: { children: React.ReactNode }) {
+  const hash = window.location.hash;
+  if (hash && hash.includes("error=") && hash.includes("otp_expired")) {
+    window.location.replace(`/predictions/admin${hash}`);
+    return null;
+  }
+  return <>{children}</>;
+}
+
 // DEV-ONLY: Import to auto-run config check on app load
 import "./lib/devConfigCheck";
 
@@ -125,7 +135,8 @@ const AppContent = () => {
       <GlobalActiveRoomBanner />
       <main className="pt-16 relative flex-1 min-h-[calc(100dvh-4rem)]">
         <Routes>
-          <Route path="/" element={<Home />} />
+          {/* Redirect auth hash errors from root to admin page */}
+          <Route path="/" element={<AuthHashRedirect><Home /></AuthHashRedirect>} />
           <Route path="/add-funds" element={<AddFunds />} />
           <Route path="/create-room" element={<CreateRoom />} />
           <Route path="/room-list" element={<RoomList />} />

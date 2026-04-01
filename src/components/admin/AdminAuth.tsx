@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Shield, Mail, Loader2, LogOut, UserPlus, Trash2 } from "lucide-react";
+import { Shield, Mail, Loader2, LogOut, UserPlus, Trash2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,6 +7,22 @@ import { toast } from "sonner";
 
 const SESSION_KEY = "admin_session";
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+const ADMIN_REDIRECT = "https://1mgaming.com/predictions/admin";
+
+/** Parse auth error from URL hash (e.g. #error=access_denied&error_code=otp_expired) */
+function parseHashError(): { code: string; description: string } | null {
+  try {
+    const hash = window.location.hash;
+    if (!hash || !hash.includes("error=")) return null;
+    const params = new URLSearchParams(hash.substring(1));
+    const code = params.get("error_code") || params.get("error") || "unknown";
+    const description = (params.get("error_description") || "Authentication failed").replace(/\+/g, " ");
+    return { code, description };
+  } catch {
+    return null;
+  }
+}
 
 interface AdminSession {
   email: string;
@@ -44,8 +60,9 @@ interface AdminAuthProps {
 export default function AdminAuth({ children }: AdminAuthProps) {
   const [session, setSession] = useState<AdminSession | null>(getStoredSession);
   const [email, setEmail] = useState("");
-  const [step, setStep] = useState<"email" | "waiting">("email");
+  const [step, setStep] = useState<"email" | "waiting" | "error">("email");
   const [loading, setLoading] = useState(false);
+  const [hashError, setHashError] = useState<string | null>(null);
 
   // Manage admins state
   const [showManage, setShowManage] = useState(false);
@@ -54,6 +71,20 @@ export default function AdminAuth({ children }: AdminAuthProps) {
   const [manageLoading, setManageLoading] = useState(false);
 
   const isPrimaryAdmin = session?.email === "morganlaurent@live.ca";
+
+  // Detect auth errors in URL hash on mount (e.g. expired/consumed magic link)
+  useEffect(() => {
+    const err = parseHashError();
+    if (err) {
+      const msg = err.code === "otp_expired"
+        ? "Login link expired or was already used. This can happen if your email provider scans links. Please request a new one."
+        : err.description;
+      setHashError(msg);
+      setStep("error");
+      // Clear the hash so the error doesn't persist on refresh
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, []);
 
   // Listen for Supabase auth state changes (magic link callback)
   useEffect(() => {
@@ -120,8 +151,10 @@ export default function AdminAuth({ children }: AdminAuthProps) {
         return;
       }
 
-      // Send magic link
-      const redirectUrl = `${window.location.origin}/predictions/admin`;
+      // Send magic link — use production URL to avoid redirect allowlist issues
+      const redirectUrl = window.location.hostname === "1mgaming.com"
+        ? ADMIN_REDIRECT
+        : `${window.location.origin}/predictions/admin`;
       const { error } = await supabase.auth.signInWithOtp({
         email: email.trim().toLowerCase(),
         options: {
@@ -218,6 +251,25 @@ export default function AdminAuth({ children }: AdminAuthProps) {
               <Button onClick={handleSendMagicLink} disabled={loading} className="w-full">
                 {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Mail className="w-4 h-4 mr-2" />}
                 Send Login Link
+              </Button>
+            </div>
+          ) : step === "error" ? (
+            <div className="space-y-4 text-center">
+              <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/30">
+                <AlertTriangle className="w-8 h-8 text-destructive mx-auto mb-3" />
+                <p className="text-sm text-foreground font-medium mb-1">
+                  Login link expired
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {hashError || "The link was already used or has expired. This often happens when email providers scan links automatically."}
+                </p>
+              </div>
+              <Button
+                onClick={() => { setStep("email"); setHashError(null); }}
+                className="w-full"
+              >
+                <Mail className="w-4 h-4 mr-2" />
+                Request a new link
               </Button>
             </div>
           ) : (
