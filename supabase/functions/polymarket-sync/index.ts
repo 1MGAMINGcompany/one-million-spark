@@ -1036,6 +1036,7 @@ async function importSingleEvent(
   importSource: string,
   sportType?: string | null,
   visibility?: string | null,
+  opts?: { eventStatusOverride?: string; fightTradingAllowed?: boolean },
 ): Promise<{ event_id: string; imported: number; is_past: boolean; warning?: string }> {
   const timeInfo = chooseSportsDisplayTime(gEvent);
   const chosenMs = timeInfo.chosen ? new Date(timeInfo.chosen).getTime() : null;
