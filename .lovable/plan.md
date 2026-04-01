@@ -1,142 +1,122 @@
 
 
-## Two Automation Upgrades
+## 1mg.live Growth & Conversion — 10 Improvements Build
 
-### 1. Quick Approve & Bulk Approve (Admin UI)
-
-**Files:** `supabase/functions/prediction-admin/index.ts`, `src/pages/FightPredictionAdmin.tsx`
-
-**Backend — New actions in `prediction-admin`:**
-
-- **`quickApproveEvent`**: Accepts `event_id`. In one call:
-  1. Updates `prediction_events` → `status = "approved"`, `auto_resolve = true`, `admin_approved_at = now()`, `automation_status = "scheduled"`
-  2. Updates ALL `prediction_fights` under that event → `trading_allowed = true`, `auto_resolve = true`, `status = "open"` (if not already past open)
-  3. Logs to `automation_logs`
-  - Works from ANY status (pending_review, draft, etc.) — not just draft
-
-- **`bulkQuickApprove`**: No event_id required. Fetches all events with `status = "pending_review"`, runs the same quickApprove logic on each. Returns count of approved events.
-
-**Frontend — `FightPredictionAdmin.tsx`:**
-
-- Add a **"⚡ Quick Approve"** button on each event card when `event.status === "pending_review"` or `"draft"`. Calls `quickApproveEvent` — one click, event goes live.
-- Add a **"Bulk Approve All"** button at the top of the `pending_review` tab. Shows confirmation dialog: "Approve all {count} events? This will make them live immediately." On confirm, calls `bulkQuickApprove`.
+All changes target the operator ecosystem only. No modifications to 1mgaming.com advanced UX.
 
 ---
 
-### 2. Daily Auto-Import via `polymarket-sync`
+### 1. Share Buttons on Operator App (Virality)
 
-**File:** `supabase/functions/polymarket-sync/index.ts`
+**Files:** `SimplePredictionModal.tsx`, `OperatorApp.tsx`
 
-**New `daily_import` action** added to the main handler. When invoked:
+- **Success screen**: Replace "Done" as primary. Add "SHARE YOUR PICK" button (styled with `themeColor`) that opens `SocialShareModal` with `variant="prediction"`. "Done" becomes secondary text link below.
+- **Win claim screen** (`SimplePredictionCard.tsx`): After "Collect Winnings" succeeds, show "SHARE YOUR WIN" button opening `SocialShareModal` with `variant="claim_win"`.
+- Pass `operatorBrandName`, `operatorLogoUrl`, `operatorSubdomain` from `OperatorApp.tsx` down through card and modal props.
+- Add `SocialShareModal` state (`shareOpen`, `shareVariant`, `shareFight`) to `OperatorApp.tsx`.
 
-1. Iterates through all `LEAGUE_SOURCES` entries, grouped by sport routing rules:
-   - **Combat + Soccer leagues** → `visibility = "all"` (both 1mgaming.com and 1mg.live), event `status = "approved"`, fights `trading_allowed = true`
-   - **All other sports** (NBA, NHL, MLB, NCAAB, Tennis, Golf, F1, Cricket, Rugby, Chess) → `visibility = "platform"`, event `status = "open"`
+### 2. Auto-Populate Events on Operator Launch
 
-2. For each league: fetches events via existing `fetchEventsBySeriesId` / `fetchEventsByTagId` / `fetchSearchEvents` (reuses existing infrastructure), filters with `isAcceptableEvent` + `isDateEligible`, then calls a modified `importSingleEvent` that accepts optional `status_override` and `trading_allowed` params.
+**File:** `OperatorOnboarding.tsx`
 
-3. Dedup is already handled by existing `importSingleEvent` logic (conditionId, title match, normalized names + date).
+- After successful operator creation (final step submit), call `prediction-admin` edge function with a new `seedOperatorEvents` action.
+- Backend: In `prediction-admin/index.ts`, add `seedOperatorEvents` action that copies up to 5 upcoming platform events matching the operator's `allowed_sports` into their view (no duplication needed — they already see platform events via the `.or()` query). Instead, auto-set `status = "active"` on the operator record so events appear immediately.
+- Actually, re-reading the code: operators already see platform events. The real fix is to ensure the operator's `allowed_sports` match popular sports and the onboarding completion navigates to the app immediately. Add a "Your app is ready!" success screen with a direct link to `{subdomain}.1mg.live`.
 
-4. Logs summary to `admin_activity_log` with total counts per sport.
+### 3. Event Date/Time on SimplePredictionCard
 
-5. The `importSingleEvent` function gets two new optional params:
-   - `eventStatusOverride?: string` — sets event status on creation (instead of default "pending_review")
-   - `fightTradingAllowed?: boolean` — sets `trading_allowed` on fight insert
+**File:** `SimplePredictionCard.tsx`
 
-**Cron Job:** Created via SQL insert (not migration) to run daily at 6:00 AM UTC:
-```sql
-SELECT cron.schedule(
-  'daily-polymarket-import',
-  '0 6 * * *',
-  $$ SELECT net.http_post(
-    url := '<SUPABASE_URL>/functions/v1/polymarket-sync',
-    headers := '{"Content-Type":"application/json","Authorization":"Bearer <ANON_KEY>"}'::jsonb,
-    body := '{"action":"daily_import"}'::jsonb
-  ); $$
-);
-```
+- Add `event_date` display below the team names row, using `formatEventDateTime` from `src/lib/formatEventLocalDateTime.ts`.
+- Show as: `"Mar 15, 2:00 PM EDT"` in `text-xs text-white/30`.
+- Also show league name from `fight.event_name` as a small badge above the card.
 
-**Sport routing map (hardcoded in edge function):**
-```text
-COMBAT_AND_SOCCER (visibility="all", status="approved"):
-  ufc, mma, boxing, bkfc + epl, mls, ucl, uel, la-liga, bundesliga,
-  serie-a, ligue-1, liga-mx, copa-libertadores, brazil-serie-a
+### 4. Draw Button for 3-Way Markets
 
-PLATFORM_ONLY (visibility="platform", status="open"):
-  nba, nhl, mlb, ncaab, atp, wta, tennis, golf, f1,
-  cricket, cricket-ipl, cricket-psl, cricket-intl, rugby
-```
+**Files:** `SimplePredictionCard.tsx`, `SimplePredictionModal.tsx`, `OperatorApp.tsx`
 
-**Summary email** — Not feasible without a configured email domain. Instead, the import summary will be logged to `admin_activity_log` where it's visible in the admin panel. If you want email notifications later, we can add that once an email domain is set up.
+- Check `fight.fighter_b_name` for "Draw" or check if fight has `price_draw` / third outcome field.
+- Actually, 3-way markets have `fighter_a` and `fighter_b` as the two teams, with Draw as a separate concept. Check the Fight type for draw support.
+- For fights where a draw outcome exists (detected via `fight.draw_enabled` or similar field), add a third button in the card grid: `grid-cols-3` instead of `grid-cols-2`. The draw button calls `onPredict(fight, "draw")`.
+- Update `onPredict` handler type to accept `"fighter_a" | "fighter_b" | "draw"`.
+
+### 5. Revenue Calculator on Landing Page
+
+**File:** `LandingPage.tsx`
+
+- Add a new section between hero and "How It Works".
+- Three sliders: Users (10-1000, default 100), Avg bet/week ($5-$100, default $20), Fee % (1-10, default 5).
+- Live calculation: `users * avgBet * (feePercent / 100)` displayed as weekly/monthly/yearly.
+- Headline: "See How Much You Could Earn"
+- Large animated result: `$400/week → $1,600/month → $20,800/year`
+
+### 6. Single CTA + Price in Hero
+
+**File:** `LandingPage.tsx`
+
+- Remove the two-button CTA (BUY NOW + CREATE ACCOUNT).
+- Replace with ONE button: `BUY NOW — $2,400 USDC` with `btn-glow` class.
+- Below button, add trust text:
+  ```
+  When you continue, a secure wallet is created for you.
+  This wallet is used to:
+  ✅ pay for your app
+  ✅ collect your earnings
+  ✅ manage your business
+  ```
+- Add "View Live Demo" link below trust text → `https://demo.1mg.live`
+- Apply same pattern to final CTA section at bottom.
+
+### 7. "My Predictions" Tab
+
+**File:** `OperatorApp.tsx`
+
+- Add a tab bar below the navbar: "Events" | "My Picks" (only visible when authenticated).
+- "My Picks" tab filters `allFights` to only those with a matching `userEntry`, showing the card in its "already picked" or "settled" state.
+- Simple toggle state, no new page needed.
+
+### 8. Fix "You Win" → Multiplier Display
+
+**Files:** `SimplePredictionCard.tsx`, `SimplePredictionModal.tsx`
+
+- **Card**: Change `You win: $18.20` → `Bet $10 → Win $18.20` (keeps the $10 reference amount).
+- **Modal payout section**: Change `You Win: $18.20` → `Bet $10 → Win $18.20` using actual entered amount.
+- Multiplier shown as small text: `(1.82x)` next to the payout.
+
+### 9. Balance Display + "Add Funds" Nudge
+
+**File:** `OperatorApp.tsx`, new component `OperatorBalanceBanner.tsx`
+
+- When user is connected, show USDC.e balance in the navbar (already have `usePolygonUSDC` imported).
+- If balance < $5, show a subtle banner below navbar: "Add funds to place predictions" with a link/button that opens the Add Funds flow or shows instructions.
+- Use `relayer_allowance` or a direct balance check.
+
+### 10. Collapse Sport Filters on Mobile
+
+**File:** `OperatorApp.tsx`
+
+- On mobile (`useIsMobile()`), replace the horizontal `ScrollableSportTabs` with a dropdown select.
+- Show current sport + count as the trigger. Opens a sheet/dropdown with all sport options.
+- Desktop keeps the current scrollable tabs.
 
 ---
 
-### Implementation order
-1. Add `quickApproveEvent` and `bulkQuickApprove` to `prediction-admin` edge function
-2. Add Quick Approve + Bulk Approve UI to `FightPredictionAdmin.tsx`
-3. Add `daily_import` action to `polymarket-sync` edge function with sport routing
-4. Deploy both edge functions
-5. Create the cron job via SQL insert
+### Implementation Order
+1. Landing page hero fix (single button + trust text + demo link) — highest sales impact
+2. Revenue calculator section
+3. Fix "You win" → "Bet $X → Win $Y" on cards and modal
+4. Add event date/time to cards
+5. Share buttons (success screen + win claim)
+6. Draw button for 3-way markets
+7. "My Picks" tab
+8. Balance display + add funds nudge
+9. Mobile sport filter dropdown
+10. Onboarding success screen with "Your app is ready" + direct link
 
----
+**Files to modify:**
+- `src/pages/platform/LandingPage.tsx`
+- `src/components/operator/SimplePredictionCard.tsx`
+- `src/components/operator/SimplePredictionModal.tsx`
+- `src/pages/platform/OperatorApp.tsx`
+- `src/pages/platform/OperatorOnboarding.tsx`
 
-## 1mg.live Growth & Conversion Upgrades
-
-### 3. Landing Page Hero Fix
-
-**File:** `src/pages/platform/LandingPage.tsx`
-
-- **Remove** the two separate "BUY NOW" / "CREATE ACCOUNT" buttons
-- **Replace with ONE button:** `BUY NOW — $2,400 USDC`
-- **Add trust text** below button:
-  > When you continue, a secure wallet is created for you.
-  > This wallet is used to:
-  > ✅ pay for your app
-  > ✅ collect your earnings
-  > ✅ manage your business
-- **Add "View Live Demo" link** → `https://demo.1mg.live`
-
-### 4. Revenue Preview Section
-
-**File:** `src/pages/platform/LandingPage.tsx`
-
-Add an interactive revenue calculator section:
-- Default: "If 100 users place $20/week at your 5% fee → you earn **$400/week**"
-- Optional: sliders for users / avg bet / fee % with live calculation
-- Positioned below hero, above features
-
-### 5. Post-Purchase Auto-Seed
-
-**File:** `src/pages/platform/OperatorOnboarding.tsx` or edge function
-
-After purchase completes:
-- Auto-create 5 sample events (preloaded from platform events)
-- Pre-select popular sports
-- Operator app is NOT empty on first visit
-
-### 6. "Share Your Pick" as Primary Post-Prediction CTA
-
-**File:** `src/components/operator/SimplePredictionModal.tsx`
-
-On the success screen:
-- **Primary button:** "SHARE YOUR PICK" (triggers `SocialShareModal`)
-- **Secondary/text link:** "Done"
-- Currently "Done" is the only button — flip priority
-
-### 7. Fix "You Win" Display
-
-**Files:** `src/components/operator/SimplePredictionCard.tsx`, `src/components/operator/SimplePredictionModal.tsx`
-
-Change payout display from:
-- ❌ `You win: $18.20`
-
-To:
-- ✅ `Bet $10 → Win $18.20` (on cards, using assumed $10)
-- ✅ `Bet $X → Win $Y` (in modal, using actual entered amount)
-
-### Implementation order
-1. Landing page hero (single button + trust text + demo link)
-2. Revenue preview calculator
-3. Fix "You Win" → "Bet $X → Win $Y" on cards and modal
-4. Share Your Pick as primary CTA on success screen
-5. Post-purchase auto-seed events
