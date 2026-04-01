@@ -11,28 +11,29 @@ const TermsOfService = () => {
       "Official terms governing use of the 1MGAMING skill-based competitive gaming platform.",
   });
 
+  const sectionClass = "bg-white/5 border border-white/10 rounded-lg p-6";
+  const iconWrapClass = "p-3 bg-blue-500/10 rounded-full shrink-0";
+  const iconClass = "text-blue-400";
+  const headingClass = "text-xl font-semibold text-white mb-3";
+  const bodyClass = "text-white/60 leading-relaxed";
+
   return (
-    <div className="min-h-screen bg-background py-12 px-4">
+    <div className="min-h-screen bg-[#06080f] text-white py-12 px-4">
       <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-2 text-center">
+        <h1 className="text-3xl md:text-4xl font-bold text-white mb-2 text-center">
           Terms of Service – 1MGAMING
         </h1>
-        <p className="text-muted-foreground text-center mb-10">
+        <p className="text-white/40 text-center mb-10">
           {t("terms.lastUpdated")}
         </p>
 
         <div className="space-y-8">
-          {/* A. Nature of Platform */}
-          <section className="bg-card border border-border rounded-lg p-6">
+          <section className={sectionClass}>
             <div className="flex items-start gap-4">
-              <div className="p-3 bg-primary/10 rounded-full shrink-0">
-                <Shield className="text-primary" size={24} />
-              </div>
+              <div className={iconWrapClass}><Shield className={iconClass} size={24} /></div>
               <div>
-                <h2 className="text-xl font-semibold text-foreground mb-3">
-                  A. Nature of Platform
-                </h2>
-                <p className="text-muted-foreground leading-relaxed">
+                <h2 className={headingClass}>A. Nature of Platform</h2>
+                <p className={bodyClass}>
                   1MGAMING provides a skill-based gaming and prediction market
                   platform where users compete against other users. Game outcomes
                   are determined by player skill and strategy. No random number
@@ -43,17 +44,12 @@ const TermsOfService = () => {
             </div>
           </section>
 
-          {/* B. Not Gambling */}
-          <section className="bg-card border border-border rounded-lg p-6">
+          <section className={sectionClass}>
             <div className="flex items-start gap-4">
-              <div className="p-3 bg-primary/10 rounded-full shrink-0">
-                <Coins className="text-primary" size={24} />
-              </div>
+              <div className={iconWrapClass}><Coins className={iconClass} size={24} /></div>
               <div>
-                <h2 className="text-xl font-semibold text-foreground mb-3">
-                  B. Skill-Based Competition
-                </h2>
-                <p className="text-muted-foreground leading-relaxed">
+                <h2 className={headingClass}>B. Skill-Based Competition</h2>
+                <p className={bodyClass}>
                   1MGAMING does not operate as a gambling platform, a platform
                   for games of chance, or a casino. Entry fees represent
                   competitive participation fees for skill-based contests.
@@ -64,23 +60,18 @@ const TermsOfService = () => {
             </div>
           </section>
 
-          {/* C. User Responsibility */}
-          <section className="bg-card border border-border rounded-lg p-6">
+          <section className={sectionClass}>
             <div className="flex items-start gap-4">
-              <div className="p-3 bg-primary/10 rounded-full shrink-0">
-                <Scale className="text-primary" size={24} />
-              </div>
+              <div className={iconWrapClass}><Scale className={iconClass} size={24} /></div>
               <div>
-                <h2 className="text-xl font-semibold text-foreground mb-3">
-                  C. User Responsibility
-                </h2>
-                <p className="text-muted-foreground leading-relaxed">
+                <h2 className={headingClass}>C. User Responsibility</h2>
+                <p className={bodyClass}>
                   Users are solely responsible for determining whether
                   participation in skill-based contests and prediction markets is
                   permitted under their local laws. By using the platform, users
                   represent that they are legally allowed to participate.
                 </p>
-                <p className="text-muted-foreground leading-relaxed mt-3">
+                <p className={`${bodyClass} mt-3`}>
                   Users are solely responsible for ensuring that participation
                   in skill-based competitions and prediction markets is lawful
                   in their jurisdiction. 1MGAMING does not make representations
@@ -91,17 +82,12 @@ const TermsOfService = () => {
             </div>
           </section>
 
-          {/* D. Age Requirement */}
-          <section className="bg-card border border-border rounded-lg p-6">
+          <section className={sectionClass}>
             <div className="flex items-start gap-4">
-              <div className="p-3 bg-primary/10 rounded-full shrink-0">
-                <UserCheck className="text-primary" size={24} />
-              </div>
+              <div className={iconWrapClass}><UserCheck className={iconClass} size={24} /></div>
               <div>
-                <h2 className="text-xl font-semibold text-foreground mb-3">
-                  D. Age Requirement
-                </h2>
-                <p className="text-muted-foreground leading-relaxed">
+                <h2 className={headingClass}>D. Age Requirement</h2>
+                <p className={bodyClass}>
                   Users must be at least 18 years old or the age of majority in
                   their jurisdiction.
                 </p>
@@ -109,17 +95,12 @@ const TermsOfService = () => {
             </div>
           </section>
 
-          {/* E. Platform Transparency */}
-          <section className="bg-card border border-border rounded-lg p-6">
+          <section className={sectionClass}>
             <div className="flex items-start gap-4">
-              <div className="p-3 bg-primary/10 rounded-full shrink-0">
-                <Eye className="text-primary" size={24} />
-              </div>
+              <div className={iconWrapClass}><Eye className={iconClass} size={24} /></div>
               <div>
-                <h2 className="text-xl font-semibold text-foreground mb-3">
-                  E. Platform Transparency
-                </h2>
-                <p className="text-muted-foreground leading-relaxed">
+                <h2 className={headingClass}>E. Platform Transparency</h2>
+                <p className={bodyClass}>
                   Game outcomes and settlements are verifiable and auditable.
                   All transactions are recorded transparently and can be
                   independently verified.
@@ -128,29 +109,21 @@ const TermsOfService = () => {
             </div>
           </section>
 
-          {/* Transaction Fees */}
-          <section className="bg-card border border-border rounded-lg p-6">
+          <section className={sectionClass}>
             <div className="flex items-start gap-4">
-              <div className="p-3 bg-primary/10 rounded-full shrink-0">
-                <Zap className="text-primary" size={24} />
-              </div>
+              <div className={iconWrapClass}><Zap className={iconClass} size={24} /></div>
               <div>
-                <h2 className="text-xl font-semibold text-foreground mb-3">
-                  {t("terms.gasFeesTitle")}
-                </h2>
-                <p className="text-muted-foreground leading-relaxed">
-                  {t("terms.gasFeesText")}
-                </p>
+                <h2 className={headingClass}>{t("terms.gasFeesTitle")}</h2>
+                <p className={bodyClass}>{t("terms.gasFeesText")}</p>
               </div>
             </div>
           </section>
 
-          {/* Important Notice */}
-          <div className="bg-primary/5 border border-primary/20 rounded-lg p-6 text-center">
-            <p className="text-foreground font-semibold text-lg mb-2">
+          <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-6 text-center">
+            <p className="text-white font-semibold text-lg mb-2">
               {t("terms.noticeTitle")}
             </p>
-            <p className="text-muted-foreground">
+            <p className="text-white/50">
               {t("terms.noticeText")}
             </p>
           </div>

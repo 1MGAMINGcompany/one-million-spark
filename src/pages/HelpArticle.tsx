@@ -1,6 +1,6 @@
 import { useParams, Link } from "react-router-dom";
 import { helpArticles } from "@/data/helpArticles";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import { useSeoMeta } from "@/components/seo/SeoMeta";
 import JsonLd from "@/components/seo/JsonLd";
 import FAQSection from "@/components/seo/FAQSection";
@@ -21,7 +21,6 @@ const HelpArticle = () => {
   const { slug } = useParams<{ slug: string }>();
   const article = helpArticles.find((a) => a.slug === slug);
 
-  // Always call hooks — use fallback values when article not found
   useSeoMeta({
     title: article ? `${article.title} | 1MGAMING` : "Article Not Found | 1MGAMING",
     description: article?.metaDescription || "The guide you're looking for doesn't exist.",
@@ -31,12 +30,14 @@ const HelpArticle = () => {
 
   if (!article) {
     return (
-      <div className="container mx-auto px-4 py-16 text-center">
-        <h1 className="text-3xl font-bold text-primary mb-4">Article Not Found</h1>
-        <p className="text-foreground/60 mb-8">The guide you're looking for doesn't exist.</p>
-        <Link to="/help" className="text-primary hover:text-primary/80 transition-colors">
-          ← Back to Help Center
-        </Link>
+      <div className="min-h-screen bg-[#06080f] text-white">
+        <div className="container mx-auto px-4 py-16 text-center">
+          <h1 className="text-3xl font-bold text-blue-400 mb-4">Article Not Found</h1>
+          <p className="text-white/60 mb-8">The guide you're looking for doesn't exist.</p>
+          <Link to="/help" className="text-blue-400 hover:text-blue-300 transition-colors">
+            ← Back to Help Center
+          </Link>
+        </div>
       </div>
     );
   }
@@ -47,6 +48,13 @@ const HelpArticle = () => {
     headline: article.title,
     description: article.metaDescription,
     url: `${SITE_URL}/help/${article.slug}`,
+    datePublished: "2025-01-15",
+    dateModified: "2025-06-01",
+    author: {
+      "@type": "Organization",
+      name: "1MGAMING",
+      url: SITE_URL,
+    },
     publisher: {
       "@type": "Organization",
       name: "1MGAMING",
@@ -70,42 +78,62 @@ const HelpArticle = () => {
   };
 
   return (
-    <div className="container mx-auto px-4 py-12 max-w-3xl">
-      <JsonLd data={articleJsonLd} />
-      <JsonLd data={breadcrumbJsonLd} />
+    <div className="min-h-screen bg-[#06080f] text-white">
+      <div className="container mx-auto px-4 py-12 max-w-3xl">
+        <JsonLd data={articleJsonLd} />
+        <JsonLd data={breadcrumbJsonLd} />
 
-      <Breadcrumb className="mb-6">
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link to="/">Home</Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link to="/help">Help & Guides</Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbPage>{article.title}</BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
+        <Breadcrumb className="mb-6">
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink asChild>
+                <Link to="/" className="text-white/50 hover:text-blue-400">Home</Link>
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator className="text-white/30" />
+            <BreadcrumbItem>
+              <BreadcrumbLink asChild>
+                <Link to="/help" className="text-white/50 hover:text-blue-400">Help & Guides</Link>
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator className="text-white/30" />
+            <BreadcrumbItem>
+              <BreadcrumbPage className="text-white/70">{article.title}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
 
-      <Link
-        to="/help"
-        className="inline-flex items-center gap-1 text-sm text-primary/70 hover:text-primary mb-8 transition-colors"
-      >
-        <ArrowLeft className="w-3 h-3" /> Back to Help Center
-      </Link>
+        {/* Top CTA Banner */}
+        <div className="mb-8 rounded-lg bg-gradient-to-r from-blue-600/10 to-blue-400/10 border border-blue-500/20 px-5 py-3 flex items-center justify-between flex-wrap gap-3">
+          <p className="text-sm text-white/70">Launch your own predictions app</p>
+          <a
+            href="https://1mg.live"
+            className="inline-flex items-center gap-1 text-sm font-semibold text-blue-400 hover:text-blue-300 transition-colors"
+          >
+            Get Started — $2,400 <ArrowRight className="w-3 h-3" />
+          </a>
+        </div>
 
-      {article.content()}
+        <Link
+          to="/help"
+          className="inline-flex items-center gap-1 text-sm text-blue-400/70 hover:text-blue-400 mb-8 transition-colors"
+        >
+          <ArrowLeft className="w-3 h-3" /> Back to Help Center
+        </Link>
 
-      <FAQSection slug={article.slug} />
-      <ArticleCTA />
-      <RelatedArticles currentSlug={article.slug} />
+        {article.content()}
+
+        <FAQSection slug={article.slug} />
+        <ArticleCTA />
+        <RelatedArticles currentSlug={article.slug} />
+
+        {/* Internal links block */}
+        <div className="mt-10 pt-6 border-t border-white/10 flex flex-wrap gap-4 text-sm text-white/50">
+          <Link to="/help" className="hover:text-blue-400 transition-colors">Help Center</Link>
+          <a href="https://demo.1mg.live" className="hover:text-blue-400 transition-colors">Live Demo</a>
+          <a href="https://1mg.live" className="hover:text-blue-400 transition-colors">Buy Your App</a>
+        </div>
+      </div>
     </div>
   );
 };

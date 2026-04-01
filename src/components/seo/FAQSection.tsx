@@ -30,9 +30,9 @@ const articleFAQs: Record<string, FAQItem[]> = {
     { question: "Can I use prediction markets for sports?", answer: "Absolutely. Sports prediction markets are the fastest-growing category. On 1MGAMING, you can predict outcomes for soccer, boxing, MMA, and more." },
   ],
   "are-prediction-markets-legal": [
-    { question: "Are prediction markets legal in the United States?", answer: "Yes, prediction markets are increasingly accepted in the U.S. The CFTC regulates event contracts, and the 2024 Kalshi ruling opened the door for broader political and sports prediction markets." },
+    { question: "Are prediction markets legal in the United States?", answer: "Prediction markets are increasingly accepted in the U.S. The CFTC regulates event contracts, and the 2024 Kalshi ruling expanded the scope of permitted political and sports prediction markets. Regulations continue to evolve." },
     { question: "Is 1MGAMING a gambling platform?", answer: "No. Prediction markets are information aggregation tools, not games of chance. Outcomes are determined by real-world events, and participants use research and analysis to make decisions." },
-    { question: "How does 1MGAMING handle my funds?", answer: "1MGAMING never holds your funds directly. All transactions happen through smart contracts. Your money goes into transparent pools and is paid out automatically when events resolve." },
+    { question: "Should I check my local laws before participating?", answer: "Yes. Prediction market regulations vary by jurisdiction. Users should verify that participation is permitted under their local laws before trading." },
   ],
   "prediction-markets-growth-2025": [
     { question: "How big are prediction markets in 2025?", answer: "Major platforms processed over $50 billion in 2024. Analysts project prediction markets could exceed $100 billion annual volume by 2026." },
@@ -81,16 +81,16 @@ const FAQSection = ({ slug }: Props) => {
   return (
     <div className="mt-12">
       <JsonLd data={faqJsonLd} />
-      <h2 className="text-2xl font-semibold text-primary/90 mb-4">
+      <h2 className="text-2xl font-semibold text-blue-400 mb-4">
         Frequently Asked Questions
       </h2>
       <Accordion type="single" collapsible className="w-full">
         {faqs.map((faq, i) => (
-          <AccordionItem key={i} value={`faq-${i}`}>
-            <AccordionTrigger className="text-left text-foreground/80 hover:no-underline">
+          <AccordionItem key={i} value={`faq-${i}`} className="border-white/10">
+            <AccordionTrigger className="text-left text-white/80 hover:text-blue-400 hover:no-underline">
               {faq.question}
             </AccordionTrigger>
-            <AccordionContent className="text-foreground/60">
+            <AccordionContent className="text-white/50">
               {faq.answer}
             </AccordionContent>
           </AccordionItem>
