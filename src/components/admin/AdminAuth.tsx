@@ -151,8 +151,10 @@ export default function AdminAuth({ children }: AdminAuthProps) {
         return;
       }
 
-      // Send magic link
-      const redirectUrl = `${window.location.origin}/predictions/admin`;
+      // Send magic link — use production URL to avoid redirect allowlist issues
+      const redirectUrl = window.location.hostname === "1mgaming.com"
+        ? ADMIN_REDIRECT
+        : `${window.location.origin}/predictions/admin`;
       const { error } = await supabase.auth.signInWithOtp({
         email: email.trim().toLowerCase(),
         options: {
