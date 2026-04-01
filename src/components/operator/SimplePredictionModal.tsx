@@ -71,7 +71,9 @@ export default function SimplePredictionModal({
     pick === "fighter_a" ? "a" : "b",
     fight
   );
-  const logo = getTeamLogo(pickedName, fight.event_name);
+  const logoData = getTeamLogo(pickedName, fight.event_name);
+  const logo = logoData?.url || null;
+  const emoji = logoData?.emoji || null;
   const currentAmount = customAmount ? parseFloat(customAmount) || 0 : amount;
   const payout = calcPayout(fight, pick, currentAmount);
   const profit = payout - currentAmount;

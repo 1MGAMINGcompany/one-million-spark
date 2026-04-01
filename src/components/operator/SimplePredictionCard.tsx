@@ -45,8 +45,12 @@ export default function SimplePredictionCard({
   const payoutA = calcPayout(priceA, 10);
   const payoutB = calcPayout(priceB, 10);
 
-  const logoA = getTeamLogo(nameA, fight.event_name);
-  const logoB = getTeamLogo(nameB, fight.event_name);
+  const logoDataA = getTeamLogo(nameA, fight.event_name);
+  const logoDataB = getTeamLogo(nameB, fight.event_name);
+  const logoA = logoDataA?.url || null;
+  const logoB = logoDataB?.url || null;
+  const emojiA = logoDataA?.emoji || null;
+  const emojiB = logoDataB?.emoji || null;
 
   const isOpen = fight.status === "open";
   const isSettled = ["settled", "confirmed", "result_selected"].includes(fight.status);
