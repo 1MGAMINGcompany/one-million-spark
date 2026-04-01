@@ -24,6 +24,27 @@ import type { TradeResult } from "@/components/predictions/tradeResultTypes";
 import { isPropMarket } from "@/lib/detectSport";
 import { getTeamLogo } from "@/lib/teamLogos";
 
+/** Inline parseSport for operator app - avoids importing EventSection */
+function parseSport(eventName: string, _sp?: string | null, _cat?: string | null): string {
+  const upper = eventName.toUpperCase();
+  if (["MLS","SOCCER","FUTBOL","PREMIER LEAGUE","LA LIGA","CHAMPIONS LEAGUE","SERIE A","BUNDESLIGA","LIGUE 1","EPL","COPA","LIGA MX"].some(k => upper.includes(k))) return "FUTBOL";
+  if (["UFC","MMA","PFL","BELLATOR"].some(k => upper.includes(k))) return "MMA";
+  if (upper.includes("BOXING")) return "BOXING";
+  if (upper.includes("MUAY THAI")) return "MUAY THAI";
+  if (upper.includes("BARE KNUCKLE") || upper.includes("BKFC")) return "BARE KNUCKLE";
+  if (upper.includes("NFL")) return "NFL";
+  if (upper.includes("NBA")) return "NBA";
+  if (upper.includes("NCAA")) return "NCAA";
+  if (upper.includes("NHL")) return "NHL";
+  if (upper.includes("MLB")) return "MLB";
+  if (upper.includes("TENNIS") || upper.includes("ATP") || upper.includes("WTA")) return "TENNIS";
+  if (upper.includes("GOLF") || upper.includes("PGA")) return "GOLF";
+  if (upper.includes("F1") || upper.includes("FORMULA")) return "F1";
+  if (upper.includes("CRICKET") || upper.includes("IPL")) return "CRICKET";
+  if (upper.includes("RUGBY")) return "RUGBY";
+  return eventName.split(' — ')[0] || "OTHER";
+}
+
 const THEME_MAP: Record<string, { primary: string; bg: string; card: string }> = {
   blue: { primary: "#3b82f6", bg: "#06080f", card: "rgba(255,255,255,0.03)" },
   gold: { primary: "#d4a017", bg: "#0a0a0a", card: "rgba(255,255,255,0.03)" },
