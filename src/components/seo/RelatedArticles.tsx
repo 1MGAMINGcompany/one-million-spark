@@ -36,16 +36,16 @@ const RelatedArticles = ({ currentSlug }: Props) => {
   const nextArticle = helpArticles[(currentIdx + 1) % helpArticles.length];
 
   return (
-    <div className="mt-12 pt-8 border-t border-border">
-      <h3 className="text-lg font-semibold text-foreground mb-4">Related Guides</h3>
+    <div className="mt-12 pt-8 border-t border-white/10">
+      <h3 className="text-lg font-semibold text-white mb-4">Related Guides</h3>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {related.map((a) => (
           <Link
             key={a.slug}
             to={`/help/${a.slug}`}
-            className="rounded-lg border border-border p-4 hover:border-primary/40 transition-colors group"
+            className="rounded-lg border border-white/10 bg-white/5 p-4 hover:border-blue-500/30 transition-colors group"
           >
-            <p className="text-sm font-medium text-foreground group-hover:text-primary transition-colors leading-snug">
+            <p className="text-sm font-medium text-white/80 group-hover:text-blue-400 transition-colors leading-snug">
               {a.title}
             </p>
           </Link>
@@ -56,7 +56,7 @@ const RelatedArticles = ({ currentSlug }: Props) => {
         <div className="mt-6">
           <Link
             to={`/help/${nextArticle.slug}`}
-            className="inline-flex items-center gap-1 text-sm text-primary/70 hover:text-primary transition-colors"
+            className="inline-flex items-center gap-1 text-sm text-blue-400/70 hover:text-blue-400 transition-colors"
           >
             Next: {nextArticle.title} <ArrowRight className="w-3 h-3" />
           </Link>
