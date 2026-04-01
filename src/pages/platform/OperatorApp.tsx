@@ -529,12 +529,28 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
             </p>
           </div>
         ) : filteredFights.length === 0 ? (
-          <div className="text-center py-20 text-white/30">
-            {activeTab === "picks"
-              ? "No predictions placed yet"
-              : searchQuery
-                ? t("operator.noSearchResults", "No events match your search")
-                : t("operator.noEvents")}
+          <div className="text-center py-20 px-6">
+            {activeTab === "picks" ? (
+              <>
+                <Trophy className="w-12 h-12 mx-auto mb-4 text-white/10" />
+                <h3 className="text-lg font-bold text-white/60">No predictions placed yet</h3>
+                <p className="mt-2 text-sm text-white/30">Pick a winner from the events tab to get started.</p>
+              </>
+            ) : searchQuery ? (
+              <>
+                <Search className="w-12 h-12 mx-auto mb-4 text-white/10" />
+                <h3 className="text-lg font-bold text-white/60">{t("operator.noSearchResults", "No events match your search")}</h3>
+                <p className="mt-2 text-sm text-white/30">Try a different team or player name.</p>
+              </>
+            ) : (
+              <>
+                <CalendarPlus className="w-12 h-12 mx-auto mb-4 text-white/10" />
+                <h3 className="text-lg font-bold text-white/60">No live sports available right now</h3>
+                <p className="mt-2 text-sm text-white/30 max-w-sm mx-auto">
+                  New matchups will appear here as soon as they open. Check back soon.
+                </p>
+              </>
+            )}
           </div>
         ) : (
           filteredFights.map(fight => {
