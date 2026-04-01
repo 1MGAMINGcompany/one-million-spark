@@ -312,18 +312,39 @@ export default function OperatorDashboard() {
         </div>
 
         {/* Revenue Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+          <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
+            <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><TrendingUp size={14} /> {t("operator.dashboard.predictions")}</div>
+            <div className="text-xl font-bold">{revenue.count}</div>
+          </div>
+          <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
+            <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><DollarSign size={14} /> {t("operator.dashboard.totalVolume", "Total Volume")}</div>
+            <div className="text-xl font-bold">${fights.reduce((s: number, f: any) => s + (f.pool_a_usd || 0) + (f.pool_b_usd || 0), 0).toFixed(0)}</div>
+          </div>
           <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
             <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><DollarSign size={14} /> {t("operator.dashboard.totalEarned")}</div>
             <div className="text-xl font-bold text-green-400">${revenue.total.toFixed(2)}</div>
           </div>
+        </div>
+
+        {/* Most popular event */}
+        {fights.length > 0 && (() => {
+          const top = [...fights].sort((a: any, b: any) => ((b.pool_a_usd || 0) + (b.pool_b_usd || 0)) - ((a.pool_a_usd || 0) + (a.pool_b_usd || 0)))[0] as any;
+          if (!top) return null;
+          const pool = (top.pool_a_usd || 0) + (top.pool_b_usd || 0);
+          return (
+            <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4 mb-4">
+              <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><Trophy size={14} /> {t("operator.dashboard.mostPopular", "Most Popular Event")}</div>
+              <div className="text-sm font-bold text-white">{top.title || "—"}</div>
+              <div className="text-xs text-white/40 mt-0.5">${pool.toFixed(0)} total pool • {top.shares_a + top.shares_b} predictions</div>
+            </div>
+          );
+        })()}
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-8">
           <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
             <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><Wallet size={14} /> {t("operator.dashboard.available")}</div>
             <div className="text-xl font-bold text-emerald-400">${availableBalance.toFixed(2)}</div>
-          </div>
-          <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
-            <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><TrendingUp size={14} /> {t("operator.dashboard.predictions")}</div>
-            <div className="text-xl font-bold">{revenue.count}</div>
           </div>
           <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
             <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><Calendar size={14} /> {t("operator.dashboard.events")}</div>
