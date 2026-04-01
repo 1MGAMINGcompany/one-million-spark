@@ -445,8 +445,8 @@ function FightPredictionAdminInner({ address }: { address: string }) {
     return "active";
   };
 
-  const bucketCounts: Record<AdminFilterType, number> = { needs_action: 0, active: 0, pending: 0, pending_review: 0, live: 0, review: 0, archived: 0, dismissed: 0 };
-  events.forEach(e => { bucketCounts[getEventBucket(e)]++; });
+  const bucketCounts: Record<AdminFilterType, number> = { overview: 0, needs_action: 0, active: 0, pending: 0, pending_review: 0, live: 0, review: 0, archived: 0, dismissed: 0 };
+  events.forEach(e => { const b = getEventBucket(e); if (b !== "overview") bucketCounts[b]++; });
 
   const FILTER_TABS: { key: AdminFilterType; label: string; count: number }[] = [
     { key: "needs_action", label: "⚡ Action", count: bucketCounts.needs_action },
