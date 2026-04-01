@@ -382,8 +382,20 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         </div>
       </div>
 
+      {/* Hero text */}
+      {filteredFights.length > 0 && !searchQuery && sportFilter === "ALL" && (
+        <div className="max-w-4xl mx-auto px-4 pt-2 pb-0 text-center">
+          <h1 className="text-2xl sm:text-3xl font-black text-white leading-tight">
+            {t("operator.heroTitle", "Pick a Winner. Win Money.")}
+          </h1>
+          <p className="text-sm text-white/40 mt-1">
+            {t("operator.heroSubtitle", "Choose a team. Enter amount. See your payout instantly.")}
+          </p>
+        </div>
+      )}
+
       {/* Events */}
-      <div className="max-w-4xl mx-auto px-4 py-4 space-y-6">
+      <div className="max-w-4xl mx-auto px-4 py-4 space-y-4">
         {backendDegraded && filteredFights.length === 0 ? (
           <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-6 py-12 text-center">
             <ShieldCheck className="w-14 h-14 mx-auto mb-4 text-amber-400" />
@@ -397,20 +409,20 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
             {searchQuery ? t("operator.noSearchResults", "No events match your search") : t("operator.noEvents")}
           </div>
         ) : (
-          eventEntries.map(([eventName, group]) => (
-            <EventSection
-              key={eventName}
-              eventName={eventName}
-              fights={group.fights}
-              wallet={address || null}
-              userEntries={userEntries}
-              onPredict={handlePredict}
-              onClaim={handleClaim}
-              claiming={claiming}
-              hotFightIds={hotFightIds}
-              onWalletRequired={() => { if (!authenticated) login(); else setShowWalletGate(true); }}
-            />
-          ))
+          filteredFights.map(fight => {
+            const entry = userEntries.find((e: any) => e.fight_id === fight.id);
+            return (
+              <SimplePredictionCard
+                key={fight.id}
+                fight={fight}
+                onPredict={handlePredict}
+                userEntry={entry || null}
+                onClaim={handleClaim}
+                claiming={claiming}
+                themeColor={theme.primary}
+              />
+            );
+          })
         )}
       </div>
 
