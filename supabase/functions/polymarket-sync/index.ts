@@ -1748,6 +1748,105 @@ Deno.serve(async (req) => {
       return json({ error: "Could not parse URL" }, 400);
     }
 
+    // ══════════════════════════════════════════════════
+    // ACTION: daily_import — Automated daily import with sport routing
+    // ══════════════════════════════════════════════════
+    if (action === "daily_import") {
+      console.log("[polymarket-sync] daily_import started");
+
+      // Sport routing: combat + soccer → visibility "all", status "approved", trading on
+      // Everything else → visibility "platform", status "open"
+      const COMBAT_AND_SOCCER_KEYS = new Set([
+        "ufc", "mma", "boxing", "bkfc",
+        "epl", "mls", "ucl", "uel", "la-liga", "bundesliga",
+        "serie-a", "ligue-1", "liga-mx", "copa-libertadores",
+        "brazil-serie-a", "eredivisie", "copa-sudamericana",
+        "j-league", "k-league", "a-league", "super-lig",
+        "primeira-liga", "concacaf", "conmebol", "fifa-friendlies",
+      ]);
+
+      const PLATFORM_ONLY_KEYS = new Set([
+        "nba", "nhl", "mlb", "ncaab", "cfb", "wnba",
+        "atp", "wta", "tennis", "tennis-atp", "tennis-wta", "tennis-grand-slam",
+        "golf", "f1",
+        "cricket", "cricket-ipl", "cricket-psl", "cricket-intl",
+        "rugby", "table-tennis",
+      ]);
+
+      const summary: Record<string, { fetched: number; imported: number; errors: number }> = {};
+      let totalImported = 0;
+      let totalErrors = 0;
+
+      // Process all leagues
+      const allLeagueKeys = [...COMBAT_AND_SOCCER_KEYS, ...PLATFORM_ONLY_KEYS];
+
+      for (const leagueKey of allLeagueKeys) {
+        const cfg = LEAGUE_SOURCES[leagueKey];
+        if (!cfg) continue;
+
+        const isCombatOrSoccer = COMBAT_AND_SOCCER_KEYS.has(leagueKey);
+        const vis = isCombatOrSoccer ? "all" : "platform";
+        const statusOverride = isCombatOrSoccer ? "approved" : "pending_review";
+        const tradingOn = isCombatOrSoccer;
+
+        try {
+          const { events: rawEvents } = await fetchByLeagueSource(cfg);
+          const { accepted } = filterFixtures(rawEvents, true);
+
+          let leagueImported = 0;
+          let leagueErrors = 0;
+
+          for (const ev of accepted) {
+            try {
+              const result = await importSingleEvent(
+                supabase, ev, null, `daily_import_${leagueKey}`,
+                cfg.sportType, vis,
+                { eventStatusOverride: statusOverride, fightTradingAllowed: tradingOn },
+              );
+              leagueImported += result.imported;
+            } catch (e) {
+              console.error(`[daily_import] Error importing ${ev.title}: ${e}`);
+              leagueErrors++;
+            }
+          }
+
+          summary[leagueKey] = { fetched: accepted.length, imported: leagueImported, errors: leagueErrors };
+          totalImported += leagueImported;
+          totalErrors += leagueErrors;
+
+          console.log(`[daily_import] ${leagueKey}: ${accepted.length} fetched, ${leagueImported} imported, ${leagueErrors} errors`);
+        } catch (e) {
+          console.error(`[daily_import] League ${leagueKey} failed: ${e}`);
+          summary[leagueKey] = { fetched: 0, imported: 0, errors: 1 };
+          totalErrors++;
+        }
+      }
+
+      // Log summary
+      await supabase.from("admin_activity_log").insert({
+        action: "daily_auto_import",
+        description: `Daily import: ${totalImported} fights imported across ${Object.keys(summary).length} leagues. ${totalErrors} errors.`,
+        admin_wallet: "system_cron",
+      });
+
+      await supabase.from("automation_logs").insert({
+        action: "daily_auto_import",
+        source: "polymarket-sync",
+        admin_wallet: null,
+        details: { total_imported: totalImported, total_errors: totalErrors, summary },
+      });
+
+      console.log(`[polymarket-sync] daily_import complete: ${totalImported} imported, ${totalErrors} errors`);
+
+      return json({
+        success: true,
+        total_imported: totalImported,
+        total_errors: totalErrors,
+        leagues_processed: Object.keys(summary).length,
+        summary,
+      });
+    }
+
     return json({ error: "Unknown action" }, 400);
   } catch (err) {
     console.error(`[polymarket-sync] Error: ${err}`);
