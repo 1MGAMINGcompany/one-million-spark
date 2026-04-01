@@ -1,122 +1,52 @@
 
 
-## 1mg.live Growth & Conversion — 10 Improvements Build
+## Create demo.1mg.live — Live Demo Operator App
 
-All changes target the operator ecosystem only. No modifications to 1mgaming.com advanced UX.
+The demo is simply an operator record in the database with subdomain `"demo"`. The existing `OperatorApp.tsx` + domain detection already handles everything. No code changes needed.
 
----
+### Steps
 
-### 1. Share Buttons on Operator App (Virality)
+**1. Insert demo operator record (database)**
 
-**Files:** `SimplePredictionModal.tsx`, `OperatorApp.tsx`
+Insert into `operators` table:
+- `subdomain`: `"demo"`
+- `brand_name`: `"1MG Demo"`
+- `status`: `"active"`
+- `fee_percent`: `5`
+- `theme`: `"gold"`
+- `user_id`: your Privy DID (platform owner)
 
-- **Success screen**: Replace "Done" as primary. Add "SHARE YOUR PICK" button (styled with `themeColor`) that opens `SocialShareModal` with `variant="prediction"`. "Done" becomes secondary text link below.
-- **Win claim screen** (`SimplePredictionCard.tsx`): After "Collect Winnings" succeeds, show "SHARE YOUR WIN" button opening `SocialShareModal` with `variant="claim_win"`.
-- Pass `operatorBrandName`, `operatorLogoUrl`, `operatorSubdomain` from `OperatorApp.tsx` down through card and modal props.
-- Add `SocialShareModal` state (`shareOpen`, `shareVariant`, `shareFight`) to `OperatorApp.tsx`.
+Insert into `operator_settings`:
+- `allowed_sports`: empty array `{}` (empty = show ALL sports, since the filter skips when length is 0)
+- `show_polymarket_events`: `true`
+- `show_platform_events`: `true`
 
-### 2. Auto-Populate Events on Operator Launch
+**2. DNS setup (Cloudflare — manual or automated)**
 
-**File:** `OperatorOnboarding.tsx`
+Add these records at your Cloudflare dashboard for the `1mg.live` zone:
+- **A record**: `demo` → `185.158.133.1` (proxied/orange cloud ON)
+- **TXT record**: `_lovable.demo` → your Lovable verification value
 
-- After successful operator creation (final step submit), call `prediction-admin` edge function with a new `seedOperatorEvents` action.
-- Backend: In `prediction-admin/index.ts`, add `seedOperatorEvents` action that copies up to 5 upcoming platform events matching the operator's `allowed_sports` into their view (no duplication needed — they already see platform events via the `.or()` query). Instead, auto-set `status = "active"` on the operator record so events appear immediately.
-- Actually, re-reading the code: operators already see platform events. The real fix is to ensure the operator's `allowed_sports` match popular sports and the onboarding completion navigates to the app immediately. Add a "Your app is ready!" success screen with a direct link to `{subdomain}.1mg.live`.
+If you already have a wildcard `*.1mg.live` A record pointing to `185.158.133.1`, the DNS is already done and `demo.1mg.live` will resolve automatically.
 
-### 3. Event Date/Time on SimplePredictionCard
+Then add `demo.1mg.live` as a custom domain in Lovable Project Settings → Domains (with "Cloudflare proxy" option enabled).
 
-**File:** `SimplePredictionCard.tsx`
+**3. Update landing page demo link**
 
-- Add `event_date` display below the team names row, using `formatEventDateTime` from `src/lib/formatEventLocalDateTime.ts`.
-- Show as: `"Mar 15, 2:00 PM EDT"` in `text-xs text-white/30`.
-- Also show league name from `fight.event_name` as a small badge above the card.
+The landing page already has a "View Live Demo" link. We just need to make sure it points to `https://demo.1mg.live`.
 
-### 4. Draw Button for 3-Way Markets
+**4. Fee routing**
 
-**Files:** `SimplePredictionCard.tsx`, `SimplePredictionModal.tsx`, `OperatorApp.tsx`
+The 5% operator fee is already handled by the existing prediction flow. When a user places a prediction on an operator app, the `prediction-submit` edge function checks `source_operator_id`, looks up the operator's `fee_percent`, and records revenue in `operator_revenue`. Since this is YOUR demo operator, the fees accrue to the demo operator record. Platform fee (1.5%) is collected separately as usual.
 
-- Check `fight.fighter_b_name` for "Draw" or check if fight has `price_draw` / third outcome field.
-- Actually, 3-way markets have `fighter_a` and `fighter_b` as the two teams, with Draw as a separate concept. Check the Fight type for draw support.
-- For fights where a draw outcome exists (detected via `fight.draw_enabled` or similar field), add a third button in the card grid: `grid-cols-3` instead of `grid-cols-2`. The draw button calls `onPredict(fight, "draw")`.
-- Update `onPredict` handler type to accept `"fighter_a" | "fighter_b" | "draw"`.
+### What already works (no code changes)
+- Domain detection → `demo.1mg.live` → `{ type: "operator", subdomain: "demo" }`
+- `useOperatorBySubdomain("demo")` fetches the operator record
+- All platform events + operator events display automatically
+- Empty `allowed_sports` = all sports shown
+- Privy auth, prediction placement, share buttons all work
+- Revenue tracking at 5% fee
 
-### 5. Revenue Calculator on Landing Page
-
-**File:** `LandingPage.tsx`
-
-- Add a new section between hero and "How It Works".
-- Three sliders: Users (10-1000, default 100), Avg bet/week ($5-$100, default $20), Fee % (1-10, default 5).
-- Live calculation: `users * avgBet * (feePercent / 100)` displayed as weekly/monthly/yearly.
-- Headline: "See How Much You Could Earn"
-- Large animated result: `$400/week → $1,600/month → $20,800/year`
-
-### 6. Single CTA + Price in Hero
-
-**File:** `LandingPage.tsx`
-
-- Remove the two-button CTA (BUY NOW + CREATE ACCOUNT).
-- Replace with ONE button: `BUY NOW — $2,400 USDC` with `btn-glow` class.
-- Below button, add trust text:
-  ```
-  When you continue, a secure wallet is created for you.
-  This wallet is used to:
-  ✅ pay for your app
-  ✅ collect your earnings
-  ✅ manage your business
-  ```
-- Add "View Live Demo" link below trust text → `https://demo.1mg.live`
-- Apply same pattern to final CTA section at bottom.
-
-### 7. "My Predictions" Tab
-
-**File:** `OperatorApp.tsx`
-
-- Add a tab bar below the navbar: "Events" | "My Picks" (only visible when authenticated).
-- "My Picks" tab filters `allFights` to only those with a matching `userEntry`, showing the card in its "already picked" or "settled" state.
-- Simple toggle state, no new page needed.
-
-### 8. Fix "You Win" → Multiplier Display
-
-**Files:** `SimplePredictionCard.tsx`, `SimplePredictionModal.tsx`
-
-- **Card**: Change `You win: $18.20` → `Bet $10 → Win $18.20` (keeps the $10 reference amount).
-- **Modal payout section**: Change `You Win: $18.20` → `Bet $10 → Win $18.20` using actual entered amount.
-- Multiplier shown as small text: `(1.82x)` next to the payout.
-
-### 9. Balance Display + "Add Funds" Nudge
-
-**File:** `OperatorApp.tsx`, new component `OperatorBalanceBanner.tsx`
-
-- When user is connected, show USDC.e balance in the navbar (already have `usePolygonUSDC` imported).
-- If balance < $5, show a subtle banner below navbar: "Add funds to place predictions" with a link/button that opens the Add Funds flow or shows instructions.
-- Use `relayer_allowance` or a direct balance check.
-
-### 10. Collapse Sport Filters on Mobile
-
-**File:** `OperatorApp.tsx`
-
-- On mobile (`useIsMobile()`), replace the horizontal `ScrollableSportTabs` with a dropdown select.
-- Show current sport + count as the trigger. Opens a sheet/dropdown with all sport options.
-- Desktop keeps the current scrollable tabs.
-
----
-
-### Implementation Order
-1. Landing page hero fix (single button + trust text + demo link) — highest sales impact
-2. Revenue calculator section
-3. Fix "You win" → "Bet $X → Win $Y" on cards and modal
-4. Add event date/time to cards
-5. Share buttons (success screen + win claim)
-6. Draw button for 3-way markets
-7. "My Picks" tab
-8. Balance display + add funds nudge
-9. Mobile sport filter dropdown
-10. Onboarding success screen with "Your app is ready" + direct link
-
-**Files to modify:**
-- `src/pages/platform/LandingPage.tsx`
-- `src/components/operator/SimplePredictionCard.tsx`
-- `src/components/operator/SimplePredictionModal.tsx`
-- `src/pages/platform/OperatorApp.tsx`
-- `src/pages/platform/OperatorOnboarding.tsx`
+### Summary
+This is a **data-only setup** — insert 2 rows + configure DNS. No code changes required. The existing system handles everything.
 
