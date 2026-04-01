@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Shield, Mail, Loader2, LogOut, UserPlus, Trash2 } from "lucide-react";
+import { Shield, Mail, Loader2, LogOut, UserPlus, Trash2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,6 +7,22 @@ import { toast } from "sonner";
 
 const SESSION_KEY = "admin_session";
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+const ADMIN_REDIRECT = "https://1mgaming.com/predictions/admin";
+
+/** Parse auth error from URL hash (e.g. #error=access_denied&error_code=otp_expired) */
+function parseHashError(): { code: string; description: string } | null {
+  try {
+    const hash = window.location.hash;
+    if (!hash || !hash.includes("error=")) return null;
+    const params = new URLSearchParams(hash.substring(1));
+    const code = params.get("error_code") || params.get("error") || "unknown";
+    const description = (params.get("error_description") || "Authentication failed").replace(/\+/g, " ");
+    return { code, description };
+  } catch {
+    return null;
+  }
+}
 
 interface AdminSession {
   email: string;
