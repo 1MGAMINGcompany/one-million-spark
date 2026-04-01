@@ -302,7 +302,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   }
 
   const theme = THEME_MAP[operator.theme] || THEME_MAP.blue;
-  const eventEntries = Object.entries(groupedEvents);
+  
 
   return (
     <div className="min-h-screen text-white" style={{ backgroundColor: theme.bg }}>
