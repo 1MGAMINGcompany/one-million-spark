@@ -19,7 +19,7 @@ import {
   Shield, Plus, Lock, Trophy, Loader2, Play, CheckCircle, Ban,
   ArrowDown, Trash2, Eye, AlertTriangle, RefreshCw, Power, Download,
   Archive, EyeOff, Filter, ChevronUp, ChevronDown, Users, Settings,
-  Save, Globe,
+  Save, Globe, Zap,
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import {
@@ -663,6 +663,29 @@ function FightPredictionAdminInner({ address }: { address: string }) {
           ))}
         </div>
 
+        {/* ── Bulk Approve (pending_review tab) ── */}
+        {adminFilter === "pending_review" && bucketCounts.pending_review > 0 && (
+          <Button
+            size="sm"
+            onClick={() => withConfirm(
+              "Bulk Approve All",
+              `Approve all ${bucketCounts.pending_review} events? This will make them live immediately with trading enabled.`,
+              async () => {
+                try {
+                  const result = await callAdmin("bulkQuickApprove");
+                  toast.success(`✅ ${result.approved} events approved`);
+                  loadData();
+                } catch (e: any) { toast.error(e.message); }
+              },
+              false
+            )}
+            disabled={busy}
+            className="bg-green-500/20 text-green-400 hover:bg-green-500/30 gap-2"
+          >
+            <Zap className="w-4 h-4" /> Bulk Approve All ({bucketCounts.pending_review})
+          </Button>
+        )}
+
         {/* ── Events List ── */}
         <h2 className="text-lg font-bold text-foreground font-['Cinzel']">
           Events
@@ -964,13 +987,23 @@ function AdminEventCard({
               <>
                 <Button size="sm" onClick={async () => {
                   try {
+                    const result = await callAdmin("quickApproveEvent", { event_id: event.id });
+                    toast.success(`⚡ "${event.event_name}" approved — ${result.fights_updated} fights enabled`);
+                    loadData();
+                  } catch(e:any){toast.error(e.message);}
+                }} disabled={busy}
+                  className="bg-green-500/20 text-green-400 hover:bg-green-500/30">
+                  <Zap className="w-3 h-3 mr-1" /> Quick Approve
+                </Button>
+                <Button size="sm" onClick={async () => {
+                  try {
                     await callAdmin("updateEventStatus", { event_id: event.id, status: "draft" });
                     toast.success("Promoted to Draft");
                     loadData();
                   } catch(e:any){toast.error(e.message);}
                 }} disabled={busy}
-                  className="bg-green-500/20 text-green-400 hover:bg-green-500/30">
-                  <CheckCircle className="w-3 h-3 mr-1" /> Approve to Draft
+                  className="bg-muted/50 text-muted-foreground hover:bg-muted">
+                  <CheckCircle className="w-3 h-3 mr-1" /> To Draft
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => onConfirm(
                   "Dismiss Event",
@@ -986,9 +1019,15 @@ function AdminEventCard({
 
             {event.status === "draft" && (
               <>
-                <Button size="sm" onClick={async () => { try { await callAdmin("approveEvent", { event_id: event.id }); toast.success("Approved"); loadData(); } catch(e:any){toast.error(e.message);} }} disabled={busy}
+                <Button size="sm" onClick={async () => {
+                  try {
+                    const result = await callAdmin("quickApproveEvent", { event_id: event.id });
+                    toast.success(`⚡ "${event.event_name}" approved — ${result.fights_updated} fights enabled`);
+                    loadData();
+                  } catch(e:any){toast.error(e.message);}
+                }} disabled={busy}
                   className="bg-green-500/20 text-green-400 hover:bg-green-500/30">
-                  <Eye className="w-3 h-3 mr-1" /> Approve
+                  <Zap className="w-3 h-3 mr-1" /> Quick Approve
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => onConfirm(
                   "Dismiss Event",

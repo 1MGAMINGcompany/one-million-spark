@@ -1146,6 +1146,112 @@ Deno.serve(async (req) => {
       return json({ success: true });
     }
 
+    // ── Quick Approve (single event) ──
+    if (action === "quickApproveEvent") {
+      const { event_id } = body;
+      if (!event_id) return json({ error: "Missing event_id" }, 400);
+
+      // Update event → approved in one shot (from ANY status)
+      const { data: evt, error: evtErr } = await supabase
+        .from("prediction_events")
+        .update({
+          status: "approved",
+          auto_resolve: true,
+          admin_approved_at: new Date().toISOString(),
+          automation_status: "scheduled",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", event_id)
+        .select("id, event_name")
+        .single();
+
+      if (evtErr) throw evtErr;
+
+      // Update ALL fights under this event
+      const { data: updatedFights } = await supabase
+        .from("prediction_fights")
+        .update({
+          trading_allowed: true,
+          auto_resolve: true,
+          status: "open",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("event_id", event_id)
+        .in("status", ["open", "locked"])
+        .select("id");
+
+      // Also enable trading on fights already open but with trading_allowed=false
+      await supabase
+        .from("prediction_fights")
+        .update({ trading_allowed: true, auto_resolve: true, updated_at: new Date().toISOString() })
+        .eq("event_id", event_id)
+        .eq("trading_allowed", false);
+
+      const fightCount = updatedFights?.length ?? 0;
+
+      await supabase.from("automation_logs").insert({
+        action: "quick_approve_event",
+        event_id,
+        admin_wallet: wallet,
+        source: "prediction-admin",
+        details: { event_name: evt.event_name, fights_updated: fightCount },
+      });
+
+      return json({ event: evt, fights_updated: fightCount });
+    }
+
+    // ── Bulk Quick Approve (all pending_review events) ──
+    if (action === "bulkQuickApprove") {
+      const { data: pendingEvents, error: fetchErr } = await supabase
+        .from("prediction_events")
+        .select("id, event_name")
+        .eq("status", "pending_review");
+
+      if (fetchErr) throw fetchErr;
+      if (!pendingEvents || pendingEvents.length === 0) {
+        return json({ approved: 0, message: "No pending_review events found" });
+      }
+
+      const eventIds = pendingEvents.map((e: any) => e.id);
+
+      // Batch update all events
+      await supabase
+        .from("prediction_events")
+        .update({
+          status: "approved",
+          auto_resolve: true,
+          admin_approved_at: new Date().toISOString(),
+          automation_status: "scheduled",
+          updated_at: new Date().toISOString(),
+        })
+        .in("id", eventIds);
+
+      // Batch update all fights under these events
+      await supabase
+        .from("prediction_fights")
+        .update({
+          trading_allowed: true,
+          auto_resolve: true,
+          updated_at: new Date().toISOString(),
+        })
+        .in("event_id", eventIds);
+
+      await supabase.from("admin_activity_log").insert({
+        action: "bulk_quick_approve",
+        description: `Bulk approved ${pendingEvents.length} events`,
+        admin_wallet: wallet,
+      });
+
+      await supabase.from("automation_logs").insert({
+        action: "bulk_quick_approve",
+        admin_wallet: wallet,
+        source: "prediction-admin",
+        details: { count: pendingEvents.length, event_names: pendingEvents.slice(0, 10).map((e: any) => e.event_name) },
+      });
+
+      return json({ approved: pendingEvents.length });
+    }
+
     return json({ error: "Unknown action" }, 400);
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), {
