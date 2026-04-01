@@ -663,6 +663,29 @@ function FightPredictionAdminInner({ address }: { address: string }) {
           ))}
         </div>
 
+        {/* ── Bulk Approve (pending_review tab) ── */}
+        {adminFilter === "pending_review" && bucketCounts.pending_review > 0 && (
+          <Button
+            size="sm"
+            onClick={() => withConfirm(
+              "Bulk Approve All",
+              `Approve all ${bucketCounts.pending_review} events? This will make them live immediately with trading enabled.`,
+              async () => {
+                try {
+                  const result = await callAdmin("bulkQuickApprove");
+                  toast.success(`✅ ${result.approved} events approved`);
+                  loadData();
+                } catch (e: any) { toast.error(e.message); }
+              },
+              false
+            )}
+            disabled={busy}
+            className="bg-green-500/20 text-green-400 hover:bg-green-500/30 gap-2"
+          >
+            <Zap className="w-4 h-4" /> Bulk Approve All ({bucketCounts.pending_review})
+          </Button>
+        )}
+
         {/* ── Events List ── */}
         <h2 className="text-lg font-bold text-foreground font-['Cinzel']">
           Events
