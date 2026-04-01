@@ -665,6 +665,9 @@ function FightPredictionAdminInner({ address }: { address: string }) {
           ))}
         </div>
 
+        {/* ── Overview Tab ── */}
+        {adminFilter === "overview" && <AdminOverviewTab />}
+
         {/* ── Bulk Approve (pending_review tab) ── */}
         {adminFilter === "pending_review" && bucketCounts.pending_review > 0 && (
           <Button
@@ -689,15 +692,17 @@ function FightPredictionAdminInner({ address }: { address: string }) {
         )}
 
         {/* ── Events List ── */}
-        <h2 className="text-lg font-bold text-foreground font-['Cinzel']">
-          Events
-          <span className="text-sm font-normal text-muted-foreground ml-2">({filteredEvents.length})</span>
-        </h2>
+        {adminFilter !== "overview" && (
+          <>
+            <h2 className="text-lg font-bold text-foreground font-['Cinzel']">
+              Events
+              <span className="text-sm font-normal text-muted-foreground ml-2">({filteredEvents.length})</span>
+            </h2>
 
-        {filteredEvents.length === 0 && (
-          <Card className="bg-card border-border/50 p-6 text-center">
-            <p className="text-sm text-muted-foreground">No events in this category.</p>
-          </Card>
+            {filteredEvents.length === 0 && (
+              <Card className="bg-card border-border/50 p-6 text-center">
+                <p className="text-sm text-muted-foreground">No events in this category.</p>
+              </Card>
         )}
 
         {filteredEvents.map(event => (
