@@ -386,7 +386,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       {/* Balance banner */}
       {isConnected && (
         <OperatorBalanceBanner
-          balanceUsdce={usdce}
+          balanceUsdce={usdc_balance}
           themeColor={theme.primary}
           onAddFunds={handleAddFunds}
         />
