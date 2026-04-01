@@ -175,7 +175,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     }
 
     if (sportFilter !== "ALL") {
-      fights = fights.filter(f => parseSport(f.event_name, null, null) === sportFilter);
+      fights = fights.filter(f => normalizeOperatorSport(f.event_name, (f as any).sport ?? null) === sportFilter);
     }
     if (dateFilter === "today") {
       const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
