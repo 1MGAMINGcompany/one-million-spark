@@ -1,52 +1,37 @@
 
 Issue identified:
-- The admin page code is already using the correct client-side OTP API shape in `src/components/admin/AdminAuth.tsx`:
-  - `supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false, emailRedirectTo: undefined } })`
-  - `supabase.auth.verifyOtp({ email, token, type: "email" })`
-- The reason you still receive a login link is not the React component. It is the auth email content/configuration.
-- I confirmed the project has no custom auth email setup in the repo:
-  - no `auth-email-hook`
-  - no auth email templates under `supabase/functions/_shared`
-- I also confirmed there is currently no sender email domain configured for this workspace, so the project is falling back to the default passwordless email behavior, which is the magic-link template.
+- `src/components/admin/AdminAuth.tsx` already sends the login email with `emailRedirectTo: ${window.location.origin}/predictions/admin`.
+- The URL you pasted — `#error=access_denied&error_code=otp_expired` — means the one-time auth token is already invalid before the app can create a session.
+- I also confirmed there is no existing hash/error handling anywhere in the app, and no dedicated auth callback route. So when auth fails, the user just lands on the site root with a raw error hash.
+- Because the failure lands on `https://1mgaming.com/` instead of `/predictions/admin`, the redirect is likely falling back to the auth default Site URL rather than the intended admin path.
+- With `morganlaurent@live.ca`, Microsoft/Outlook link scanning is also a likely contributor: these scanners often open single-use magic links before the user does, which causes `otp_expired`.
 
 What to build:
-1. Keep `src/components/admin/AdminAuth.tsx` functionally as-is, aside from optionally cleaning the misleading comment that says “magic link”.
-2. Set up auth email infrastructure for this project so passwordless emails use a branded/custom template instead of the default.
-3. Replace the default passwordless email template content so it includes the 6-digit token (`{{ .Token }}`) rather than a login button/link.
-4. Deploy the auth email hook/templates so `signInWithOtp` emails render as code-based OTP emails.
-5. Verify the admin flow end-to-end:
-   - enter admin email
-   - receive 6-digit code email
-   - enter code
-   - gain access
+1. Keep the admin flow as magic-link based.
+2. Update `src/components/admin/AdminAuth.tsx` so it:
+   - uses an explicit production admin redirect target for live traffic
+   - reads URL hash errors on load
+   - shows a clear “link expired or already used — request a new one” message instead of silently dropping the user on `/`
+   - clears the bad hash after handling it
+3. Add a dedicated admin auth callback route if needed so magic-link returns go through one stable page before the dashboard renders.
+4. Update auth redirect configuration so the exact admin URL is allowed:
+   - `https://1mgaming.com/predictions/admin`
+   - testing URLs for preview/published environments as needed
+5. Re-test the flow end-to-end with a freshly generated link.
 
 Technical details:
-- Supabase/Lovable passwordless email OTP and magic link share the same send API.
-- The difference is mainly the email template content:
-  - magic link template uses confirmation URL/button
-  - OTP template must include `{{ .Token }}`
-- Since this project currently has no custom auth email templates and no configured email domain, code changes in `AdminAuth.tsx` alone cannot change the email body from link to code.
+- `otp_expired` is an auth-layer failure, not a React route bug by itself.
+- Missing/invalid allowed redirect URLs can cause fallback to the root Site URL.
+- Single-use magic links are vulnerable to Outlook/Microsoft link prefetching, which can invalidate the token before the real click.
 
 Implementation sequence:
-1. Configure a sender email domain for the project.
-2. Scaffold auth email templates.
-3. Update the magic-link/passwordless auth template to show a 6-digit code using `{{ .Token }}` and remove the login-link CTA.
-4. Deploy the auth email template handler.
-5. Test the `/predictions/admin` flow with `morganlaurent@live.ca`.
+1. Harden `AdminAuth.tsx` around redirect target selection and auth error/hash handling.
+2. Optionally add a small callback route in `src/App.tsx` if a dedicated landing point is needed.
+3. Verify backend auth settings include the exact admin redirect URL.
+4. Test with a brand-new email on production.
+5. If `otp_expired` still happens even with correct redirects, treat Microsoft link scanning as the remaining blocker and move this admin login away from single-use links.
 
 Expected outcome:
-- Admin login UI stays the same.
-- Email content changes from “One-time login link” to a code-based OTP email.
-- The existing code entry box on the admin page will then match the email users receive.
-
-Blocker:
-- I cannot complete the OTP-email fix until the project has an email domain configured, because there is currently no email domain in this workspace.
-
-Next implementation plan once domain is available:
-```text
-AdminAuth.tsx
-  -> send OTP request
-  -> user receives custom auth email with {{ .Token }}
-  -> verifyOtp(type: "email")
-  -> 24h admin session
-```
+- Successful admin links land on `/predictions/admin`.
+- Failed/consumed links show a clear resend state instead of a confusing root-page error URL.
+- The admin dashboard only opens after the email is validated against `prediction_admins` and the local 24-hour admin session is created.
