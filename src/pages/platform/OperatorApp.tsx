@@ -9,13 +9,16 @@ import { useAllowanceGate } from "@/hooks/useAllowanceGate";
 import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
 import { usePolymarketSession } from "@/hooks/usePolymarketSession";
 import { usePolymarketPrices } from "@/hooks/usePolymarketPrices";
-import { Globe, Trophy, Loader2, ShieldCheck, Search } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { Globe, Trophy, Loader2, ShieldCheck, Search, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { dbg } from "@/lib/debugLog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import SimplePredictionCard from "@/components/operator/SimplePredictionCard";
 import SimplePredictionModal from "@/components/operator/SimplePredictionModal";
+import OperatorBalanceBanner from "@/components/operator/OperatorBalanceBanner";
+import SocialShareModal, { type ShareVariant } from "@/components/SocialShareModal";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
 import ScrollableSportTabs, { type SportTabGroup } from "@/components/admin/ScrollableSportTabs";
@@ -23,6 +26,7 @@ import type { Fight } from "@/components/predictions/FightCard";
 import type { TradeResult } from "@/components/predictions/tradeResultTypes";
 import { isPropMarket } from "@/lib/detectSport";
 import { getTeamLogo } from "@/lib/teamLogos";
+import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
 
 /** Inline parseSport for operator app - avoids importing EventSection */
 function parseSport(eventName: string, _sp?: string | null, _cat?: string | null): string {
@@ -51,26 +55,33 @@ const THEME_MAP: Record<string, { primary: string; bg: string; card: string }> =
   red: { primary: "#ef4444", bg: "#0a0a0f", card: "rgba(255,255,255,0.03)" },
 };
 
+const SPORT_EMOJI: Record<string, string> = {
+  nba: "🏀", nhl: "🏒", mlb: "⚾", nfl: "🏈", mls: "⚽", soccer: "⚽",
+  futbol: "⚽", ufc: "🥊", mma: "🥊", boxing: "🥊", tennis: "🎾", cricket: "🏏",
+  golf: "⛳", f1: "🏎️", rugby: "🏉", ncaa: "🎓",
+};
+
 interface OperatorAppProps {
   subdomain: string;
 }
 
 export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const { t } = useTranslation();
+  const isMobile = useIsMobile();
   const { data: operator, isLoading } = useOperatorBySubdomain(subdomain);
   const { data: settings } = useOperatorSettings(operator?.id ?? null);
 
   const { authenticated, login, getAccessToken } = usePrivy();
   const { walletAddress: address, eoaAddress, isPrivyUser } = usePrivyWallet();
   const { state: allowanceState, ensureAllowance, reset: resetAllowance } = useAllowanceGate();
-  const { relayer_allowance } = usePolygonUSDC();
+  const { relayer_allowance, usdce } = usePolygonUSDC();
   const { hasSession, canTrade, setupTradingWallet } = usePolymarketSession();
   usePolymarketPrices();
 
   const isConnected = authenticated && isPrivyUser;
 
   const [selectedFight, setSelectedFight] = useState<Fight | null>(null);
-  const [selectedPick, setSelectedPick] = useState<"fighter_a" | "fighter_b" | null>(null);
+  const [selectedPick, setSelectedPick] = useState<"fighter_a" | "fighter_b" | "draw" | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [lastTradeResult, setLastTradeResult] = useState<TradeResult | null>(null);
@@ -80,6 +91,14 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [sportFilter, setSportFilter] = useState("ALL");
   const [dateFilter, setDateFilter] = useState<"all" | "today" | "week">("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<"events" | "picks">("events");
+  const [mobileDropdownOpen, setMobileDropdownOpen] = useState(false);
+
+  // Social share state
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareVariant, setShareVariant] = useState<ShareVariant>("prediction");
+  const [shareFight, setShareFight] = useState<Fight | null>(null);
+  const [shareAmount, setShareAmount] = useState<number | undefined>();
 
   const { data: operatorFights, isError: opFightsError } = useQuery({
     queryKey: ["operator_fights", operator?.id],
@@ -127,11 +146,6 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       const sport = parseSport(f.event_name, null, null);
       sportCounts[sport] = (sportCounts[sport] || 0) + 1;
     });
-    const SPORT_EMOJI: Record<string, string> = {
-      nba: "🏀", nhl: "🏒", mlb: "⚾", nfl: "🏈", mls: "⚽", soccer: "⚽",
-      ufc: "🥊", mma: "🥊", boxing: "🥊", tennis: "🎾", cricket: "🏏",
-      golf: "⛳", f1: "🏎️", rugby: "🏉", ncaa: "🎓",
-    };
     const tabs = Object.entries(sportCounts)
       .sort((a, b) => b[1] - a[1])
       .map(([sport, count]) => ({
@@ -146,9 +160,18 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     }];
   }, [allFights]);
 
+  const allSportTabs = sportTabGroups[0]?.tabs || [];
+
   // Filtered fights
   const filteredFights = useMemo(() => {
     let fights = allFights;
+
+    // My Picks filter
+    if (activeTab === "picks") {
+      const userFightIds = new Set(userEntries.map((e: any) => e.fight_id));
+      fights = fights.filter(f => userFightIds.has(f.id));
+    }
+
     if (sportFilter !== "ALL") {
       fights = fights.filter(f => parseSport(f.event_name, null, null) === sportFilter);
     }
@@ -179,7 +202,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       );
     }
     return fights;
-  }, [allFights, sportFilter, dateFilter, searchQuery]);
+  }, [allFights, sportFilter, dateFilter, searchQuery, activeTab, userEntries]);
 
 
   const handleSubmit = async (amountUsd: number) => {
@@ -238,6 +261,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         net_amount_usdc: data?.net_amount_usdc,
         entry_id: data?.entry_id,
       });
+      setShareAmount(amountUsd);
 
       toast.success(t("operator.predictionSubmitted"), {
         description: t("operator.amountPlaced", { amount: amountUsd.toFixed(2) }),
@@ -251,7 +275,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     }
   };
 
-  const handlePredict = (fight: Fight, pick: "fighter_a" | "fighter_b") => {
+  const handlePredict = (fight: Fight, pick: "fighter_a" | "fighter_b" | "draw") => {
     if (fight.status !== "open") {
       toast.error(t("operator.predictionsClosed"));
       return;
@@ -282,6 +306,23 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     }
   };
 
+  const handleSharePick = () => {
+    if (!selectedFight || !selectedPick) return;
+    setShareFight(selectedFight);
+    setShareVariant("prediction");
+    setShareOpen(true);
+  };
+
+  const handleShareWin = (fight: Fight) => {
+    setShareFight(fight);
+    setShareVariant("claim_win");
+    setShareOpen(true);
+  };
+
+  const handleAddFunds = () => {
+    toast.info("To add funds, send USDC.e (Polygon) to your wallet address.");
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#06080f] text-white flex items-center justify-center">
@@ -302,7 +343,14 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   }
 
   const theme = THEME_MAP[operator.theme] || THEME_MAP.blue;
-  
+
+  const pickedNameForShare = shareFight && selectedPick
+    ? (selectedPick === "draw" ? "Draw" : resolveOutcomeName(
+        selectedPick === "fighter_a" ? shareFight.fighter_a_name : shareFight.fighter_b_name,
+        selectedPick === "fighter_a" ? "a" : "b",
+        shareFight
+      ))
+    : undefined;
 
   return (
     <div className="min-h-screen text-white" style={{ backgroundColor: theme.bg }}>
@@ -335,13 +383,78 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         </div>
       </nav>
 
-      {/* Sport Tabs + Filters */}
-      <div className="max-w-4xl mx-auto px-4 pt-4">
-        <ScrollableSportTabs
-          groups={sportTabGroups}
-          activeTab={sportFilter}
-          onTabChange={setSportFilter}
+      {/* Balance banner */}
+      {isConnected && (
+        <OperatorBalanceBanner
+          balanceUsdce={usdce}
+          themeColor={theme.primary}
+          onAddFunds={handleAddFunds}
         />
+      )}
+
+      {/* Tab bar: Events | My Picks */}
+      {isConnected && (
+        <div className="max-w-4xl mx-auto px-4 pt-3">
+          <div className="flex gap-1 bg-white/[0.03] rounded-lg p-1 w-fit">
+            <button
+              onClick={() => setActiveTab("events")}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+                activeTab === "events" ? "bg-white/10 text-white" : "text-white/40 hover:text-white/60"
+              }`}
+            >
+              Events
+            </button>
+            <button
+              onClick={() => setActiveTab("picks")}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+                activeTab === "picks" ? "bg-white/10 text-white" : "text-white/40 hover:text-white/60"
+              }`}
+            >
+              My Picks {userEntries.length > 0 && `(${userEntries.length})`}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Sport Tabs + Filters */}
+      <div className="max-w-4xl mx-auto px-4 pt-3">
+        {isMobile ? (
+          /* Mobile: dropdown select */
+          <div className="relative">
+            <button
+              onClick={() => setMobileDropdownOpen(!mobileDropdownOpen)}
+              className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-sm text-white"
+            >
+              <span>
+                {(allSportTabs.find(t => t.key === sportFilter)?.emoji || "🔥")}{" "}
+                {sportFilter === "ALL" ? "All Sports" : sportFilter}{" "}
+                <span className="text-white/30">({allSportTabs.find(t => t.key === sportFilter)?.count || 0})</span>
+              </span>
+              <ChevronDown className={`w-4 h-4 text-white/40 transition-transform ${mobileDropdownOpen ? "rotate-180" : ""}`} />
+            </button>
+            {mobileDropdownOpen && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-[#0d1117] border border-white/10 rounded-lg z-30 max-h-60 overflow-y-auto">
+                {allSportTabs.map(tab => (
+                  <button
+                    key={tab.key}
+                    onClick={() => { setSportFilter(tab.key); setMobileDropdownOpen(false); }}
+                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                      sportFilter === tab.key ? "bg-white/10 text-white" : "text-white/60 hover:bg-white/5"
+                    }`}
+                  >
+                    {tab.emoji} {tab.label} <span className="text-white/30">({tab.count})</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <ScrollableSportTabs
+            groups={sportTabGroups}
+            activeTab={sportFilter}
+            onTabChange={setSportFilter}
+          />
+        )}
         <div className="flex items-center gap-2 mt-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
@@ -372,7 +485,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       </div>
 
       {/* Hero text */}
-      {filteredFights.length > 0 && !searchQuery && sportFilter === "ALL" && (
+      {filteredFights.length > 0 && !searchQuery && sportFilter === "ALL" && activeTab === "events" && (
         <div className="max-w-4xl mx-auto px-4 pt-2 pb-0 text-center">
           <h1 className="text-2xl sm:text-3xl font-black text-white leading-tight">
             {t("operator.heroTitle", "Pick a Winner. Win Money.")}
@@ -395,7 +508,11 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           </div>
         ) : filteredFights.length === 0 ? (
           <div className="text-center py-20 text-white/30">
-            {searchQuery ? t("operator.noSearchResults", "No events match your search") : t("operator.noEvents")}
+            {activeTab === "picks"
+              ? "No predictions placed yet"
+              : searchQuery
+                ? t("operator.noSearchResults", "No events match your search")
+                : t("operator.noEvents")}
           </div>
         ) : (
           filteredFights.map(fight => {
@@ -409,6 +526,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                 onClaim={handleClaim}
                 claiming={claiming}
                 themeColor={theme.primary}
+                onShareWin={handleShareWin}
               />
             );
           })
@@ -440,8 +558,23 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           approvalError={allowanceState.errorReason}
           themeColor={theme.primary}
           operatorBrandName={operator?.brand_name}
+          onSharePick={handleSharePick}
         />
       )}
+
+      {/* Social Share Modal */}
+      <SocialShareModal
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        variant={shareVariant}
+        eventTitle={shareFight?.event_name}
+        fighterPick={pickedNameForShare}
+        amountUsd={shareAmount}
+        wallet={address}
+        operatorBrandName={operator?.brand_name}
+        operatorLogoUrl={operator?.logo_url}
+        operatorSubdomain={subdomain}
+      />
 
       <WalletGateModal
         isOpen={showWalletGate}
