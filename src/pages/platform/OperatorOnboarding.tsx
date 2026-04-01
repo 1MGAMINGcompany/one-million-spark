@@ -22,6 +22,7 @@ export default function OperatorOnboarding() {
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [created, setCreated] = useState(false);
 
   const [brandName, setBrandName] = useState("");
   const [subdomain, setSubdomain] = useState("");
