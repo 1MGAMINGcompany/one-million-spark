@@ -78,3 +78,65 @@ PLATFORM_ONLY (visibility="platform", status="open"):
 4. Deploy both edge functions
 5. Create the cron job via SQL insert
 
+---
+
+## 1mg.live Growth & Conversion Upgrades
+
+### 3. Landing Page Hero Fix
+
+**File:** `src/pages/platform/LandingPage.tsx`
+
+- **Remove** the two separate "BUY NOW" / "CREATE ACCOUNT" buttons
+- **Replace with ONE button:** `BUY NOW — $2,400 USDC`
+- **Add trust text** below button:
+  > When you continue, a secure wallet is created for you.
+  > This wallet is used to:
+  > ✅ pay for your app
+  > ✅ collect your earnings
+  > ✅ manage your business
+- **Add "View Live Demo" link** → `https://demo.1mg.live`
+
+### 4. Revenue Preview Section
+
+**File:** `src/pages/platform/LandingPage.tsx`
+
+Add an interactive revenue calculator section:
+- Default: "If 100 users place $20/week at your 5% fee → you earn **$400/week**"
+- Optional: sliders for users / avg bet / fee % with live calculation
+- Positioned below hero, above features
+
+### 5. Post-Purchase Auto-Seed
+
+**File:** `src/pages/platform/OperatorOnboarding.tsx` or edge function
+
+After purchase completes:
+- Auto-create 5 sample events (preloaded from platform events)
+- Pre-select popular sports
+- Operator app is NOT empty on first visit
+
+### 6. "Share Your Pick" as Primary Post-Prediction CTA
+
+**File:** `src/components/operator/SimplePredictionModal.tsx`
+
+On the success screen:
+- **Primary button:** "SHARE YOUR PICK" (triggers `SocialShareModal`)
+- **Secondary/text link:** "Done"
+- Currently "Done" is the only button — flip priority
+
+### 7. Fix "You Win" Display
+
+**Files:** `src/components/operator/SimplePredictionCard.tsx`, `src/components/operator/SimplePredictionModal.tsx`
+
+Change payout display from:
+- ❌ `You win: $18.20`
+
+To:
+- ✅ `Bet $10 → Win $18.20` (on cards, using assumed $10)
+- ✅ `Bet $X → Win $Y` (in modal, using actual entered amount)
+
+### Implementation order
+1. Landing page hero (single button + trust text + demo link)
+2. Revenue preview calculator
+3. Fix "You Win" → "Bet $X → Win $Y" on cards and modal
+4. Share Your Pick as primary CTA on success screen
+5. Post-purchase auto-seed events
