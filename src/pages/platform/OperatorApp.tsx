@@ -74,7 +74,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const { authenticated, login, getAccessToken } = usePrivy();
   const { walletAddress: address, eoaAddress, isPrivyUser } = usePrivyWallet();
   const { state: allowanceState, ensureAllowance, reset: resetAllowance } = useAllowanceGate();
-  const { relayer_allowance, usdce } = usePolygonUSDC();
+  const { relayer_allowance, usdc_balance } = usePolygonUSDC();
   const { hasSession, canTrade, setupTradingWallet } = usePolymarketSession();
   usePolymarketPrices();
 
