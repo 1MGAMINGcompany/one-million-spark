@@ -432,26 +432,28 @@ export default function LandingPage() {
       <section className="py-24 px-4 sm:px-6 relative z-10">
         <div className="max-w-3xl mx-auto text-center">
           <h2 className="text-3xl sm:text-4xl font-bold mb-4">{t("platform.cta.readyToStart")}</h2>
-          <p className="text-white/40 text-lg mb-10">
+          <p className="text-white/40 text-lg mb-8">
             {t("platform.cta.readyDesc")}
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button
-              onClick={handleBuyNow}
-              size="lg"
-              className="bg-blue-600 hover:bg-blue-500 text-white text-lg px-10 h-16 border-0 btn-glow rounded-xl font-bold"
-            >
-              {t("platform.cta.buyNow")} <ArrowRight size={20} className="ml-2" />
-            </Button>
-            <Button
-              onClick={handleCreateAccount}
-              variant="outline"
-              size="lg"
-              className="border-white/10 text-white hover:bg-white/5 text-lg px-10 h-16 rounded-xl font-bold"
-            >
-              {t("platform.cta.createAccount")}
-            </Button>
+          <Button
+            onClick={handleBuyNow}
+            size="lg"
+            className="bg-blue-600 hover:bg-blue-500 text-white text-lg px-10 h-16 border-0 btn-glow rounded-xl font-bold"
+          >
+            BUY NOW — $2,400 USDC <ArrowRight size={20} className="ml-2" />
+          </Button>
+          <div className="mt-4 text-sm text-white/40 space-y-1">
+            <p className="text-white/50 font-medium">When you continue, a secure wallet is created for you.</p>
+            <p>✅ pay for your app &nbsp; ✅ collect your earnings &nbsp; ✅ manage your business</p>
           </div>
+          <a
+            href="https://demo.1mg.live"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block mt-4 text-blue-400 hover:text-blue-300 text-sm font-medium underline underline-offset-2 transition-colors"
+          >
+            View Live Demo →
+          </a>
         </div>
       </section>
 
