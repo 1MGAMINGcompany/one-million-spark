@@ -96,14 +96,16 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const { data: operatorFights, isError: opFightsError } = useQuery({
     queryKey: ["operator_fights", operator?.id],
     queryFn: async () => {
+      const cutoff = new Date(Date.now() - 7 * 86400000).toISOString();
       const { data } = await (supabase as any)
         .from("prediction_fights")
         .select("*, prediction_events!event_id(category)")
         .or(`operator_id.eq.${operator!.id},and(operator_id.is.null,visibility.in.(platform,all))`)
         .in("status", ["open", "live", "locked"])
         .not("event_date", "is", null)
+        .gte("event_date", cutoff)
         .order("event_date", { ascending: true })
-        .limit(200);
+        .limit(500);
       return ((data || []) as any[]).map((f: any) => ({
         ...f,
         _category: f.prediction_events?.category || null,
