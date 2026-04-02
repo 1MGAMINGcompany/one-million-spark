@@ -66,13 +66,11 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [showWalletGate, setShowWalletGate] = useState(false);
   const [userEntries, setUserEntries] = useState<any[]>([]);
   const [claiming, setClaiming] = useState(false);
-  const [sportFilter, setSportFilter] = useState("ALL");
-  const [dateFilter, setDateFilter] = useState<"all" | "today" | "week">("all");
+  const [broadSportFilter, setBroadSportFilter] = useState("ALL");
+  const [leagueFilter, setLeagueFilter] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"events" | "picks">("events");
-  const [mobileDropdownOpen, setMobileDropdownOpen] = useState(false);
   const [graphFight, setGraphFight] = useState<Fight | null>(null);
-  const [leagueFilter, setLeagueFilter] = useState<string | null>(null);
 
   // Social share state
   const [shareOpen, setShareOpen] = useState(false);
