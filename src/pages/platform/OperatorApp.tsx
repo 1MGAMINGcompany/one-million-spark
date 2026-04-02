@@ -585,10 +585,19 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       </div>
 
       <footer
-        className="py-6 text-center text-xs"
+        className="py-6 text-center space-y-2"
         style={{ borderTop: `1px solid ${theme.cardBorder}`, color: theme.textMuted }}
       >
-        {t("operator.poweredBy")} <span style={{ color: theme.primary }}>1MG.live</span>
+        <p className="text-xs">
+          {t("operator.poweredBy")} <span style={{ color: theme.primary }}>1MG.live</span>
+        </p>
+        <a
+          href="/purchase"
+          className="inline-block text-[11px] font-medium hover:opacity-80 transition-opacity"
+          style={{ color: theme.primary }}
+        >
+          Get Your Own Predictions App →
+        </a>
       </footer>
 
       {/* Prediction Modal */}
