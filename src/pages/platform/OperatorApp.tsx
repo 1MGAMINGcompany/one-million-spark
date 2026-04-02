@@ -66,8 +66,21 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [showWalletGate, setShowWalletGate] = useState(false);
   const [userEntries, setUserEntries] = useState<any[]>([]);
   const [claiming, setClaiming] = useState(false);
-  const [broadSportFilter, setBroadSportFilter] = useState("ALL");
-  const [leagueFilter, setLeagueFilter] = useState<string | null>(null);
+  const [broadSportFilter, setBroadSportFilter] = useState(() => {
+    try { return localStorage.getItem("1mg-sport-filter") || "ALL"; } catch { return "ALL"; }
+  });
+  const [leagueFilter, setLeagueFilter] = useState<string | null>(() => {
+    try { return localStorage.getItem("1mg-league-filter") || null; } catch { return null; }
+  });
+
+  // Persist filter selections
+  useEffect(() => {
+    try {
+      localStorage.setItem("1mg-sport-filter", broadSportFilter);
+      if (leagueFilter) localStorage.setItem("1mg-league-filter", leagueFilter);
+      else localStorage.removeItem("1mg-league-filter");
+    } catch {}
+  }, [broadSportFilter, leagueFilter]);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"events" | "picks">("events");
   const [graphFight, setGraphFight] = useState<Fight | null>(null);
