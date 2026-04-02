@@ -81,7 +81,7 @@ function PhoneMockup() {
         <div className="absolute top-3 left-1/2 -translate-x-1/2 w-20 h-5 bg-black rounded-full" />
         <div className="rounded-[1.6rem] bg-gradient-to-b from-[#0a0f1a] to-[#060810] p-4 pt-8 min-h-[360px] sm:min-h-[420px] overflow-hidden">
           <div className="text-center mb-5">
-            <div className="text-xs text-blue-400 font-bold mb-1">yourname.1mg.live</div>
+            <div className="text-xs text-blue-400 font-bold mb-1">1mg.live/yourname</div>
             <div className="text-[10px] text-white/30">Your branded app</div>
           </div>
           {[
