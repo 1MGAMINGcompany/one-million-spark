@@ -26,6 +26,7 @@ import SportPickerModal from "@/components/operator/SportPickerModal";
 import type { Fight } from "@/components/predictions/FightCard";
 import type { TradeResult } from "@/components/predictions/tradeResultTypes";
 import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
+import { formatEventDateTime } from "@/lib/formatEventLocalDateTime";
 import {
   normalizeOperatorSport,
   isValidOperatorEvent,
