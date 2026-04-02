@@ -7,7 +7,7 @@ import type { Fight } from "@/components/predictions/FightCard";
 import type { OperatorTheme } from "@/lib/operatorThemes";
 
 interface SimplePredictionCardProps {
-  fight: Fight;
+  fight: Fight & { _broadSport?: string; _league?: string };
   onPredict: (fight: Fight, pick: "fighter_a" | "fighter_b" | "draw") => void;
   userEntry?: { fighter_pick: string; amount_usd: number | null; claimed: boolean } | null;
   onClaim?: (fightId: string) => void;
@@ -15,6 +15,19 @@ interface SimplePredictionCardProps {
   theme: OperatorTheme;
   onShareWin?: (fight: Fight) => void;
   onGraph?: (fight: Fight) => void;
+}
+
+function getTimeLabel(eventDate: string | null | undefined): { text: string; isLive: boolean } | null {
+  if (!eventDate) return null;
+  const d = new Date(eventDate);
+  const now = Date.now();
+  const diff = d.getTime() - now;
+  // If event started within last 3 hours → LIVE
+  if (diff < 0 && diff > -3 * 3600000) return { text: "LIVE", isLive: true };
+  if (diff < 0) return null;
+  if (diff < 3600000) return { text: `Starts in ${Math.max(1, Math.round(diff / 60000))}m`, isLive: false };
+  if (diff < 86400000) return { text: `Starts in ${Math.round(diff / 3600000)}h`, isLive: false };
+  return null;
 }
 
 function calcPayout(price: number | null, amount: number): number {
