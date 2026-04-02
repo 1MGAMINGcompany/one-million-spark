@@ -14,17 +14,16 @@ import { Globe, Trophy, Loader2, ShieldCheck, Search, ChevronDown, CalendarPlus 
 import { toast } from "sonner";
 import { dbg } from "@/lib/debugLog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import SimplePredictionCard from "@/components/operator/SimplePredictionCard";
 import SimplePredictionModal from "@/components/operator/SimplePredictionModal";
 import OperatorBalanceBanner from "@/components/operator/OperatorBalanceBanner";
+import MarketGraphModal from "@/components/operator/MarketGraphModal";
 import SocialShareModal, { type ShareVariant } from "@/components/SocialShareModal";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
 import ScrollableSportTabs, { type SportTabGroup } from "@/components/admin/ScrollableSportTabs";
 import type { Fight } from "@/components/predictions/FightCard";
 import type { TradeResult } from "@/components/predictions/tradeResultTypes";
-import { getTeamLogo } from "@/lib/teamLogos";
 import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
 import {
   normalizeOperatorSport,
@@ -32,12 +31,7 @@ import {
   isEventDateRelevant,
   OPERATOR_SPORT_EMOJI,
 } from "@/lib/operatorSportRules";
-
-const THEME_MAP: Record<string, { primary: string; bg: string; card: string }> = {
-  blue: { primary: "#3b82f6", bg: "#06080f", card: "rgba(255,255,255,0.03)" },
-  gold: { primary: "#d4a017", bg: "#0a0a0a", card: "rgba(255,255,255,0.03)" },
-  red: { primary: "#ef4444", bg: "#0a0a0f", card: "rgba(255,255,255,0.03)" },
-};
+import { getOperatorTheme } from "@/lib/operatorThemes";
 
 interface OperatorAppProps {
   subdomain: string;
@@ -52,7 +46,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const { authenticated, login, getAccessToken } = usePrivy();
   const { walletAddress: address, eoaAddress, isPrivyUser } = usePrivyWallet();
   const { state: allowanceState, ensureAllowance, reset: resetAllowance } = useAllowanceGate();
-  const { relayer_allowance, usdc_balance } = usePolygonUSDC();
+  const { usdc_balance } = usePolygonUSDC();
   const { hasSession, canTrade, setupTradingWallet } = usePolymarketSession();
   usePolymarketPrices();
 
@@ -71,12 +65,15 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"events" | "picks">("events");
   const [mobileDropdownOpen, setMobileDropdownOpen] = useState(false);
+  const [graphFight, setGraphFight] = useState<Fight | null>(null);
 
   // Social share state
   const [shareOpen, setShareOpen] = useState(false);
   const [shareVariant, setShareVariant] = useState<ShareVariant>("prediction");
   const [shareFight, setShareFight] = useState<Fight | null>(null);
   const [shareAmount, setShareAmount] = useState<number | undefined>();
+
+  const theme = getOperatorTheme(operator?.theme);
 
   // ── STRICT event query ──
   const { data: operatorFights, isError: opFightsError } = useQuery({
@@ -90,7 +87,6 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         .not("event_date", "is", null)
         .order("event_date", { ascending: true })
         .limit(200);
-      // Flatten category from joined prediction_events onto each fight
       return ((data || []) as any[]).map((f: any) => ({
         ...f,
         _category: f.prediction_events?.category || null,
@@ -115,24 +111,11 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   // ── STRICT client-side validation pipeline ──
   const allFights = useMemo(() => {
     return (operatorFights || []).filter(f => {
-      // 1. Valid event shape (non-empty names, title, date, status)
       if (!isValidOperatorEvent(f as any)) return false;
-
-      // 2. Event date must be relevant (not too old)
       if (!isEventDateRelevant((f as any).event_date)) return false;
-
-      // 3. Sport must be on the allowlist
-      const sport = normalizeOperatorSport(
-        f.event_name,
-        (f as any).sport ?? (f as any)._category ?? null,
-      );
+      const sport = normalizeOperatorSport(f.event_name, (f as any).sport ?? (f as any)._category ?? null);
       if (!sport) return false;
-
-      // 4. Check operator's disabled_sports
       if (disabledSports.length > 0 && disabledSports.some((ds: string) => ds.toUpperCase() === sport)) return false;
-
-      // 5. If operator has an explicit allowed_sports list, apply it
-      //    (operator's own events always pass)
       if (allowedSports.length > 0 && (f as any).operator_id !== operator?.id) {
         const sportLower = sport.toLowerCase();
         const match = allowedSports.some((s: string) =>
@@ -140,12 +123,11 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         );
         if (!match) return false;
       }
-
       return true;
     });
   }, [operatorFights, allowedSports, disabledSports, operator?.id]);
 
-  // ── Build sport tab groups (only sports with events) ──
+  // ── Build sport tab groups ──
   const sportTabGroups = useMemo<SportTabGroup[]>(() => {
     const sportCounts: Record<string, number> = {};
     allFights.forEach(f => {
@@ -171,13 +153,10 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   // Filtered fights
   const filteredFights = useMemo(() => {
     let fights = allFights;
-
-    // My Picks filter
     if (activeTab === "picks") {
       const userFightIds = new Set(userEntries.map((e: any) => e.fight_id));
       fights = fights.filter(f => userFightIds.has(f.id));
     }
-
     if (sportFilter !== "ALL") {
       fights = fights.filter(f => normalizeOperatorSport(f.event_name, (f as any).sport ?? null) === sportFilter);
     }
@@ -210,12 +189,10 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     return fights;
   }, [allFights, sportFilter, dateFilter, searchQuery, activeTab, userEntries]);
 
-
   const handleSubmit = async (amountUsd: number) => {
     if (!selectedFight || !selectedPick || !isConnected || !address) return;
     setSubmitting(true);
     resetAllowance();
-
     try {
       const privyToken = await getAccessToken();
       if (!privyToken) {
@@ -223,7 +200,6 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         setSubmitting(false);
         return;
       }
-
       const feeRate = selectedFight.commission_bps != null
         ? selectedFight.commission_bps / 10_000
         : (selectedFight.source === "polymarket" ? 0.02 : 0.05);
@@ -232,7 +208,6 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         const approved = await ensureAllowance(feeUsdc);
         if (!approved) { setSubmitting(false); return; }
       }
-
       const { data, error } = await supabase.functions.invoke("prediction-submit", {
         body: {
           fight_id: selectedFight.id,
@@ -245,7 +220,6 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         },
         headers: { "x-privy-token": privyToken },
       });
-
       if (error || data?.error) {
         const msg = data?.error || error?.message || "Backend error";
         const errorCode = data?.error_code || "";
@@ -257,7 +231,6 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         }
         throw new Error(msg);
       }
-
       setLastTradeResult({
         trade_order_id: data?.trade_order_id,
         trade_status: data?.trade_status,
@@ -268,7 +241,6 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         entry_id: data?.entry_id,
       });
       setShareAmount(amountUsd);
-
       toast.success(t("operator.predictionSubmitted"), {
         description: t("operator.amountPlaced", { amount: amountUsd.toFixed(2) }),
       });
@@ -331,8 +303,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#06080f] text-white flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-white/30" />
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: theme.bg }}>
+        <Loader2 className="w-8 h-8 animate-spin" style={{ color: theme.textMuted }} />
       </div>
     );
   }
@@ -344,9 +316,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           <div className="w-16 h-16 mx-auto rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-2">
             <Globe className="w-8 h-8 text-white/20" />
           </div>
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
-            This app does not exist
-          </h1>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">This app does not exist</h1>
           <p className="text-white/50 text-base sm:text-lg leading-relaxed">
             Start your own predictions app in minutes — no code, no setup, just launch.
           </p>
@@ -358,17 +328,12 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
             BUY YOUR APP — $2,400 USDC
           </a>
           <p className="text-white/30 text-xs">
-            Powered by{" "}
-            <a href="https://1mg.live" className="underline hover:text-white/50">
-              1MG
-            </a>
+            Powered by <a href="https://1mg.live" className="underline hover:text-white/50">1MG</a>
           </p>
         </div>
       </div>
     );
   }
-
-  const theme = THEME_MAP[operator.theme] || THEME_MAP.blue;
 
   const pickedNameForShare = shareFight && selectedPick
     ? (selectedPick === "draw" ? "Draw" : resolveOutcomeName(
@@ -379,20 +344,25 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     : undefined;
 
   return (
-    <div className="min-h-screen text-white" style={{ backgroundColor: theme.bg }}>
+    <div className="min-h-screen" style={{ backgroundColor: theme.bg, color: theme.textPrimary }}>
       {/* Navbar */}
-      <nav className="border-b border-white/5 backdrop-blur-xl sticky top-0 z-40" style={{ backgroundColor: `${theme.bg}cc` }}>
+      <nav
+        className="backdrop-blur-xl sticky top-0 z-40"
+        style={{ backgroundColor: theme.navBg, borderBottom: `1px solid ${theme.navBorder}` }}
+      >
         <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {operator.logo_url && (
               <img src={operator.logo_url} alt={operator.brand_name} className="h-7 w-7 rounded-lg object-contain" />
             )}
-            <span className="font-bold text-base">{operator.brand_name}</span>
+            <span className="font-bold text-base" style={{ color: theme.textPrimary }}>
+              {operator.brand_name}
+            </span>
           </div>
           <div className="flex items-center gap-3">
             <PlatformLanguageSwitcher />
             {isConnected && address ? (
-              <span className="text-xs text-white/40 font-mono">
+              <span className="text-xs font-mono" style={{ color: theme.textMuted }}>
                 {address.slice(0, 6)}…{address.slice(-4)}
               </span>
             ) : (
@@ -400,7 +370,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                 onClick={login}
                 size="sm"
                 className="text-xs font-bold border-0"
-                style={{ backgroundColor: theme.primary }}
+                style={{ backgroundColor: theme.primary, color: theme.primaryForeground }}
               >
                 {t("operator.signIn")}
               </Button>
@@ -413,7 +383,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       {isConnected && (
         <OperatorBalanceBanner
           balanceUsdce={usdc_balance}
-          themeColor={theme.primary}
+          theme={theme}
           onAddFunds={handleAddFunds}
         />
       )}
@@ -421,23 +391,24 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       {/* Tab bar: Events | My Picks */}
       {isConnected && (
         <div className="max-w-4xl mx-auto px-4 pt-3">
-          <div className="flex gap-1 bg-white/[0.03] rounded-lg p-1 w-fit">
-            <button
-              onClick={() => setActiveTab("events")}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-                activeTab === "events" ? "bg-white/10 text-white" : "text-white/40 hover:text-white/60"
-              }`}
-            >
-              Events
-            </button>
-            <button
-              onClick={() => setActiveTab("picks")}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-                activeTab === "picks" ? "bg-white/10 text-white" : "text-white/40 hover:text-white/60"
-              }`}
-            >
-              My Picks {userEntries.length > 0 && `(${userEntries.length})`}
-            </button>
+          <div
+            className="flex gap-1 rounded-lg p-1 w-fit"
+            style={{ backgroundColor: theme.surfaceBg }}
+          >
+            {(["events", "picks"] as const).map(tab => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className="px-4 py-1.5 rounded-md text-sm font-medium transition-all"
+                style={{
+                  backgroundColor: activeTab === tab ? theme.cardBg : "transparent",
+                  color: activeTab === tab ? theme.textPrimary : theme.textMuted,
+                  boxShadow: activeTab === tab ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                }}
+              >
+                {tab === "events" ? "Events" : `My Picks${userEntries.length > 0 ? ` (${userEntries.length})` : ""}`}
+              </button>
+            ))}
           </div>
         </div>
       )}
@@ -445,30 +416,45 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       {/* Sport Tabs + Filters */}
       <div className="max-w-4xl mx-auto px-4 pt-3">
         {isMobile ? (
-          /* Mobile: dropdown select */
           <div className="relative">
             <button
               onClick={() => setMobileDropdownOpen(!mobileDropdownOpen)}
-              className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-sm text-white"
+              className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-sm"
+              style={{
+                backgroundColor: theme.surfaceBg,
+                border: `1px solid ${theme.cardBorder}`,
+                color: theme.textPrimary,
+              }}
             >
               <span>
                 {(allSportTabs.find(t => t.key === sportFilter)?.emoji || "🔥")}{" "}
                 {sportFilter === "ALL" ? "All Sports" : sportFilter}{" "}
-                <span className="text-white/30">({allSportTabs.find(t => t.key === sportFilter)?.count || 0})</span>
+                <span style={{ color: theme.textMuted }}>
+                  ({allSportTabs.find(t => t.key === sportFilter)?.count || 0})
+                </span>
               </span>
-              <ChevronDown className={`w-4 h-4 text-white/40 transition-transform ${mobileDropdownOpen ? "rotate-180" : ""}`} />
+              <ChevronDown
+                className={`w-4 h-4 transition-transform ${mobileDropdownOpen ? "rotate-180" : ""}`}
+                style={{ color: theme.textMuted }}
+              />
             </button>
             {mobileDropdownOpen && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-[#0d1117] border border-white/10 rounded-lg z-30 max-h-60 overflow-y-auto">
+              <div
+                className="absolute top-full left-0 right-0 mt-1 rounded-lg z-30 max-h-60 overflow-y-auto"
+                style={{ backgroundColor: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}
+              >
                 {allSportTabs.map(tab => (
                   <button
                     key={tab.key}
                     onClick={() => { setSportFilter(tab.key); setMobileDropdownOpen(false); }}
-                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                      sportFilter === tab.key ? "bg-white/10 text-white" : "text-white/60 hover:bg-white/5"
-                    }`}
+                    className="w-full text-left px-4 py-2.5 text-sm transition-colors"
+                    style={{
+                      color: sportFilter === tab.key ? theme.textPrimary : theme.textSecondary,
+                      backgroundColor: sportFilter === tab.key ? theme.surfaceBg : "transparent",
+                    }}
                   >
-                    {tab.emoji} {tab.label} <span className="text-white/30">({tab.count})</span>
+                    {tab.emoji} {tab.label}{" "}
+                    <span style={{ color: theme.textMuted }}>({tab.count})</span>
                   </button>
                 ))}
               </div>
@@ -483,13 +469,22 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         )}
         <div className="flex items-center gap-2 mt-3">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4"
+              style={{ color: theme.textMuted }}
+            />
             <input
               type="text"
               placeholder={t("operator.searchTeams", "Search teams or players...")}
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-white/20"
+              className="w-full pl-9 pr-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2"
+              style={{
+                backgroundColor: theme.inputBg,
+                border: `1px solid ${theme.inputBorder}`,
+                color: theme.textPrimary,
+                focusRingColor: theme.primary,
+              }}
             />
           </div>
           <div className="flex gap-1">
@@ -497,11 +492,11 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
               <button
                 key={df}
                 onClick={() => setDateFilter(df)}
-                className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                  dateFilter === df
-                    ? "bg-white/10 text-white"
-                    : "text-white/40 hover:text-white/60"
-                }`}
+                className="px-3 py-2 rounded-lg text-xs font-medium transition-all"
+                style={{
+                  backgroundColor: dateFilter === df ? theme.surfaceBg : "transparent",
+                  color: dateFilter === df ? theme.textPrimary : theme.textMuted,
+                }}
               >
                 {df === "all" ? t("operator.allDates", "All") : df === "today" ? t("operator.today", "Today") : t("operator.thisWeek", "This Week")}
               </button>
@@ -512,11 +507,11 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
       {/* Hero text */}
       {filteredFights.length > 0 && !searchQuery && sportFilter === "ALL" && activeTab === "events" && (
-        <div className="max-w-4xl mx-auto px-4 pt-2 pb-0 text-center">
-          <h1 className="text-2xl sm:text-3xl font-black text-white leading-tight">
+        <div className="max-w-4xl mx-auto px-4 pt-4 pb-0 text-center">
+          <h1 className="text-2xl sm:text-3xl font-black leading-tight" style={{ color: theme.textPrimary }}>
             {t("operator.heroTitle", "Pick a Winner. Win Money.")}
           </h1>
-          <p className="text-sm text-white/40 mt-1">
+          <p className="text-sm mt-1" style={{ color: theme.textSecondary }}>
             {t("operator.heroSubtitle", "Choose a team. Enter amount. See your payout instantly.")}
           </p>
         </div>
@@ -525,32 +520,39 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       {/* Events */}
       <div className="max-w-4xl mx-auto px-4 py-4 space-y-4">
         {backendDegraded && filteredFights.length === 0 ? (
-          <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-6 py-12 text-center">
-            <ShieldCheck className="w-14 h-14 mx-auto mb-4 text-amber-400" />
-            <h3 className="text-lg font-bold text-white">{t("operator.onHoldTitle", "All Predictions Are Temporarily On Hold")}</h3>
-            <p className="mt-2 text-sm text-white/60 max-w-md mx-auto">
-              {t("operator.onHoldDesc", "We're experiencing a brief issue with one of our providers. Your funds and existing predictions are completely safe. We're actively working to resolve this — please check back shortly.")}
+          <div
+            className="rounded-xl px-6 py-12 text-center"
+            style={{ backgroundColor: theme.isDark ? "rgba(120,53,15,0.2)" : "rgba(254,243,199,0.3)", border: `1px solid ${theme.isDark ? "rgba(245,158,11,0.3)" : "#fde68a"}` }}
+          >
+            <ShieldCheck className="w-14 h-14 mx-auto mb-4 text-amber-500" />
+            <h3 className="text-lg font-bold" style={{ color: theme.textPrimary }}>
+              {t("operator.onHoldTitle", "All Predictions Are Temporarily On Hold")}
+            </h3>
+            <p className="mt-2 text-sm max-w-md mx-auto" style={{ color: theme.textSecondary }}>
+              {t("operator.onHoldDesc", "We're experiencing a brief issue with one of our providers. Your funds and existing predictions are completely safe.")}
             </p>
           </div>
         ) : filteredFights.length === 0 ? (
           <div className="text-center py-20 px-6">
             {activeTab === "picks" ? (
               <>
-                <Trophy className="w-12 h-12 mx-auto mb-4 text-white/10" />
-                <h3 className="text-lg font-bold text-white/60">No predictions placed yet</h3>
-                <p className="mt-2 text-sm text-white/30">Pick a winner from the events tab to get started.</p>
+                <Trophy className="w-12 h-12 mx-auto mb-4" style={{ color: theme.textMuted }} />
+                <h3 className="text-lg font-bold" style={{ color: theme.textSecondary }}>No predictions placed yet</h3>
+                <p className="mt-2 text-sm" style={{ color: theme.textMuted }}>Pick a winner from the events tab to get started.</p>
               </>
             ) : searchQuery ? (
               <>
-                <Search className="w-12 h-12 mx-auto mb-4 text-white/10" />
-                <h3 className="text-lg font-bold text-white/60">{t("operator.noSearchResults", "No events match your search")}</h3>
-                <p className="mt-2 text-sm text-white/30">Try a different team or player name.</p>
+                <Search className="w-12 h-12 mx-auto mb-4" style={{ color: theme.textMuted }} />
+                <h3 className="text-lg font-bold" style={{ color: theme.textSecondary }}>
+                  {t("operator.noSearchResults", "No events match your search")}
+                </h3>
+                <p className="mt-2 text-sm" style={{ color: theme.textMuted }}>Try a different team or player name.</p>
               </>
             ) : (
               <>
-                <CalendarPlus className="w-12 h-12 mx-auto mb-4 text-white/10" />
-                <h3 className="text-lg font-bold text-white/60">No live sports available right now</h3>
-                <p className="mt-2 text-sm text-white/30 max-w-sm mx-auto">
+                <CalendarPlus className="w-12 h-12 mx-auto mb-4" style={{ color: theme.textMuted }} />
+                <h3 className="text-lg font-bold" style={{ color: theme.textSecondary }}>No live sports available right now</h3>
+                <p className="mt-2 text-sm max-w-sm mx-auto" style={{ color: theme.textMuted }}>
                   New matchups will appear here as soon as they open. Check back soon.
                 </p>
               </>
@@ -567,8 +569,9 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                 userEntry={entry || null}
                 onClaim={handleClaim}
                 claiming={claiming}
-                themeColor={theme.primary}
+                theme={theme}
                 onShareWin={handleShareWin}
+                onGraph={(f) => setGraphFight(f)}
               />
             );
           })
@@ -577,12 +580,15 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
       {/* Fee disclosure */}
       <div className="max-w-4xl mx-auto px-4 pb-4">
-        <p className="text-[10px] text-white/20 text-center">
+        <p className="text-[10px] text-center" style={{ color: theme.textMuted }}>
           {t("operator.platformFee")}
         </p>
       </div>
 
-      <footer className="border-t border-white/5 py-6 text-center text-xs text-white/20">
+      <footer
+        className="py-6 text-center text-xs"
+        style={{ borderTop: `1px solid ${theme.cardBorder}`, color: theme.textMuted }}
+      >
         {t("operator.poweredBy")} <span style={{ color: theme.primary }}>1MG.live</span>
       </footer>
 
@@ -601,6 +607,16 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           themeColor={theme.primary}
           operatorBrandName={operator?.brand_name}
           onSharePick={handleSharePick}
+        />
+      )}
+
+      {/* Market Graph Modal */}
+      {graphFight && (
+        <MarketGraphModal
+          fight={graphFight}
+          open={!!graphFight}
+          onClose={() => setGraphFight(null)}
+          theme={theme}
         />
       )}
 
