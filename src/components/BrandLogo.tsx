@@ -26,7 +26,7 @@ const BrandLogo = ({ size = "md", className = "" }: BrandLogoProps) => {
       {is1mgLive ? (
         <>
           <img
-            src="/images/1mglive-logo.png"
+            src="/images/1mglive-logo-2.png"
             alt="1MG.live"
             style={{ width: config.icon, height: config.icon }}
             className="object-contain"
