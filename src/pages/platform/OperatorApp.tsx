@@ -10,7 +10,7 @@ import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
 import { usePolymarketSession } from "@/hooks/usePolymarketSession";
 import { usePolymarketPrices } from "@/hooks/usePolymarketPrices";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Globe, Trophy, Loader2, ShieldCheck, Search, ChevronDown, CalendarPlus } from "lucide-react";
+import { Globe, Trophy, Loader2, ShieldCheck, Search, CalendarPlus } from "lucide-react";
 import { toast } from "sonner";
 import { dbg } from "@/lib/debugLog";
 import { Button } from "@/components/ui/button";
@@ -29,10 +29,15 @@ import {
   normalizeOperatorSport,
   isValidOperatorEvent,
   isEventDateRelevant,
-  OPERATOR_SPORT_EMOJI,
 } from "@/lib/operatorSportRules";
 import { getOperatorTheme } from "@/lib/operatorThemes";
-import { groupByLeague, extractSoccerLeague } from "@/lib/soccerLeagues";
+import {
+  BROAD_SPORTS,
+  toBroadSport,
+  extractLeague,
+  buildLeagueTabs,
+  groupByDate,
+} from "@/lib/sportLeagues";
 
 interface OperatorAppProps {
   subdomain: string;
@@ -61,13 +66,24 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [showWalletGate, setShowWalletGate] = useState(false);
   const [userEntries, setUserEntries] = useState<any[]>([]);
   const [claiming, setClaiming] = useState(false);
-  const [sportFilter, setSportFilter] = useState("ALL");
-  const [dateFilter, setDateFilter] = useState<"all" | "today" | "week">("all");
+  const [broadSportFilter, setBroadSportFilter] = useState(() => {
+    try { return localStorage.getItem("1mg-sport-filter") || "ALL"; } catch { return "ALL"; }
+  });
+  const [leagueFilter, setLeagueFilter] = useState<string | null>(() => {
+    try { return localStorage.getItem("1mg-league-filter") || null; } catch { return null; }
+  });
+
+  // Persist filter selections
+  useEffect(() => {
+    try {
+      localStorage.setItem("1mg-sport-filter", broadSportFilter);
+      if (leagueFilter) localStorage.setItem("1mg-league-filter", leagueFilter);
+      else localStorage.removeItem("1mg-league-filter");
+    } catch {}
+  }, [broadSportFilter, leagueFilter]);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"events" | "picks">("events");
-  const [mobileDropdownOpen, setMobileDropdownOpen] = useState(false);
   const [graphFight, setGraphFight] = useState<Fight | null>(null);
-  const [leagueFilter, setLeagueFilter] = useState<string | null>(null);
 
   // Social share state
   const [shareOpen, setShareOpen] = useState(false);
@@ -129,67 +145,56 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     });
   }, [operatorFights, allowedSports, disabledSports, operator?.id]);
 
-  // DEBUG: confirm sport detection (temporary)
-  useEffect(() => {
-    if (allFights.length > 0) {
-      const sports = Array.from(new Set(allFights.map(f =>
-        normalizeOperatorSport(f.event_name, (f as any).sport ?? (f as any)._category ?? null)
-      )));
-      console.log("SPORTS DETECTED:", sports);
-      console.log("EVENTS:", allFights.length, "total");
-    }
+  // ── Attach broad sport + league to each fight ──
+  const enrichedFights = useMemo(() => {
+    return allFights.map(f => {
+      const norm = normalizeOperatorSport(f.event_name, (f as any).sport ?? (f as any)._category ?? null) || "OTHER";
+      const broad = toBroadSport(norm);
+      const league = extractLeague(broad, f.event_name, (f as any)._category);
+      return { ...f, _broadSport: broad, _league: league };
+    });
   }, [allFights]);
 
-  // ── Build sport tab groups ──
-  const sportTabGroups = useMemo<SportTabGroup[]>(() => {
-    const sportCounts: Record<string, number> = {};
-    allFights.forEach(f => {
-      const sport = normalizeOperatorSport(f.event_name, (f as any).sport ?? (f as any)._category ?? null) || "OTHER";
-      sportCounts[sport] = (sportCounts[sport] || 0) + 1;
+  // ── Build broad sport tabs (Level 1) ──
+  const broadSportTabs = useMemo<SportTabGroup[]>(() => {
+    const counts: Record<string, number> = {};
+    enrichedFights.forEach(f => {
+      counts[f._broadSport] = (counts[f._broadSport] || 0) + 1;
     });
-    const tabs = Object.entries(sportCounts)
+    const tabs = Object.entries(counts)
       .sort((a, b) => b[1] - a[1])
       .map(([sport, count]) => ({
         key: sport,
-        label: sport,
-        emoji: OPERATOR_SPORT_EMOJI[sport] || "🏆",
+        label: BROAD_SPORTS[sport]?.label || sport,
+        emoji: BROAD_SPORTS[sport]?.emoji || "🏆",
         count,
       }));
     return [{
       label: "Sports",
-      tabs: [{ key: "ALL", label: "All Sports", emoji: "🔥", count: allFights.length }, ...tabs],
+      tabs: [{ key: "ALL", label: "All Sports", emoji: "🔥", count: enrichedFights.length }, ...tabs],
     }];
-  }, [allFights]);
+  }, [enrichedFights]);
 
-  const allSportTabs = sportTabGroups[0]?.tabs || [];
+  // ── Build league tabs (Level 2) for selected sport ──
+  const leagueTabs = useMemo(() => {
+    if (broadSportFilter === "ALL") return [];
+    const sportFights = enrichedFights.filter(f => f._broadSport === broadSportFilter);
+    if (sportFights.length === 0) return [];
+    return buildLeagueTabs(broadSportFilter, sportFights as any);
+  }, [enrichedFights, broadSportFilter]);
 
-  // Filtered fights
+  // ── Filtered fights ──
   const filteredFights = useMemo(() => {
-    let fights = allFights;
+    let fights = enrichedFights;
     if (activeTab === "picks") {
       const userFightIds = new Set(userEntries.map((e: any) => e.fight_id));
       fights = fights.filter(f => userFightIds.has(f.id));
     }
-    if (sportFilter !== "ALL") {
-      fights = fights.filter(f => normalizeOperatorSport(f.event_name, (f as any).sport ?? (f as any)._category ?? null) === sportFilter);
+    if (broadSportFilter !== "ALL") {
+      fights = fights.filter(f => f._broadSport === broadSportFilter);
     }
-    if (dateFilter === "today") {
-      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-      const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
-      fights = fights.filter(f => {
-        const ed = (f as any).event_date;
-        if (!ed) return false;
-        const d = new Date(ed);
-        return d >= todayStart && d <= todayEnd;
-      });
-    } else if (dateFilter === "week") {
-      const now = new Date();
-      const weekEnd = new Date(now.getTime() + 7 * 86400000);
-      fights = fights.filter(f => {
-        const ed = (f as any).event_date;
-        if (!ed) return true;
-        return new Date(ed) <= weekEnd;
-      });
+    if (leagueFilter && leagueFilter !== "ALL_LEAGUES") {
+      fights = fights.filter(f => f._league === leagueFilter);
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -199,12 +204,11 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         f.event_name.toLowerCase().includes(q)
       );
     }
-    // Apply league filter for soccer
-    if (leagueFilter && sportFilter === "SOCCER") {
-      fights = fights.filter((f: any) => extractSoccerLeague(f.event_name, f._category) === leagueFilter);
-    }
     return fights;
-  }, [allFights, sportFilter, dateFilter, searchQuery, activeTab, userEntries, leagueFilter]);
+  }, [enrichedFights, broadSportFilter, leagueFilter, searchQuery, activeTab, userEntries]);
+
+  // ── Date-grouped fights for display ──
+  const dateGroups = useMemo(() => groupByDate(filteredFights), [filteredFights]);
 
   const handleSubmit = async (amountUsd: number) => {
     if (!selectedFight || !selectedPick || !isConnected || !address) return;
@@ -430,135 +434,70 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         </div>
       )}
 
-      {/* Sport Tabs + Filters */}
-      <div className="max-w-4xl mx-auto px-4 pt-3">
-        {isMobile ? (
-          <div className="relative">
-            <button
-              onClick={() => setMobileDropdownOpen(!mobileDropdownOpen)}
-              className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-sm"
-              style={{
-                backgroundColor: theme.surfaceBg,
-                border: `1px solid ${theme.cardBorder}`,
-                color: theme.textPrimary,
-              }}
-            >
-              <span>
-                {(allSportTabs.find(t => t.key === sportFilter)?.emoji || "🔥")}{" "}
-                {sportFilter === "ALL" ? "All Sports" : sportFilter}{" "}
-                <span style={{ color: theme.textMuted }}>
-                  ({allSportTabs.find(t => t.key === sportFilter)?.count || 0})
-                </span>
-              </span>
-              <ChevronDown
-                className={`w-4 h-4 transition-transform ${mobileDropdownOpen ? "rotate-180" : ""}`}
-                style={{ color: theme.textMuted }}
-              />
-            </button>
-            {mobileDropdownOpen && (
-              <div
-                className="absolute top-full left-0 right-0 mt-1 rounded-lg z-30 max-h-60 overflow-y-auto"
-                style={{ backgroundColor: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}
-              >
-                {allSportTabs.map(tab => (
-                  <button
-                    key={tab.key}
-                    onClick={() => { setSportFilter(tab.key); setLeagueFilter(null); setMobileDropdownOpen(false); }}
-                    className="w-full text-left px-4 py-2.5 text-sm transition-colors"
-                    style={{
-                      color: sportFilter === tab.key ? theme.textPrimary : theme.textSecondary,
-                      backgroundColor: sportFilter === tab.key ? theme.surfaceBg : "transparent",
-                    }}
-                  >
-                    {tab.emoji} {tab.label}{" "}
-                    <span style={{ color: theme.textMuted }}>({tab.count})</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          <ScrollableSportTabs
-            groups={sportTabGroups}
-            activeTab={sportFilter}
-            onTabChange={(key) => { setSportFilter(key); setLeagueFilter(null); }}
-          />
-        )}
+      {/* Level 1: Broad Sport Tabs (scrollable chips) */}
+      <div className="max-w-4xl mx-auto px-4 pt-3 space-y-2">
+        <ScrollableSportTabs
+          groups={broadSportTabs}
+          activeTab={broadSportFilter}
+          onTabChange={(key) => { setBroadSportFilter(key); setLeagueFilter(null); }}
+          theme={{
+            activeBg: theme.primary + "25",
+            activeText: theme.primary,
+            inactiveBg: "transparent",
+            inactiveText: theme.textMuted,
+            countBg: theme.surfaceBg,
+          }}
+        />
 
-        {/* League sub-tabs for Soccer */}
-        {sportFilter === "SOCCER" && (() => {
-          const soccerFights = allFights.filter(f =>
-            normalizeOperatorSport(f.event_name, (f as any).sport ?? (f as any)._category ?? null) === "SOCCER"
-          );
-          const leagueGroups = groupByLeague(soccerFights as any);
-          if (leagueGroups.length <= 1) return null;
-          return (
-            <div className="flex gap-2 overflow-x-auto mt-2 pb-1 scrollbar-hide">
-              <button
-                onClick={() => setLeagueFilter(null)}
-                className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap"
-                style={{
-                  backgroundColor: !leagueFilter ? theme.primary : theme.surfaceBg,
-                  color: !leagueFilter ? theme.primaryForeground : theme.textSecondary,
-                }}
-              >
-                All Leagues ({soccerFights.length})
-              </button>
-              {leagueGroups.map(lg => (
+        {/* Level 2: League sub-tabs (scrollable chips) */}
+        {leagueTabs.length > 1 && (
+          <div
+            className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide"
+            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+          >
+            {leagueTabs.map(tab => {
+              const isActive = leagueFilter === tab.key || (!leagueFilter && tab.key === "ALL_LEAGUES");
+              return (
                 <button
-                  key={lg.league}
-                  onClick={() => setLeagueFilter(lg.league)}
+                  key={tab.key}
+                  onClick={() => setLeagueFilter(tab.key === "ALL_LEAGUES" ? null : tab.key)}
                   className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap"
                   style={{
-                    backgroundColor: leagueFilter === lg.league ? theme.primary : theme.surfaceBg,
-                    color: leagueFilter === lg.league ? theme.primaryForeground : theme.textSecondary,
+                    backgroundColor: isActive ? theme.primary : theme.surfaceBg,
+                    color: isActive ? theme.primaryForeground : theme.textSecondary,
                   }}
                 >
-                  {lg.league} ({lg.fights.length})
+                  {tab.label}
+                  <span className="ml-1 opacity-60">({tab.count})</span>
                 </button>
-              ))}
-            </div>
-          );
-        })()}
-        <div className="flex items-center gap-2 mt-3">
-          <div className="relative flex-1">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4"
-              style={{ color: theme.textMuted }}
-            />
-            <input
-              type="text"
-              placeholder={t("operator.searchTeams", "Search teams or players...")}
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2"
-              style={{
-                backgroundColor: theme.inputBg,
-                border: `1px solid ${theme.inputBorder}`,
-                color: theme.textPrimary,
-              }}
-            />
+              );
+            })}
           </div>
-          <div className="flex gap-1">
-            {(["all", "today", "week"] as const).map(df => (
-              <button
-                key={df}
-                onClick={() => setDateFilter(df)}
-                className="px-3 py-2 rounded-lg text-xs font-medium transition-all"
-                style={{
-                  backgroundColor: dateFilter === df ? theme.surfaceBg : "transparent",
-                  color: dateFilter === df ? theme.textPrimary : theme.textMuted,
-                }}
-              >
-                {df === "all" ? t("operator.allDates", "All") : df === "today" ? t("operator.today", "Today") : t("operator.thisWeek", "This Week")}
-              </button>
-            ))}
-          </div>
+        )}
+
+        {/* Search */}
+        <div className="relative">
+          <Search
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4"
+            style={{ color: theme.textMuted }}
+          />
+          <input
+            type="text"
+            placeholder={t("operator.searchTeams", "Search teams or players...")}
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2"
+            style={{
+              backgroundColor: theme.inputBg,
+              border: `1px solid ${theme.inputBorder}`,
+              color: theme.textPrimary,
+            }}
+          />
         </div>
       </div>
 
       {/* Hero text */}
-      {filteredFights.length > 0 && !searchQuery && sportFilter === "ALL" && activeTab === "events" && (
+      {filteredFights.length > 0 && !searchQuery && broadSportFilter === "ALL" && activeTab === "events" && (
         <div className="max-w-4xl mx-auto px-4 pt-4 pb-0 text-center">
           <h1 className="text-2xl sm:text-3xl font-black leading-tight" style={{ color: theme.textPrimary }}>
             {t("operator.heroTitle", "Pick a Winner. Win Money.")}
@@ -569,14 +508,14 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         </div>
       )}
 
-      {/* Events */}
+      {/* Events — grouped by date */}
       <div className="max-w-4xl mx-auto px-4 py-4 space-y-4">
         {backendDegraded && filteredFights.length === 0 ? (
           <div
             className="rounded-xl px-6 py-12 text-center"
             style={{ backgroundColor: theme.isDark ? "rgba(120,53,15,0.2)" : "rgba(254,243,199,0.3)", border: `1px solid ${theme.isDark ? "rgba(245,158,11,0.3)" : "#fde68a"}` }}
           >
-            <ShieldCheck className="w-14 h-14 mx-auto mb-4 text-amber-500" />
+            <ShieldCheck className="w-14 h-14 mx-auto mb-4" style={{ color: theme.isDark ? "#f59e0b" : "#d97706" }} />
             <h3 className="text-lg font-bold" style={{ color: theme.textPrimary }}>
               {t("operator.onHoldTitle", "All Predictions Are Temporarily On Hold")}
             </h3>
@@ -610,6 +549,35 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
               </>
             )}
           </div>
+        ) : dateGroups.length > 0 ? (
+          dateGroups.map(group => (
+            <div key={group.sortKey}>
+              <h3
+                className="text-xs font-bold uppercase tracking-wider mb-2 px-1"
+                style={{ color: theme.textMuted }}
+              >
+                {group.label}
+              </h3>
+              <div className="space-y-3">
+                {group.fights.map(fight => {
+                  const entry = userEntries.find((e: any) => e.fight_id === fight.id);
+                  return (
+                    <SimplePredictionCard
+                      key={fight.id}
+                      fight={fight}
+                      onPredict={handlePredict}
+                      userEntry={entry || null}
+                      onClaim={handleClaim}
+                      claiming={claiming}
+                      theme={theme}
+                      onShareWin={handleShareWin}
+                      onGraph={(f) => setGraphFight(f)}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          ))
         ) : (
           filteredFights.map(fight => {
             const entry = userEntries.find((e: any) => e.fight_id === fight.id);

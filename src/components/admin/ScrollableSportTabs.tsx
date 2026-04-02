@@ -18,51 +18,66 @@ interface ScrollableSportTabsProps {
   activeTab: string;
   onTabChange: (key: string) => void;
   className?: string;
+  /** Use themed inline styles instead of tailwind classes */
+  theme?: {
+    activeBg?: string;
+    activeText?: string;
+    inactiveBg?: string;
+    inactiveText?: string;
+    countBg?: string;
+  };
 }
 
-export default function ScrollableSportTabs({ groups, activeTab, onTabChange, className }: ScrollableSportTabsProps) {
+export default function ScrollableSportTabs({ groups, activeTab, onTabChange, className, theme }: ScrollableSportTabsProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   return (
     <div
       ref={scrollRef}
       className={cn(
-        "flex items-center gap-1 overflow-x-auto pb-1 scrollbar-hide",
+        "flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide",
         className
       )}
       style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
     >
       {groups.map((group, gi) => (
-        <div key={group.label} className="flex items-center gap-1 shrink-0">
+        <div key={group.label} className="flex items-center gap-1.5 shrink-0">
           {gi > 0 && (
             <div className="w-px h-5 bg-border mx-1 shrink-0" />
           )}
-          <span className="text-[10px] text-muted-foreground font-medium px-1 shrink-0 hidden sm:inline">
-            {group.label}
-          </span>
-          {group.tabs.map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => onTabChange(tab.key)}
-              className={cn(
-                "shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all whitespace-nowrap",
-                activeTab === tab.key
-                  ? "bg-amber-500/20 text-amber-400 ring-1 ring-amber-500/30"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-              )}
-            >
-              <span>{tab.emoji}</span>
-              <span>{tab.label}</span>
-              {tab.count != null && tab.count > 0 && (
-                <span className={cn(
-                  "text-[10px] px-1 py-0.5 rounded-full min-w-[18px] text-center",
-                  activeTab === tab.key ? "bg-amber-500/30" : "bg-muted"
-                )}>
-                  {tab.count}
-                </span>
-              )}
-            </button>
-          ))}
+          {group.tabs.map(tab => {
+            const isActive = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => onTabChange(tab.key)}
+                className={cn(
+                  "shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap",
+                  !theme && (isActive
+                    ? "bg-primary/15 text-primary ring-1 ring-primary/30"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50")
+                )}
+                style={theme ? {
+                  backgroundColor: isActive ? theme.activeBg : theme.inactiveBg || "transparent",
+                  color: isActive ? theme.activeText : theme.inactiveText,
+                } : undefined}
+              >
+                <span className="text-sm">{tab.emoji}</span>
+                <span>{tab.label}</span>
+                {tab.count != null && tab.count > 0 && (
+                  <span
+                    className={cn(
+                      "text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center font-semibold",
+                      !theme && (isActive ? "bg-primary/20" : "bg-muted")
+                    )}
+                    style={theme ? { backgroundColor: theme.countBg || "rgba(255,255,255,0.1)" } : undefined}
+                  >
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       ))}
     </div>
