@@ -217,7 +217,7 @@ export interface DateGroup<T> {
  * Group fights by date (Today, Tomorrow, Apr 5, etc.), sorted ascending.
  * Hides past events.
  */
-export function groupByDate<T extends { event_date?: string | null }>(
+export function groupByDate<T extends Record<string, any>>(
   fights: T[],
 ): DateGroup<T>[] {
   const now = new Date();
