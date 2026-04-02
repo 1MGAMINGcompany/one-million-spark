@@ -7,7 +7,7 @@ import type { Fight } from "@/components/predictions/FightCard";
 import type { OperatorTheme } from "@/lib/operatorThemes";
 
 interface SimplePredictionCardProps {
-  fight: Fight;
+  fight: Fight & { _broadSport?: string; _league?: string };
   onPredict: (fight: Fight, pick: "fighter_a" | "fighter_b" | "draw") => void;
   userEntry?: { fighter_pick: string; amount_usd: number | null; claimed: boolean } | null;
   onClaim?: (fightId: string) => void;
@@ -15,6 +15,19 @@ interface SimplePredictionCardProps {
   theme: OperatorTheme;
   onShareWin?: (fight: Fight) => void;
   onGraph?: (fight: Fight) => void;
+}
+
+function getTimeLabel(eventDate: string | null | undefined): { text: string; isLive: boolean } | null {
+  if (!eventDate) return null;
+  const d = new Date(eventDate);
+  const now = Date.now();
+  const diff = d.getTime() - now;
+  // If event started within last 3 hours → LIVE
+  if (diff < 0 && diff > -3 * 3600000) return { text: "LIVE", isLive: true };
+  if (diff < 0) return null;
+  if (diff < 3600000) return { text: `Starts in ${Math.max(1, Math.round(diff / 60000))}m`, isLive: false };
+  if (diff < 86400000) return { text: `Starts in ${Math.round(diff / 3600000)}h`, isLive: false };
+  return null;
 }
 
 function calcPayout(price: number | null, amount: number): number {
@@ -69,7 +82,16 @@ export default function SimplePredictionCard({
     ? formatEventDateTime((fight as any).event_date)
     : null;
 
-  const leagueName = fight.event_name?.split(" — ")[0] || fight.event_name;
+  const leagueName = (fight as any)._league || fight.event_name?.split(" — ")[0] || fight.event_name;
+  const broadSportLabel = (fight as any)._broadSport && (fight as any)._broadSport !== "OTHER"
+    ? ((fight as any)._broadSport as string).charAt(0) + ((fight as any)._broadSport as string).slice(1).toLowerCase()
+    : null;
+  const sportLeagueLabel = broadSportLabel && leagueName && leagueName !== "Other"
+    ? `${broadSportLabel.toUpperCase()} • ${leagueName}`
+    : broadSportLabel
+      ? broadSportLabel.toUpperCase()
+      : leagueName;
+  const timeLabel = getTimeLabel((fight as any).event_date);
 
   const cardStyle = {
     backgroundColor: theme.cardBg,
@@ -99,9 +121,9 @@ export default function SimplePredictionCard({
     const winnerName = fight.winner === "fighter_a" ? nameA : nameB;
     return (
       <div className="rounded-2xl p-5" style={cardStyle}>
-        {leagueName && (
+        {sportLeagueLabel && (
           <div className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: theme.textMuted }}>
-            {leagueName}
+            {sportLeagueLabel}
           </div>
         )}
         <div className="text-center mb-3">
@@ -155,9 +177,9 @@ export default function SimplePredictionCard({
     return (
       <div className="rounded-2xl p-5" style={cardStyle}>
         <div className="flex items-center justify-between mb-2">
-          {leagueName && (
+          {sportLeagueLabel && (
             <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: theme.textMuted }}>
-              {leagueName}
+              {sportLeagueLabel}
             </div>
           )}
           <GraphButton />
@@ -194,13 +216,26 @@ export default function SimplePredictionCard({
 
   return (
     <div className="rounded-2xl p-5 space-y-3" style={cardStyle}>
-      {/* League badge + Graph */}
+      {/* Sport + League badge + time + Graph */}
       <div className="flex items-center justify-between">
-        {leagueName && (
-          <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: theme.textMuted }}>
-            {leagueName}
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {sportLeagueLabel && (
+            <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: theme.textMuted }}>
+              {sportLeagueLabel}
+            </div>
+          )}
+          {timeLabel && (
+            <span
+              className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+              style={{
+                backgroundColor: timeLabel.isLive ? "#ef444422" : theme.primary + "18",
+                color: timeLabel.isLive ? "#ef4444" : theme.primary,
+              }}
+            >
+              {timeLabel.isLive ? "● LIVE" : timeLabel.text}
+            </span>
+          )}
+        </div>
         <GraphButton />
       </div>
 

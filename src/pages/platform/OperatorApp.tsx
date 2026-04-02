@@ -10,7 +10,7 @@ import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
 import { usePolymarketSession } from "@/hooks/usePolymarketSession";
 import { usePolymarketPrices } from "@/hooks/usePolymarketPrices";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Globe, Trophy, Loader2, ShieldCheck, Search, CalendarPlus } from "lucide-react";
+import { Globe, Trophy, Loader2, ShieldCheck, Search, CalendarPlus, ChevronDown, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { dbg } from "@/lib/debugLog";
 import { Button } from "@/components/ui/button";
@@ -22,9 +22,11 @@ import SocialShareModal, { type ShareVariant } from "@/components/SocialShareMod
 import { WalletGateModal } from "@/components/WalletGateModal";
 import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
 import ScrollableSportTabs, { type SportTabGroup } from "@/components/admin/ScrollableSportTabs";
+import SportPickerModal from "@/components/operator/SportPickerModal";
 import type { Fight } from "@/components/predictions/FightCard";
 import type { TradeResult } from "@/components/predictions/tradeResultTypes";
 import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
+import { formatEventDateTime } from "@/lib/formatEventLocalDateTime";
 import {
   normalizeOperatorSport,
   isValidOperatorEvent,
@@ -83,6 +85,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"events" | "picks">("events");
   const [graphFight, setGraphFight] = useState<Fight | null>(null);
+  const [sportPickerOpen, setSportPickerOpen] = useState(false);
+  const [timeFilter, setTimeFilter] = useState<"all" | "today" | "week">("all");
 
   // Social share state
   const [shareOpen, setShareOpen] = useState(false);
@@ -182,13 +186,19 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     return mapped;
   }, [allFights, operator?.id]);
 
-  // ── Build broad sport tabs (Level 1) ──
-  const broadSportTabs = useMemo<SportTabGroup[]>(() => {
+  // ── Sport counts for picker ──
+  const sportCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     enrichedFights.forEach(f => {
       counts[f._broadSport] = (counts[f._broadSport] || 0) + 1;
     });
-    const tabs = Object.entries(counts)
+    console.log("SPORTS AVAILABLE:", Object.keys(counts), counts);
+    return counts;
+  }, [enrichedFights]);
+
+  // ── Build broad sport tabs (Level 1) ──
+  const broadSportTabs = useMemo<SportTabGroup[]>(() => {
+    const tabs = Object.entries(sportCounts)
       .sort((a, b) => b[1] - a[1])
       .map(([sport, count]) => ({
         key: sport,
@@ -200,7 +210,29 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       label: "Sports",
       tabs: [{ key: "ALL", label: "All Sports", emoji: "🔥", count: enrichedFights.length }, ...tabs],
     }];
-  }, [enrichedFights]);
+  }, [enrichedFights, sportCounts]);
+
+  // ── Featured event ──
+  const featuredEvent = useMemo(() => {
+    if (broadSportFilter !== "ALL" || searchQuery || activeTab === "picks") return null;
+    const now = Date.now();
+    // 1. Live event
+    const live = enrichedFights.find(f => {
+      const d = new Date((f as any).event_date || 0).getTime();
+      return d < now && d > now - 3 * 3600000;
+    });
+    if (live) return live;
+    // 2. Next event today
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+    const today = enrichedFights.find(f => {
+      const d = new Date((f as any).event_date || 0).getTime();
+      return d >= now && d <= endOfDay.getTime();
+    });
+    if (today) return today;
+    // 3. Next upcoming
+    return enrichedFights.find(f => new Date((f as any).event_date || 0).getTime() >= now) || null;
+  }, [enrichedFights, broadSportFilter, searchQuery, activeTab]);
 
   // ── Build league tabs (Level 2) for selected sport ──
   const leagueTabs = useMemo(() => {
@@ -223,6 +255,21 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     if (leagueFilter && leagueFilter !== "ALL_LEAGUES") {
       fights = fights.filter(f => f._league === leagueFilter);
     }
+    // Time filter
+    if (timeFilter === "today") {
+      const endOfDay = new Date();
+      endOfDay.setHours(23, 59, 59, 999);
+      fights = fights.filter(f => {
+        const d = new Date((f as any).event_date || 0).getTime();
+        return d <= endOfDay.getTime();
+      });
+    } else if (timeFilter === "week") {
+      const endOfWeek = Date.now() + 7 * 86400000;
+      fights = fights.filter(f => {
+        const d = new Date((f as any).event_date || 0).getTime();
+        return d <= endOfWeek;
+      });
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       fights = fights.filter(f =>
@@ -231,8 +278,12 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         f.event_name.toLowerCase().includes(q)
       );
     }
+    // Exclude featured event from main list to avoid duplication
+    if (featuredEvent) {
+      fights = fights.filter(f => f.id !== featuredEvent.id);
+    }
     return fights;
-  }, [enrichedFights, broadSportFilter, leagueFilter, searchQuery, activeTab, userEntries]);
+  }, [enrichedFights, broadSportFilter, leagueFilter, searchQuery, activeTab, userEntries, timeFilter, featuredEvent]);
 
   // ── Date-grouped fights for display ──
   const dateGroups = useMemo(() => groupByDate(filteredFights), [filteredFights]);
@@ -463,18 +514,55 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
       {/* Level 1: Broad Sport Tabs (scrollable chips) */}
       <div className="max-w-4xl mx-auto px-4 pt-3 space-y-2">
-        <ScrollableSportTabs
-          groups={broadSportTabs}
-          activeTab={broadSportFilter}
-          onTabChange={(key) => { setBroadSportFilter(key); setLeagueFilter(null); }}
-          theme={{
-            activeBg: theme.primary,
-            activeText: theme.primaryForeground,
-            inactiveBg: theme.surfaceBg,
-            inactiveText: theme.textSecondary,
-            countBg: theme.isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)",
-          }}
-        />
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
+          {/* All Sports button → opens modal */}
+          <button
+            onClick={() => setSportPickerOpen(true)}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap"
+            style={{
+              backgroundColor: broadSportFilter === "ALL" ? theme.primary : theme.surfaceBg,
+              color: broadSportFilter === "ALL" ? theme.primaryForeground : theme.textSecondary,
+              ...(broadSportFilter === "ALL" ? { boxShadow: `0 2px 8px ${theme.primary}44` } : {}),
+            }}
+          >
+            <span className="text-sm">🔥</span>
+            <span>All Sports</span>
+            <ChevronDown className="w-3 h-3" />
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center font-semibold"
+              style={{ backgroundColor: broadSportFilter === "ALL" ? "rgba(255,255,255,0.2)" : (theme.isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)") }}
+            >
+              {enrichedFights.length}
+            </span>
+          </button>
+          {/* Individual sport chips */}
+          {broadSportTabs[0]?.tabs.filter(t => t.key !== "ALL").map(tab => {
+            const isActive = broadSportFilter === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => { setBroadSportFilter(tab.key); setLeagueFilter(null); }}
+                className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap"
+                style={{
+                  backgroundColor: isActive ? theme.primary : theme.surfaceBg,
+                  color: isActive ? theme.primaryForeground : theme.textSecondary,
+                  ...(isActive ? { boxShadow: `0 2px 8px ${theme.primary}44` } : {}),
+                }}
+              >
+                <span className="text-sm">{tab.emoji}</span>
+                <span>{tab.label}</span>
+                {tab.count != null && tab.count > 0 && (
+                  <span
+                    className="text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center font-semibold"
+                    style={{ backgroundColor: isActive ? "rgba(255,255,255,0.2)" : (theme.isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)") }}
+                  >
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
 
         {/* Level 2: League sub-tabs (scrollable chips) */}
         {leagueTabs.length > 1 && (
@@ -504,6 +592,28 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           </div>
         )}
 
+        {/* Time filter bar */}
+        <div className="flex items-center gap-2">
+          {(["all", "today", "week"] as const).map(f => {
+            const isActive = timeFilter === f;
+            const label = f === "all" ? "All" : f === "today" ? "Today" : "This Week";
+            return (
+              <button
+                key={f}
+                onClick={() => setTimeFilter(f)}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap"
+                style={{
+                  backgroundColor: isActive ? theme.primary + "18" : "transparent",
+                  color: isActive ? theme.primary : theme.textMuted,
+                  fontWeight: isActive ? 600 : 400,
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
         {/* Search */}
         <div className="relative">
           <Search
@@ -525,8 +635,65 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         </div>
       </div>
 
+      {/* Featured event hero */}
+      {featuredEvent && activeTab === "events" && !searchQuery && (
+        <div className="max-w-4xl mx-auto px-4 pt-4">
+          <div
+            className="rounded-2xl p-5 relative overflow-hidden"
+            style={{
+              backgroundColor: theme.isDark ? "rgba(255,255,255,0.05)" : theme.primary + "08",
+              border: `1px solid ${theme.isDark ? "rgba(255,255,255,0.1)" : theme.primary + "20"}`,
+            }}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              {(() => {
+                const d = new Date((featuredEvent as any).event_date || 0);
+                const isLive = d.getTime() < Date.now() && d.getTime() > Date.now() - 3 * 3600000;
+                return isLive ? (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500">● LIVE</span>
+                ) : (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: theme.primary + "18", color: theme.primary }}>
+                    <Zap className="w-3 h-3 inline mr-0.5" />UP NEXT
+                  </span>
+                );
+              })()}
+              <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: theme.textMuted }}>
+                {(featuredEvent as any)._broadSport && BROAD_SPORTS[(featuredEvent as any)._broadSport]?.label
+                  ? `${BROAD_SPORTS[(featuredEvent as any)._broadSport].label} • ${(featuredEvent as any)._league || ""}`
+                  : (featuredEvent as any)._league || ""}
+              </span>
+            </div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-lg font-bold" style={{ color: theme.textPrimary }}>
+                {resolveOutcomeName(featuredEvent.fighter_a_name, "a", featuredEvent)}
+              </span>
+              <span className="text-sm font-bold" style={{ color: theme.textMuted }}>VS</span>
+              <span className="text-lg font-bold text-right" style={{ color: theme.textPrimary }}>
+                {resolveOutcomeName(featuredEvent.fighter_b_name, "b", featuredEvent)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs" style={{ color: theme.textMuted }}>
+                {(featuredEvent as any).event_date ? formatEventDateTime((featuredEvent as any).event_date) : ""}
+              </span>
+              <button
+                onClick={() => {
+                  if (featuredEvent.status === "open") {
+                    handlePredict(featuredEvent, "fighter_a");
+                  }
+                }}
+                className="px-4 py-1.5 rounded-lg text-xs font-bold transition-all"
+                style={{ backgroundColor: theme.primary, color: theme.primaryForeground }}
+              >
+                Predict Now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Hero text */}
-      {filteredFights.length > 0 && !searchQuery && broadSportFilter === "ALL" && activeTab === "events" && (
+      {filteredFights.length > 0 && !searchQuery && broadSportFilter === "ALL" && activeTab === "events" && !featuredEvent && (
         <div className="max-w-4xl mx-auto px-4 pt-4 pb-0 text-center">
           <h1 className="text-2xl sm:text-3xl font-black leading-tight" style={{ color: theme.textPrimary }}>
             {t("operator.heroTitle", "Pick a Winner. Win Money.")}
@@ -697,6 +864,16 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         onClose={() => setShowWalletGate(false)}
         title={t("operator.signInToPredict")}
         description={t("operator.signInDesc")}
+      />
+
+      {/* Sport Picker Modal */}
+      <SportPickerModal
+        open={sportPickerOpen}
+        onClose={() => setSportPickerOpen(false)}
+        onSelect={(key) => { setBroadSportFilter(key); setLeagueFilter(null); }}
+        sportCounts={sportCounts}
+        totalCount={enrichedFights.length}
+        theme={theme}
       />
     </div>
   );
