@@ -31,7 +31,7 @@ const SPORTS = [
 ];
 
 const FAQS = [
-  { q: "What do I get when I buy a predictions app?", a: "You get your own fully branded predictions platform at yourname.1mg.live with built-in payments, liquidity, sports markets, and a custom fee structure. Everything is ready to go — no coding or infrastructure needed." },
+  { q: "What do I get when I buy a predictions app?", a: "You get your own fully branded predictions platform at 1mg.live/yourname with built-in payments, liquidity, sports markets, and a custom fee structure. Everything is ready to go — no coding or infrastructure needed." },
   { q: "How much does it cost?", a: "The setup fee is a one-time payment of $2,400 USDC. There are no monthly fees — you earn revenue from the fees you set on every prediction made on your platform." },
   { q: "Do I need technical skills?", a: "No. Your app is fully managed. You choose your brand name, set your fee percentage, and start sharing with your audience. We handle all the technology, payments, and liquidity." },
   { q: "What is built-in liquidity?", a: "Your app is never empty. We provide active prediction markets with real money already flowing, so your users can start trading immediately without waiting for the platform to grow." },
