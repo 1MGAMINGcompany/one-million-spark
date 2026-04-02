@@ -199,8 +199,13 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         f.event_name.toLowerCase().includes(q)
       );
     }
+    // Apply league filter for soccer
+    if (leagueFilter && sportFilter === "SOCCER") {
+      const { extractSoccerLeague } = require("@/lib/soccerLeagues");
+      fights = fights.filter((f: any) => extractSoccerLeague(f.event_name, f._category) === leagueFilter);
+    }
     return fights;
-  }, [allFights, sportFilter, dateFilter, searchQuery, activeTab, userEntries]);
+  }, [allFights, sportFilter, dateFilter, searchQuery, activeTab, userEntries, leagueFilter]);
 
   const handleSubmit = async (amountUsd: number) => {
     if (!selectedFight || !selectedPick || !isConnected || !address) return;
