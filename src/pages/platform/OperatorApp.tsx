@@ -464,7 +464,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                 {allSportTabs.map(tab => (
                   <button
                     key={tab.key}
-                    onClick={() => { setSportFilter(tab.key); setMobileDropdownOpen(false); }}
+                    onClick={() => { setSportFilter(tab.key); setLeagueFilter(null); setMobileDropdownOpen(false); }}
                     className="w-full text-left px-4 py-2.5 text-sm transition-colors"
                     style={{
                       color: sportFilter === tab.key ? theme.textPrimary : theme.textSecondary,
