@@ -12,6 +12,9 @@ const OPERATOR_ALLOWED_SPORTS = new Set([
 
 /** Keyword → canonical sport mapping (order matters: first match wins) */
 const SPORT_KEYWORDS: [string[], string][] = [
+  // Direct category aliases from sync pipeline
+  [["FUTBOL"], "SOCCER"],
+  [["BARE KNUCKLE"], "BOXING"],
   // Soccer / Futbol variants
   [["MLS"], "MLS"],
   [["SOCCER", "FUTBOL", "FÚTBOL", "PREMIER LEAGUE", "LA LIGA", "CHAMPIONS LEAGUE",
