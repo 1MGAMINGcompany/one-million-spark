@@ -257,19 +257,19 @@ export default function OperatorOnboarding() {
             <span className="font-bold text-white">{brandName}</span> is now live at
           </p>
           <a
-            href={`https://${subdomain}.1mg.live`}
+            href={`https://1mg.live/${subdomain}`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 text-xl font-bold text-blue-400 hover:text-blue-300 transition-colors mb-8"
           >
-            {subdomain}.1mg.live <ExternalLink className="w-5 h-5" />
+            1mg.live/{subdomain} <ExternalLink className="w-5 h-5" />
           </a>
           <p className="text-sm text-white/40 mb-8">
             Events from popular sports are already loaded. Share your app link to start earning!
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button
-              onClick={() => window.open(`https://${subdomain}.1mg.live`, "_blank")}
+              onClick={() => window.open(`https://1mg.live/${subdomain}`, "_blank")}
               className="bg-blue-600 hover:bg-blue-500 border-0 font-bold"
             >
               Open My App <ExternalLink size={16} className="ml-1" />
