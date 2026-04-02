@@ -132,67 +132,56 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     });
   }, [operatorFights, allowedSports, disabledSports, operator?.id]);
 
-  // DEBUG: confirm sport detection (temporary)
-  useEffect(() => {
-    if (allFights.length > 0) {
-      const sports = Array.from(new Set(allFights.map(f =>
-        normalizeOperatorSport(f.event_name, (f as any).sport ?? (f as any)._category ?? null)
-      )));
-      console.log("SPORTS DETECTED:", sports);
-      console.log("EVENTS:", allFights.length, "total");
-    }
+  // ── Attach broad sport + league to each fight ──
+  const enrichedFights = useMemo(() => {
+    return allFights.map(f => {
+      const norm = normalizeOperatorSport(f.event_name, (f as any).sport ?? (f as any)._category ?? null) || "OTHER";
+      const broad = toBroadSport(norm);
+      const league = extractLeague(broad, f.event_name, (f as any)._category);
+      return { ...f, _broadSport: broad, _league: league };
+    });
   }, [allFights]);
 
-  // ── Build sport tab groups ──
-  const sportTabGroups = useMemo<SportTabGroup[]>(() => {
-    const sportCounts: Record<string, number> = {};
-    allFights.forEach(f => {
-      const sport = normalizeOperatorSport(f.event_name, (f as any).sport ?? (f as any)._category ?? null) || "OTHER";
-      sportCounts[sport] = (sportCounts[sport] || 0) + 1;
+  // ── Build broad sport tabs (Level 1) ──
+  const broadSportTabs = useMemo<SportTabGroup[]>(() => {
+    const counts: Record<string, number> = {};
+    enrichedFights.forEach(f => {
+      counts[f._broadSport] = (counts[f._broadSport] || 0) + 1;
     });
-    const tabs = Object.entries(sportCounts)
+    const tabs = Object.entries(counts)
       .sort((a, b) => b[1] - a[1])
       .map(([sport, count]) => ({
         key: sport,
-        label: sport,
-        emoji: OPERATOR_SPORT_EMOJI[sport] || "🏆",
+        label: BROAD_SPORTS[sport]?.label || sport,
+        emoji: BROAD_SPORTS[sport]?.emoji || "🏆",
         count,
       }));
     return [{
       label: "Sports",
-      tabs: [{ key: "ALL", label: "All Sports", emoji: "🔥", count: allFights.length }, ...tabs],
+      tabs: [{ key: "ALL", label: "All Sports", emoji: "🔥", count: enrichedFights.length }, ...tabs],
     }];
-  }, [allFights]);
+  }, [enrichedFights]);
 
-  const allSportTabs = sportTabGroups[0]?.tabs || [];
+  // ── Build league tabs (Level 2) for selected sport ──
+  const leagueTabs = useMemo(() => {
+    if (broadSportFilter === "ALL") return [];
+    const sportFights = enrichedFights.filter(f => f._broadSport === broadSportFilter);
+    if (sportFights.length === 0) return [];
+    return buildLeagueTabs(broadSportFilter, sportFights as any);
+  }, [enrichedFights, broadSportFilter]);
 
-  // Filtered fights
+  // ── Filtered fights ──
   const filteredFights = useMemo(() => {
-    let fights = allFights;
+    let fights = enrichedFights;
     if (activeTab === "picks") {
       const userFightIds = new Set(userEntries.map((e: any) => e.fight_id));
       fights = fights.filter(f => userFightIds.has(f.id));
     }
-    if (sportFilter !== "ALL") {
-      fights = fights.filter(f => normalizeOperatorSport(f.event_name, (f as any).sport ?? (f as any)._category ?? null) === sportFilter);
+    if (broadSportFilter !== "ALL") {
+      fights = fights.filter(f => f._broadSport === broadSportFilter);
     }
-    if (dateFilter === "today") {
-      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-      const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
-      fights = fights.filter(f => {
-        const ed = (f as any).event_date;
-        if (!ed) return false;
-        const d = new Date(ed);
-        return d >= todayStart && d <= todayEnd;
-      });
-    } else if (dateFilter === "week") {
-      const now = new Date();
-      const weekEnd = new Date(now.getTime() + 7 * 86400000);
-      fights = fights.filter(f => {
-        const ed = (f as any).event_date;
-        if (!ed) return true;
-        return new Date(ed) <= weekEnd;
-      });
+    if (leagueFilter && leagueFilter !== "ALL_LEAGUES") {
+      fights = fights.filter(f => f._league === leagueFilter);
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -202,12 +191,11 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         f.event_name.toLowerCase().includes(q)
       );
     }
-    // Apply league filter for soccer
-    if (leagueFilter && sportFilter === "SOCCER") {
-      fights = fights.filter((f: any) => extractSoccerLeague(f.event_name, f._category) === leagueFilter);
-    }
     return fights;
-  }, [allFights, sportFilter, dateFilter, searchQuery, activeTab, userEntries, leagueFilter]);
+  }, [enrichedFights, broadSportFilter, leagueFilter, searchQuery, activeTab, userEntries]);
+
+  // ── Date-grouped fights for display ──
+  const dateGroups = useMemo(() => groupByDate(filteredFights), [filteredFights]);
 
   const handleSubmit = async (amountUsd: number) => {
     if (!selectedFight || !selectedPick || !isConnected || !address) return;
