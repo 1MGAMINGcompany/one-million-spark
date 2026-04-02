@@ -4,12 +4,15 @@ import { Input } from "@/components/ui/input";
 import { usePrivy } from "@privy-io/react-auth";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, ArrowLeft, Check, ExternalLink, Rocket } from "lucide-react";
+import { THEME_OPTIONS } from "@/lib/operatorThemes";
 
-const THEMES = [
-  { key: "blue", label: "Blue + White", primary: "#3b82f6", bg: "#0a0f1a" },
-  { key: "gold", label: "Gold + Black", primary: "#d4a017", bg: "#0a0a0a" },
-  { key: "red", label: "Red + White", primary: "#ef4444", bg: "#0a0a0f" },
-];
+const THEMES = THEME_OPTIONS.map(t => ({
+  key: t.key,
+  label: t.label,
+  primary: t.primary,
+  preview: t.isDark ? t.bg : t.bg,
+  isDark: t.isDark,
+}));
 
 const SPORTS_OPTIONS = [
   "NFL", "NBA", "NHL", "Soccer", "MMA", "Boxing",
