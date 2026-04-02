@@ -127,6 +127,17 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     });
   }, [operatorFights, allowedSports, disabledSports, operator?.id]);
 
+  // DEBUG: confirm sport detection (temporary)
+  useEffect(() => {
+    if (allFights.length > 0) {
+      const sports = Array.from(new Set(allFights.map(f =>
+        normalizeOperatorSport(f.event_name, (f as any).sport ?? (f as any)._category ?? null)
+      )));
+      console.log("SPORTS DETECTED:", sports);
+      console.log("EVENTS:", allFights.length, "total");
+    }
+  }, [allFights]);
+
   // ── Build sport tab groups ──
   const sportTabGroups = useMemo<SportTabGroup[]>(() => {
     const sportCounts: Record<string, number> = {};
