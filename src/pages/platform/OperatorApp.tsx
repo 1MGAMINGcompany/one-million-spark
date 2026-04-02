@@ -185,13 +185,19 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     return mapped;
   }, [allFights, operator?.id]);
 
-  // ── Build broad sport tabs (Level 1) ──
-  const broadSportTabs = useMemo<SportTabGroup[]>(() => {
+  // ── Sport counts for picker ──
+  const sportCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     enrichedFights.forEach(f => {
       counts[f._broadSport] = (counts[f._broadSport] || 0) + 1;
     });
-    const tabs = Object.entries(counts)
+    console.log("SPORTS AVAILABLE:", Object.keys(counts), counts);
+    return counts;
+  }, [enrichedFights]);
+
+  // ── Build broad sport tabs (Level 1) ──
+  const broadSportTabs = useMemo<SportTabGroup[]>(() => {
+    const tabs = Object.entries(sportCounts)
       .sort((a, b) => b[1] - a[1])
       .map(([sport, count]) => ({
         key: sport,
@@ -203,7 +209,29 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       label: "Sports",
       tabs: [{ key: "ALL", label: "All Sports", emoji: "🔥", count: enrichedFights.length }, ...tabs],
     }];
-  }, [enrichedFights]);
+  }, [enrichedFights, sportCounts]);
+
+  // ── Featured event ──
+  const featuredEvent = useMemo(() => {
+    if (broadSportFilter !== "ALL" || searchQuery || activeTab === "picks") return null;
+    const now = Date.now();
+    // 1. Live event
+    const live = enrichedFights.find(f => {
+      const d = new Date((f as any).event_date || 0).getTime();
+      return d < now && d > now - 3 * 3600000;
+    });
+    if (live) return live;
+    // 2. Next event today
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+    const today = enrichedFights.find(f => {
+      const d = new Date((f as any).event_date || 0).getTime();
+      return d >= now && d <= endOfDay.getTime();
+    });
+    if (today) return today;
+    // 3. Next upcoming
+    return enrichedFights.find(f => new Date((f as any).event_date || 0).getTime() >= now) || null;
+  }, [enrichedFights, broadSportFilter, searchQuery, activeTab]);
 
   // ── Build league tabs (Level 2) for selected sport ──
   const leagueTabs = useMemo(() => {
