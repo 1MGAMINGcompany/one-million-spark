@@ -392,9 +392,7 @@ export default function LandingPage() {
                   </div>
                 </div>
                 <a
-                  href="https://demo.1mg.live"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href="/demo"
                   className="text-blue-400 hover:text-blue-300 text-sm font-medium underline underline-offset-2 transition-colors"
                 >
                   View Live Demo →
