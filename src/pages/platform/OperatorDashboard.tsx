@@ -227,7 +227,7 @@ export default function OperatorDashboard() {
 
   const copyAppLink = () => {
     if (!operator) return;
-    navigator.clipboard.writeText(`https://${operator.subdomain}.1mg.live`);
+    navigator.clipboard.writeText(`https://1mg.live/${operator.subdomain}`);
     setLinkCopied(true);
     toast.success(t("operator.dashboard.linkCopied"));
     setTimeout(() => setLinkCopied(false), 2000);
