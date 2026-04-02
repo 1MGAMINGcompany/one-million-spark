@@ -1,8 +1,9 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { usePrivy } from "@privy-io/react-auth";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { DomainContext } from "@/lib/domainDetection";
+import { extractOperatorSlug } from "@/lib/domainDetection";
 import LandingPage from "./LandingPage";
 import OperatorOnboarding from "./OperatorOnboarding";
 import OperatorDashboard from "./OperatorDashboard";
@@ -12,6 +13,8 @@ import BuyPredictionsApp from "./BuyPredictionsApp";
 import HelpCenter from "@/pages/HelpCenter";
 import HelpArticle from "@/pages/HelpArticle";
 import PlatformAdmin from "./PlatformAdmin";
+import TermsOfService from "@/pages/TermsOfService";
+import PrivacyPolicy from "@/pages/PrivacyPolicy";
 
 /** Extracts privy DID from JWT without remote verification */
 function extractPrivyDid(token: string): string | null {
@@ -59,11 +62,28 @@ function RequireActiveOperator({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * Handles path-based operator routing.
+ * If the first path segment is a valid operator slug, renders OperatorApp.
+ * Otherwise falls through to show a "not found" operator page.
+ */
+function OperatorSlugRoute() {
+  const location = useLocation();
+  const slug = extractOperatorSlug(location.pathname);
+
+  if (!slug) {
+    return <Navigate to="/" replace />;
+  }
+
+  return <OperatorApp subdomain={slug} />;
+}
+
 interface PlatformAppProps {
   context: DomainContext;
 }
 
 export default function PlatformApp({ context }: PlatformAppProps) {
+  // Legacy: if somehow an operator context arrives (from old subdomain logic), use it
   if (context.type === "operator") {
     return <OperatorApp subdomain={context.subdomain} />;
   }
@@ -78,8 +98,10 @@ export default function PlatformApp({ context }: PlatformAppProps) {
       <Route path="/help" element={<HelpCenter />} />
       <Route path="/help/:slug" element={<HelpArticle />} />
       <Route path="/admin" element={<PlatformAdmin />} />
-      <Route path="/terms-of-service" element={<LandingPage />} />
-      <Route path="/privacy-policy" element={<LandingPage />} />
+      <Route path="/terms-of-service" element={<TermsOfService />} />
+      <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+      {/* Catch-all: treat any unknown path as a potential operator slug */}
+      <Route path="/:slug" element={<OperatorSlugRoute />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

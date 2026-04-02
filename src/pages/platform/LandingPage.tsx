@@ -81,7 +81,7 @@ function PhoneMockup() {
         <div className="absolute top-3 left-1/2 -translate-x-1/2 w-20 h-5 bg-black rounded-full" />
         <div className="rounded-[1.6rem] bg-gradient-to-b from-[#0a0f1a] to-[#060810] p-4 pt-8 min-h-[360px] sm:min-h-[420px] overflow-hidden">
           <div className="text-center mb-5">
-            <div className="text-xs text-blue-400 font-bold mb-1">yourname.1mg.live</div>
+            <div className="text-xs text-blue-400 font-bold mb-1">1mg.live/yourname</div>
             <div className="text-[10px] text-white/30">Your branded app</div>
           </div>
           {[
@@ -392,9 +392,7 @@ export default function LandingPage() {
                   </div>
                 </div>
                 <a
-                  href="https://demo.1mg.live"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href="/demo"
                   className="text-blue-400 hover:text-blue-300 text-sm font-medium underline underline-offset-2 transition-colors"
                 >
                   View Live Demo →
@@ -519,9 +517,7 @@ export default function LandingPage() {
             <p>✅ pay for your app &nbsp; ✅ collect your earnings &nbsp; ✅ manage your business</p>
           </div>
           <a
-            href="https://demo.1mg.live"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/demo"
             className="inline-block mt-4 text-blue-400 hover:text-blue-300 text-sm font-medium underline underline-offset-2 transition-colors"
           >
             View Live Demo →

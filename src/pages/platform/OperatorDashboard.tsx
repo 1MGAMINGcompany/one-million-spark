@@ -227,7 +227,7 @@ export default function OperatorDashboard() {
 
   const copyAppLink = () => {
     if (!operator) return;
-    navigator.clipboard.writeText(`https://${operator.subdomain}.1mg.live`);
+    navigator.clipboard.writeText(`https://1mg.live/${operator.subdomain}`);
     setLinkCopied(true);
     toast.success(t("operator.dashboard.linkCopied"));
     setTimeout(() => setLinkCopied(false), 2000);
@@ -260,12 +260,12 @@ export default function OperatorDashboard() {
           <div className="flex items-center gap-3">
             <PlatformLanguageSwitcher />
             <a
-              href={`https://${operator.subdomain}.1mg.live`}
+              href={`https://1mg.live/${operator.subdomain}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-sm text-blue-400 flex items-center gap-1 hover:text-blue-300"
             >
-              {operator.subdomain}.1mg.live <ExternalLink size={14} />
+              1mg.live/{operator.subdomain} <ExternalLink size={14} />
             </a>
           </div>
         </div>
@@ -282,7 +282,7 @@ export default function OperatorDashboard() {
             </div>
             <div>
               <div className="text-white/40 text-xs">{t("operator.dashboard.subdomain")}</div>
-              <div className="font-semibold">{operator.subdomain}.1mg.live</div>
+              <div className="font-semibold">1mg.live/{operator.subdomain}</div>
             </div>
             <div>
               <div className="text-white/40 text-xs">{t("operator.dashboard.status")}</div>

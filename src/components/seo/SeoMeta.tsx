@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 
 function isPlatformDomain() {
   const h = window.location.hostname;
-  return h === "1mg.live" || h === "www.1mg.live" || h.endsWith(".1mg.live");
+  return h === "1mg.live" || h === "www.1mg.live";
 }
 
 const SITE_URL = isPlatformDomain() ? "https://1mg.live" : "https://1mgaming.com";
