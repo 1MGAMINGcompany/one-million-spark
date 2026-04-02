@@ -90,7 +90,7 @@ export default function OperatorOnboarding() {
             </span>
           </div>
           {subdomain && (
-            <p className="text-sm text-blue-400">{subdomain}.1mg.live</p>
+            <p className="text-sm text-blue-400">1mg.live/{subdomain}</p>
           )}
         </div>
       ),
