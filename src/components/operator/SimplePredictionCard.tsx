@@ -216,13 +216,26 @@ export default function SimplePredictionCard({
 
   return (
     <div className="rounded-2xl p-5 space-y-3" style={cardStyle}>
-      {/* League badge + Graph */}
+      {/* Sport + League badge + time + Graph */}
       <div className="flex items-center justify-between">
-        {leagueName && (
-          <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: theme.textMuted }}>
-            {leagueName}
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {sportLeagueLabel && (
+            <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: theme.textMuted }}>
+              {sportLeagueLabel}
+            </div>
+          )}
+          {timeLabel && (
+            <span
+              className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+              style={{
+                backgroundColor: timeLabel.isLive ? "#ef444422" : theme.primary + "18",
+                color: timeLabel.isLive ? "#ef4444" : theme.primary,
+              }}
+            >
+              {timeLabel.isLive ? "● LIVE" : timeLabel.text}
+            </span>
+          )}
+        </div>
         <GraphButton />
       </div>
 
