@@ -282,7 +282,7 @@ export default function OperatorDashboard() {
             </div>
             <div>
               <div className="text-white/40 text-xs">{t("operator.dashboard.subdomain")}</div>
-              <div className="font-semibold">{operator.subdomain}.1mg.live</div>
+              <div className="font-semibold">1mg.live/{operator.subdomain}</div>
             </div>
             <div>
               <div className="text-white/40 text-xs">{t("operator.dashboard.status")}</div>

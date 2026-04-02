@@ -134,7 +134,7 @@ export default function BuyPredictionsApp() {
             {[
               { num: "01", title: "Buy Your App", desc: "Pay the one-time $2,400 USDC setup fee to secure your platform." },
               { num: "02", title: "Brand It", desc: "Choose your name, set your fee percentage, and customize your look." },
-              { num: "03", title: "Go Live", desc: "Your app launches at yourname.1mg.live with markets already active." },
+              { num: "03", title: "Go Live", desc: "Your app launches at 1mg.live/yourname with markets already active." },
               { num: "04", title: "Earn", desc: "Earn your fee on every prediction. Share with your audience and grow." },
             ].map((s) => (
               <div key={s.num} className="bg-white/[0.03] border border-white/5 rounded-2xl p-6 relative overflow-hidden">
