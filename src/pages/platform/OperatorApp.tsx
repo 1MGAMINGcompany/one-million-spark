@@ -28,7 +28,6 @@ import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
 import {
   normalizeOperatorSport,
   isValidOperatorEvent,
-  isEventDateRelevant,
 } from "@/lib/operatorSportRules";
 import { getOperatorTheme } from "@/lib/operatorThemes";
 import {
