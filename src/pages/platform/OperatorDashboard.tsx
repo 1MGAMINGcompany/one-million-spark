@@ -260,12 +260,12 @@ export default function OperatorDashboard() {
           <div className="flex items-center gap-3">
             <PlatformLanguageSwitcher />
             <a
-              href={`https://${operator.subdomain}.1mg.live`}
+              href={`https://1mg.live/${operator.subdomain}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-sm text-blue-400 flex items-center gap-1 hover:text-blue-300"
             >
-              {operator.subdomain}.1mg.live <ExternalLink size={14} />
+              1mg.live/{operator.subdomain} <ExternalLink size={14} />
             </a>
           </div>
         </div>
