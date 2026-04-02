@@ -45,6 +45,8 @@ export default function MarketGraphModal({ fight, open, onClose, theme }: Market
   const volume = (fight as any).polymarket_volume_usd || 0;
   const liquidity = (fight as any).polymarket_liquidity || 0;
 
+  if (!open) return null;
+
   const overlayBg = theme.isDark ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.4)";
   const modalBg = theme.isDark ? "#141414" : "#ffffff";
   const borderColor = theme.isDark ? "rgba(255,255,255,0.1)" : "#e2e8f0";
