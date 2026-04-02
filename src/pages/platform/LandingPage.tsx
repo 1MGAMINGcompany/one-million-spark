@@ -517,9 +517,7 @@ export default function LandingPage() {
             <p>✅ pay for your app &nbsp; ✅ collect your earnings &nbsp; ✅ manage your business</p>
           </div>
           <a
-            href="https://demo.1mg.live"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/demo"
             className="inline-block mt-4 text-blue-400 hover:text-blue-300 text-sm font-medium underline underline-offset-2 transition-colors"
           >
             View Live Demo →

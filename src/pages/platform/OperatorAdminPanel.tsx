@@ -107,12 +107,12 @@ export default function OperatorAdminPanel() {
                   <div>
                     <div className="font-bold text-foreground">{op.brand_name}</div>
                     <a
-                      href={`https://${op.subdomain}.1mg.live`}
+                      href={`https://1mg.live/${op.subdomain}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-xs text-primary flex items-center gap-1"
                     >
-                      {op.subdomain}.1mg.live <ExternalLink className="w-3 h-3" />
+                      1mg.live/{op.subdomain} <ExternalLink className="w-3 h-3" />
                     </a>
                   </div>
                 </div>
