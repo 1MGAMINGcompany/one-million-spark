@@ -29,7 +29,7 @@ const SPORT_KEYWORDS: [string[], string][] = [
   [["NFL", "SUPER BOWL"], "NFL"],
   [["NBA", "WNBA"], "NBA"],
   [["NCAA", "MARCH MADNESS", "COLLEGE FOOTBALL", "COLLEGE BASKETBALL", "CWBB"], "NCAA"],
-  [["NHL", "STANLEY CUP"], "NHL"],
+  [["NHL", "HOCKEY", "STANLEY CUP"], "NHL"],
   [["MLB", "WORLD SERIES"], "MLB"],
   // Racket / Individual
   [["TENNIS", "ATP", "WTA", "WIMBLEDON"], "TENNIS"],
