@@ -10,7 +10,7 @@ import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
 import { usePolymarketSession } from "@/hooks/usePolymarketSession";
 import { usePolymarketPrices } from "@/hooks/usePolymarketPrices";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Globe, Trophy, Loader2, ShieldCheck, Search, ChevronDown, CalendarPlus } from "lucide-react";
+import { Globe, Trophy, Loader2, ShieldCheck, Search, CalendarPlus } from "lucide-react";
 import { toast } from "sonner";
 import { dbg } from "@/lib/debugLog";
 import { Button } from "@/components/ui/button";
@@ -29,10 +29,15 @@ import {
   normalizeOperatorSport,
   isValidOperatorEvent,
   isEventDateRelevant,
-  OPERATOR_SPORT_EMOJI,
 } from "@/lib/operatorSportRules";
 import { getOperatorTheme } from "@/lib/operatorThemes";
-import { groupByLeague, extractSoccerLeague } from "@/lib/soccerLeagues";
+import {
+  BROAD_SPORTS,
+  toBroadSport,
+  extractLeague,
+  buildLeagueTabs,
+  groupByDate,
+} from "@/lib/sportLeagues";
 
 interface OperatorAppProps {
   subdomain: string;
