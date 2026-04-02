@@ -369,9 +369,11 @@ export default function LandingPage() {
               <p className="text-lg sm:text-xl text-white/50 max-w-xl mb-3 leading-relaxed mx-auto lg:mx-0">
                 {t("platform.hero.subtitle")}
               </p>
-              <p className="text-base text-white/40 max-w-lg mb-10 mx-auto lg:mx-0">
-                {t("platform.hero.subtitleSmall")}
-              </p>
+              {t("platform.hero.subtitleSmall") && (
+                <p className="text-base text-white/40 max-w-lg mb-10 mx-auto lg:mx-0">
+                  {t("platform.hero.subtitleSmall")}
+                </p>
+              )}
 
               {/* CTA */}
               <div className="flex flex-col gap-4 justify-center lg:justify-start mb-8">

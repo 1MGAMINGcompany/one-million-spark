@@ -16,7 +16,7 @@ const ArticleCTA = () => {
           <Rocket className="w-4 h-4" /> Buy Your App — $2,400
         </a>
         <a
-          href="https://demo.1mg.live"
+          href="/demo"
           className="inline-flex items-center gap-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-sm font-semibold text-blue-400 hover:bg-blue-500/20 transition-colors"
         >
           <Eye className="w-4 h-4" /> Live Demo

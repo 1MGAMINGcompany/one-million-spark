@@ -1548,10 +1548,10 @@
   },
   "platform": {
     "hero": {
-      "title": "Your Own Digital",
-      "titleHighlight": "Predictions Business",
-      "subtitle": "Launch your own branded predictions app with digital payments and built-in liquidity.",
-      "subtitleSmall": "We handle the money and activity — you grow your app."
+      "title": "Own Your Own Predictions App.",
+      "titleHighlight": "Earn Fees From Every Pick.",
+      "subtitle": "We give you the app, users place predictions, you earn a % on every play.",
+      "subtitleSmall": ""
     },
     "cta": {
       "buyNow": "BUY NOW — $2,400 USDC",
