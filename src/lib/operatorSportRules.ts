@@ -125,7 +125,7 @@ export function getAllowedSportsList(): string[] {
 export const OPERATOR_SPORT_EMOJI: Record<string, string> = {
   NBA: "🏀", NHL: "🏒", MLB: "⚾", NFL: "🏈", MLS: "⚽", SOCCER: "⚽",
   MMA: "🥊", BOXING: "🥊", TENNIS: "🎾", CRICKET: "🏏", GOLF: "⛳",
-  F1: "🏎️", NASCAR: "🏁", NCAA: "🎓",
+  F1: "🏎️", NASCAR: "🏁", NCAA: "🎓", RUGBY: "🏉",
 };
 
 // ── Event shape validation ──
