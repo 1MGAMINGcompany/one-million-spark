@@ -82,7 +82,16 @@ export default function SimplePredictionCard({
     ? formatEventDateTime((fight as any).event_date)
     : null;
 
-  const leagueName = fight.event_name?.split(" — ")[0] || fight.event_name;
+  const leagueName = (fight as any)._league || fight.event_name?.split(" — ")[0] || fight.event_name;
+  const broadSportLabel = (fight as any)._broadSport && (fight as any)._broadSport !== "OTHER"
+    ? ((fight as any)._broadSport as string).charAt(0) + ((fight as any)._broadSport as string).slice(1).toLowerCase()
+    : null;
+  const sportLeagueLabel = broadSportLabel && leagueName && leagueName !== "Other"
+    ? `${broadSportLabel.toUpperCase()} • ${leagueName}`
+    : broadSportLabel
+      ? broadSportLabel.toUpperCase()
+      : leagueName;
+  const timeLabel = getTimeLabel((fight as any).event_date);
 
   const cardStyle = {
     backgroundColor: theme.cardBg,
