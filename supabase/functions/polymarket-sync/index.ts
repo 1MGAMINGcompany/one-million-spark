@@ -1790,6 +1790,7 @@ Deno.serve(async (req) => {
         "primeira-liga", "concacaf", "conmebol", "fifa-friendlies",
       ]);
 
+      // Platform sports — now also get trading_allowed=true so operator apps can display them
       const PLATFORM_ONLY_KEYS = new Set([
         "nba", "nhl", "mlb", "ncaab", "cfb", "wnba",
         "atp", "wta", "tennis", "tennis-atp", "tennis-wta", "tennis-grand-slam",
