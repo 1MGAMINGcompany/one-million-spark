@@ -441,11 +441,11 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           activeTab={broadSportFilter}
           onTabChange={(key) => { setBroadSportFilter(key); setLeagueFilter(null); }}
           theme={{
-            activeBg: theme.primary + "25",
-            activeText: theme.primary,
-            inactiveBg: "transparent",
-            inactiveText: theme.textMuted,
-            countBg: theme.surfaceBg,
+            activeBg: theme.primary,
+            activeText: theme.primaryForeground,
+            inactiveBg: theme.surfaceBg,
+            inactiveText: theme.textSecondary,
+            countBg: theme.isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)",
           }}
         />
 
