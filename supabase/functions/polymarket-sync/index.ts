@@ -1813,7 +1813,8 @@ Deno.serve(async (req) => {
         const isCombatOrSoccer = COMBAT_AND_SOCCER_KEYS.has(leagueKey);
         const vis = isCombatOrSoccer ? "all" : "platform";
         const statusOverride = isCombatOrSoccer ? "approved" : "pending_review";
-        const tradingOn = isCombatOrSoccer;
+        // Enable trading for ALL sports so operator apps can display and trade them
+        const tradingOn = true;
 
         try {
           const { events: rawEvents } = await fetchByLeagueSource(cfg);
