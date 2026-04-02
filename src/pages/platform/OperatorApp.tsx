@@ -84,6 +84,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"events" | "picks">("events");
   const [graphFight, setGraphFight] = useState<Fight | null>(null);
+  const [sportPickerOpen, setSportPickerOpen] = useState(false);
+  const [timeFilter, setTimeFilter] = useState<"all" | "today" | "week">("all");
 
   // Social share state
   const [shareOpen, setShareOpen] = useState(false);
