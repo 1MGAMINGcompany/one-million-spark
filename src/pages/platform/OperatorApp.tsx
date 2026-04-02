@@ -513,18 +513,55 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
       {/* Level 1: Broad Sport Tabs (scrollable chips) */}
       <div className="max-w-4xl mx-auto px-4 pt-3 space-y-2">
-        <ScrollableSportTabs
-          groups={broadSportTabs}
-          activeTab={broadSportFilter}
-          onTabChange={(key) => { setBroadSportFilter(key); setLeagueFilter(null); }}
-          theme={{
-            activeBg: theme.primary,
-            activeText: theme.primaryForeground,
-            inactiveBg: theme.surfaceBg,
-            inactiveText: theme.textSecondary,
-            countBg: theme.isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)",
-          }}
-        />
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
+          {/* All Sports button → opens modal */}
+          <button
+            onClick={() => setSportPickerOpen(true)}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap"
+            style={{
+              backgroundColor: broadSportFilter === "ALL" ? theme.primary : theme.surfaceBg,
+              color: broadSportFilter === "ALL" ? theme.primaryForeground : theme.textSecondary,
+              ...(broadSportFilter === "ALL" ? { boxShadow: `0 2px 8px ${theme.primary}44` } : {}),
+            }}
+          >
+            <span className="text-sm">🔥</span>
+            <span>All Sports</span>
+            <ChevronDown className="w-3 h-3" />
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center font-semibold"
+              style={{ backgroundColor: broadSportFilter === "ALL" ? "rgba(255,255,255,0.2)" : (theme.isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)") }}
+            >
+              {enrichedFights.length}
+            </span>
+          </button>
+          {/* Individual sport chips */}
+          {broadSportTabs[0]?.tabs.filter(t => t.key !== "ALL").map(tab => {
+            const isActive = broadSportFilter === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => { setBroadSportFilter(tab.key); setLeagueFilter(null); }}
+                className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap"
+                style={{
+                  backgroundColor: isActive ? theme.primary : theme.surfaceBg,
+                  color: isActive ? theme.primaryForeground : theme.textSecondary,
+                  ...(isActive ? { boxShadow: `0 2px 8px ${theme.primary}44` } : {}),
+                }}
+              >
+                <span className="text-sm">{tab.emoji}</span>
+                <span>{tab.label}</span>
+                {tab.count != null && tab.count > 0 && (
+                  <span
+                    className="text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center font-semibold"
+                    style={{ backgroundColor: isActive ? "rgba(255,255,255,0.2)" : (theme.isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)") }}
+                  >
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
 
         {/* Level 2: League sub-tabs (scrollable chips) */}
         {leagueTabs.length > 1 && (
@@ -554,6 +591,28 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           </div>
         )}
 
+        {/* Time filter bar */}
+        <div className="flex items-center gap-2">
+          {(["all", "today", "week"] as const).map(f => {
+            const isActive = timeFilter === f;
+            const label = f === "all" ? "All" : f === "today" ? "Today" : "This Week";
+            return (
+              <button
+                key={f}
+                onClick={() => setTimeFilter(f)}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap"
+                style={{
+                  backgroundColor: isActive ? theme.primary + "18" : "transparent",
+                  color: isActive ? theme.primary : theme.textMuted,
+                  fontWeight: isActive ? 600 : 400,
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
         {/* Search */}
         <div className="relative">
           <Search
@@ -575,8 +634,65 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         </div>
       </div>
 
+      {/* Featured event hero */}
+      {featuredEvent && activeTab === "events" && !searchQuery && (
+        <div className="max-w-4xl mx-auto px-4 pt-4">
+          <div
+            className="rounded-2xl p-5 relative overflow-hidden"
+            style={{
+              backgroundColor: theme.isDark ? "rgba(255,255,255,0.05)" : theme.primary + "08",
+              border: `1px solid ${theme.isDark ? "rgba(255,255,255,0.1)" : theme.primary + "20"}`,
+            }}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              {(() => {
+                const d = new Date((featuredEvent as any).event_date || 0);
+                const isLive = d.getTime() < Date.now() && d.getTime() > Date.now() - 3 * 3600000;
+                return isLive ? (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500">● LIVE</span>
+                ) : (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: theme.primary + "18", color: theme.primary }}>
+                    <Zap className="w-3 h-3 inline mr-0.5" />UP NEXT
+                  </span>
+                );
+              })()}
+              <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: theme.textMuted }}>
+                {(featuredEvent as any)._broadSport && BROAD_SPORTS[(featuredEvent as any)._broadSport]?.label
+                  ? `${BROAD_SPORTS[(featuredEvent as any)._broadSport].label} • ${(featuredEvent as any)._league || ""}`
+                  : (featuredEvent as any)._league || ""}
+              </span>
+            </div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-lg font-bold" style={{ color: theme.textPrimary }}>
+                {resolveOutcomeName(featuredEvent.fighter_a_name, "a", featuredEvent)}
+              </span>
+              <span className="text-sm font-bold" style={{ color: theme.textMuted }}>VS</span>
+              <span className="text-lg font-bold text-right" style={{ color: theme.textPrimary }}>
+                {resolveOutcomeName(featuredEvent.fighter_b_name, "b", featuredEvent)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs" style={{ color: theme.textMuted }}>
+                {(featuredEvent as any).event_date ? formatEventDateTime((featuredEvent as any).event_date) : ""}
+              </span>
+              <button
+                onClick={() => {
+                  if (featuredEvent.status === "open") {
+                    handlePredict(featuredEvent, "fighter_a");
+                  }
+                }}
+                className="px-4 py-1.5 rounded-lg text-xs font-bold transition-all"
+                style={{ backgroundColor: theme.primary, color: theme.primaryForeground }}
+              >
+                Predict Now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Hero text */}
-      {filteredFights.length > 0 && !searchQuery && broadSportFilter === "ALL" && activeTab === "events" && (
+      {filteredFights.length > 0 && !searchQuery && broadSportFilter === "ALL" && activeTab === "events" && !featuredEvent && (
         <div className="max-w-4xl mx-auto px-4 pt-4 pb-0 text-center">
           <h1 className="text-2xl sm:text-3xl font-black leading-tight" style={{ color: theme.textPrimary }}>
             {t("operator.heroTitle", "Pick a Winner. Win Money.")}
