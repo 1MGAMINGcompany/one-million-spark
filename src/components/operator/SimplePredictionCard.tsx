@@ -121,9 +121,9 @@ export default function SimplePredictionCard({
     const winnerName = fight.winner === "fighter_a" ? nameA : nameB;
     return (
       <div className="rounded-2xl p-5" style={cardStyle}>
-        {leagueName && (
+        {sportLeagueLabel && (
           <div className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: theme.textMuted }}>
-            {leagueName}
+            {sportLeagueLabel}
           </div>
         )}
         <div className="text-center mb-3">
