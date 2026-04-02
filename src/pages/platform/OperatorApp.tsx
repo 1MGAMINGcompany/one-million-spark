@@ -254,6 +254,21 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     if (leagueFilter && leagueFilter !== "ALL_LEAGUES") {
       fights = fights.filter(f => f._league === leagueFilter);
     }
+    // Time filter
+    if (timeFilter === "today") {
+      const endOfDay = new Date();
+      endOfDay.setHours(23, 59, 59, 999);
+      fights = fights.filter(f => {
+        const d = new Date((f as any).event_date || 0).getTime();
+        return d <= endOfDay.getTime();
+      });
+    } else if (timeFilter === "week") {
+      const endOfWeek = Date.now() + 7 * 86400000;
+      fights = fights.filter(f => {
+        const d = new Date((f as any).event_date || 0).getTime();
+        return d <= endOfWeek;
+      });
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       fights = fights.filter(f =>
@@ -262,8 +277,12 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         f.event_name.toLowerCase().includes(q)
       );
     }
+    // Exclude featured event from main list to avoid duplication
+    if (featuredEvent) {
+      fights = fights.filter(f => f.id !== featuredEvent.id);
+    }
     return fights;
-  }, [enrichedFights, broadSportFilter, leagueFilter, searchQuery, activeTab, userEntries]);
+  }, [enrichedFights, broadSportFilter, leagueFilter, searchQuery, activeTab, userEntries, timeFilter, featuredEvent]);
 
   // ── Date-grouped fights for display ──
   const dateGroups = useMemo(() => groupByDate(filteredFights), [filteredFights]);
