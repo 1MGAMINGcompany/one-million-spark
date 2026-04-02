@@ -201,7 +201,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     }
     // Apply league filter for soccer
     if (leagueFilter && sportFilter === "SOCCER") {
-      const { extractSoccerLeague } = require("@/lib/soccerLeagues");
+      const { extractSoccerLeague } = await import("@/lib/soccerLeagues");
       fights = fights.filter((f: any) => extractSoccerLeague(f.event_name, f._category) === leagueFilter);
     }
     return fights;
