@@ -28,7 +28,6 @@ import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
 import {
   normalizeOperatorSport,
   isValidOperatorEvent,
-  isEventDateRelevant,
 } from "@/lib/operatorSportRules";
 import { getOperatorTheme } from "@/lib/operatorThemes";
 import {
@@ -130,8 +129,20 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const allFights = useMemo(() => {
     return (operatorFights || []).filter(f => {
       if (!isValidOperatorEvent(f as any)) return false;
-      if (!isEventDateRelevant((f as any).event_date)) return false;
-      const sport = normalizeOperatorSport(f.event_name, (f as any).sport ?? (f as any)._category ?? null);
+      // Operator-created events get 24h grace; platform events get 4h
+      const isOperatorEvent = (f as any).operator_id === operator?.id && (f as any).operator_id != null;
+      const graceMs = isOperatorEvent ? 24 * 3600000 : 4 * 3600000;
+      const eventDate = (f as any).event_date;
+      if (!eventDate) return false;
+      const d = new Date(eventDate);
+      if (isNaN(d.getTime())) return false;
+      if (d.getTime() < Date.now() - graceMs) return false;
+
+      const sport = normalizeOperatorSport(
+        f.event_name,
+        (f as any).sport ?? (f as any)._category ?? null,
+        (f as any).polymarket_slug ?? null,
+      );
       if (!sport) return false;
       if (disabledSports.length > 0 && disabledSports.some((ds: string) => ds.toUpperCase() === sport)) return false;
       if (allowedSports.length > 0 && (f as any).operator_id !== operator?.id) {
@@ -145,15 +156,29 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     });
   }, [operatorFights, allowedSports, disabledSports, operator?.id]);
 
-  // ── Attach broad sport + league to each fight ──
+  // ── Attach broad sport + league to each fight, sort operator events first ──
   const enrichedFights = useMemo(() => {
-    return allFights.map(f => {
-      const norm = normalizeOperatorSport(f.event_name, (f as any).sport ?? (f as any)._category ?? null) || "OTHER";
+    const mapped = allFights.map(f => {
+      const norm = normalizeOperatorSport(
+        f.event_name,
+        (f as any).sport ?? (f as any)._category ?? null,
+        (f as any).polymarket_slug ?? null,
+      ) || "OTHER";
       const broad = toBroadSport(norm);
-      const league = extractLeague(broad, f.event_name, (f as any)._category);
-      return { ...f, _broadSport: broad, _league: league };
+      const league = extractLeague(broad, f.event_name, (f as any)._category, (f as any).polymarket_slug);
+      const isOperatorEvent = (f as any).operator_id === operator?.id && (f as any).operator_id != null;
+      return { ...f, _broadSport: broad, _league: league, _isOperatorEvent: isOperatorEvent };
     });
-  }, [allFights]);
+    // Operator-created events appear first, then sorted by event_date
+    mapped.sort((a, b) => {
+      if (a._isOperatorEvent && !b._isOperatorEvent) return -1;
+      if (!a._isOperatorEvent && b._isOperatorEvent) return 1;
+      const da = new Date((a as any).event_date || 0).getTime();
+      const db = new Date((b as any).event_date || 0).getTime();
+      return da - db;
+    });
+    return mapped;
+  }, [allFights, operator?.id]);
 
   // ── Build broad sport tabs (Level 1) ──
   const broadSportTabs = useMemo<SportTabGroup[]>(() => {

@@ -1,6 +1,9 @@
 /**
  * Universal sport → league mapping system.
  * Provides broad sport categories and league derivation from event metadata.
+ *
+ * Primary league derivation uses polymarket_slug prefix (most reliable),
+ * then falls back to keyword matching on category / event_name.
  */
 
 // ── Broad sport categories (Level 1) ──
@@ -23,6 +26,7 @@ export const BROAD_SPORTS: Record<string, { label: string; emoji: string }> = {
 const SPORT_TO_BROAD: Record<string, string> = {
   SOCCER: "SOCCER",
   MLS: "SOCCER",
+  FUTBOL: "SOCCER",
   NBA: "BASKETBALL",
   NCAA: "BASKETBALL",
   EUROLEAGUE: "BASKETBALL",
@@ -33,6 +37,7 @@ const SPORT_TO_BROAD: Record<string, string> = {
   NFL: "FOOTBALL",
   MLB: "BASEBALL",
   MMA: "MMA",
+  "MUAY THAI": "MMA",
   BOXING: "BOXING",
   CRICKET: "CRICKET",
   TENNIS: "TENNIS",
@@ -50,7 +55,90 @@ export function toBroadSport(normalizedSport: string | null): string {
   return SPORT_TO_BROAD[normalizedSport] || "OTHER";
 }
 
-// ── League derivation per broad sport ──
+// ── Polymarket slug prefix → league (most reliable source) ──
+
+const SLUG_PREFIX_TO_LEAGUE: Record<string, string> = {
+  // Soccer
+  epl: "Premier League",
+  lal: "La Liga",
+  bun: "Bundesliga",
+  ser: "Serie A",
+  itc: "Serie A",
+  fl1: "Ligue 1",
+  mls: "MLS",
+  mex: "Liga MX",
+  ere: "Eredivisie",
+  ucl: "Champions League",
+  uel: "Europa League",
+  uecl: "Europa Conference",
+  lib: "Copa Libertadores",
+  sud: "Copa Sudamericana",
+  bra: "Brasileirão",
+  arg: "Argentina Liga",
+  kor: "K-League",
+  j1100: "J-League",
+  j1: "J-League",
+  j2: "J-League",
+  tur: "Süper Lig",
+  sau: "Saudi Pro League",
+  por: "Primeira Liga",
+  ros: "Russian PL",
+  sco: "Scottish PL",
+  bel: "Belgian Pro League",
+  aus: "A-League",
+  chi: "Chilean Liga",
+  col: "Colombian Liga",
+  per: "Peruvian Liga",
+  ven: "Venezuelan Liga",
+  ecu: "Ecuadorian Liga",
+  uru: "Uruguayan Liga",
+  par: "Paraguayan Liga",
+  bol: "Bolivian Liga",
+  // US sports
+  nba: "NBA",
+  nhl: "NHL",
+  mlb: "MLB",
+  nfl: "NFL",
+  cbb: "NCAAB",
+  cfb: "NCAA Football",
+  // Combat
+  ufc: "UFC",
+  pfl: "PFL",
+  bel2: "Bellator",
+  one: "ONE",
+  bkfc: "BKFC",
+  // Cricket
+  cricipl: "IPL",
+  cricpsl: "PSL",
+  cric: "International",
+  // Tennis
+  atp: "ATP",
+  wta: "WTA",
+  // Golf
+  pga: "PGA Tour",
+  // F1
+  f1: "Formula 1",
+  nascar: "NASCAR",
+};
+
+/**
+ * Derive league from polymarket_slug prefix.
+ * Returns null if no match.
+ */
+function leagueFromSlug(slug: string | null | undefined): string | null {
+  if (!slug) return null;
+  // Try longest prefix first (j1100 before j1)
+  const lower = slug.toLowerCase();
+  // Check multi-char prefixes first
+  for (const prefix of Object.keys(SLUG_PREFIX_TO_LEAGUE).sort((a, b) => b.length - a.length)) {
+    if (lower.startsWith(prefix + "-") || lower === prefix) {
+      return SLUG_PREFIX_TO_LEAGUE[prefix];
+    }
+  }
+  return null;
+}
+
+// ── Keyword-based league rules (fallback) ──
 
 interface LeagueRule {
   keywords: string[];
@@ -69,24 +157,27 @@ const SOCCER_LEAGUES: LeagueRule[] = [
   { keywords: ["CHAMPIONS LEAGUE", "UCL"], league: "Champions League" },
   { keywords: ["EUROPA LEAGUE", "UEL"], league: "Europa League" },
   { keywords: ["EUROPA CONFERENCE"], league: "Europa Conference" },
-  { keywords: ["COPA LIBERTADORES"], league: "Copa Libertadores" },
-  { keywords: ["COPA SUDAMERICANA"], league: "Copa Sudamericana" },
+  { keywords: ["COPA LIBERTADORES", "LIBERTADORES"], league: "Copa Libertadores" },
+  { keywords: ["COPA SUDAMERICANA", "SUDAMERICANA"], league: "Copa Sudamericana" },
   { keywords: ["CONCACAF"], league: "CONCACAF" },
   { keywords: ["A-LEAGUE"], league: "A-League" },
-  { keywords: ["K-LEAGUE"], league: "K-League" },
-  { keywords: ["J-LEAGUE"], league: "J-League" },
+  { keywords: ["K-LEAGUE", "K LEAGUE"], league: "K-League" },
+  { keywords: ["J-LEAGUE", "J LEAGUE", "J1 LEAGUE"], league: "J-League" },
   { keywords: ["PRIMEIRA LIGA"], league: "Primeira Liga" },
   { keywords: ["SUPER LIG", "SÜPER LIG"], league: "Süper Lig" },
   { keywords: ["SAUDI PRO LEAGUE"], league: "Saudi Pro League" },
-  { keywords: ["BRAZIL SÉRIE A"], league: "Brasileirão" },
+  { keywords: ["BRAZIL SÉRIE A", "BRASILEIRÃO"], league: "Brasileirão" },
   { keywords: ["WORLD CUP"], league: "World Cup" },
   { keywords: ["EURO 20", "UEFA EURO"], league: "UEFA Euro" },
   { keywords: ["COPA AMERICA"], league: "Copa América" },
+  { keywords: ["FIFA CLUB WORLD CUP", "CLUB WORLD"], league: "Club World Cup" },
+  { keywords: ["SCOTTISH"], league: "Scottish PL" },
+  { keywords: ["BELGIAN PRO"], league: "Belgian Pro League" },
 ];
 
 const BASKETBALL_LEAGUES: LeagueRule[] = [
   { keywords: ["NBA", "WNBA"], league: "NBA" },
-  { keywords: ["NCAA", "MARCH MADNESS", "COLLEGE BASKETBALL", "CWBB", "COLLEGE WOMEN"], league: "NCAA" },
+  { keywords: ["NCAA", "MARCH MADNESS", "COLLEGE BASKETBALL", "CWBB", "COLLEGE WOMEN"], league: "NCAAB" },
   { keywords: ["EUROLEAGUE", "EURO LEAGUE"], league: "Euroleague" },
   { keywords: ["JAPAN B LEAGUE", "B.LEAGUE"], league: "Japan B League" },
   { keywords: ["BSL", "TURKEY BASKETBALL"], league: "Turkey BSL" },
@@ -118,13 +209,12 @@ const MMA_LEAGUES: LeagueRule[] = [
   { keywords: ["UFC"], league: "UFC" },
   { keywords: ["PFL"], league: "PFL" },
   { keywords: ["BELLATOR"], league: "Bellator" },
-  { keywords: ["ONE CHAMPIONSHIP", "ONE FC"], league: "ONE" },
+  { keywords: ["ONE CHAMPIONSHIP", "ONE FC", "ONE FIGHT", "ONE SAMURAI"], league: "ONE" },
   { keywords: ["MUAY THAI"], league: "Muay Thai" },
   { keywords: ["BARE KNUCKLE", "BKFC"], league: "BKFC" },
 ];
 
 const BOXING_LEAGUES: LeagueRule[] = [
-  // Boxing doesn't have leagues per se, but we can group by org
   { keywords: ["WBC"], league: "WBC" },
   { keywords: ["WBA"], league: "WBA" },
   { keywords: ["IBF"], league: "IBF" },
@@ -132,7 +222,7 @@ const BOXING_LEAGUES: LeagueRule[] = [
 ];
 
 const CRICKET_LEAGUES: LeagueRule[] = [
-  { keywords: ["IPL"], league: "IPL" },
+  { keywords: ["IPL", "INDIAN PREMIER"], league: "IPL" },
   { keywords: ["PSL"], league: "PSL" },
   { keywords: ["T20 WORLD", "T20I"], league: "T20 International" },
   { keywords: ["TEST MATCH", "TEST CRICKET"], league: "Test Cricket" },
@@ -163,13 +253,19 @@ const LEAGUE_RULES: Record<string, LeagueRule[]> = {
 
 /**
  * Extract league from event metadata.
- * Priority: category → event_name → fallback "Other"
+ * Priority: polymarket_slug → category → event_name → fallback "Other"
  */
 export function extractLeague(
   broadSport: string,
   eventName: string,
   category?: string | null,
+  polymarketSlug?: string | null,
 ): string {
+  // 1. Best source: polymarket slug prefix
+  const fromSlug = leagueFromSlug(polymarketSlug);
+  if (fromSlug) return fromSlug;
+
+  // 2. Keyword matching against category + event_name
   const rules = LEAGUE_RULES[broadSport];
   if (!rules) return "Other";
 
@@ -186,11 +282,11 @@ export function extractLeague(
  */
 export function buildLeagueTabs(
   broadSport: string,
-  fights: Array<{ event_name: string; _category?: string | null }>,
+  fights: Array<{ event_name: string; _category?: string | null; _league?: string }>,
 ): { key: string; label: string; count: number }[] {
   const map = new Map<string, number>();
   for (const f of fights) {
-    const league = extractLeague(broadSport, f.event_name, f._category);
+    const league = f._league || extractLeague(broadSport, f.event_name, f._category);
     map.set(league, (map.get(league) || 0) + 1);
   }
 
@@ -215,10 +311,11 @@ export interface DateGroup<T> {
 
 /**
  * Group fights by date (Today, Tomorrow, Apr 5, etc.), sorted ascending.
- * Hides past events.
+ * Hides past events (with configurable grace period).
  */
 export function groupByDate<T extends Record<string, any>>(
   fights: T[],
+  graceHours = 4,
 ): DateGroup<T>[] {
   const now = new Date();
   const todayStr = now.toDateString();
@@ -229,7 +326,7 @@ export function groupByDate<T extends Record<string, any>>(
   for (const f of fights) {
     if (!f.event_date) continue;
     const d = new Date(f.event_date);
-    if (d.getTime() < now.getTime() - 4 * 3600000) continue; // skip past events (4hr grace)
+    if (d.getTime() < now.getTime() - graceHours * 3600000) continue;
 
     const dateStr = d.toDateString();
     let label: string;

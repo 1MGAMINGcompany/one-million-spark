@@ -7,14 +7,15 @@
 /** Sports allowed on operator apps — strict allowlist */
 const OPERATOR_ALLOWED_SPORTS = new Set([
   "NFL", "NBA", "NHL", "SOCCER", "MMA", "BOXING", "MLB", "TENNIS",
-  "GOLF", "NCAA", "CRICKET", "F1", "NASCAR", "MLS",
+  "GOLF", "NCAA", "CRICKET", "F1", "NASCAR", "MLS", "RUGBY",
 ]);
 
 /** Keyword → canonical sport mapping (order matters: first match wins) */
 const SPORT_KEYWORDS: [string[], string][] = [
   // Direct category aliases from sync pipeline
-  [["FUTBOL"], "SOCCER"],
-  [["BARE KNUCKLE"], "BOXING"],
+  [["FUTBOL", "FÚTBOL"], "SOCCER"],
+  [["MUAY THAI"], "MMA"],
+  [["BARE KNUCKLE", "BKFC"], "BOXING"],
   // Soccer / Futbol variants
   [["MLS"], "MLS"],
   [["SOCCER", "FUTBOL", "FÚTBOL", "PREMIER LEAGUE", "LA LIGA", "CHAMPIONS LEAGUE",
@@ -50,7 +51,14 @@ const SPORT_KEYWORDS: [string[], string][] = [
 export function normalizeOperatorSport(
   eventName: string,
   sportColumn?: string | null,
+  polymarketSlug?: string | null,
 ): string | null {
+  // 0. Polymarket slug prefix → sport (fast, reliable)
+  if (polymarketSlug) {
+    const sport = sportFromSlug(polymarketSlug);
+    if (sport && OPERATOR_ALLOWED_SPORTS.has(sport)) return sport;
+  }
+
   // 1. If the DB has a sport column, try to normalize it first
   if (sportColumn) {
     const upper = sportColumn.toUpperCase().trim();
@@ -75,6 +83,34 @@ export function normalizeOperatorSport(
   return null; // unknown / not allowed
 }
 
+/** Slug prefix → canonical sport */
+const SLUG_SPORT_MAP: Record<string, string> = {
+  epl: "SOCCER", lal: "SOCCER", bun: "SOCCER", ser: "SOCCER", itc: "SOCCER",
+  fl1: "SOCCER", mls: "SOCCER", mex: "SOCCER", ere: "SOCCER", ucl: "SOCCER",
+  uel: "SOCCER", uecl: "SOCCER", lib: "SOCCER", sud: "SOCCER", bra: "SOCCER",
+  arg: "SOCCER", kor: "SOCCER", j1100: "SOCCER", j1: "SOCCER", j2: "SOCCER",
+  tur: "SOCCER", sau: "SOCCER", por: "SOCCER", sco: "SOCCER", bel: "SOCCER",
+  aus: "SOCCER", chi: "SOCCER", col: "SOCCER", per: "SOCCER", ven: "SOCCER",
+  ecu: "SOCCER", uru: "SOCCER", bol: "SOCCER", par: "SOCCER", ros: "SOCCER",
+  nba: "NBA", nhl: "NHL", mlb: "MLB", nfl: "NFL",
+  cbb: "NCAA", cfb: "NCAA",
+  ufc: "MMA", pfl: "MMA", one: "MMA",
+  bkfc: "BOXING", floyd: "BOXING",
+  cricipl: "CRICKET", cricpsl: "CRICKET", cric: "CRICKET",
+  atp: "TENNIS", wta: "TENNIS",
+  pga: "GOLF", f1: "F1", nascar: "NASCAR",
+};
+
+function sportFromSlug(slug: string): string | null {
+  const lower = slug.toLowerCase();
+  for (const prefix of Object.keys(SLUG_SPORT_MAP).sort((a, b) => b.length - a.length)) {
+    if (lower.startsWith(prefix + "-") || lower === prefix) {
+      return SLUG_SPORT_MAP[prefix];
+    }
+  }
+  return null;
+}
+
 /** Check if a sport (already normalized) is on the operator allowlist */
 export function isAllowedOperatorSport(sport: string): boolean {
   return OPERATOR_ALLOWED_SPORTS.has(sport.toUpperCase());
@@ -89,7 +125,7 @@ export function getAllowedSportsList(): string[] {
 export const OPERATOR_SPORT_EMOJI: Record<string, string> = {
   NBA: "🏀", NHL: "🏒", MLB: "⚾", NFL: "🏈", MLS: "⚽", SOCCER: "⚽",
   MMA: "🥊", BOXING: "🥊", TENNIS: "🎾", CRICKET: "🏏", GOLF: "⛳",
-  F1: "🏎️", NASCAR: "🏁", NCAA: "🎓",
+  F1: "🏎️", NASCAR: "🏁", NCAA: "🎓", RUGBY: "🏉",
 };
 
 // ── Event shape validation ──
