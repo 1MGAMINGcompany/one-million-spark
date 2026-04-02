@@ -177,9 +177,9 @@ export default function SimplePredictionCard({
     return (
       <div className="rounded-2xl p-5" style={cardStyle}>
         <div className="flex items-center justify-between mb-2">
-          {leagueName && (
+          {sportLeagueLabel && (
             <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: theme.textMuted }}>
-              {leagueName}
+              {sportLeagueLabel}
             </div>
           )}
           <GraphButton />
