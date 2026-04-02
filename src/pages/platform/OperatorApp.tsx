@@ -84,13 +84,17 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     queryFn: async () => {
       const { data } = await (supabase as any)
         .from("prediction_fights")
-        .select("*")
+        .select("*, prediction_events!event_id(category)")
         .or(`operator_id.eq.${operator!.id},and(operator_id.is.null,visibility.in.(platform,all))`)
         .in("status", ["open", "live", "locked"])
         .not("event_date", "is", null)
         .order("event_date", { ascending: true })
         .limit(200);
-      return (data || []) as Fight[];
+      // Flatten category from joined prediction_events onto each fight
+      return ((data || []) as any[]).map((f: any) => ({
+        ...f,
+        _category: f.prediction_events?.category || null,
+      })) as Fight[];
     },
     enabled: !!operator?.id,
     refetchInterval: 15000,
