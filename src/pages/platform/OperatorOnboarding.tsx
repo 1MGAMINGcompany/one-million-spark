@@ -128,7 +128,7 @@ export default function OperatorOnboarding() {
           <label className="text-sm text-white/60">
             Choose your color theme
           </label>
-          <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 gap-4">
             {THEMES.map((t) => (
               <button
                 key={t.key}
@@ -136,13 +136,15 @@ export default function OperatorOnboarding() {
                 className={`p-4 rounded-xl border-2 transition-all ${
                   theme === t.key ? "border-blue-500" : "border-white/10"
                 }`}
-                style={{ backgroundColor: t.bg }}
+                style={{ backgroundColor: t.preview }}
               >
                 <div
                   className="w-8 h-8 rounded-full mx-auto mb-2"
                   style={{ backgroundColor: t.primary }}
                 />
-                <div className="text-xs text-white/60">{t.label}</div>
+                <div className={`text-xs ${t.isDark ? "text-white/60" : "text-gray-600"}`}>
+                  {t.label}
+                </div>
               </button>
             ))}
           </div>
