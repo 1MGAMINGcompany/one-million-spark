@@ -149,7 +149,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const sportTabGroups = useMemo<SportTabGroup[]>(() => {
     const sportCounts: Record<string, number> = {};
     allFights.forEach(f => {
-      const sport = normalizeOperatorSport(f.event_name, (f as any).sport ?? null) || "OTHER";
+      const sport = normalizeOperatorSport(f.event_name, (f as any).sport ?? (f as any)._category ?? null) || "OTHER";
       sportCounts[sport] = (sportCounts[sport] || 0) + 1;
     });
     const tabs = Object.entries(sportCounts)
