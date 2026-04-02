@@ -201,7 +201,8 @@ export default function OperatorOnboarding() {
             <span className="text-white/40">%</span>
           </div>
           <p className="text-xs text-white/30">
-            Platform takes 1.5% fee on every prediction (covers gas, support, backend &amp; money flow). Your fee is added on top.
+            1MG charges a low 1.5% platform fee (covers gas, backend, support &amp; money flow).
+            Your operator fee is added on top — you keep 100% of your fee revenue.
           </p>
         </div>
       ),
