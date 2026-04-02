@@ -1,0 +1,261 @@
+/**
+ * Universal sport → league mapping system.
+ * Provides broad sport categories and league derivation from event metadata.
+ */
+
+// ── Broad sport categories (Level 1) ──
+export const BROAD_SPORTS: Record<string, { label: string; emoji: string }> = {
+  SOCCER: { label: "Soccer", emoji: "⚽" },
+  BASKETBALL: { label: "Basketball", emoji: "🏀" },
+  HOCKEY: { label: "Hockey", emoji: "🏒" },
+  FOOTBALL: { label: "Football", emoji: "🏈" },
+  BASEBALL: { label: "Baseball", emoji: "⚾" },
+  MMA: { label: "MMA", emoji: "🥊" },
+  BOXING: { label: "Boxing", emoji: "🥊" },
+  CRICKET: { label: "Cricket", emoji: "🏏" },
+  TENNIS: { label: "Tennis", emoji: "🎾" },
+  GOLF: { label: "Golf", emoji: "⛳" },
+  F1: { label: "F1", emoji: "🏎️" },
+  RUGBY: { label: "Rugby", emoji: "🏉" },
+};
+
+// ── Normalized sport → broad sport mapping ──
+const SPORT_TO_BROAD: Record<string, string> = {
+  SOCCER: "SOCCER",
+  MLS: "SOCCER",
+  NBA: "BASKETBALL",
+  NCAA: "BASKETBALL",
+  EUROLEAGUE: "BASKETBALL",
+  NHL: "HOCKEY",
+  KHL: "HOCKEY",
+  SHL: "HOCKEY",
+  AHL: "HOCKEY",
+  NFL: "FOOTBALL",
+  MLB: "BASEBALL",
+  MMA: "MMA",
+  BOXING: "BOXING",
+  CRICKET: "CRICKET",
+  TENNIS: "TENNIS",
+  GOLF: "GOLF",
+  F1: "F1",
+  NASCAR: "F1",
+  RUGBY: "RUGBY",
+};
+
+/**
+ * Map a normalizedOperatorSport result to a broad sport category.
+ */
+export function toBroadSport(normalizedSport: string | null): string {
+  if (!normalizedSport) return "OTHER";
+  return SPORT_TO_BROAD[normalizedSport] || "OTHER";
+}
+
+// ── League derivation per broad sport ──
+
+interface LeagueRule {
+  keywords: string[];
+  league: string;
+}
+
+const SOCCER_LEAGUES: LeagueRule[] = [
+  { keywords: ["PREMIER LEAGUE", "EPL"], league: "Premier League" },
+  { keywords: ["LA LIGA"], league: "La Liga" },
+  { keywords: ["BUNDESLIGA"], league: "Bundesliga" },
+  { keywords: ["SERIE A"], league: "Serie A" },
+  { keywords: ["LIGUE 1"], league: "Ligue 1" },
+  { keywords: ["LIGA MX"], league: "Liga MX" },
+  { keywords: ["MLS"], league: "MLS" },
+  { keywords: ["EREDIVISIE"], league: "Eredivisie" },
+  { keywords: ["CHAMPIONS LEAGUE", "UCL"], league: "Champions League" },
+  { keywords: ["EUROPA LEAGUE", "UEL"], league: "Europa League" },
+  { keywords: ["EUROPA CONFERENCE"], league: "Europa Conference" },
+  { keywords: ["COPA LIBERTADORES"], league: "Copa Libertadores" },
+  { keywords: ["COPA SUDAMERICANA"], league: "Copa Sudamericana" },
+  { keywords: ["CONCACAF"], league: "CONCACAF" },
+  { keywords: ["A-LEAGUE"], league: "A-League" },
+  { keywords: ["K-LEAGUE"], league: "K-League" },
+  { keywords: ["J-LEAGUE"], league: "J-League" },
+  { keywords: ["PRIMEIRA LIGA"], league: "Primeira Liga" },
+  { keywords: ["SUPER LIG", "SÜPER LIG"], league: "Süper Lig" },
+  { keywords: ["SAUDI PRO LEAGUE"], league: "Saudi Pro League" },
+  { keywords: ["BRAZIL SÉRIE A"], league: "Brasileirão" },
+  { keywords: ["WORLD CUP"], league: "World Cup" },
+  { keywords: ["EURO 20", "UEFA EURO"], league: "UEFA Euro" },
+  { keywords: ["COPA AMERICA"], league: "Copa América" },
+];
+
+const BASKETBALL_LEAGUES: LeagueRule[] = [
+  { keywords: ["NBA", "WNBA"], league: "NBA" },
+  { keywords: ["NCAA", "MARCH MADNESS", "COLLEGE BASKETBALL", "CWBB", "COLLEGE WOMEN"], league: "NCAA" },
+  { keywords: ["EUROLEAGUE", "EURO LEAGUE"], league: "Euroleague" },
+  { keywords: ["JAPAN B LEAGUE", "B.LEAGUE"], league: "Japan B League" },
+  { keywords: ["BSL", "TURKEY BASKETBALL"], league: "Turkey BSL" },
+  { keywords: ["LIGA ENDESA"], league: "Liga Endesa" },
+  { keywords: ["CBA"], league: "CBA" },
+];
+
+const HOCKEY_LEAGUES: LeagueRule[] = [
+  { keywords: ["NHL", "STANLEY CUP"], league: "NHL" },
+  { keywords: ["KHL"], league: "KHL" },
+  { keywords: ["SHL", "SWEDISH HOCKEY"], league: "SHL" },
+  { keywords: ["AHL"], league: "AHL" },
+];
+
+const FOOTBALL_LEAGUES: LeagueRule[] = [
+  { keywords: ["NFL", "SUPER BOWL"], league: "NFL" },
+  { keywords: ["NCAA", "COLLEGE FOOTBALL"], league: "NCAA Football" },
+  { keywords: ["XFL"], league: "XFL" },
+  { keywords: ["CFL"], league: "CFL" },
+];
+
+const BASEBALL_LEAGUES: LeagueRule[] = [
+  { keywords: ["MLB", "WORLD SERIES"], league: "MLB" },
+  { keywords: ["NPB", "JAPAN BASEBALL"], league: "NPB" },
+  { keywords: ["KBO"], league: "KBO" },
+];
+
+const MMA_LEAGUES: LeagueRule[] = [
+  { keywords: ["UFC"], league: "UFC" },
+  { keywords: ["PFL"], league: "PFL" },
+  { keywords: ["BELLATOR"], league: "Bellator" },
+  { keywords: ["ONE CHAMPIONSHIP", "ONE FC"], league: "ONE" },
+  { keywords: ["MUAY THAI"], league: "Muay Thai" },
+  { keywords: ["BARE KNUCKLE", "BKFC"], league: "BKFC" },
+];
+
+const BOXING_LEAGUES: LeagueRule[] = [
+  // Boxing doesn't have leagues per se, but we can group by org
+  { keywords: ["WBC"], league: "WBC" },
+  { keywords: ["WBA"], league: "WBA" },
+  { keywords: ["IBF"], league: "IBF" },
+  { keywords: ["WBO"], league: "WBO" },
+];
+
+const CRICKET_LEAGUES: LeagueRule[] = [
+  { keywords: ["IPL"], league: "IPL" },
+  { keywords: ["PSL"], league: "PSL" },
+  { keywords: ["T20 WORLD", "T20I"], league: "T20 International" },
+  { keywords: ["TEST MATCH", "TEST CRICKET"], league: "Test Cricket" },
+  { keywords: ["BBL", "BIG BASH"], league: "BBL" },
+  { keywords: ["ODI", "ONE DAY"], league: "ODI" },
+];
+
+const TENNIS_LEAGUES: LeagueRule[] = [
+  { keywords: ["WIMBLEDON"], league: "Wimbledon" },
+  { keywords: ["US OPEN"], league: "US Open" },
+  { keywords: ["FRENCH OPEN", "ROLAND GARROS"], league: "French Open" },
+  { keywords: ["AUSTRALIAN OPEN"], league: "Australian Open" },
+  { keywords: ["ATP"], league: "ATP" },
+  { keywords: ["WTA"], league: "WTA" },
+];
+
+const LEAGUE_RULES: Record<string, LeagueRule[]> = {
+  SOCCER: SOCCER_LEAGUES,
+  BASKETBALL: BASKETBALL_LEAGUES,
+  HOCKEY: HOCKEY_LEAGUES,
+  FOOTBALL: FOOTBALL_LEAGUES,
+  BASEBALL: BASEBALL_LEAGUES,
+  MMA: MMA_LEAGUES,
+  BOXING: BOXING_LEAGUES,
+  CRICKET: CRICKET_LEAGUES,
+  TENNIS: TENNIS_LEAGUES,
+};
+
+/**
+ * Extract league from event metadata.
+ * Priority: category → event_name → fallback "Other"
+ */
+export function extractLeague(
+  broadSport: string,
+  eventName: string,
+  category?: string | null,
+): string {
+  const rules = LEAGUE_RULES[broadSport];
+  if (!rules) return "Other";
+
+  const search = `${category || ""} ${eventName}`.toUpperCase();
+  for (const rule of rules) {
+    if (rule.keywords.some(k => search.includes(k))) return rule.league;
+  }
+  return "Other";
+}
+
+/**
+ * Build league tabs for a given broad sport from fight data.
+ * Returns leagues sorted by count (desc), with "All {Sport}" prepended.
+ */
+export function buildLeagueTabs(
+  broadSport: string,
+  fights: Array<{ event_name: string; _category?: string | null }>,
+): { key: string; label: string; count: number }[] {
+  const map = new Map<string, number>();
+  for (const f of fights) {
+    const league = extractLeague(broadSport, f.event_name, f._category);
+    map.set(league, (map.get(league) || 0) + 1);
+  }
+
+  const sorted = Array.from(map.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([league, count]) => ({ key: league, label: league, count }));
+
+  const sportLabel = BROAD_SPORTS[broadSport]?.label || broadSport;
+  return [
+    { key: "ALL_LEAGUES", label: `All ${sportLabel}`, count: fights.length },
+    ...sorted,
+  ];
+}
+
+// ── Date grouping ──
+
+export interface DateGroup<T> {
+  label: string;
+  sortKey: string;
+  fights: T[];
+}
+
+/**
+ * Group fights by date (Today, Tomorrow, Apr 5, etc.), sorted ascending.
+ * Hides past events.
+ */
+export function groupByDate<T extends { event_date?: string | null }>(
+  fights: T[],
+): DateGroup<T>[] {
+  const now = new Date();
+  const todayStr = now.toDateString();
+  const tomorrowStr = new Date(now.getTime() + 86400000).toDateString();
+
+  const map = new Map<string, { label: string; sortKey: string; fights: T[] }>();
+
+  for (const f of fights) {
+    if (!f.event_date) continue;
+    const d = new Date(f.event_date);
+    if (d.getTime() < now.getTime() - 4 * 3600000) continue; // skip past events (4hr grace)
+
+    const dateStr = d.toDateString();
+    let label: string;
+    if (dateStr === todayStr) {
+      label = "Today";
+    } else if (dateStr === tomorrowStr) {
+      label = "Tomorrow";
+    } else {
+      label = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    }
+
+    const sortKey = d.toISOString().slice(0, 10);
+    if (!map.has(sortKey)) {
+      map.set(sortKey, { label, sortKey, fights: [] });
+    }
+    map.get(sortKey)!.fights.push(f);
+  }
+
+  return Array.from(map.values())
+    .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+    .map(g => {
+      g.fights.sort((a, b) => {
+        const da = new Date(a.event_date!).getTime();
+        const db = new Date(b.event_date!).getTime();
+        return da - db;
+      });
+      return g;
+    });
+}
