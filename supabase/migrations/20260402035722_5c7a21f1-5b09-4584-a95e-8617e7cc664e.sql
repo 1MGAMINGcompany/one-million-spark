@@ -1,0 +1,1 @@
+UPDATE operators SET theme = 'blue' WHERE subdomain = 'demo';
