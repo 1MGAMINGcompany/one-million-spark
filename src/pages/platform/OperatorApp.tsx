@@ -22,6 +22,7 @@ import SocialShareModal, { type ShareVariant } from "@/components/SocialShareMod
 import { WalletGateModal } from "@/components/WalletGateModal";
 import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
 import ScrollableSportTabs, { type SportTabGroup } from "@/components/admin/ScrollableSportTabs";
+import SportPickerModal from "@/components/operator/SportPickerModal";
 import type { Fight } from "@/components/predictions/FightCard";
 import type { TradeResult } from "@/components/predictions/tradeResultTypes";
 import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
