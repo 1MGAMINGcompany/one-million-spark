@@ -75,6 +75,9 @@ export default function OperatorOnboarding() {
             Choose your subdomain
           </label>
           <div className="flex items-center gap-2">
+            <span className="text-white/40 text-sm whitespace-nowrap">
+              1mg.live/
+            </span>
             <Input
               value={subdomain}
               onChange={(e) =>
@@ -85,9 +88,6 @@ export default function OperatorOnboarding() {
               placeholder="yourname"
               className="bg-white/5 border-white/10 text-white h-12 placeholder:text-white/20"
             />
-            <span className="text-white/40 text-sm whitespace-nowrap">
-              1mg.live/
-            </span>
           </div>
           {subdomain && (
             <p className="text-sm text-blue-400">1mg.live/{subdomain}</p>
