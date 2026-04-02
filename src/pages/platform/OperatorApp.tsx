@@ -124,7 +124,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       // 3. Sport must be on the allowlist
       const sport = normalizeOperatorSport(
         f.event_name,
-        (f as any).sport ?? null,
+        (f as any).sport ?? (f as any)._category ?? null,
       );
       if (!sport) return false;
 
