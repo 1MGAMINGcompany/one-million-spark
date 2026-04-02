@@ -315,7 +315,7 @@ const Navbar = () => {
                       onClick={() => { setIsOpen(false); handleNavClick(); }}
                       className={`group flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
                         isActive
-                          ? "bg-primary text-primary-foreground shadow-gold"
+                          ? "bg-primary text-primary-foreground shadow-md"
                           : "text-muted-foreground hover:text-foreground hover:bg-secondary border border-transparent hover:border-primary/30"
                       }`}
                     >

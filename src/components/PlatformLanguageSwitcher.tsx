@@ -7,6 +7,12 @@ const PLATFORM_LANGS = [
   { code: "es", label: "ES" },
   { code: "pt", label: "PT" },
   { code: "fr", label: "FR" },
+  { code: "hi", label: "HI" },
+  { code: "de", label: "DE" },
+  { code: "ar", label: "AR" },
+  { code: "it", label: "IT" },
+  { code: "ja", label: "JA" },
+  { code: "zh", label: "ZH" },
 ] as const;
 
 export default function PlatformLanguageSwitcher() {
