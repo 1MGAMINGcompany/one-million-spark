@@ -482,7 +482,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           <ScrollableSportTabs
             groups={sportTabGroups}
             activeTab={sportFilter}
-            onTabChange={setSportFilter}
+            onTabChange={(key) => { setSportFilter(key); setLeagueFilter(null); }}
           />
         )}
         <div className="flex items-center gap-2 mt-3">
