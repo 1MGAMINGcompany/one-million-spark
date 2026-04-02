@@ -86,7 +86,7 @@ export default function OperatorOnboarding() {
               className="bg-white/5 border-white/10 text-white h-12 placeholder:text-white/20"
             />
             <span className="text-white/40 text-sm whitespace-nowrap">
-              .1mg.live
+              1mg.live/
             </span>
           </div>
           {subdomain && (
