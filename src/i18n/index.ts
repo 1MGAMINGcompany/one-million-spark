@@ -1,6 +1,7 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
+import { getGeoLanguage } from '@/lib/geoLanguage';
 
 import en from './locales/en.json';
 import es from './locales/es.json';
@@ -28,6 +29,15 @@ export const languages = [
 
 export type LanguageCode = typeof languages[number]['code'];
 
+// Apply geo-based language on first visit (before user has chosen)
+const storedLang = typeof window !== 'undefined' ? localStorage.getItem('1m-gaming-language') : null;
+if (!storedLang && typeof window !== 'undefined') {
+  const geoLang = getGeoLanguage();
+  if (geoLang) {
+    localStorage.setItem('1m-gaming-language', geoLang);
+  }
+}
+
 i18n
   .use(LanguageDetector)
   .use(initReactI18next)
@@ -49,7 +59,7 @@ i18n
       escapeValue: false,
     },
     detection: {
-      order: ['navigator', 'localStorage', 'htmlTag'],
+      order: ['localStorage', 'navigator', 'htmlTag'],
       caches: ['localStorage'],
       lookupLocalStorage: '1m-gaming-language',
     },

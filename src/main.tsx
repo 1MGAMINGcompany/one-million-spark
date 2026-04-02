@@ -20,6 +20,11 @@ console.log(`[1MGAMING] App started | Build: ${BUILD_VERSION} | ${BUILD_TIMESTAM
 import { dbg } from "./lib/debugLog";
 
 if (typeof window !== "undefined") {
+  // Safety redirect: demo.1mg.live → 1mg.live/demo
+  if (window.location.hostname === "demo.1mg.live") {
+    window.location.replace("https://1mg.live/demo");
+  }
+
   window.addEventListener("error", (e) => {
     dbg("window.error", {
       message: e.message,
