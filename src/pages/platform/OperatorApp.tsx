@@ -485,6 +485,42 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
             onTabChange={(key) => { setSportFilter(key); setLeagueFilter(null); }}
           />
         )}
+
+        {/* League sub-tabs for Soccer */}
+        {sportFilter === "SOCCER" && (() => {
+          const soccerFights = allFights.filter(f =>
+            normalizeOperatorSport(f.event_name, (f as any).sport ?? (f as any)._category ?? null) === "SOCCER"
+          );
+          const leagueGroups = groupByLeague(soccerFights as any);
+          if (leagueGroups.length <= 1) return null;
+          return (
+            <div className="flex gap-2 overflow-x-auto mt-2 pb-1 scrollbar-hide">
+              <button
+                onClick={() => setLeagueFilter(null)}
+                className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap"
+                style={{
+                  backgroundColor: !leagueFilter ? theme.primary : theme.surfaceBg,
+                  color: !leagueFilter ? theme.primaryForeground : theme.textSecondary,
+                }}
+              >
+                All Leagues ({soccerFights.length})
+              </button>
+              {leagueGroups.map(lg => (
+                <button
+                  key={lg.league}
+                  onClick={() => setLeagueFilter(lg.league)}
+                  className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap"
+                  style={{
+                    backgroundColor: leagueFilter === lg.league ? theme.primary : theme.surfaceBg,
+                    color: leagueFilter === lg.league ? theme.primaryForeground : theme.textSecondary,
+                  }}
+                >
+                  {lg.league} ({lg.fights.length})
+                </button>
+              ))}
+            </div>
+          );
+        })()}
         <div className="flex items-center gap-2 mt-3">
           <div className="relative flex-1">
             <Search
