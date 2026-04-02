@@ -13,8 +13,6 @@ interface MarketGraphModalProps {
 }
 
 export default function MarketGraphModal({ fight, open, onClose, theme }: MarketGraphModalProps) {
-  if (!open) return null;
-
   const nameA = resolveOutcomeName(fight.fighter_a_name, "a", fight);
   const nameB = resolveOutcomeName(fight.fighter_b_name, "b", fight);
 
@@ -22,7 +20,6 @@ export default function MarketGraphModal({ fight, open, onClose, theme }: Market
   const priceB = fight.price_b ?? 0.5;
 
   // Generate simulated historical data based on current prices
-  // This gives users a visual sense of where odds sit even without time-series backend
   const chartData = useMemo(() => {
     const points: { time: string; a: number; b: number }[] = [];
     const now = Date.now();
