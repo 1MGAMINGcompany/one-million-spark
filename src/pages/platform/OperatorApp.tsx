@@ -130,8 +130,20 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const allFights = useMemo(() => {
     return (operatorFights || []).filter(f => {
       if (!isValidOperatorEvent(f as any)) return false;
-      if (!isEventDateRelevant((f as any).event_date)) return false;
-      const sport = normalizeOperatorSport(f.event_name, (f as any).sport ?? (f as any)._category ?? null);
+      // Operator-created events get 24h grace; platform events get 4h
+      const isOperatorEvent = (f as any).operator_id === operator?.id && (f as any).operator_id != null;
+      const graceMs = isOperatorEvent ? 24 * 3600000 : 4 * 3600000;
+      const eventDate = (f as any).event_date;
+      if (!eventDate) return false;
+      const d = new Date(eventDate);
+      if (isNaN(d.getTime())) return false;
+      if (d.getTime() < Date.now() - graceMs) return false;
+
+      const sport = normalizeOperatorSport(
+        f.event_name,
+        (f as any).sport ?? (f as any)._category ?? null,
+        (f as any).polymarket_slug ?? null,
+      );
       if (!sport) return false;
       if (disabledSports.length > 0 && disabledSports.some((ds: string) => ds.toUpperCase() === sport)) return false;
       if (allowedSports.length > 0 && (f as any).operator_id !== operator?.id) {
