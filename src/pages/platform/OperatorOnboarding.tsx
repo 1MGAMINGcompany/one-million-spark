@@ -4,12 +4,15 @@ import { Input } from "@/components/ui/input";
 import { usePrivy } from "@privy-io/react-auth";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, ArrowLeft, Check, ExternalLink, Rocket } from "lucide-react";
+import { THEME_OPTIONS } from "@/lib/operatorThemes";
 
-const THEMES = [
-  { key: "blue", label: "Blue + White", primary: "#3b82f6", bg: "#0a0f1a" },
-  { key: "gold", label: "Gold + Black", primary: "#d4a017", bg: "#0a0a0a" },
-  { key: "red", label: "Red + White", primary: "#ef4444", bg: "#0a0a0f" },
-];
+const THEMES = THEME_OPTIONS.map(t => ({
+  key: t.key,
+  label: t.label,
+  primary: t.primary,
+  preview: t.isDark ? t.bg : t.bg,
+  isDark: t.isDark,
+}));
 
 const SPORTS_OPTIONS = [
   "NFL", "NBA", "NHL", "Soccer", "MMA", "Boxing",
@@ -125,7 +128,7 @@ export default function OperatorOnboarding() {
           <label className="text-sm text-white/60">
             Choose your color theme
           </label>
-          <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 gap-4">
             {THEMES.map((t) => (
               <button
                 key={t.key}
@@ -133,13 +136,15 @@ export default function OperatorOnboarding() {
                 className={`p-4 rounded-xl border-2 transition-all ${
                   theme === t.key ? "border-blue-500" : "border-white/10"
                 }`}
-                style={{ backgroundColor: t.bg }}
+                style={{ backgroundColor: t.preview }}
               >
                 <div
                   className="w-8 h-8 rounded-full mx-auto mb-2"
                   style={{ backgroundColor: t.primary }}
                 />
-                <div className="text-xs text-white/60">{t.label}</div>
+                <div className={`text-xs ${t.isDark ? "text-white/60" : "text-gray-600"}`}>
+                  {t.label}
+                </div>
               </button>
             ))}
           </div>
@@ -196,7 +201,8 @@ export default function OperatorOnboarding() {
             <span className="text-white/40">%</span>
           </div>
           <p className="text-xs text-white/30">
-            Platform takes 1.5% fee on every prediction (covers gas, support, backend &amp; money flow). Your fee is added on top.
+            1MG charges a low 1.5% platform fee (covers gas, backend, support &amp; money flow).
+            Your operator fee is added on top — you keep 100% of your fee revenue.
           </p>
         </div>
       ),

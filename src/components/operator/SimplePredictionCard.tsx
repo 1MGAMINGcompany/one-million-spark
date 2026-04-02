@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { BarChart3 } from "lucide-react";
 import { getTeamLogo } from "@/lib/teamLogos";
 import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
 import { formatEventDateTime } from "@/lib/formatEventLocalDateTime";
 import type { Fight } from "@/components/predictions/FightCard";
+import type { OperatorTheme } from "@/lib/operatorThemes";
 
 interface SimplePredictionCardProps {
   fight: Fight;
@@ -10,8 +12,9 @@ interface SimplePredictionCardProps {
   userEntry?: { fighter_pick: string; amount_usd: number | null; claimed: boolean } | null;
   onClaim?: (fightId: string) => void;
   claiming?: boolean;
-  themeColor?: string;
+  theme: OperatorTheme;
   onShareWin?: (fight: Fight) => void;
+  onGraph?: (fight: Fight) => void;
 }
 
 function calcPayout(price: number | null, amount: number): number {
@@ -38,8 +41,9 @@ export default function SimplePredictionCard({
   userEntry,
   onClaim,
   claiming,
-  themeColor = "#3b82f6",
+  theme,
   onShareWin,
+  onGraph,
 }: SimplePredictionCardProps) {
   const nameA = resolveOutcomeName(fight.fighter_a_name, "a", fight);
   const nameB = resolveOutcomeName(fight.fighter_b_name, "b", fight);
@@ -55,7 +59,6 @@ export default function SimplePredictionCard({
   const logoB = logoDataB?.url || null;
 
   const hasDrawOption = !!(fight as any).draw_allowed;
-
   const isOpen = fight.status === "open";
   const isSettled = ["settled", "confirmed", "result_selected"].includes(fight.status);
   const userPicked = userEntry?.fighter_pick;
@@ -66,43 +69,70 @@ export default function SimplePredictionCard({
     ? formatEventDateTime((fight as any).event_date)
     : null;
 
-  // League badge
   const leagueName = fight.event_name?.split(" — ")[0] || fight.event_name;
+
+  const cardStyle = {
+    backgroundColor: theme.cardBg,
+    border: `1px solid ${theme.cardBorder}`,
+  };
+
+  // Graph button component
+  const GraphButton = () => (
+    onGraph ? (
+      <button
+        onClick={(e) => { e.stopPropagation(); onGraph(fight); }}
+        className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-all hover:opacity-80"
+        style={{
+          backgroundColor: theme.surfaceBg,
+          border: `1px solid ${theme.cardBorder}`,
+          color: theme.textSecondary,
+        }}
+      >
+        <BarChart3 className="w-3 h-3" />
+        Graph
+      </button>
+    ) : null
+  );
 
   // Settled state
   if (isSettled && fight.winner) {
     const winnerName = fight.winner === "fighter_a" ? nameA : nameB;
     return (
-      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+      <div className="rounded-2xl p-5" style={cardStyle}>
         {leagueName && (
-          <div className="text-[10px] font-bold text-white/25 uppercase tracking-wider mb-2">{leagueName}</div>
+          <div className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: theme.textMuted }}>
+            {leagueName}
+          </div>
         )}
         <div className="text-center mb-3">
-          <span className="text-xs font-bold text-green-400 uppercase tracking-wider">✅ Result</span>
+          <span className="text-xs font-bold text-green-500 uppercase tracking-wider">✅ Result</span>
         </div>
-        <p className="text-center text-lg font-bold text-white mb-1">{winnerName} Wins!</p>
+        <p className="text-center text-lg font-bold mb-1" style={{ color: theme.textPrimary }}>
+          {winnerName} Wins!
+        </p>
         {userPicked && (
           <div className="text-center mt-3">
             {userWon ? (
               <>
-                <p className="text-green-400 font-bold text-sm">🎉 You Won!</p>
+                <p className="text-green-500 font-bold text-sm">🎉 You Won!</p>
                 {!userEntry?.claimed && onClaim && (
                   <button
                     onClick={() => onClaim(fight.id)}
                     disabled={claiming}
-                    className="mt-2 px-6 py-2 rounded-xl font-bold text-sm text-black transition-all"
-                    style={{ backgroundColor: themeColor }}
+                    className="mt-2 px-6 py-2 rounded-xl font-bold text-sm transition-all"
+                    style={{ backgroundColor: theme.primary, color: theme.primaryForeground }}
                   >
                     {claiming ? "Claiming..." : "Collect Winnings"}
                   </button>
                 )}
                 {userEntry?.claimed && (
                   <div className="space-y-2 mt-2">
-                    <p className="text-xs text-white/40">Winnings collected ✓</p>
+                    <p className="text-xs" style={{ color: theme.textMuted }}>Winnings collected ✓</p>
                     {onShareWin && !winShared && (
                       <button
                         onClick={() => { onShareWin(fight); setWinShared(true); }}
-                        className="px-5 py-2 rounded-xl font-bold text-sm text-white transition-all border border-white/20 hover:bg-white/10"
+                        className="px-5 py-2 rounded-xl font-bold text-sm transition-all hover:opacity-80"
+                        style={{ border: `1px solid ${theme.cardBorder}`, color: theme.textPrimary }}
                       >
                         🏆 SHARE YOUR WIN
                       </button>
@@ -123,29 +153,36 @@ export default function SimplePredictionCard({
   if (userPicked) {
     const pickedName = userPicked === "fighter_a" ? nameA : nameB;
     return (
-      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-        {leagueName && (
-          <div className="text-[10px] font-bold text-white/25 uppercase tracking-wider mb-2">{leagueName}</div>
-        )}
+      <div className="rounded-2xl p-5" style={cardStyle}>
+        <div className="flex items-center justify-between mb-2">
+          {leagueName && (
+            <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: theme.textMuted }}>
+              {leagueName}
+            </div>
+          )}
+          <GraphButton />
+        </div>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             {logoA && <img src={logoA} className="w-6 h-6 object-contain" alt="" />}
-            <span className="text-base font-bold text-white">{nameA}</span>
+            <span className="text-base font-bold" style={{ color: theme.textPrimary }}>{nameA}</span>
           </div>
-          <span className="text-xs text-white/30 font-bold">VS</span>
+          <span className="text-xs font-bold" style={{ color: theme.textMuted }}>VS</span>
           <div className="flex items-center gap-2">
-            <span className="text-base font-bold text-white">{nameB}</span>
+            <span className="text-base font-bold" style={{ color: theme.textPrimary }}>{nameB}</span>
             {logoB && <img src={logoB} className="w-6 h-6 object-contain" alt="" />}
           </div>
         </div>
         {eventDateStr && (
-          <p className="text-xs text-white/30 text-center mb-2">{eventDateStr}</p>
+          <p className="text-xs text-center mb-2" style={{ color: theme.textMuted }}>{eventDateStr}</p>
         )}
-        <div className="text-center rounded-xl bg-white/5 py-3 px-4">
-          <p className="text-sm text-white/60">Your Pick</p>
-          <p className="text-lg font-bold text-white">🎯 {pickedName}</p>
+        <div className="text-center rounded-xl py-3 px-4" style={{ backgroundColor: theme.surfaceBg }}>
+          <p className="text-sm" style={{ color: theme.textSecondary }}>Your Pick</p>
+          <p className="text-lg font-bold" style={{ color: theme.textPrimary }}>🎯 {pickedName}</p>
           {userEntry?.amount_usd && (
-            <p className="text-xs text-white/40 mt-1">${userEntry.amount_usd.toFixed(2)} placed</p>
+            <p className="text-xs mt-1" style={{ color: theme.textMuted }}>
+              ${userEntry.amount_usd.toFixed(2)} placed
+            </p>
           )}
         </div>
       </div>
@@ -156,28 +193,33 @@ export default function SimplePredictionCard({
   const gridCols = hasDrawOption ? "grid-cols-3" : "grid-cols-2";
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 space-y-4">
-      {/* League badge */}
-      {leagueName && (
-        <div className="text-[10px] font-bold text-white/25 uppercase tracking-wider">{leagueName}</div>
-      )}
+    <div className="rounded-2xl p-5 space-y-3" style={cardStyle}>
+      {/* League badge + Graph */}
+      <div className="flex items-center justify-between">
+        {leagueName && (
+          <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: theme.textMuted }}>
+            {leagueName}
+          </div>
+        )}
+        <GraphButton />
+      </div>
 
       {/* Team names */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 flex-1">
           {logoA && <img src={logoA} className="w-8 h-8 object-contain" alt="" />}
-          <span className="text-lg font-bold text-white leading-tight">{nameA}</span>
+          <span className="text-lg font-bold leading-tight" style={{ color: theme.textPrimary }}>{nameA}</span>
         </div>
-        <span className="text-sm text-white/20 font-bold mx-3">VS</span>
+        <span className="text-sm font-bold mx-3" style={{ color: theme.textMuted }}>VS</span>
         <div className="flex items-center gap-3 flex-1 justify-end text-right">
-          <span className="text-lg font-bold text-white leading-tight">{nameB}</span>
+          <span className="text-lg font-bold leading-tight" style={{ color: theme.textPrimary }}>{nameB}</span>
           {logoB && <img src={logoB} className="w-8 h-8 object-contain" alt="" />}
         </div>
       </div>
 
       {/* Event date */}
       {eventDateStr && (
-        <p className="text-xs text-white/30 text-center">{eventDateStr}</p>
+        <p className="text-xs text-center" style={{ color: theme.textMuted }}>{eventDateStr}</p>
       )}
 
       {/* Pick buttons */}
@@ -185,34 +227,46 @@ export default function SimplePredictionCard({
         <button
           onClick={() => isOpen && onPredict(fight, "fighter_a")}
           disabled={!isOpen}
-          className="rounded-xl py-3 px-2 text-center transition-all border border-white/10 hover:border-white/30 bg-white/5 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="rounded-xl py-3 px-2 text-center transition-all hover:shadow-md disabled:opacity-40 disabled:cursor-not-allowed"
+          style={{
+            backgroundColor: theme.surfaceBg,
+            border: `1px solid ${theme.cardBorder}`,
+          }}
         >
-          <span className="block text-sm font-bold text-white">{nameA}</span>
-          <span className="block text-xs mt-1" style={{ color: themeColor }}>
+          <span className="block text-sm font-bold" style={{ color: theme.textPrimary }}>{nameA}</span>
+          <span className="block text-xs mt-1" style={{ color: theme.primary }}>
             Bet $10 → Win ${payoutA.toFixed(2)}
           </span>
-          <span className="block text-[10px] text-white/25 mt-0.5">({multiplierA}x)</span>
+          <span className="block text-[10px] mt-0.5" style={{ color: theme.textMuted }}>({multiplierA}x)</span>
         </button>
         {hasDrawOption && (
           <button
             onClick={() => isOpen && onPredict(fight, "draw")}
             disabled={!isOpen}
-            className="rounded-xl py-3 px-2 text-center transition-all border border-white/10 hover:border-white/30 bg-white/5 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="rounded-xl py-3 px-2 text-center transition-all hover:shadow-md disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{
+              backgroundColor: theme.surfaceBg,
+              border: `1px solid ${theme.cardBorder}`,
+            }}
           >
-            <span className="block text-sm font-bold text-white">Draw</span>
-            <span className="block text-xs mt-1 text-white/40">Available</span>
+            <span className="block text-sm font-bold" style={{ color: theme.textPrimary }}>Draw</span>
+            <span className="block text-xs mt-1" style={{ color: theme.textMuted }}>Available</span>
           </button>
         )}
         <button
           onClick={() => isOpen && onPredict(fight, "fighter_b")}
           disabled={!isOpen}
-          className="rounded-xl py-3 px-2 text-center transition-all border border-white/10 hover:border-white/30 bg-white/5 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="rounded-xl py-3 px-2 text-center transition-all hover:shadow-md disabled:opacity-40 disabled:cursor-not-allowed"
+          style={{
+            backgroundColor: theme.surfaceBg,
+            border: `1px solid ${theme.cardBorder}`,
+          }}
         >
-          <span className="block text-sm font-bold text-white">{nameB}</span>
-          <span className="block text-xs mt-1" style={{ color: themeColor }}>
+          <span className="block text-sm font-bold" style={{ color: theme.textPrimary }}>{nameB}</span>
+          <span className="block text-xs mt-1" style={{ color: theme.primary }}>
             Bet $10 → Win ${payoutB.toFixed(2)}
           </span>
-          <span className="block text-[10px] text-white/25 mt-0.5">({multiplierB}x)</span>
+          <span className="block text-[10px] mt-0.5" style={{ color: theme.textMuted }}>({multiplierB}x)</span>
         </button>
       </div>
 
@@ -221,7 +275,7 @@ export default function SimplePredictionCard({
         const total = (fight.pool_a_usd ?? 0) + (fight.pool_b_usd ?? 0);
         if (total <= 0) return null;
         return (
-          <p className="text-center text-[11px] text-white/25">
+          <p className="text-center text-[11px]" style={{ color: theme.textMuted }}>
             Total Pool: ${total >= 1000 ? `${(total / 1000).toFixed(0)}K` : total.toFixed(0)}
           </p>
         );
