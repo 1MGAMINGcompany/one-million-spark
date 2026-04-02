@@ -483,7 +483,6 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                 backgroundColor: theme.inputBg,
                 border: `1px solid ${theme.inputBorder}`,
                 color: theme.textPrimary,
-                focusRingColor: theme.primary,
               }}
             />
           </div>
