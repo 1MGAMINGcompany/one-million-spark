@@ -201,10 +201,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     }
     // Apply league filter for soccer
     if (leagueFilter && sportFilter === "SOCCER") {
-      fights = fights.filter((f: any) => {
-        const { extractSoccerLeague } = require("@/lib/soccerLeagues") as typeof import("@/lib/soccerLeagues");
-        return extractSoccerLeague(f.event_name, f._category) === leagueFilter;
-      });
+      fights = fights.filter((f: any) => extractSoccerLeague(f.event_name, f._category) === leagueFilter);
     }
     return fights;
   }, [allFights, sportFilter, dateFilter, searchQuery, activeTab, userEntries, leagueFilter]);
