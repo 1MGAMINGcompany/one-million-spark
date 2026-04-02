@@ -32,6 +32,7 @@ import {
   OPERATOR_SPORT_EMOJI,
 } from "@/lib/operatorSportRules";
 import { getOperatorTheme } from "@/lib/operatorThemes";
+import { groupByLeague } from "@/lib/soccerLeagues";
 
 interface OperatorAppProps {
   subdomain: string;
