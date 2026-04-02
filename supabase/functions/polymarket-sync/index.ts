@@ -1093,6 +1093,31 @@ async function importSingleEvent(
     if (outcomes.length > 3) continue;
     if (outcomes.length < 2 || tokenIds.length < 2) continue;
 
+    // ── Reject Yes/No binary markets — extract real names from event title ──
+    const GENERIC_LABELS = new Set(["yes", "no", "over", "under"]);
+    const outcomeALower = (outcomes[0] || "").toLowerCase().trim();
+    const outcomeBLower = (outcomes[1] || "").toLowerCase().trim();
+    const hasGenericOutcomes = GENERIC_LABELS.has(outcomeALower) || GENERIC_LABELS.has(outcomeBLower);
+
+    if (hasGenericOutcomes) {
+      // Try to extract real team names from event title "Team A vs Team B" or question
+      const vsSource = gEvent.title || market.question || "";
+      const vsMatch = vsSource.match(/^(.+?)\s+vs\.?\s+(.+?)(?:\s*[-–—(]|$)/i);
+      if (vsMatch) {
+        outcomes[0] = vsMatch[1].trim();
+        outcomes[1] = vsMatch[2].trim();
+        // Re-check: still generic after extraction?
+        if (GENERIC_LABELS.has(outcomes[0].toLowerCase()) || GENERIC_LABELS.has(outcomes[1].toLowerCase())) {
+          console.log(`[polymarket-sync] Skipping binary Yes/No market (no real names): ${gEvent.title}`);
+          continue;
+        }
+      } else {
+        // Can't extract real names — skip this market entirely
+        console.log(`[polymarket-sync] Skipping binary Yes/No market: ${gEvent.title}`);
+        continue;
+      }
+    }
+
     // Reject already-settled markets (0%/100% probability)
     const priceA = parseFloat(outcomePrices[0] || "0");
     const priceB = parseFloat(outcomePrices[1] || "0");
@@ -1765,6 +1790,7 @@ Deno.serve(async (req) => {
         "primeira-liga", "concacaf", "conmebol", "fifa-friendlies",
       ]);
 
+      // Platform sports — now also get trading_allowed=true so operator apps can display them
       const PLATFORM_ONLY_KEYS = new Set([
         "nba", "nhl", "mlb", "ncaab", "cfb", "wnba",
         "atp", "wta", "tennis", "tennis-atp", "tennis-wta", "tennis-grand-slam",
@@ -1787,7 +1813,8 @@ Deno.serve(async (req) => {
         const isCombatOrSoccer = COMBAT_AND_SOCCER_KEYS.has(leagueKey);
         const vis = isCombatOrSoccer ? "all" : "platform";
         const statusOverride = isCombatOrSoccer ? "approved" : "pending_review";
-        const tradingOn = isCombatOrSoccer;
+        // Enable trading for ALL sports so operator apps can display and trade them
+        const tradingOn = true;
 
         try {
           const { events: rawEvents } = await fetchByLeagueSource(cfg);

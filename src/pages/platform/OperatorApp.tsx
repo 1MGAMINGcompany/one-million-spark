@@ -84,13 +84,17 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     queryFn: async () => {
       const { data } = await (supabase as any)
         .from("prediction_fights")
-        .select("*")
+        .select("*, prediction_events!event_id(category)")
         .or(`operator_id.eq.${operator!.id},and(operator_id.is.null,visibility.in.(platform,all))`)
         .in("status", ["open", "live", "locked"])
         .not("event_date", "is", null)
         .order("event_date", { ascending: true })
         .limit(200);
-      return (data || []) as Fight[];
+      // Flatten category from joined prediction_events onto each fight
+      return ((data || []) as any[]).map((f: any) => ({
+        ...f,
+        _category: f.prediction_events?.category || null,
+      })) as Fight[];
     },
     enabled: !!operator?.id,
     refetchInterval: 15000,
@@ -120,7 +124,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       // 3. Sport must be on the allowlist
       const sport = normalizeOperatorSport(
         f.event_name,
-        (f as any).sport ?? null,
+        (f as any).sport ?? (f as any)._category ?? null,
       );
       if (!sport) return false;
 
@@ -145,7 +149,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const sportTabGroups = useMemo<SportTabGroup[]>(() => {
     const sportCounts: Record<string, number> = {};
     allFights.forEach(f => {
-      const sport = normalizeOperatorSport(f.event_name, (f as any).sport ?? null) || "OTHER";
+      const sport = normalizeOperatorSport(f.event_name, (f as any).sport ?? (f as any)._category ?? null) || "OTHER";
       sportCounts[sport] = (sportCounts[sport] || 0) + 1;
     });
     const tabs = Object.entries(sportCounts)
