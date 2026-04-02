@@ -130,7 +130,7 @@ const HelpArticle = () => {
         {/* Internal links block */}
         <div className="mt-10 pt-6 border-t border-white/10 flex flex-wrap gap-4 text-sm text-white/50">
           <Link to="/help" className="hover:text-blue-400 transition-colors">Help Center</Link>
-          <a href="https://demo.1mg.live" className="hover:text-blue-400 transition-colors">Live Demo</a>
+          <a href="/demo" className="hover:text-blue-400 transition-colors">Live Demo</a>
           <a href="https://1mg.live" className="hover:text-blue-400 transition-colors">Buy Your App</a>
         </div>
       </div>

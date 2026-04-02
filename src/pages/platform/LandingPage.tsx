@@ -366,11 +366,8 @@ export default function LandingPage() {
                   {t("platform.hero.titleHighlight")}
                 </span>
               </h1>
-              <p className="text-lg sm:text-xl text-white/50 max-w-xl mb-3 leading-relaxed mx-auto lg:mx-0">
+              <p className="text-lg sm:text-xl text-white/50 max-w-xl mb-10 leading-relaxed mx-auto lg:mx-0">
                 {t("platform.hero.subtitle")}
-              </p>
-              <p className="text-base text-white/40 max-w-lg mb-10 mx-auto lg:mx-0">
-                {t("platform.hero.subtitleSmall")}
               </p>
 
               {/* CTA */}
