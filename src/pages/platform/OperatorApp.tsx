@@ -441,11 +441,11 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           activeTab={broadSportFilter}
           onTabChange={(key) => { setBroadSportFilter(key); setLeagueFilter(null); }}
           theme={{
-            activeBg: theme.primary + "25",
-            activeText: theme.primary,
-            inactiveBg: "transparent",
-            inactiveText: theme.textMuted,
-            countBg: theme.surfaceBg,
+            activeBg: theme.primary,
+            activeText: theme.primaryForeground,
+            inactiveBg: theme.surfaceBg,
+            inactiveText: theme.textSecondary,
+            countBg: theme.isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)",
           }}
         />
 
@@ -463,8 +463,10 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                   onClick={() => setLeagueFilter(tab.key === "ALL_LEAGUES" ? null : tab.key)}
                   className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap"
                   style={{
-                    backgroundColor: isActive ? theme.primary : theme.surfaceBg,
-                    color: isActive ? theme.primaryForeground : theme.textSecondary,
+                    backgroundColor: isActive ? (theme.primary + "22") : theme.surfaceBg,
+                    color: isActive ? theme.primary : theme.textSecondary,
+                    border: isActive ? `1.5px solid ${theme.primary}` : "1.5px solid transparent",
+                    fontWeight: isActive ? 600 : 500,
                   }}
                 >
                   {tab.label}
