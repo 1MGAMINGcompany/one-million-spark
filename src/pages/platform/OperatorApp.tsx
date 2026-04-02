@@ -865,6 +865,16 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         title={t("operator.signInToPredict")}
         description={t("operator.signInDesc")}
       />
+
+      {/* Sport Picker Modal */}
+      <SportPickerModal
+        open={sportPickerOpen}
+        onClose={() => setSportPickerOpen(false)}
+        onSelect={(key) => { setBroadSportFilter(key); setLeagueFilter(null); }}
+        sportCounts={sportCounts}
+        totalCount={enrichedFights.length}
+        theme={theme}
+      />
     </div>
   );
 }
