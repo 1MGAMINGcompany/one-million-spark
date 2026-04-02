@@ -7,7 +7,7 @@ import JsonLd from "@/components/seo/JsonLd";
 
 const FEATURES = [
   "Your own branded predictions app",
-  "Custom web address (yourname.1mg.live)",
+  "Custom web address (1mg.live/yourname)",
   "Built-in digital payments (USDC)",
   "Built-in liquidity — money flows from day one",
   "Access to major sports markets worldwide",
