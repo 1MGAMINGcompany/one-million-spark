@@ -165,7 +165,7 @@ export default function SimplePredictionCard({
                 )}
               </>
             ) : (
-              <p className="text-red-400/70 text-sm">Better luck next time</p>
+              <p className="text-red-400/70 text-sm">{t("operator.betterLuck")}</p>
             )}
           </div>
         )}
