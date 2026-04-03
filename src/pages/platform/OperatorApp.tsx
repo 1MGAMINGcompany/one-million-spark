@@ -738,9 +738,9 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
             ) : (
               <>
                 <CalendarPlus className="w-12 h-12 mx-auto mb-4" style={{ color: theme.textMuted }} />
-                <h3 className="text-lg font-bold" style={{ color: theme.textSecondary }}>No live sports available right now</h3>
-                <p className="mt-2 text-sm max-w-sm mx-auto" style={{ color: theme.textMuted }}>
-                  New matchups will appear here as soon as they open. Check back soon.
+                 <h3 className="text-lg font-bold" style={{ color: theme.textSecondary }}>{t("operator.noLiveEvents")}</h3>
+                 <p className="mt-2 text-sm max-w-sm mx-auto" style={{ color: theme.textMuted }}>
+                   {t("operator.noLiveEventsDesc")}
                 </p>
               </>
             )}
