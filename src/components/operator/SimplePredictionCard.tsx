@@ -286,7 +286,7 @@ export default function SimplePredictionCard({
               border: `1px solid ${theme.cardBorder}`,
             }}
           >
-            <span className="block text-sm font-bold" style={{ color: theme.textPrimary }}>Draw</span>
+            <span className="block text-sm font-bold" style={{ color: theme.textPrimary }}>{t("operator.draw")}</span>
             <span className="block text-xs mt-1" style={{ color: theme.textMuted }}>Available</span>
           </button>
         )}
