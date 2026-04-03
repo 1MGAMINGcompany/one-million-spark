@@ -505,7 +505,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                   boxShadow: activeTab === tab ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
                 }}
               >
-                {tab === "events" ? t("operator.events") : `${t("operator.myPicks")}${userEntries.length > 0 ? ` (${userEntries.length})` : ""}`}
+                {tab === "events" ? "Events" : `My Picks${userEntries.length > 0 ? ` (${userEntries.length})` : ""}`}
               </button>
             ))}
           </div>
@@ -526,7 +526,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
             }}
           >
             <span className="text-sm">🔥</span>
-            <span>{t("operator.allSports")}</span>
+            <span>All Sports</span>
             <ChevronDown className="w-3 h-3" />
             <span
               className="text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center font-semibold"
@@ -596,7 +596,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         <div className="flex items-center gap-2">
           {(["all", "today", "week"] as const).map(f => {
             const isActive = timeFilter === f;
-            const label = f === "all" ? t("operator.all") : f === "today" ? t("operator.today") : t("operator.thisWeek");
+            const label = f === "all" ? "All" : f === "today" ? "Today" : "This Week";
             return (
               <button
                 key={f}
@@ -650,10 +650,10 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                 const d = new Date((featuredEvent as any).event_date || 0);
                 const isLive = d.getTime() < Date.now() && d.getTime() > Date.now() - 3 * 3600000;
                 return isLive ? (
-                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500">● {t("operator.live")}</span>
-                 ) : (
-                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: theme.primary + "18", color: theme.primary }}>
-                     <Zap className="w-3 h-3 inline mr-0.5" />{t("operator.upNext")}
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500">● LIVE</span>
+                ) : (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: theme.primary + "18", color: theme.primary }}>
+                    <Zap className="w-3 h-3 inline mr-0.5" />UP NEXT
                   </span>
                 );
               })()}
@@ -685,7 +685,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                 className="px-4 py-1.5 rounded-lg text-xs font-bold transition-all"
                 style={{ backgroundColor: theme.primary, color: theme.primaryForeground }}
               >
-                {t("operator.predictNow")}
+                Predict Now
               </button>
             </div>
           </div>
@@ -724,8 +724,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
             {activeTab === "picks" ? (
               <>
                 <Trophy className="w-12 h-12 mx-auto mb-4" style={{ color: theme.textMuted }} />
-                <h3 className="text-lg font-bold" style={{ color: theme.textSecondary }}>{t("operator.noPicks")}</h3>
-                <p className="mt-2 text-sm" style={{ color: theme.textMuted }}>{t("operator.noPicksDesc")}</p>
+                <h3 className="text-lg font-bold" style={{ color: theme.textSecondary }}>No predictions placed yet</h3>
+                <p className="mt-2 text-sm" style={{ color: theme.textMuted }}>Pick a winner from the events tab to get started.</p>
               </>
             ) : searchQuery ? (
               <>
@@ -733,14 +733,14 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                 <h3 className="text-lg font-bold" style={{ color: theme.textSecondary }}>
                   {t("operator.noSearchResults", "No events match your search")}
                 </h3>
-                <p className="mt-2 text-sm" style={{ color: theme.textMuted }}>{t("operator.noSearchResultsDesc")}</p>
+                <p className="mt-2 text-sm" style={{ color: theme.textMuted }}>Try a different team or player name.</p>
               </>
             ) : (
               <>
                 <CalendarPlus className="w-12 h-12 mx-auto mb-4" style={{ color: theme.textMuted }} />
-                 <h3 className="text-lg font-bold" style={{ color: theme.textSecondary }}>{t("operator.noLiveEvents")}</h3>
-                 <p className="mt-2 text-sm max-w-sm mx-auto" style={{ color: theme.textMuted }}>
-                   {t("operator.noLiveEventsDesc")}
+                <h3 className="text-lg font-bold" style={{ color: theme.textSecondary }}>No live sports available right now</h3>
+                <p className="mt-2 text-sm max-w-sm mx-auto" style={{ color: theme.textMuted }}>
+                  New matchups will appear here as soon as they open. Check back soon.
                 </p>
               </>
             )}
@@ -813,7 +813,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           className="inline-block text-[11px] font-medium hover:opacity-80 transition-opacity"
           style={{ color: theme.primary }}
         >
-          {t("operator.getYourApp")}
+          Get Your Own Predictions App →
         </a>
       </footer>
 

@@ -24,8 +24,6 @@ export default function PlatformLanguageSwitcher() {
   const handleChange = (code: string) => {
     i18n.changeLanguage(code);
     localStorage.setItem("1m-gaming-language", code);
-    localStorage.setItem("1m-gaming-lang-locked", "true");
-    console.log("LANG:", code);
     setOpen(false);
   };
 
