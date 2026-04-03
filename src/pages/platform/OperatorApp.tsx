@@ -733,7 +733,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                 <h3 className="text-lg font-bold" style={{ color: theme.textSecondary }}>
                   {t("operator.noSearchResults", "No events match your search")}
                 </h3>
-                <p className="mt-2 text-sm" style={{ color: theme.textMuted }}>Try a different team or player name.</p>
+                <p className="mt-2 text-sm" style={{ color: theme.textMuted }}>{t("operator.noSearchResultsDesc")}</p>
               </>
             ) : (
               <>
