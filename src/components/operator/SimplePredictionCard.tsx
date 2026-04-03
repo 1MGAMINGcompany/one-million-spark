@@ -129,7 +129,7 @@ export default function SimplePredictionCard({
           </div>
         )}
         <div className="text-center mb-3">
-          <span className="text-xs font-bold text-green-500 uppercase tracking-wider">✅ Result</span>
+          <span className="text-xs font-bold text-green-500 uppercase tracking-wider">{t("operator.result")}</span>
         </div>
         <p className="text-center text-lg font-bold mb-1" style={{ color: theme.textPrimary }}>
           {winnerName} Wins!
