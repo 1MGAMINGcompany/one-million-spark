@@ -724,8 +724,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
             {activeTab === "picks" ? (
               <>
                 <Trophy className="w-12 h-12 mx-auto mb-4" style={{ color: theme.textMuted }} />
-                <h3 className="text-lg font-bold" style={{ color: theme.textSecondary }}>No predictions placed yet</h3>
-                <p className="mt-2 text-sm" style={{ color: theme.textMuted }}>Pick a winner from the events tab to get started.</p>
+                <h3 className="text-lg font-bold" style={{ color: theme.textSecondary }}>{t("operator.noPicks")}</h3>
+                <p className="mt-2 text-sm" style={{ color: theme.textMuted }}>{t("operator.noPicksDesc")}</p>
               </>
             ) : searchQuery ? (
               <>
