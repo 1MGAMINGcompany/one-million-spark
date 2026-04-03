@@ -66,7 +66,7 @@ export default function SportPickerModal({
             <div className="flex items-center gap-3">
               <span className="text-lg">🔥</span>
               <span className="font-semibold text-sm" style={{ color: theme.textPrimary }}>
-                All Sports
+                {t("operator.allSports")}
               </span>
             </div>
             <span
