@@ -359,7 +359,7 @@ const Navbar = () => {
                 }`}
               >
                 {notificationsEnabled ? <Bell size={20} /> : <BellOff size={20} />}
-                <span>{notificationsEnabled ? "Notifications On" : "Notifications Off"}</span>
+                <span>{notificationsEnabled ? t("operator.notificationsOn") : t("operator.notificationsOff")}</span>
               </button>
 
               {/* Day/Night Theme Toggle (mobile) */}
