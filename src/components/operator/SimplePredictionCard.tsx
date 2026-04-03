@@ -158,7 +158,7 @@ export default function SimplePredictionCard({
                         className="px-5 py-2 rounded-xl font-bold text-sm transition-all hover:opacity-80"
                         style={{ border: `1px solid ${theme.cardBorder}`, color: theme.textPrimary }}
                       >
-                        🏆 SHARE YOUR WIN
+                        {t("operator.shareYourWin")}
                       </button>
                     )}
                   </div>
