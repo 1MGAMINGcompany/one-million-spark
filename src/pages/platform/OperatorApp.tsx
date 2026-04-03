@@ -813,7 +813,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           className="inline-block text-[11px] font-medium hover:opacity-80 transition-opacity"
           style={{ color: theme.primary }}
         >
-          Get Your Own Predictions App →
+          {t("operator.getYourApp")}
         </a>
       </footer>
 
