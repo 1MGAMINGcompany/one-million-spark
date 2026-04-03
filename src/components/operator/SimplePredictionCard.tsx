@@ -205,7 +205,7 @@ export default function SimplePredictionCard({
           <p className="text-lg font-bold" style={{ color: theme.textPrimary }}>🎯 {pickedName}</p>
           {userEntry?.amount_usd && (
             <p className="text-xs mt-1" style={{ color: theme.textMuted }}>
-              ${userEntry.amount_usd.toFixed(2)} placed
+              ${userEntry.amount_usd.toFixed(2)} {t("operator.placed", { amount: userEntry.amount_usd.toFixed(2) }).replace(`$${userEntry.amount_usd.toFixed(2)}`, "").trim() || "placed"}
             </p>
           )}
         </div>
