@@ -234,7 +234,7 @@ export default function SimplePredictionCard({
                 color: timeLabel.isLive ? "#ef4444" : theme.primary,
               }}
             >
-              {timeLabel.isLive ? "● LIVE" : timeLabel.text}
+              {timeLabel.isLive ? `● ${t("operator.live")}` : timeLabel.text}
             </span>
           )}
         </div>
