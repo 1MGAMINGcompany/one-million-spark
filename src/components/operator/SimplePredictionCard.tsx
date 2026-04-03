@@ -201,7 +201,7 @@ export default function SimplePredictionCard({
           <p className="text-xs text-center mb-2" style={{ color: theme.textMuted }}>{eventDateStr}</p>
         )}
         <div className="text-center rounded-xl py-3 px-4" style={{ backgroundColor: theme.surfaceBg }}>
-          <p className="text-sm" style={{ color: theme.textSecondary }}>Your Pick</p>
+          <p className="text-sm" style={{ color: theme.textSecondary }}>{t("operator.yourPick")}</p>
           <p className="text-lg font-bold" style={{ color: theme.textPrimary }}>🎯 {pickedName}</p>
           {userEntry?.amount_usd && (
             <p className="text-xs mt-1" style={{ color: theme.textMuted }}>
