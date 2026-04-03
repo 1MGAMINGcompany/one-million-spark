@@ -138,7 +138,7 @@ export default function SimplePredictionCard({
           <div className="text-center mt-3">
             {userWon ? (
               <>
-                <p className="text-green-500 font-bold text-sm">🎉 You Won!</p>
+                <p className="text-green-500 font-bold text-sm">{t("operator.youWon")}</p>
                 {!userEntry?.claimed && onClaim && (
                   <button
                     onClick={() => onClaim(fight.id)}
