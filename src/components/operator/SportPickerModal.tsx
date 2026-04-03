@@ -21,6 +21,7 @@ export default function SportPickerModal({
   totalCount,
   theme,
 }: SportPickerModalProps) {
+  const { t } = useTranslation();
   const sorted = useMemo(() => {
     return Object.entries(sportCounts)
       .sort((a, b) => b[1] - a[1])
