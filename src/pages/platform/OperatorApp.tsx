@@ -685,7 +685,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                 className="px-4 py-1.5 rounded-lg text-xs font-bold transition-all"
                 style={{ backgroundColor: theme.primary, color: theme.primaryForeground }}
               >
-                Predict Now
+                {t("operator.predictNow")}
               </button>
             </div>
           </div>
