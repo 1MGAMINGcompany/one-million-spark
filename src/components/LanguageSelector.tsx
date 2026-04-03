@@ -21,10 +21,12 @@ const LanguageSelector = () => {
 
   const handleLanguageChange = (code: LanguageCode) => {
     i18n.changeLanguage(code);
+    localStorage.setItem('1m-gaming-lang-locked', 'true');
     // Update document direction for RTL languages
     const lang = languages.find(l => l.code === code);
     document.documentElement.dir = lang?.dir || 'ltr';
     document.documentElement.lang = code;
+    console.log("LANG:", code);
     setOpen(false);
   };
 

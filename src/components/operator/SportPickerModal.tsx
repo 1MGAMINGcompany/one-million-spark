@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import { BROAD_SPORTS } from "@/lib/sportLeagues";
 import type { OperatorTheme } from "@/lib/operatorThemes";
@@ -20,6 +21,7 @@ export default function SportPickerModal({
   totalCount,
   theme,
 }: SportPickerModalProps) {
+  const { t } = useTranslation();
   const sorted = useMemo(() => {
     return Object.entries(sportCounts)
       .sort((a, b) => b[1] - a[1])
@@ -46,7 +48,7 @@ export default function SportPickerModal({
           style={{ borderBottom: `1px solid ${theme.cardBorder}` }}
         >
           <h2 className="text-lg font-bold" style={{ color: theme.textPrimary }}>
-            All Sports
+            {t("operator.allSports")}
           </h2>
           <button onClick={onClose} className="p-1 rounded-lg hover:opacity-70">
             <X className="w-5 h-5" style={{ color: theme.textMuted }} />
@@ -64,7 +66,7 @@ export default function SportPickerModal({
             <div className="flex items-center gap-3">
               <span className="text-lg">🔥</span>
               <span className="font-semibold text-sm" style={{ color: theme.textPrimary }}>
-                All Sports
+                {t("operator.allSports")}
               </span>
             </div>
             <span
