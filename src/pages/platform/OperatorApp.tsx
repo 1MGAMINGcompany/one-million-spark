@@ -526,7 +526,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
             }}
           >
             <span className="text-sm">🔥</span>
-            <span>All Sports</span>
+            <span>{t("operator.allSports")}</span>
             <ChevronDown className="w-3 h-3" />
             <span
               className="text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center font-semibold"
