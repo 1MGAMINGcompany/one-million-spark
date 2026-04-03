@@ -48,7 +48,7 @@ export default function SportPickerModal({
           style={{ borderBottom: `1px solid ${theme.cardBorder}` }}
         >
           <h2 className="text-lg font-bold" style={{ color: theme.textPrimary }}>
-            All Sports
+            {t("operator.allSports")}
           </h2>
           <button onClick={onClose} className="p-1 rounded-lg hover:opacity-70">
             <X className="w-5 h-5" style={{ color: theme.textMuted }} />
