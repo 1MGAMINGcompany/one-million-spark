@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import { BROAD_SPORTS } from "@/lib/sportLeagues";
 import type { OperatorTheme } from "@/lib/operatorThemes";
