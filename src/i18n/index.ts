@@ -31,7 +31,8 @@ export type LanguageCode = typeof languages[number]['code'];
 
 // Apply geo-based language on first visit (before user has chosen)
 const storedLang = typeof window !== 'undefined' ? localStorage.getItem('1m-gaming-language') : null;
-if (!storedLang && typeof window !== 'undefined') {
+const langLocked = typeof window !== 'undefined' ? localStorage.getItem('1m-gaming-lang-locked') : null;
+if (!storedLang && !langLocked && typeof window !== 'undefined') {
   const geoLang = getGeoLanguage();
   if (geoLang) {
     localStorage.setItem('1m-gaming-language', geoLang);
