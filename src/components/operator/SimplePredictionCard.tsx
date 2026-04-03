@@ -313,7 +313,7 @@ export default function SimplePredictionCard({
         if (total <= 0) return null;
         return (
           <p className="text-center text-[11px]" style={{ color: theme.textMuted }}>
-            Total Pool: ${total >= 1000 ? `${(total / 1000).toFixed(0)}K` : total.toFixed(0)}
+            {t("operator.totalPool")}: ${total >= 1000 ? `${(total / 1000).toFixed(0)}K` : total.toFixed(0)}
           </p>
         );
       })()}
