@@ -287,7 +287,7 @@ export default function SimplePredictionCard({
             }}
           >
             <span className="block text-sm font-bold" style={{ color: theme.textPrimary }}>{t("operator.draw")}</span>
-            <span className="block text-xs mt-1" style={{ color: theme.textMuted }}>Available</span>
+            <span className="block text-xs mt-1" style={{ color: theme.textMuted }}>{t("operator.available")}</span>
           </button>
         )}
         <button
