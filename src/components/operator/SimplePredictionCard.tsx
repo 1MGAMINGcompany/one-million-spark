@@ -151,7 +151,7 @@ export default function SimplePredictionCard({
                 )}
                 {userEntry?.claimed && (
                   <div className="space-y-2 mt-2">
-                    <p className="text-xs" style={{ color: theme.textMuted }}>Winnings collected ✓</p>
+                    <p className="text-xs" style={{ color: theme.textMuted }}>{t("operator.winningsCollected")}</p>
                     {onShareWin && !winShared && (
                       <button
                         onClick={() => { onShareWin(fight); setWinShared(true); }}
