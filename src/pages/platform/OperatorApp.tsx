@@ -650,10 +650,10 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                 const d = new Date((featuredEvent as any).event_date || 0);
                 const isLive = d.getTime() < Date.now() && d.getTime() > Date.now() - 3 * 3600000;
                 return isLive ? (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500">● LIVE</span>
-                ) : (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: theme.primary + "18", color: theme.primary }}>
-                    <Zap className="w-3 h-3 inline mr-0.5" />UP NEXT
+                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500">● {t("operator.live")}</span>
+                 ) : (
+                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: theme.primary + "18", color: theme.primary }}>
+                     <Zap className="w-3 h-3 inline mr-0.5" />{t("operator.upNext")}
                   </span>
                 );
               })()}
