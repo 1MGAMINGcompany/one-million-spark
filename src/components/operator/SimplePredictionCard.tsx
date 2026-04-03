@@ -191,7 +191,7 @@ export default function SimplePredictionCard({
             {logoA && <img src={logoA} className="w-6 h-6 object-contain" alt="" />}
             <span className="text-base font-bold" style={{ color: theme.textPrimary }}>{nameA}</span>
           </div>
-          <span className="text-xs font-bold" style={{ color: theme.textMuted }}>VS</span>
+          <span className="text-xs font-bold" style={{ color: theme.textMuted }}>{t("operator.vs")}</span>
           <div className="flex items-center gap-2">
             <span className="text-base font-bold" style={{ color: theme.textPrimary }}>{nameB}</span>
             {logoB && <img src={logoB} className="w-6 h-6 object-contain" alt="" />}
