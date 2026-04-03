@@ -596,7 +596,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         <div className="flex items-center gap-2">
           {(["all", "today", "week"] as const).map(f => {
             const isActive = timeFilter === f;
-            const label = f === "all" ? "All" : f === "today" ? "Today" : "This Week";
+            const label = f === "all" ? t("operator.all") : f === "today" ? t("operator.today") : t("operator.thisWeek");
             return (
               <button
                 key={f}
