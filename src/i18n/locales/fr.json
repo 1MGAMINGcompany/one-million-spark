@@ -1316,6 +1316,12 @@
       "linkCopied": "Lien copié !",
       "support": "Support",
       "supportEmail": "1mgaming@proton.me"
-    }
+    },
+    "heroTitle": "Choisissez un Gagnant. Gagnez de l'Argent.",
+    "heroSubtitle": "Choisissez une équipe. Entrez votre montant. Voyez vos gains instantanément.",
+    "onHoldTitle": "Toutes les Prédictions Sont Temporairement en Pause",
+    "onHoldDesc": "Nous rencontrons un bref problème avec l'un de nos fournisseurs. Vos fonds et prédictions existantes sont en sécurité.",
+    "noSearchResults": "Aucun événement ne correspond à votre recherche",
+    "searchTeams": "Rechercher équipes ou joueurs..."
   }
 }

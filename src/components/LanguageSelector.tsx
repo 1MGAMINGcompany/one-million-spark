@@ -21,9 +21,8 @@ const LanguageSelector = () => {
 
   const handleLanguageChange = (code: LanguageCode) => {
     i18n.changeLanguage(code);
-    // Update document direction for RTL languages
-    const lang = languages.find(l => l.code === code);
-    document.documentElement.dir = lang?.dir || 'ltr';
+    // Always LTR layout — only text is translated for RTL languages
+    document.documentElement.dir = 'ltr';
     document.documentElement.lang = code;
     setOpen(false);
   };
