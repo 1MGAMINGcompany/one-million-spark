@@ -4,6 +4,8 @@ import { getTeamLogo } from "@/lib/teamLogos";
 import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
 import { formatEventDateTime } from "@/lib/formatEventLocalDateTime";
 import type { Fight } from "@/components/predictions/FightCard";
+import { useLiveGameState } from "@/hooks/useSportsWebSocket";
+import LiveGameBadge, { LiveScoreDisplay } from "@/components/predictions/LiveGameBadge";
 import type { OperatorTheme } from "@/lib/operatorThemes";
 
 interface SimplePredictionCardProps {
@@ -65,6 +67,9 @@ export default function SimplePredictionCard({
   const payoutB = calcPayout(priceB, 10);
   const multiplierA = priceA > 0 ? (1 / priceA).toFixed(2) : "—";
   const multiplierB = priceB > 0 ? (1 / priceB).toFixed(2) : "—";
+
+  // Live game data from Polymarket Sports WebSocket
+  const liveState = useLiveGameState((fight as any).polymarket_slug);
 
   const logoDataA = getTeamLogo(nameA, fight.event_name);
   const logoDataB = getTeamLogo(nameB, fight.event_name);
@@ -224,7 +229,9 @@ export default function SimplePredictionCard({
               {sportLeagueLabel}
             </div>
           )}
-          {timeLabel && (
+          {liveState && (liveState.live || liveState.ended) ? (
+            <LiveGameBadge state={liveState} theme={theme} />
+          ) : timeLabel ? (
             <span
               className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
               style={{
@@ -234,7 +241,7 @@ export default function SimplePredictionCard({
             >
               {timeLabel.isLive ? "● LIVE" : timeLabel.text}
             </span>
-          )}
+          ) : null}
         </div>
         <GraphButton />
       </div>
@@ -245,7 +252,13 @@ export default function SimplePredictionCard({
           {logoA && <img src={logoA} className="w-8 h-8 object-contain" alt="" />}
           <span className="text-lg font-bold leading-tight" style={{ color: theme.textPrimary }}>{nameA}</span>
         </div>
-        <span className="text-sm font-bold mx-3" style={{ color: theme.textMuted }}>VS</span>
+        <span className="text-sm font-bold mx-3" style={{ color: theme.textMuted }}>
+          {liveState && liveState.live && liveState.score ? (
+            <LiveScoreDisplay state={liveState} theme={theme} />
+          ) : (
+            "VS"
+          )}
+        </span>
         <div className="flex items-center gap-3 flex-1 justify-end text-right">
           <span className="text-lg font-bold leading-tight" style={{ color: theme.textPrimary }}>{nameB}</span>
           {logoB && <img src={logoB} className="w-8 h-8 object-contain" alt="" />}

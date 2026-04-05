@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { SportsWebSocketProvider } from "@/hooks/useSportsWebSocket";
 import { useTranslation } from "react-i18next";
 import { useOperatorBySubdomain, useOperatorSettings } from "@/hooks/useOperator";
 import { useQuery } from "@tanstack/react-query";
@@ -445,6 +446,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     : undefined;
 
   return (
+    <SportsWebSocketProvider>
     <div className="min-h-screen" style={{ backgroundColor: theme.bg, color: theme.textPrimary }}>
       {/* Navbar */}
       <nav
@@ -878,5 +880,6 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         theme={theme}
       />
     </div>
+    </SportsWebSocketProvider>
   );
 }
