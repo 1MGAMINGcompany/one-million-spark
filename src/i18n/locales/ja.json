@@ -302,7 +302,9 @@
     "bannerDismissed": "Banner dismissed",
     "bannerDismissedDesc": "This room has been hidden from the banner.",
     "cannotSendMessage": "Cannot send message",
-    "walletCopied": "Wallet address copied to clipboard"
+    "walletCopied": "Wallet address copied to clipboard",
+    "today": "今日",
+    "tomorrow": "明日"
   },
   "hero": {
     "badge": "プレミアム予測",
@@ -1440,7 +1442,12 @@
       "linkCopied": "Link copied!",
       "support": "Support",
       "supportEmail": "1mgaming@proton.me"
-    }
+    },
+    "youWon": "🎉 勝ちました！",
+    "amountPlacedLabel": "${{amount}} ベット済み",
+    "startsInMin": "{{min}}分後に開始",
+    "startsInHour": "{{hour}}時間後に開始",
+    "poweredByLabel": "提供元"
   },
   "platform": {
     "hero": {
@@ -1528,7 +1535,8 @@
     },
     "nav": {
       "signIn": "Sign In",
-      "dashboard": "Dashboard"
+      "dashboard": "Dashboard",
+      "signOut": "サインアウト"
     }
   },
   "gameMultiplayer": {

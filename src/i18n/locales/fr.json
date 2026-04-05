@@ -627,7 +627,9 @@
     "bannerDismissed": "Banner dismissed",
     "bannerDismissedDesc": "This room has been hidden from the banner.",
     "cannotSendMessage": "Cannot send message",
-    "walletCopied": "Wallet address copied to clipboard"
+    "walletCopied": "Wallet address copied to clipboard",
+    "today": "Aujourd'hui",
+    "tomorrow": "Demain"
   },
   "rematch": {
     "title": "Revanche",
@@ -1412,7 +1414,8 @@
     },
     "nav": {
       "signIn": "Se Connecter",
-      "dashboard": "Tableau de Bord"
+      "dashboard": "Tableau de Bord",
+      "signOut": "Se déconnecter"
     },
     "calculator": {
       "title": "Voyez combien vous pourriez gagner",
@@ -1527,7 +1530,12 @@
     "buyYourApp": "ACHETEZ VOTRE APP — $2,400 USDC",
     "appNotExist": "Cette app n'existe pas",
     "appNotExistDesc": "Lancez votre app de prédictions en quelques minutes — sans code, sans configuration.",
-    "noSearchResultsDesc": "Essayez un autre nom d'équipe ou de joueur."
+    "noSearchResultsDesc": "Essayez un autre nom d'équipe ou de joueur.",
+    "youWon": "🎉 Vous avez gagné !",
+    "amountPlacedLabel": "${{amount}} misé",
+    "startsInMin": "Commence dans {{min}}m",
+    "startsInHour": "Commence dans {{hour}}h",
+    "poweredByLabel": "Propulsé par"
   },
   "gameMultiplayer": {
     "rooms": "Rooms",

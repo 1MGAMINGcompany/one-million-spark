@@ -627,7 +627,9 @@
     "bannerDismissed": "Banner dismissed",
     "bannerDismissedDesc": "This room has been hidden from the banner.",
     "cannotSendMessage": "Cannot send message",
-    "walletCopied": "Wallet address copied to clipboard"
+    "walletCopied": "Wallet address copied to clipboard",
+    "today": "Hoje",
+    "tomorrow": "Amanhã"
   },
   "rematch": {
     "title": "Revanche",
@@ -1412,7 +1414,8 @@
     },
     "nav": {
       "signIn": "Entrar",
-      "dashboard": "Painel"
+      "dashboard": "Painel",
+      "signOut": "Sair"
     },
     "calculator": {
       "title": "Veja quanto você poderia ganhar",
@@ -1527,7 +1530,12 @@
     "buyYourApp": "COMPRE SEU APP — $2,400 USDC",
     "appNotExist": "Este app não existe",
     "appNotExistDesc": "Inicie seu app de previsões em minutos — sem código, sem configuração.",
-    "noSearchResultsDesc": "Tente um time ou jogador diferente."
+    "noSearchResultsDesc": "Tente um time ou jogador diferente.",
+    "youWon": "🎉 Você ganhou!",
+    "amountPlacedLabel": "${{amount}} apostado",
+    "startsInMin": "Começa em {{min}}m",
+    "startsInHour": "Começa em {{hour}}h",
+    "poweredByLabel": "Desenvolvido por"
   },
   "gameMultiplayer": {
     "rooms": "Rooms",

@@ -139,9 +139,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const allFights = useMemo(() => {
     return (operatorFights || []).filter(f => {
       if (!isValidOperatorEvent(f as any)) return false;
-      // Operator-created events get 24h grace; platform events get 4h
-      const isOperatorEvent = (f as any).operator_id === operator?.id && (f as any).operator_id != null;
-      const graceMs = isOperatorEvent ? 24 * 3600000 : 4 * 3600000;
+      // All events get 24h grace to match groupByDate
+      const graceMs = 24 * 3600000;
       const eventDate = (f as any).event_date;
       if (!eventDate) return false;
       const d = new Date(eventDate);
@@ -434,7 +433,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
             {t("operator.buyYourApp")}
           </a>
           <p className="text-muted-foreground/50 text-xs">
-            Powered by <a href="https://1mg.live" className="underline hover:opacity-80">1MG</a>
+            {t("operator.poweredByLabel")} <a href="https://1mg.live" className="underline hover:opacity-80">1MG</a>
           </p>
         </div>
       </div>
@@ -783,7 +782,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                 className="text-xs font-bold uppercase tracking-wider mb-2 px-1"
                 style={{ color: theme.textMuted }}
               >
-                {group.label}
+                {group.label === "today" ? t("common.today") : group.label === "tomorrow" ? t("common.tomorrow") : group.label}
               </h3>
               <div className="space-y-3">
                 {group.fights.map(fight => {

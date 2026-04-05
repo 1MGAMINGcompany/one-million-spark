@@ -337,7 +337,7 @@ export default function LandingPage() {
                   size="icon"
                   onClick={logout}
                   className="h-8 w-8 text-white/40 hover:text-red-400"
-                  title="Sign Out"
+                  title={t("platform.nav.signOut")}
                 >
                   <LogOut size={16} />
                 </Button>
