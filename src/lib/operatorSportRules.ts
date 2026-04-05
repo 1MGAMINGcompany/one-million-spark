@@ -7,7 +7,7 @@
 /** Sports allowed on operator apps — strict allowlist */
 const OPERATOR_ALLOWED_SPORTS = new Set([
   "NFL", "NBA", "NHL", "SOCCER", "MMA", "BOXING", "MLB", "TENNIS",
-  "GOLF", "NCAA", "CRICKET", "F1", "NASCAR", "MLS", "RUGBY",
+  "GOLF", "NCAA", "CRICKET", "F1", "NASCAR", "MLS", "RUGBY", "ESPORTS",
 ]);
 
 /** Keyword → canonical sport mapping (order matters: first match wins) */
