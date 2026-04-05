@@ -24,8 +24,7 @@ function getTimeLabel(eventDate: string | null | undefined): { text: string; isL
   const d = new Date(eventDate);
   const now = Date.now();
   const diff = d.getTime() - now;
-  // If event started within last 3 hours → LIVE
-  if (diff < 0 && diff > -3 * 3600000) return { text: "LIVE", isLive: true };
+  // Never show LIVE from time heuristic — only LiveGameBadge should do that
   if (diff < 0) return null;
   if (diff < 3600000) return { text: `Starts in ${Math.max(1, Math.round(diff / 60000))}m`, isLive: false };
   if (diff < 86400000) return { text: `Starts in ${Math.round(diff / 3600000)}h`, isLive: false };
@@ -235,11 +234,11 @@ export default function SimplePredictionCard({
             <span
               className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
               style={{
-                backgroundColor: timeLabel.isLive ? "#ef444422" : theme.primary + "18",
-                color: timeLabel.isLive ? "#ef4444" : theme.primary,
+                backgroundColor: theme.primary + "18",
+                color: theme.primary,
               }}
             >
-              {timeLabel.isLive ? "● LIVE" : timeLabel.text}
+              {timeLabel.text}
             </span>
           ) : null}
         </div>
