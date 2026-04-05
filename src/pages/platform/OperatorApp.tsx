@@ -445,12 +445,6 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       ))
     : undefined;
 
-  // Collect polymarket slugs for live tracking
-  const liveSlugs = useMemo(() => {
-    return enrichedFights
-      .map(f => (f as any).polymarket_slug)
-      .filter((s): s is string => !!s);
-  }, [enrichedFights]);
 
   return (
     <SportsWebSocketProvider slugs={liveSlugs}>
