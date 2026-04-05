@@ -21,6 +21,7 @@ const LanguageSelector = () => {
 
   const handleLanguageChange = (code: LanguageCode) => {
     i18n.changeLanguage(code);
+    localStorage.setItem('1m-gaming-language', code);
     // Always LTR layout — only text is translated for RTL languages
     document.documentElement.dir = 'ltr';
     document.documentElement.lang = code;
