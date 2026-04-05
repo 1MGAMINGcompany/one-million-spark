@@ -146,7 +146,7 @@ export default function SimplePredictionCard({
                     className="mt-2 px-6 py-2 rounded-xl font-bold text-sm transition-all"
                     style={{ backgroundColor: theme.primary, color: theme.primaryForeground }}
                   >
-                    {claiming ? "Claiming..." : "Collect Winnings"}
+                    {claiming ? t("operator.claiming") : t("operator.collectWinnings")}
                   </button>
                 )}
                 {userEntry?.claimed && (
