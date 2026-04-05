@@ -229,7 +229,9 @@ export default function SimplePredictionCard({
               {sportLeagueLabel}
             </div>
           )}
-          {timeLabel && (
+          {liveState && (liveState.live || liveState.ended) ? (
+            <LiveGameBadge state={liveState} theme={theme} />
+          ) : timeLabel ? (
             <span
               className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
               style={{
@@ -239,7 +241,7 @@ export default function SimplePredictionCard({
             >
               {timeLabel.isLive ? "● LIVE" : timeLabel.text}
             </span>
-          )}
+          ) : null}
         </div>
         <GraphButton />
       </div>

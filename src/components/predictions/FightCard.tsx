@@ -48,6 +48,7 @@ export interface Fight {
   venue?: string | null;
   referee?: string | null;
   polymarket_volume_usd?: number | null;
+  polymarket_slug?: string | null;
   has_updates?: boolean;
 }
 
