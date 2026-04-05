@@ -854,6 +854,7 @@ function SoccerTeamColumn({
   name: string; odds: number; poolAmount: number; canPredict: boolean; onPredict: () => void;
   logo?: string | null; isWinner: boolean; isBinaryMarket?: boolean;
 }) {
+  const { t } = useTranslation();
   const [logoError, setLogoError] = useState(false);
   const showLogo = logo && !logoError;
 
