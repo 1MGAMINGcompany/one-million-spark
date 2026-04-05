@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, Fragment } from "react";
 import { SportsWebSocketProvider } from "@/hooks/useSportsWebSocket";
 import { useTranslation } from "react-i18next";
 import { useOperatorBySubdomain, useOperatorSettings } from "@/hooks/useOperator";
@@ -11,7 +11,7 @@ import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
 import { usePolymarketSession } from "@/hooks/usePolymarketSession";
 import { usePolymarketPrices } from "@/hooks/usePolymarketPrices";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Globe, Trophy, Loader2, ShieldCheck, Search, CalendarPlus, ChevronDown, Zap } from "lucide-react";
+import { Globe, Trophy, Loader2, ShieldCheck, Search, CalendarPlus, ChevronDown, Zap, Copy, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { dbg } from "@/lib/debugLog";
 import { Button } from "@/components/ui/button";
@@ -88,6 +88,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [graphFight, setGraphFight] = useState<Fight | null>(null);
   const [sportPickerOpen, setSportPickerOpen] = useState(false);
   const [timeFilter, setTimeFilter] = useState<"all" | "today" | "week">("all");
+  const [showFundsModal, setShowFundsModal] = useState(false);
 
   // Social share state
   const [shareOpen, setShareOpen] = useState(false);
@@ -195,7 +196,6 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     enrichedFights.forEach(f => {
       counts[f._broadSport] = (counts[f._broadSport] || 0) + 1;
     });
-    console.log("SPORTS AVAILABLE:", Object.keys(counts), counts);
     return counts;
   }, [enrichedFights]);
 
@@ -219,11 +219,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const featuredEvent = useMemo(() => {
     if (broadSportFilter !== "ALL" || searchQuery || activeTab === "picks") return null;
     const now = Date.now();
-    // 1. Live event
-    const live = enrichedFights.find(f => {
-      const d = new Date((f as any).event_date || 0).getTime();
-      return d < now && d > now - 3 * 3600000;
-    });
+    // 1. Actually live event (confirmed by fight status)
+    const live = enrichedFights.find(f => f.status === "live");
     if (live) return live;
     // 2. Next event today
     const endOfDay = new Date();
@@ -407,7 +404,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   };
 
   const handleAddFunds = () => {
-    toast.info("To add funds, send USDC.e (Polygon) to your wallet address.");
+    setShowFundsModal(true);
   };
 
   if (isLoading) {
@@ -420,13 +417,13 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
   if (!operator) {
     return (
-      <div className="min-h-screen bg-[#06080f] text-white flex flex-col items-center justify-center px-6">
+      <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center px-6">
         <div className="text-center max-w-md space-y-6">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-2">
-            <Globe className="w-8 h-8 text-white/20" />
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-muted border border-border flex items-center justify-center mb-2">
+            <Globe className="w-8 h-8 text-muted-foreground" />
           </div>
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">This app does not exist</h1>
-          <p className="text-white/50 text-base sm:text-lg leading-relaxed">
+          <p className="text-muted-foreground text-base sm:text-lg leading-relaxed">
             Start your own predictions app in minutes — no code, no setup, just launch.
           </p>
           <a
@@ -436,8 +433,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           >
             BUY YOUR APP — $2,400 USDC
           </a>
-          <p className="text-white/30 text-xs">
-            Powered by <a href="https://1mg.live" className="underline hover:text-white/50">1MG</a>
+          <p className="text-muted-foreground/50 text-xs">
+            Powered by <a href="https://1mg.live" className="underline hover:opacity-80">1MG</a>
           </p>
         </div>
       </div>
@@ -658,17 +655,13 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
             }}
           >
             <div className="flex items-center gap-2 mb-3">
-              {(() => {
-                const d = new Date((featuredEvent as any).event_date || 0);
-                const isLive = d.getTime() < Date.now() && d.getTime() > Date.now() - 3 * 3600000;
-                return isLive ? (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500">● LIVE</span>
-                ) : (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: theme.primary + "18", color: theme.primary }}>
-                    <Zap className="w-3 h-3 inline mr-0.5" />UP NEXT
-                  </span>
-                );
-              })()}
+              {featuredEvent.status === "live" ? (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500">● LIVE</span>
+              ) : (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: theme.primary + "18", color: theme.primary }}>
+                  <Zap className="w-3 h-3 inline mr-0.5" />UP NEXT
+                </span>
+              )}
               <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: theme.textMuted }}>
                 {(featuredEvent as any)._broadSport && BROAD_SPORTS[(featuredEvent as any)._broadSport]?.label
                   ? `${BROAD_SPORTS[(featuredEvent as any)._broadSport].label} • ${(featuredEvent as any)._league || ""}`
@@ -718,7 +711,33 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
       {/* Events — grouped by date */}
       <div className="max-w-4xl mx-auto px-4 py-4 space-y-4">
-        {backendDegraded && filteredFights.length === 0 ? (
+        {/* Loading skeleton */}
+        {!operatorFights && !backendDegraded && (
+          <div className="space-y-3">
+            {[1, 2, 3].map(i => (
+              <div
+                key={i}
+                className="rounded-xl p-4 animate-pulse"
+                style={{ backgroundColor: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="h-3 rounded-full w-24" style={{ backgroundColor: theme.surfaceBg }} />
+                  <div className="h-3 rounded-full w-16" style={{ backgroundColor: theme.surfaceBg }} />
+                </div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="h-5 rounded w-28" style={{ backgroundColor: theme.surfaceBg }} />
+                  <div className="h-4 rounded w-8" style={{ backgroundColor: theme.surfaceBg }} />
+                  <div className="h-5 rounded w-28" style={{ backgroundColor: theme.surfaceBg }} />
+                </div>
+                <div className="flex gap-2 mt-3">
+                  <div className="h-9 rounded-lg flex-1" style={{ backgroundColor: theme.surfaceBg }} />
+                  <div className="h-9 rounded-lg flex-1" style={{ backgroundColor: theme.surfaceBg }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {operatorFights && backendDegraded && filteredFights.length === 0 ? (
           <div
             className="rounded-xl px-6 py-12 text-center"
             style={{ backgroundColor: theme.isDark ? "rgba(120,53,15,0.2)" : "rgba(254,243,199,0.3)", border: `1px solid ${theme.isDark ? "rgba(245,158,11,0.3)" : "#fde68a"}` }}
@@ -877,6 +896,57 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         title={t("operator.signInToPredict")}
         description={t("operator.signInDesc")}
       />
+
+      {/* Add Funds Modal */}
+      {showFundsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowFundsModal(false)} />
+          <div
+            className="relative z-10 w-full max-w-sm rounded-2xl p-6 space-y-4 shadow-2xl"
+            style={{ backgroundColor: theme.cardBg, border: `1px solid ${theme.cardBorder}`, color: theme.textPrimary }}
+          >
+            <h3 className="text-lg font-bold">Add Funds</h3>
+            <p className="text-sm" style={{ color: theme.textSecondary }}>
+              Send <strong>USDC.e</strong> on the <strong>Polygon</strong> network to your wallet address below.
+            </p>
+            {address && (
+              <div
+                className="flex items-center gap-2 p-3 rounded-lg text-xs font-mono break-all"
+                style={{ backgroundColor: theme.surfaceBg, border: `1px solid ${theme.cardBorder}` }}
+              >
+                <span className="flex-1">{address}</span>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(address);
+                    toast.success("Address copied!");
+                  }}
+                  className="shrink-0 p-1.5 rounded-md hover:opacity-80 transition-opacity"
+                  style={{ backgroundColor: theme.primary + "22", color: theme.primary }}
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+            <a
+              href="https://app.uniswap.org/swap?chain=polygon"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90"
+              style={{ backgroundColor: theme.primary, color: theme.primaryForeground }}
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              Get USDC.e on Polygon
+            </a>
+            <button
+              onClick={() => setShowFundsModal(false)}
+              className="w-full py-2 rounded-lg text-sm font-medium transition-colors"
+              style={{ backgroundColor: theme.surfaceBg, color: theme.textSecondary }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Sport Picker Modal */}
       <SportPickerModal

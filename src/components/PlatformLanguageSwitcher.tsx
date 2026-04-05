@@ -31,7 +31,7 @@ export default function PlatformLanguageSwitcher() {
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-white/60 hover:text-white hover:bg-white/5 transition-colors text-sm"
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors text-sm"
         aria-label="Select language"
       >
         <Globe size={14} />
@@ -41,13 +41,13 @@ export default function PlatformLanguageSwitcher() {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1 z-50 bg-[#0d1117] border border-white/10 rounded-lg shadow-xl overflow-hidden min-w-[100px]">
+          <div className="fixed sm:absolute right-2 sm:right-0 top-auto sm:top-full mt-1 z-50 bg-popover border border-border rounded-lg shadow-xl overflow-hidden min-w-[100px] max-h-64 overflow-y-auto">
             {PLATFORM_LANGS.map(lang => (
               <button
                 key={lang.code}
                 onClick={() => handleChange(lang.code)}
-                className={`w-full px-4 py-2 text-left text-sm hover:bg-white/5 transition-colors ${
-                  current.code === lang.code ? "text-blue-400 font-semibold" : "text-white/70"
+                className={`w-full px-4 py-2.5 text-left text-sm hover:bg-muted/50 transition-colors ${
+                  current.code === lang.code ? "text-primary font-semibold" : "text-muted-foreground"
                 }`}
               >
                 {lang.label}
