@@ -749,8 +749,13 @@ Deno.serve(async (req) => {
 
     // ═══════════════════════════════════════════════════
     // VALIDATE FIGHT STATUS (tradability gate)
+    // Polymarket-backed events allow "live" and "locked" for in-play trading;
+    // the downstream polymarket_end_date + grace window is the authoritative gate.
     // ═══════════════════════════════════════════════════
-    if (!TRADABLE_STATUSES.has(fight.status)) {
+    const isPolymarketEvent = !!(fight.polymarket_market_id && fight.polymarket_outcome_a_token);
+    const polymarketInPlay = isPolymarketEvent && (fight.status === "live" || fight.status === "locked");
+
+    if (!TRADABLE_STATUSES.has(fight.status) && !polymarketInPlay) {
       const errorCode =
         fight.status === "locked"
           ? "market_locked"
@@ -843,8 +848,9 @@ Deno.serve(async (req) => {
       }
 
       if (fight.polymarket_active === false) {
-        await auditLog(supabase, null, normalizedWallet, "tradability_check_failed", { fight_id }, { error_code: "market_inactive" });
-        return json({ error: "This Polymarket market is no longer active", error_code: "market_inactive" }, 400);
+        // Log as warning but don't reject — polymarket_active flips to false when games start.
+        // The polymarket_end_date + 6h grace window below is the authoritative expiration gate.
+        console.warn(`[prediction-submit] polymarket_active=false for fight ${fight_id}, allowing in-play trading`);
       }
 
       if (fight.polymarket_end_date) {
