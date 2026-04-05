@@ -21,9 +21,8 @@ const LanguageSelector = () => {
 
   const handleLanguageChange = (code: LanguageCode) => {
     i18n.changeLanguage(code);
-    // Update document direction for RTL languages
-    const lang = languages.find(l => l.code === code);
-    document.documentElement.dir = lang?.dir || 'ltr';
+    // Do NOT set document.dir to 'rtl' — the app layout is LTR-only.
+    // Arabic text renders correctly in its own direction within LTR containers.
     document.documentElement.lang = code;
     setOpen(false);
   };

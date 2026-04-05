@@ -508,7 +508,7 @@
   "wallet": {
     "signedInAs": "Signed in as",
     "connect": "Sign In",
-    "disconnect": "Sign Out",
+    "disconnect": "Disconnect",
     "wrongNetwork": "Wrong Network",
     "switchNetwork": "Switch Network",
     "walletRequired": "Account Required",
@@ -522,7 +522,7 @@
     "back": "Back",
     "copyLink": "Copy Link",
     "copied": "Copied!",
-    "openInWalletBrowser": "Open in wallet browser",
+    "openInWalletBrowser": "Open in {{wallet}} Browser",
     "tryInBrowserConnect": "Try connecting in this browser",
     "connectionTimedOut": "Connection timed out",
     "wrongWalletBrowserHint": "Make sure you're opening this page inside your wallet's browser",
@@ -592,7 +592,6 @@
     "desktopModalDescription": "Install the wallet extension or open in wallet browser to continue.",
     "openInPhantom": "Open in Phantom",
     "openInSolflare": "Open in Solflare",
-    "openInWalletBrowser": "Open in {{wallet}} Browser",
     "orOpenInWalletBrowser": "Or open in wallet browser:",
     "openInWallet": "Open in {{wallet}}",
     "opensWalletBrowser": "Opens wallet browser",
@@ -611,7 +610,6 @@
     "alreadyHaveCryptoWallet": "Already have a crypto wallet?",
     "switchWallet": "Switch Wallet",
     "walletLoginNotConfigured": "Wallet login not configured",
-    "disconnect": "Disconnect",
     "loginToPlay": "Log in to Play",
     "loginToPlayDesc": "Sign in with Google, X, or Email to get started.",
     "orUseExternal": "Or connect an external wallet",
@@ -1551,7 +1549,14 @@
       "title": "Own Your Own Predictions App.",
       "titleHighlight": "Earn Fees From Every Pick.",
       "subtitle": "We give you the app, users place predictions, you earn a % on every play.",
-      "subtitleSmall": ""
+      "subtitleSmall": "",
+      "buyNow": "BUY NOW — $2,400 USDC",
+      "viewDemo": "View Live Demo →",
+      "walletCreated": "When you continue, a secure wallet is created for you.",
+      "walletUsedFor": "This wallet is used to:",
+      "payForApp": "✅ pay for your app",
+      "collectEarnings": "✅ collect your earnings",
+      "manageBusiness": "✅ manage your business"
     },
     "cta": {
       "buyNow": "BUY NOW — $2,400 USDC",
@@ -1611,6 +1616,21 @@
     "nav": {
       "signIn": "Sign In",
       "dashboard": "Dashboard"
+    },
+    "calculator": {
+      "title": "See How Much You Could Earn",
+      "subtitle": "Adjust the numbers to match your market",
+      "activeUsers": "Active Users",
+      "avgBet": "Avg Bet / Week ($)",
+      "yourFee": "Your Fee %",
+      "perWeek": "per week",
+      "perMonth": "per month",
+      "perYear": "per year"
+    },
+    "phone": {
+      "yourBrandedApp": "Your branded app",
+      "placePrediction": "Place Prediction →",
+      "marketProbability": "market probability"
     }
   },
   "operator": {
@@ -1674,6 +1694,42 @@
       "linkCopied": "Link copied!",
       "support": "Support",
       "supportEmail": "1mgaming@proton.me"
-    }
+    },
+    "events": "Events",
+    "myPicks": "My Picks",
+    "allSports": "All Sports",
+    "all": "All",
+    "today": "Today",
+    "thisWeek": "This Week",
+    "predictNow": "Predict Now",
+    "noLiveSports": "No live sports available right now",
+    "noPredictions": "No predictions placed yet",
+    "pickWinner": "Pick a winner from the events tab to get started.",
+    "checkBackSoon": "New matchups will appear here as soon as they open. Check back soon.",
+    "upNext": "UP NEXT",
+    "collectWinnings": "Collect Winnings",
+    "claiming": "Claiming...",
+    "shareYourWin": "🏆 SHARE YOUR WIN",
+    "betterLuck": "Better luck next time",
+    "yourPick": "Your Pick",
+    "vs": "VS",
+    "draw": "Draw",
+    "totalPool": "Total Pool",
+    "graph": "Graph",
+    "winningsCollected": "Winnings collected ✓",
+    "result": "✅ Result",
+    "wins": "Wins!",
+    "betToWin": "Bet $10 → Win ${{amount}}",
+    "available": "Available",
+    "addFundsTitle": "Add Funds",
+    "addFundsDesc": "Send USDC.e on the Polygon network to your wallet address below.",
+    "addressCopied": "Address copied!",
+    "getUsdce": "Get USDC.e on Polygon",
+    "close": "Close",
+    "getYourApp": "Get Your Own Predictions App →",
+    "buyYourApp": "BUY YOUR APP — $2,400 USDC",
+    "appNotExist": "This app does not exist",
+    "appNotExistDesc": "Start your own predictions app in minutes — no code, no setup, just launch.",
+    "noSearchResultsDesc": "Try a different team or player name."
   }
 }

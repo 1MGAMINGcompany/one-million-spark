@@ -69,6 +69,7 @@ function FloatingIcons() {
 
 /* ── Phone Mockup ── */
 function PhoneMockup() {
+  const { t } = useTranslation();
   return (
     <div className="relative mx-auto w-[240px] sm:w-[280px]">
       <div
@@ -82,7 +83,7 @@ function PhoneMockup() {
         <div className="rounded-[1.6rem] bg-gradient-to-b from-[#0a0f1a] to-[#060810] p-4 pt-8 min-h-[360px] sm:min-h-[420px] overflow-hidden">
           <div className="text-center mb-5">
             <div className="text-xs text-blue-400 font-bold mb-1">1mg.live/yourname</div>
-            <div className="text-[10px] text-white/30">Your branded app</div>
+            <div className="text-[10px] text-white/30">{t("platform.phone.yourBrandedApp")}</div>
           </div>
           {[
             { a: "Lakers", b: "Celtics", pct: "52%" },
@@ -96,11 +97,11 @@ function PhoneMockup() {
               <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
                 <div className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full" style={{ width: m.pct }} />
               </div>
-              <div className="text-[9px] text-white/25 mt-1 text-center">{m.pct} market probability</div>
+              <div className="text-[9px] text-white/25 mt-1 text-center">{m.pct} {t("platform.phone.marketProbability")}</div>
             </div>
           ))}
           <div className="mt-3 bg-blue-600/20 border border-blue-500/20 rounded-lg p-2.5 text-center">
-            <span className="text-[10px] text-blue-300 font-semibold">Place Prediction →</span>
+            <span className="text-[10px] text-blue-300 font-semibold">{t("platform.phone.placePrediction")}</span>
           </div>
         </div>
       </div>
@@ -144,6 +145,7 @@ function AnimatedCounter({ target, suffix = "" }: { target: number; suffix?: str
 
 /* ── Revenue Calculator ── */
 function RevenueCalculator() {
+  const { t } = useTranslation();
   const [users, setUsers] = useState(100);
   const [avgBet, setAvgBet] = useState(20);
   const [feePct, setFeePct] = useState(5);
@@ -158,12 +160,12 @@ function RevenueCalculator() {
     <section className="py-20 px-4 sm:px-6 relative z-10">
       <div className="max-w-4xl mx-auto">
         <div className="bg-gradient-to-br from-blue-600/[0.08] to-cyan-600/[0.04] border border-blue-500/15 rounded-3xl p-8 sm:p-12">
-          <h2 className="text-3xl sm:text-4xl font-bold text-center mb-2">See How Much You Could Earn</h2>
-          <p className="text-white/40 text-center mb-10 max-w-lg mx-auto">Adjust the numbers to match your market</p>
+          <h2 className="text-3xl sm:text-4xl font-bold text-center mb-2">{t("platform.calculator.title")}</h2>
+          <p className="text-white/40 text-center mb-10 max-w-lg mx-auto">{t("platform.calculator.subtitle")}</p>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 mb-10">
             <div>
-              <label className="text-sm text-white/50 block mb-2">Active Users</label>
+              <label className="text-sm text-white/50 block mb-2">{t("platform.calculator.activeUsers")}</label>
               <input
                 type="range" min={10} max={1000} step={10} value={users}
                 onChange={e => setUsers(Number(e.target.value))}
@@ -172,7 +174,7 @@ function RevenueCalculator() {
               <div className="text-2xl font-bold text-white mt-1">{users}</div>
             </div>
             <div>
-              <label className="text-sm text-white/50 block mb-2">Avg Bet / Week ($)</label>
+              <label className="text-sm text-white/50 block mb-2">{t("platform.calculator.avgBet")}</label>
               <input
                 type="range" min={5} max={100} step={5} value={avgBet}
                 onChange={e => setAvgBet(Number(e.target.value))}
@@ -181,7 +183,7 @@ function RevenueCalculator() {
               <div className="text-2xl font-bold text-white mt-1">${avgBet}</div>
             </div>
             <div>
-              <label className="text-sm text-white/50 block mb-2">Your Fee %</label>
+              <label className="text-sm text-white/50 block mb-2">{t("platform.calculator.yourFee")}</label>
               <input
                 type="range" min={1} max={10} step={0.5} value={feePct}
                 onChange={e => setFeePct(Number(e.target.value))}
@@ -194,15 +196,15 @@ function RevenueCalculator() {
           <div className="grid grid-cols-3 gap-4 text-center">
             <div className="bg-white/[0.04] rounded-xl p-5 border border-white/5">
               <div className="text-3xl sm:text-4xl font-bold text-blue-400">${fmtK(weekly)}</div>
-              <div className="text-white/40 text-sm mt-1">per week</div>
+              <div className="text-white/40 text-sm mt-1">{t("platform.calculator.perWeek")}</div>
             </div>
             <div className="bg-white/[0.04] rounded-xl p-5 border border-blue-500/20">
               <div className="text-3xl sm:text-4xl font-bold text-blue-400">${fmtK(monthly)}</div>
-              <div className="text-white/40 text-sm mt-1">per month</div>
+              <div className="text-white/40 text-sm mt-1">{t("platform.calculator.perMonth")}</div>
             </div>
             <div className="bg-white/[0.04] rounded-xl p-5 border border-white/5">
               <div className="text-3xl sm:text-4xl font-bold text-blue-400">${fmtK(yearly)}</div>
-              <div className="text-white/40 text-sm mt-1">per year</div>
+              <div className="text-white/40 text-sm mt-1">{t("platform.calculator.perYear")}</div>
             </div>
           </div>
         </div>
@@ -377,22 +379,22 @@ export default function LandingPage() {
                   size="lg"
                   className="bg-blue-600 hover:bg-blue-500 text-white text-lg px-10 h-16 border-0 btn-glow rounded-xl font-bold w-full sm:w-auto"
                 >
-                  BUY NOW — $2,400 USDC <ArrowRight size={20} className="ml-2" />
+                  {t("platform.hero.buyNow")} <ArrowRight size={20} className="ml-2" />
                 </Button>
                 <div className="text-sm text-white/40 space-y-1.5 max-w-md">
-                  <p className="text-white/50 font-medium">When you continue, a secure wallet is created for you.</p>
-                  <p className="text-white/40">This wallet is used to:</p>
+                  <p className="text-white/50 font-medium">{t("platform.hero.walletCreated")}</p>
+                  <p className="text-white/40">{t("platform.hero.walletUsedFor")}</p>
                   <div className="space-y-0.5 text-white/40">
-                    <p>✅ pay for your app</p>
-                    <p>✅ collect your earnings</p>
-                    <p>✅ manage your business</p>
+                    <p>{t("platform.hero.payForApp")}</p>
+                    <p>{t("platform.hero.collectEarnings")}</p>
+                    <p>{t("platform.hero.manageBusiness")}</p>
                   </div>
                 </div>
                 <a
                   href="/demo"
                   className="text-blue-400 hover:text-blue-300 text-sm font-medium underline underline-offset-2 transition-colors"
                 >
-                  View Live Demo →
+                  {t("platform.hero.viewDemo")}
                 </a>
               </div>
 
@@ -507,17 +509,17 @@ export default function LandingPage() {
             size="lg"
             className="bg-blue-600 hover:bg-blue-500 text-white text-lg px-10 h-16 border-0 btn-glow rounded-xl font-bold"
           >
-            BUY NOW — $2,400 USDC <ArrowRight size={20} className="ml-2" />
+            {t("platform.hero.buyNow")} <ArrowRight size={20} className="ml-2" />
           </Button>
           <div className="mt-4 text-sm text-white/40 space-y-1">
-            <p className="text-white/50 font-medium">When you continue, a secure wallet is created for you.</p>
-            <p>✅ pay for your app &nbsp; ✅ collect your earnings &nbsp; ✅ manage your business</p>
+            <p className="text-white/50 font-medium">{t("platform.hero.walletCreated")}</p>
+            <p>{t("platform.hero.payForApp")} &nbsp; {t("platform.hero.collectEarnings")} &nbsp; {t("platform.hero.manageBusiness")}</p>
           </div>
           <a
             href="/demo"
             className="inline-block mt-4 text-blue-400 hover:text-blue-300 text-sm font-medium underline underline-offset-2 transition-colors"
           >
-            View Live Demo →
+            {t("platform.hero.viewDemo")}
           </a>
         </div>
       </section>
