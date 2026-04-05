@@ -215,7 +215,7 @@ type FetchStrategy = "tag" | "series" | "search";
 interface LeagueSource {
   key: string;
   label: string;
-  sportType: "soccer" | "mma" | "boxing" | "bkfc" | "nfl" | "nba" | "nhl" | "ncaa" | "mlb" | "tennis" | "golf" | "cricket" | "f1" | "rugby";
+  sportType: "soccer" | "mma" | "boxing" | "bkfc" | "nfl" | "nba" | "nhl" | "ncaa" | "mlb" | "tennis" | "golf" | "cricket" | "f1" | "rugby" | "esports";
   fetchStrategy: FetchStrategy;
   tagId?: string;
   tagSlug?: string;
@@ -292,6 +292,13 @@ const LEAGUE_SOURCES: Record<string, LeagueSource> = {
   "cricket-intl":  { key: "cricket-intl",  label: "Cricket Intl",  sportType: "cricket", fetchStrategy: "search", searchSeed: ["cricket international", "cricket vs", "T20 international"] },
   // ─── Rugby ───
   "rugby":    { key: "rugby",    label: "Rugby",    sportType: "rugby", fetchStrategy: "search", searchSeed: ["rugby vs", "Six Nations", "rugby union"] },
+  // ─── Esports ───
+  "cs2":      { key: "cs2",      label: "Counter-Strike", sportType: "esports", fetchStrategy: "search", searchSeed: ["Counter-Strike vs", "CS2 vs", "CS2"] },
+  // ─── Additional Cricket leagues ───
+  "cricket-legends": { key: "cricket-legends", label: "Legends", sportType: "cricket", fetchStrategy: "search", searchSeed: ["Legends Cricket League", "LLC vs"] },
+  "cricket-t20":     { key: "cricket-t20",     label: "T20",     sportType: "cricket", fetchStrategy: "search", searchSeed: ["T20 cricket vs", "National T20", "T20 Cup"] },
+  "cricket-bbl":     { key: "cricket-bbl",     label: "BBL",     sportType: "cricket", fetchStrategy: "search", searchSeed: ["Big Bash League", "BBL vs"] },
+  "cricket-test":    { key: "cricket-test",    label: "Test",    sportType: "cricket", fetchStrategy: "search", searchSeed: ["Test cricket", "Test match vs"] },
   // ─── Other ───
   "table-tennis": { key: "table-tennis", label: "Table Tennis", sportType: "tennis", fetchStrategy: "search", searchSeed: ["table tennis", "ping pong"] },
 };
@@ -609,17 +616,44 @@ function findWinnerMarket(ev: GammaEvent): GammaMarketExt | null {
     "most", "top scorer", "batting average", "home runs",
     "touchdowns", "will they", "will .* make", "season wins",
     "trade", "signed", "contract", "agreement", "champion",
+    // Cricket props
+    "toss winner", "toss", "top batter", "top bowler",
+    "completed match", "highest opening", "most sixes",
+    "most fours", "first wicket", "first boundary",
+    "man of the match", "century", "run out",
+    "highest individual", "powerplay", "death overs",
+    // Esports props
+    "game 1", "game 2", "game 3", "game1", "game2", "game3",
+    "map 1", "map 2", "map 3", "map1", "map2", "map3",
+    "round ", "pistol round", "first blood", "first kill",
+    "total kills", "total maps", "ace",
+    // Draw-only / special
+    "draw or", "go the distance",
   ];
+
+  // Also reject by slug patterns (catches things rejectWords miss)
+  const slugRejectPatterns = [
+    /-toss-winner/i, /-completed-match/i, /-top-bat/i, /-top-bowl/i,
+    /-game[0-9]/i, /-map[0-9]/i, /-round[0-9]/i,
+    /-most-sixes/i, /-most-fours/i, /-first-wicket/i,
+    /-first-blood/i, /-first-kill/i, /-total-kills/i,
+  ];
+  const evSlug = (ev.slug || "").toLowerCase();
+  if (slugRejectPatterns.some(re => re.test(evSlug))) return null;
 
   for (const m of ev.markets || []) {
     const outcomes = safeJsonParse(m.outcomes);
     const question = (m.question || "").toLowerCase();
+    const mSlug = (m.slug || "").toLowerCase();
 
     // Must have 2 or 3 outcomes only (team A, team B, optional draw)
     if (outcomes.length < 2 || outcomes.length > 3) continue;
 
     // Reject prop keywords in the question
     if (rejectWords.some(w => question.includes(w))) continue;
+
+    // Reject prop keywords in market slug
+    if (slugRejectPatterns.some(re => re.test(mSlug))) continue;
 
     // Must contain "win" or "vs" pattern
     if (question.includes("win") || question.includes("vs") || MATCHUP_RE.test(question)) {
@@ -633,8 +667,9 @@ function findWinnerMarket(ev: GammaEvent): GammaMarketExt | null {
     const m = markets[0];
     const outcomes = safeJsonParse(m.outcomes);
     const question = (m.question || "").toLowerCase();
+    const mSlug = (m.slug || "").toLowerCase();
     if (outcomes.length >= 2 && outcomes.length <= 3) {
-      if (!rejectWords.some(w => question.includes(w))) {
+      if (!rejectWords.some(w => question.includes(w)) && !slugRejectPatterns.some(re => re.test(mSlug))) {
         return m as GammaMarketExt;
       }
     }
@@ -986,6 +1021,7 @@ const SPORT_TYPE_TO_CATEGORY: Record<string, string> = {
   cricket: "CRICKET",
   f1: "F1",
   rugby: "RUGBY",
+  esports: "ESPORTS",
 };
 
 /** Country name → ISO 3166-1 alpha-2 code for flag CDN */
@@ -1796,7 +1832,9 @@ Deno.serve(async (req) => {
         "atp", "wta", "tennis", "tennis-atp", "tennis-wta", "tennis-grand-slam",
         "golf", "f1",
         "cricket", "cricket-ipl", "cricket-psl", "cricket-intl",
+        "cricket-legends", "cricket-t20", "cricket-bbl", "cricket-test",
         "rugby", "table-tennis",
+        "cs2",
       ]);
 
       const summary: Record<string, { fetched: number; imported: number; errors: number }> = {};

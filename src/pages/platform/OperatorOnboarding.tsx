@@ -16,7 +16,7 @@ const THEMES = THEME_OPTIONS.map(t => ({
 
 const SPORTS_OPTIONS = [
   "NFL", "NBA", "NHL", "Soccer", "MMA", "Boxing",
-  "MLB", "Tennis", "UFC", "Cricket", "F1",
+  "MLB", "Tennis", "UFC", "Cricket", "F1", "Esports",
 ];
 
 export default function OperatorOnboarding() {

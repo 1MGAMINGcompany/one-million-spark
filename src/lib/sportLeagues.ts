@@ -20,6 +20,7 @@ export const BROAD_SPORTS: Record<string, { label: string; emoji: string }> = {
   GOLF: { label: "Golf", emoji: "⛳" },
   F1: { label: "F1", emoji: "🏎️" },
   RUGBY: { label: "Rugby", emoji: "🏉" },
+  ESPORTS: { label: "Esports", emoji: "🎮" },
 };
 
 // ── Normalized sport → broad sport mapping ──
@@ -45,6 +46,7 @@ const SPORT_TO_BROAD: Record<string, string> = {
   F1: "F1",
   NASCAR: "F1",
   RUGBY: "RUGBY",
+  ESPORTS: "ESPORTS",
 };
 
 /**
@@ -94,6 +96,7 @@ const SLUG_PREFIX_TO_LEAGUE: Record<string, string> = {
   uru: "Uruguayan Liga",
   par: "Paraguayan Liga",
   bol: "Bolivian Liga",
+  svk1: "Slovak Super Liga",
   // US sports
   nba: "NBA",
   nhl: "NHL",
@@ -107,10 +110,18 @@ const SLUG_PREFIX_TO_LEAGUE: Record<string, string> = {
   bel2: "Bellator",
   one: "ONE",
   bkfc: "BKFC",
-  // Cricket
+  // Cricket — granular subdivision
   cricipl: "IPL",
   cricpsl: "PSL",
   cric: "International",
+  cricleg: "Legends Cricket League",
+  crict20: "National T20",
+  cricbbl: "BBL",
+  crictest: "Test Cricket",
+  cricwc: "Cricket World Cup",
+  cricodi: "ODI",
+  cricsaf: "South Africa",
+  cricaus: "Australia",
   // Tennis
   atp: "ATP",
   wta: "WTA",
@@ -119,6 +130,8 @@ const SLUG_PREFIX_TO_LEAGUE: Record<string, string> = {
   // F1
   f1: "Formula 1",
   nascar: "NASCAR",
+  // Esports
+  cs2: "Counter-Strike",
 };
 
 /**
@@ -225,9 +238,12 @@ const CRICKET_LEAGUES: LeagueRule[] = [
   { keywords: ["IPL", "INDIAN PREMIER"], league: "IPL" },
   { keywords: ["PSL"], league: "PSL" },
   { keywords: ["T20 WORLD", "T20I"], league: "T20 International" },
+  { keywords: ["NATIONAL T20"], league: "National T20" },
   { keywords: ["TEST MATCH", "TEST CRICKET"], league: "Test Cricket" },
   { keywords: ["BBL", "BIG BASH"], league: "BBL" },
   { keywords: ["ODI", "ONE DAY"], league: "ODI" },
+  { keywords: ["LEGENDS CRICKET", "LLC"], league: "Legends Cricket League" },
+  { keywords: ["WORLD CUP CRICKET", "CRICKET WORLD"], league: "Cricket World Cup" },
 ];
 
 const TENNIS_LEAGUES: LeagueRule[] = [
@@ -237,6 +253,13 @@ const TENNIS_LEAGUES: LeagueRule[] = [
   { keywords: ["AUSTRALIAN OPEN"], league: "Australian Open" },
   { keywords: ["ATP"], league: "ATP" },
   { keywords: ["WTA"], league: "WTA" },
+];
+
+const ESPORTS_LEAGUES: LeagueRule[] = [
+  { keywords: ["COUNTER-STRIKE", "CS2", "CS:GO"], league: "Counter-Strike" },
+  { keywords: ["DOTA", "DOTA 2"], league: "Dota 2" },
+  { keywords: ["LEAGUE OF LEGENDS", "LOL"], league: "League of Legends" },
+  { keywords: ["VALORANT"], league: "Valorant" },
 ];
 
 const LEAGUE_RULES: Record<string, LeagueRule[]> = {
@@ -249,6 +272,7 @@ const LEAGUE_RULES: Record<string, LeagueRule[]> = {
   BOXING: BOXING_LEAGUES,
   CRICKET: CRICKET_LEAGUES,
   TENNIS: TENNIS_LEAGUES,
+  ESPORTS: ESPORTS_LEAGUES,
 };
 
 /**

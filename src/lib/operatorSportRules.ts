@@ -7,7 +7,7 @@
 /** Sports allowed on operator apps — strict allowlist */
 const OPERATOR_ALLOWED_SPORTS = new Set([
   "NFL", "NBA", "NHL", "SOCCER", "MMA", "BOXING", "MLB", "TENNIS",
-  "GOLF", "NCAA", "CRICKET", "F1", "NASCAR", "MLS", "RUGBY",
+  "GOLF", "NCAA", "CRICKET", "F1", "NASCAR", "MLS", "RUGBY", "ESPORTS",
 ]);
 
 /** Keyword → canonical sport mapping (order matters: first match wins) */
@@ -16,13 +16,15 @@ const SPORT_KEYWORDS: [string[], string][] = [
   [["FUTBOL", "FÚTBOL"], "SOCCER"],
   [["MUAY THAI"], "MMA"],
   [["BARE KNUCKLE", "BKFC"], "BOXING"],
+  // Esports
+  [["COUNTER-STRIKE", "CS2", "DOTA", "LEAGUE OF LEGENDS", "VALORANT", "ESPORTS"], "ESPORTS"],
   // Soccer / Futbol variants
   [["MLS"], "MLS"],
   [["SOCCER", "FUTBOL", "FÚTBOL", "PREMIER LEAGUE", "LA LIGA", "CHAMPIONS LEAGUE",
     "SERIE A", "BUNDESLIGA", "LIGUE 1", "EPL", "COPA", "LIGA MX", "EREDIVISIE",
     "PRIMEIRA LIGA", "SUPER LIG", "SÜPER LIG", "BRAZIL SÉRIE A", "SAUDI PRO LEAGUE",
     "COPA LIBERTADORES", "EUROPA LEAGUE", "UEL", "UCL", "A-LEAGUE", "K-LEAGUE",
-    "J-LEAGUE", "CONCACAF", "CONMEBOL"], "SOCCER"],
+    "J-LEAGUE", "CONCACAF", "CONMEBOL", "SLOVAK SUPER LIGA"], "SOCCER"],
   // Combat
   [["UFC", "MMA", "PFL", "BELLATOR", "ONE CHAMPIONSHIP", "MUAY THAI", "KICKBOXING"], "MMA"],
   [["BOXING", "BARE KNUCKLE", "BKFC"], "BOXING"],
@@ -40,7 +42,7 @@ const SPORT_KEYWORDS: [string[], string][] = [
   [["F1"], "F1"],
   [["NASCAR", "DAYTONA", "INDY 500"], "NASCAR"],
   // Other
-  [["CRICKET", "IPL", "T20", "PSL"], "CRICKET"],
+  [["CRICKET", "IPL", "T20", "PSL", "BBL", "BIG BASH", "LEGENDS CRICKET"], "CRICKET"],
 ];
 
 /**
@@ -92,13 +94,17 @@ const SLUG_SPORT_MAP: Record<string, string> = {
   tur: "SOCCER", sau: "SOCCER", por: "SOCCER", sco: "SOCCER", bel: "SOCCER",
   aus: "SOCCER", chi: "SOCCER", col: "SOCCER", per: "SOCCER", ven: "SOCCER",
   ecu: "SOCCER", uru: "SOCCER", bol: "SOCCER", par: "SOCCER", ros: "SOCCER",
+  svk1: "SOCCER",
   nba: "NBA", nhl: "NHL", mlb: "MLB", nfl: "NFL",
   cbb: "NCAA", cfb: "NCAA",
   ufc: "MMA", pfl: "MMA", one: "MMA",
   bkfc: "BOXING", floyd: "BOXING",
   cricipl: "CRICKET", cricpsl: "CRICKET", cric: "CRICKET",
+  cricleg: "CRICKET", crict20: "CRICKET", cricbbl: "CRICKET",
+  crictest: "CRICKET", cricwc: "CRICKET",
   atp: "TENNIS", wta: "TENNIS",
   pga: "GOLF", f1: "F1", nascar: "NASCAR",
+  cs2: "ESPORTS",
 };
 
 function sportFromSlug(slug: string): string | null {
@@ -125,7 +131,7 @@ export function getAllowedSportsList(): string[] {
 export const OPERATOR_SPORT_EMOJI: Record<string, string> = {
   NBA: "🏀", NHL: "🏒", MLB: "⚾", NFL: "🏈", MLS: "⚽", SOCCER: "⚽",
   MMA: "🥊", BOXING: "🥊", TENNIS: "🎾", CRICKET: "🏏", GOLF: "⛳",
-  F1: "🏎️", NASCAR: "🏁", NCAA: "🎓", RUGBY: "🏉",
+  F1: "🏎️", NASCAR: "🏁", NCAA: "🎓", RUGBY: "🏉", ESPORTS: "🎮",
 };
 
 // ── Event shape validation ──
