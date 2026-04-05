@@ -211,7 +211,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       }));
     return [{
       label: "Sports",
-      tabs: [{ key: "ALL", label: "All Sports", emoji: "🔥", count: enrichedFights.length }, ...tabs],
+      tabs: [{ key: "ALL", label: t("operator.allSports"), emoji: "🔥", count: enrichedFights.length }, ...tabs],
+    }];
     }];
   }, [enrichedFights, sportCounts]);
 
@@ -422,16 +423,16 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           <div className="w-16 h-16 mx-auto rounded-2xl bg-muted border border-border flex items-center justify-center mb-2">
             <Globe className="w-8 h-8 text-muted-foreground" />
           </div>
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">This app does not exist</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">{t("operator.appNotExist")}</h1>
           <p className="text-muted-foreground text-base sm:text-lg leading-relaxed">
-            Start your own predictions app in minutes — no code, no setup, just launch.
+            {t("operator.appNotExistDesc")}
           </p>
           <a
             href="https://1mg.live"
             className="inline-flex items-center justify-center gap-2 rounded-xl px-8 py-4 text-base font-bold text-black transition-all duration-200 hover:scale-[1.02] shadow-lg"
             style={{ background: "linear-gradient(135deg, #d4a017, #f5c842)" }}
           >
-            BUY YOUR APP — $2,400 USDC
+            {t("operator.buyYourApp")}
           </a>
           <p className="text-muted-foreground/50 text-xs">
             Powered by <a href="https://1mg.live" className="underline hover:opacity-80">1MG</a>
@@ -514,7 +515,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                   boxShadow: activeTab === tab ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
                 }}
               >
-                {tab === "events" ? "Events" : `My Picks${userEntries.length > 0 ? ` (${userEntries.length})` : ""}`}
+                {tab === "events" ? t("operator.events") : `${t("operator.myPicks")}${userEntries.length > 0 ? ` (${userEntries.length})` : ""}`}
               </button>
             ))}
           </div>
@@ -535,7 +536,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
             }}
           >
             <span className="text-sm">🔥</span>
-            <span>All Sports</span>
+            <span>{t("operator.allSports")}</span>
             <ChevronDown className="w-3 h-3" />
             <span
               className="text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center font-semibold"
@@ -605,7 +606,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         <div className="flex items-center gap-2">
           {(["all", "today", "week"] as const).map(f => {
             const isActive = timeFilter === f;
-            const label = f === "all" ? "All" : f === "today" ? "Today" : "This Week";
+            const label = f === "all" ? t("operator.all") : f === "today" ? t("operator.today") : t("operator.thisWeek");
             return (
               <button
                 key={f}
@@ -659,7 +660,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500">● LIVE</span>
               ) : (
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: theme.primary + "18", color: theme.primary }}>
-                  <Zap className="w-3 h-3 inline mr-0.5" />UP NEXT
+                  <Zap className="w-3 h-3 inline mr-0.5" />{t("operator.upNext")}
                 </span>
               )}
               <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: theme.textMuted }}>
@@ -672,7 +673,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
               <span className="text-lg font-bold" style={{ color: theme.textPrimary }}>
                 {resolveOutcomeName(featuredEvent.fighter_a_name, "a", featuredEvent)}
               </span>
-              <span className="text-sm font-bold" style={{ color: theme.textMuted }}>VS</span>
+              <span className="text-sm font-bold" style={{ color: theme.textMuted }}>{t("operator.vs")}</span>
               <span className="text-lg font-bold text-right" style={{ color: theme.textPrimary }}>
                 {resolveOutcomeName(featuredEvent.fighter_b_name, "b", featuredEvent)}
               </span>
@@ -690,7 +691,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                 className="px-4 py-1.5 rounded-lg text-xs font-bold transition-all"
                 style={{ backgroundColor: theme.primary, color: theme.primaryForeground }}
               >
-                Predict Now
+                {t("operator.predictNow")}
               </button>
             </div>
           </div>
@@ -755,8 +756,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
             {activeTab === "picks" ? (
               <>
                 <Trophy className="w-12 h-12 mx-auto mb-4" style={{ color: theme.textMuted }} />
-                <h3 className="text-lg font-bold" style={{ color: theme.textSecondary }}>No predictions placed yet</h3>
-                <p className="mt-2 text-sm" style={{ color: theme.textMuted }}>Pick a winner from the events tab to get started.</p>
+                <h3 className="text-lg font-bold" style={{ color: theme.textSecondary }}>{t("operator.noPredictions")}</h3>
+                <p className="mt-2 text-sm" style={{ color: theme.textMuted }}>{t("operator.pickWinner")}</p>
               </>
             ) : searchQuery ? (
               <>
@@ -764,14 +765,14 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                 <h3 className="text-lg font-bold" style={{ color: theme.textSecondary }}>
                   {t("operator.noSearchResults", "No events match your search")}
                 </h3>
-                <p className="mt-2 text-sm" style={{ color: theme.textMuted }}>Try a different team or player name.</p>
+                <p className="mt-2 text-sm" style={{ color: theme.textMuted }}>{t("operator.noSearchResultsDesc")}</p>
               </>
             ) : (
               <>
                 <CalendarPlus className="w-12 h-12 mx-auto mb-4" style={{ color: theme.textMuted }} />
-                <h3 className="text-lg font-bold" style={{ color: theme.textSecondary }}>No live sports available right now</h3>
+                <h3 className="text-lg font-bold" style={{ color: theme.textSecondary }}>{t("operator.noLiveSports")}</h3>
                 <p className="mt-2 text-sm max-w-sm mx-auto" style={{ color: theme.textMuted }}>
-                  New matchups will appear here as soon as they open. Check back soon.
+                  {t("operator.checkBackSoon")}
                 </p>
               </>
             )}
@@ -844,7 +845,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           className="inline-block text-[11px] font-medium hover:opacity-80 transition-opacity"
           style={{ color: theme.primary }}
         >
-          Get Your Own Predictions App →
+          {t("operator.getYourApp")}
         </a>
       </footer>
 
@@ -905,9 +906,9 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
             className="relative z-10 w-full max-w-sm rounded-2xl p-6 space-y-4 shadow-2xl"
             style={{ backgroundColor: theme.cardBg, border: `1px solid ${theme.cardBorder}`, color: theme.textPrimary }}
           >
-            <h3 className="text-lg font-bold">Add Funds</h3>
+            <h3 className="text-lg font-bold">{t("operator.addFundsTitle")}</h3>
             <p className="text-sm" style={{ color: theme.textSecondary }}>
-              Send <strong>USDC.e</strong> on the <strong>Polygon</strong> network to your wallet address below.
+              {t("operator.addFundsDesc")}
             </p>
             {address && (
               <div
@@ -918,7 +919,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText(address);
-                    toast.success("Address copied!");
+                    toast.success(t("operator.addressCopied"));
                   }}
                   className="shrink-0 p-1.5 rounded-md hover:opacity-80 transition-opacity"
                   style={{ backgroundColor: theme.primary + "22", color: theme.primary }}
@@ -935,14 +936,14 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
               style={{ backgroundColor: theme.primary, color: theme.primaryForeground }}
             >
               <ExternalLink className="w-3.5 h-3.5" />
-              Get USDC.e on Polygon
+              {t("operator.getUsdce")}
             </a>
             <button
               onClick={() => setShowFundsModal(false)}
               className="w-full py-2 rounded-lg text-sm font-medium transition-colors"
               style={{ backgroundColor: theme.surfaceBg, color: theme.textSecondary }}
             >
-              Close
+              {t("operator.close")}
             </button>
           </div>
         </div>
