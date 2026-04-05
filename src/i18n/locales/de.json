@@ -627,7 +627,9 @@
     "bannerDismissed": "Banner dismissed",
     "bannerDismissedDesc": "This room has been hidden from the banner.",
     "cannotSendMessage": "Cannot send message",
-    "walletCopied": "Wallet address copied to clipboard"
+    "walletCopied": "Wallet address copied to clipboard",
+    "today": "Heute",
+    "tomorrow": "Morgen"
   },
   "rematch": {
     "title": "Revanche",
@@ -1438,7 +1440,12 @@
       "linkCopied": "Link copied!",
       "support": "Support",
       "supportEmail": "1mgaming@proton.me"
-    }
+    },
+    "youWon": "🎉 Du hast gewonnen!",
+    "amountPlacedLabel": "${{amount}} gesetzt",
+    "startsInMin": "Beginnt in {{min}}m",
+    "startsInHour": "Beginnt in {{hour}}h",
+    "poweredByLabel": "Betrieben von"
   },
   "platform": {
     "hero": {
@@ -1526,7 +1533,8 @@
     },
     "nav": {
       "signIn": "Sign In",
-      "dashboard": "Dashboard"
+      "dashboard": "Dashboard",
+      "signOut": "Abmelden"
     }
   },
   "gameMultiplayer": {

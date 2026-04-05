@@ -629,7 +629,9 @@
     "bannerDismissed": "Banner dismissed",
     "bannerDismissedDesc": "This room has been hidden from the banner.",
     "cannotSendMessage": "Cannot send message",
-    "walletCopied": "Wallet address copied to clipboard"
+    "walletCopied": "Wallet address copied to clipboard",
+    "today": "اليوم",
+    "tomorrow": "غداً"
   },
   "footer": {
     "company": "1 MILLION GAMING co",
@@ -1440,7 +1442,12 @@
       "linkCopied": "Link copied!",
       "support": "Support",
       "supportEmail": "1mgaming@proton.me"
-    }
+    },
+    "youWon": "🎉 لقد فزت!",
+    "amountPlacedLabel": "${{amount}} تم الرهان",
+    "startsInMin": "يبدأ خلال {{min}} د",
+    "startsInHour": "يبدأ خلال {{hour}} س",
+    "poweredByLabel": "مدعوم من"
   },
   "platform": {
     "hero": {
@@ -1528,7 +1535,8 @@
     },
     "nav": {
       "signIn": "Sign In",
-      "dashboard": "Dashboard"
+      "dashboard": "Dashboard",
+      "signOut": "تسجيل الخروج"
     }
   },
   "gameMultiplayer": {

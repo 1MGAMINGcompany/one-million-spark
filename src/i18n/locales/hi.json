@@ -629,7 +629,9 @@
     "bannerDismissed": "Banner dismissed",
     "bannerDismissedDesc": "This room has been hidden from the banner.",
     "cannotSendMessage": "Cannot send message",
-    "walletCopied": "Wallet address copied to clipboard"
+    "walletCopied": "Wallet address copied to clipboard",
+    "today": "आज",
+    "tomorrow": "कल"
   },
   "footer": {
     "company": "1 MILLION GAMING co",
@@ -1414,7 +1416,8 @@
     },
     "nav": {
       "signIn": "साइन इन",
-      "dashboard": "डैशबोर्ड"
+      "dashboard": "डैशबोर्ड",
+      "signOut": "साइन आउट"
     },
     "calculator": {
       "title": "देखें आप कितना कमा सकते हैं",
@@ -1531,7 +1534,12 @@
       "linkCopied": "Link copied!",
       "support": "Support",
       "supportEmail": "1mgaming@proton.me"
-    }
+    },
+    "youWon": "🎉 आप जीत गए!",
+    "amountPlacedLabel": "${{amount}} लगाया",
+    "startsInMin": "{{min}} मिनट में शुरू",
+    "startsInHour": "{{hour}} घंटे में शुरू",
+    "poweredByLabel": "द्वारा संचालित"
   },
   "gameMultiplayer": {
     "rooms": "Rooms",

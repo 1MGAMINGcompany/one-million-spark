@@ -752,7 +752,9 @@
     "bannerDismissed": "Banner dismissed",
     "bannerDismissedDesc": "This room has been hidden from the banner.",
     "cannotSendMessage": "Cannot send message",
-    "walletCopied": "Wallet address copied to clipboard"
+    "walletCopied": "Wallet address copied to clipboard",
+    "today": "Today",
+    "tomorrow": "Tomorrow"
   },
   "rematch": {
     "title": "Rematch",
@@ -1615,7 +1617,8 @@
     },
     "nav": {
       "signIn": "Sign In",
-      "dashboard": "Dashboard"
+      "dashboard": "Dashboard",
+      "signOut": "Sign Out"
     },
     "calculator": {
       "title": "See How Much You Could Earn",
@@ -1730,6 +1733,11 @@
     "buyYourApp": "BUY YOUR APP — $2,400 USDC",
     "appNotExist": "This app does not exist",
     "appNotExistDesc": "Start your own predictions app in minutes — no code, no setup, just launch.",
-    "noSearchResultsDesc": "Try a different team or player name."
+    "noSearchResultsDesc": "Try a different team or player name.",
+    "youWon": "🎉 You Won!",
+    "amountPlacedLabel": "${{amount}} placed",
+    "startsInMin": "Starts in {{min}}m",
+    "startsInHour": "Starts in {{hour}}h",
+    "poweredByLabel": "Powered by"
   }
 }
