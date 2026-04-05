@@ -794,6 +794,7 @@ function FighterColumn({
   logo?: string | null; isSoccer?: boolean; photo?: string | null;
   record?: string | null; sport?: SportType;
 }) {
+  const { t } = useTranslation();
   const [imgError, setImgError] = useState(false);
   const showLogo = logo && !imgError;
   const showPhoto = !showLogo && photo && !imgError;
