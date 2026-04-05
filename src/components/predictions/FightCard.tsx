@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -332,7 +331,6 @@ export default function FightCard({
   const { oddsA, oddsB, noData, resolving } = calcOdds(poolA, poolB, fight.price_a, fight.price_b, fight.source);
   const totalPool = poolA + poolB;
   const isPolymarket = fight.source === "polymarket";
-  const { t } = useTranslation();
   const isFeatured = fight.featured === true;
 
   const isClaimable = ["confirmed", "settled"].includes(fight.status);
@@ -640,7 +638,7 @@ export default function FightCard({
             <span>{isPolymarket && totalPool === 0 ? "Volume" : "Pool"}</span>
             <span className="font-bold text-primary text-[11px]">
               {isPolymarket && totalPool === 0
-                ? (volume > 0 ? formatVolume(volume) : t("predictions.liveMarket"))
+                ? (volume > 0 ? formatVolume(volume) : "Live Market")
                 : `$${totalPool.toFixed(2)}`}
             </span>
           </div>
@@ -794,7 +792,6 @@ function FighterColumn({
   logo?: string | null; isSoccer?: boolean; photo?: string | null;
   record?: string | null; sport?: SportType;
 }) {
-  const { t } = useTranslation();
   const [imgError, setImgError] = useState(false);
   const showLogo = logo && !imgError;
   const showPhoto = !showLogo && photo && !imgError;
@@ -841,7 +838,7 @@ function FighterColumn({
       {isWinner && (
         <div className="mt-2 flex items-center justify-center gap-1 text-primary">
           <Trophy className="w-4 h-4" />
-          <span className="text-xs font-bold">{t("predictions.winner")}</span>
+          <span className="text-xs font-bold">WINNER</span>
         </div>
       )}
     </div>
@@ -854,7 +851,6 @@ function SoccerTeamColumn({
   name: string; odds: number; poolAmount: number; canPredict: boolean; onPredict: () => void;
   logo?: string | null; isWinner: boolean; isBinaryMarket?: boolean;
 }) {
-  const { t } = useTranslation();
   const [logoError, setLogoError] = useState(false);
   const showLogo = logo && !logoError;
 
@@ -888,15 +884,15 @@ function SoccerTeamColumn({
           className="mt-1.5 w-full bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.97] transition-all text-sm py-2.5 font-bold"
           onClick={onPredict}
         >
-          {isBinaryMarket ? (name === "No" ? t("predictions.predictNo") : t("predictions.predictYes")) : t("predictions.predict")}
+          {isBinaryMarket ? (name === "No" ? "Predict No" : "Predict Yes") : "Predict"}
         </Button>
       ) : !isWinner && (
-        <p className="mt-1.5 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wide">{t("predictions.predictionsClosed")}</p>
+        <p className="mt-1.5 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wide">Predictions Closed</p>
       )}
       {isWinner && (
         <div className="mt-1 flex items-center justify-center gap-1 text-primary">
           <Trophy className="w-4 h-4" />
-          <span className="text-xs font-bold">{t("predictions.winner")}</span>
+          <span className="text-xs font-bold">WINNER</span>
         </div>
       )}
     </div>

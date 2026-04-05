@@ -54,8 +54,9 @@ const Navbar = () => {
 
   // Set document direction based on language
   useEffect(() => {
-    document.documentElement.dir = 'ltr';
-    document.documentElement.lang = i18n.language;
+    const lang = i18n.language;
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+    document.documentElement.lang = lang;
   }, [i18n.language]);
 
   const handleToggleSound = () => {

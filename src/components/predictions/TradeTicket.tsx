@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Loader2, Coins, Wallet, AlertTriangle, ArrowRightLeft } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -56,7 +55,6 @@ export default function TradeTicket({
   nativeUsdcFormatted = null,
   isPolymarket = false,
 }: TradeTicketProps) {
-  const { t } = useTranslation();
   const isApproving = ["checking_allowance", "approval_required", "waiting_wallet", "approval_submitted", "waiting_confirmation"].includes(approvalStep);
   const { getQuote, quoting } = useSwapToUsdce();
   const [swapping, setSwapping] = useState(false);
@@ -88,11 +86,11 @@ export default function TradeTicket({
 
   // Button label based on current step
   const getButtonLabel = () => {
-    if (approvalStep === "checking_allowance") return t("predictions.checkingApproval");
-    if (approvalStep === "waiting_wallet") return t("predictions.approveInWallet");
-    if (approvalStep === "approval_submitted" || approvalStep === "waiting_confirmation") return t("predictions.confirmingApproval");
-    if (submitting) return t("predictions.submitting");
-    return t("predictions.submitPrediction");
+    if (approvalStep === "checking_allowance") return "Checking approval…";
+    if (approvalStep === "waiting_wallet") return "Approve in wallet…";
+    if (approvalStep === "approval_submitted" || approvalStep === "waiting_confirmation") return "Confirming approval…";
+    if (submitting) return "Submitting…";
+    return "Submit Prediction";
   };
 
   return (

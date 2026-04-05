@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { Swords, Trophy, Lock, Radio, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,36 +23,36 @@ interface HighlightFight extends Fight {
 
 type Section = "live" | "today" | "upcoming";
 
-function getStatusBadge(status: string, t: (key: string) => string) {
+function getStatusBadge(status: string) {
   switch (status) {
     case "open":
-      return { label: t("predictions.open"), className: "bg-green-500/20 text-green-400" };
+      return { label: "Open", className: "bg-green-500/20 text-green-400" };
     case "locked":
-      return { label: t("predictions.locked"), className: "bg-yellow-500/20 text-yellow-400" };
+      return { label: "Locked", className: "bg-yellow-500/20 text-yellow-400" };
     case "live":
-      return { label: t("predictions.liveNow"), className: "bg-red-500/20 text-red-400 animate-pulse" };
+      return { label: "Live Now", className: "bg-red-500/20 text-red-400 animate-pulse" };
     case "confirmed":
     case "result_selected":
-      return { label: t("predictions.resultPending"), className: "bg-orange-500/20 text-orange-400" };
+      return { label: "Result Pending", className: "bg-orange-500/20 text-orange-400" };
     case "settled":
-      return { label: t("predictions.finished"), className: "bg-muted text-muted-foreground" };
+      return { label: "Finished", className: "bg-muted text-muted-foreground" };
     default:
       return { label: status, className: "bg-muted text-muted-foreground" };
   }
 }
 
-function getButtonState(status: string, t: (key: string) => string): { disabled: boolean; label: string } {
+function getButtonState(status: string): { disabled: boolean; label: string } {
   switch (status) {
     case "open":
-      return { disabled: false, label: t("predictions.predict") };
+      return { disabled: false, label: "Predict" };
     case "locked":
-      return { disabled: true, label: t("predictions.predictionsClosed") };
+      return { disabled: true, label: "Predictions Closed" };
     case "live":
-      return { disabled: true, label: t("predictions.liveNow") };
+      return { disabled: true, label: "Live Now" };
     case "confirmed":
     case "result_selected":
     case "settled":
-      return { disabled: true, label: t("predictions.finished") };
+      return { disabled: true, label: "Finished" };
     default:
       return { disabled: true, label: "Unavailable" };
   }
@@ -110,14 +109,13 @@ function HighlightCard({
   onPredict?: (fight: Fight, pick: "fighter_a" | "fighter_b") => void;
   compact?: boolean;
 }) {
-  const { t } = useTranslation();
   const poolA = (fight.pool_a_usd ?? 0) > 0 ? fight.pool_a_usd! : fight.pool_a_lamports / 1_000_000_000;
   const poolB = (fight.pool_b_usd ?? 0) > 0 ? fight.pool_b_usd! : fight.pool_b_lamports / 1_000_000_000;
   const { oddsA, oddsB, noData, resolving } = calcOdds(poolA, poolB, fight.price_a, fight.price_b, fight.source);
   const totalPool = poolA + poolB;
   const isPolymarketPool = fight.source === "polymarket" && totalPool === 0;
-  const badge = getStatusBadge(fight.status, t);
-  const btn = getButtonState(fight.status, t);
+  const badge = getStatusBadge(fight.status);
+  const btn = getButtonState(fight.status);
 
   return (
     <Card className="bg-card border-border/50 overflow-hidden">
@@ -201,12 +199,12 @@ function HighlightCard({
 
         {/* Pool */}
         <div className="mt-2 pt-1.5 border-t border-border/30 flex items-center justify-between">
-          <span className="text-[10px] text-muted-foreground">{isPolymarketPool ? t("predictions.volume") : t("predictions.pool")}</span>
+          <span className="text-[10px] text-muted-foreground">{isPolymarketPool ? "Volume" : "Pool"}</span>
           <span className="text-[11px] font-bold text-primary">
             {isPolymarketPool
               ? ((fight.polymarket_volume_usd ?? 0) > 0
                 ? `$${((fight.polymarket_volume_usd ?? 0) >= 1000 ? `${((fight.polymarket_volume_usd ?? 0) / 1000).toFixed(0)}K` : (fight.polymarket_volume_usd ?? 0).toFixed(0))}`
-                : t("predictions.liveMarket"))
+                : "Live Market")
               : `$${totalPool.toFixed(2)}`}
           </span>
         </div>

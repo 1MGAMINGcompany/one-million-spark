@@ -38,8 +38,6 @@ if (!storedLang && typeof window !== 'undefined') {
   }
 }
 
-const SUPPORTED_LANGS = ['en', 'es', 'pt', 'fr', 'de', 'ar', 'zh', 'it', 'ja', 'hi'];
-
 i18n
   .use(LanguageDetector)
   .use(initReactI18next)
@@ -56,7 +54,6 @@ i18n
       ja: { translation: ja },
       hi: { translation: hi },
     },
-    supportedLngs: SUPPORTED_LANGS,
     fallbackLng: 'en',
     interpolation: {
       escapeValue: false,

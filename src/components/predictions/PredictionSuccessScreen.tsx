@@ -1,5 +1,4 @@
 import { useCallback } from "react";
-import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, Eye, Clock, Trophy, Share2, AlertTriangle, Loader2 } from "lucide-react";
 import { usePrivy } from "@privy-io/react-auth";
@@ -82,7 +81,6 @@ export default function PredictionSuccessScreen({
   operatorLogoUrl,
   operatorSubdomain,
 }: Props) {
-  const { t } = useTranslation();
   // Privy access token for authenticated polling
   const { getAccessToken } = usePrivy();
   const stableGetToken = useCallback(() => getAccessToken(), [getAccessToken]);
@@ -97,18 +95,8 @@ export default function PredictionSuccessScreen({
 
   // Use live-polled status if available, otherwise initial
   const status = liveStatus?.status ?? tradeResult?.trade_status;
-  const { icon } = getStatusDisplay(status);
+  const { icon, title, subtitle } = getStatusDisplay(status);
   const isFailed = status === "failed";
-  
-  // Translated status text
-  const title = status === "filled" ? "Trade Filled!" 
-    : status === "partial_fill" ? "Partially Filled"
-    : status === "submitted" || status === "requested" ? t("predictions.tradeProcessing")
-    : status === "failed" ? t("predictions.tradeFailed")
-    : t("predictions.predictionPlaced");
-  const subtitle = status === "failed" ? t("predictions.somethingWentWrong")
-    : status === "submitted" || status === "requested" ? t("predictions.tradeSubmitted")
-    : "";
 
   // Prefer live backend values → initial backend values → frontend estimates
   const displayAmount = tradeResult?.requested_amount_usdc ?? amountNum;
@@ -208,11 +196,11 @@ export default function PredictionSuccessScreen({
           <div className="flex gap-2">
             {!isFailed && SOCIAL_SHARE_ENABLED && (
               <Button variant="outline" className="gap-1.5" onClick={() => setShowShare(true)}>
-                <Share2 className="w-4 h-4" /> {t("predictions.sharePick")}
+                <Share2 className="w-4 h-4" /> Share Pick
               </Button>
             )}
             <Button onClick={onClose} className="flex-1" size="lg">
-              {isFailed ? t("predictions.close") : t("predictions.gotIt")}
+              {isFailed ? "Close" : "Got it!"}
             </Button>
           </div>
         </div>

@@ -1,18 +1,18 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Globe, Check } from "lucide-react";
+import { Globe } from "lucide-react";
 
 const PLATFORM_LANGS = [
-  { code: "en", label: "EN", native: "English" },
-  { code: "es", label: "ES", native: "Español" },
-  { code: "pt", label: "PT", native: "Português" },
-  { code: "fr", label: "FR", native: "Français" },
-  { code: "de", label: "DE", native: "Deutsch" },
-  { code: "ar", label: "AR", native: "العربية" },
-  { code: "zh", label: "ZH", native: "中文" },
-  { code: "it", label: "IT", native: "Italiano" },
-  { code: "ja", label: "JA", native: "日本語" },
-  { code: "hi", label: "HI", native: "हिन्दी" },
+  { code: "en", label: "EN" },
+  { code: "es", label: "ES" },
+  { code: "pt", label: "PT" },
+  { code: "fr", label: "FR" },
+  { code: "hi", label: "HI" },
+  { code: "de", label: "DE" },
+  { code: "ar", label: "AR" },
+  { code: "it", label: "IT" },
+  { code: "ja", label: "JA" },
+  { code: "zh", label: "ZH" },
 ] as const;
 
 export default function PlatformLanguageSwitcher() {
@@ -24,8 +24,6 @@ export default function PlatformLanguageSwitcher() {
   const handleChange = (code: string) => {
     i18n.changeLanguage(code);
     localStorage.setItem("1m-gaming-language", code);
-    document.documentElement.dir = 'ltr';
-    document.documentElement.lang = code;
     setOpen(false);
   };
 
@@ -43,17 +41,16 @@ export default function PlatformLanguageSwitcher() {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1 z-50 bg-[#0d1117] border border-white/10 rounded-lg shadow-xl overflow-hidden min-w-[160px] max-h-[70vh] overflow-y-auto">
+          <div className="absolute right-0 top-full mt-1 z-50 bg-[#0d1117] border border-white/10 rounded-lg shadow-xl overflow-hidden min-w-[100px]">
             {PLATFORM_LANGS.map(lang => (
               <button
                 key={lang.code}
                 onClick={() => handleChange(lang.code)}
-                className={`w-full px-4 py-2.5 text-left text-sm hover:bg-white/5 transition-colors flex items-center justify-between gap-3 ${
+                className={`w-full px-4 py-2 text-left text-sm hover:bg-white/5 transition-colors ${
                   current.code === lang.code ? "text-blue-400 font-semibold" : "text-white/70"
                 }`}
               >
-                <span>{lang.native}</span>
-                {current.code === lang.code && <Check size={14} className="text-blue-400 shrink-0" />}
+                {lang.label}
               </button>
             ))}
           </div>

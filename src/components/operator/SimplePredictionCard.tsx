@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useTranslation } from "react-i18next";
 import { BarChart3 } from "lucide-react";
 import { getTeamLogo } from "@/lib/teamLogos";
 import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
@@ -59,7 +58,6 @@ export default function SimplePredictionCard({
   onShareWin,
   onGraph,
 }: SimplePredictionCardProps) {
-  const { t } = useTranslation();
   const nameA = resolveOutcomeName(fight.fighter_a_name, "a", fight);
   const nameB = resolveOutcomeName(fight.fighter_b_name, "b", fight);
   const { priceA, priceB } = getOddsFromFight(fight);
@@ -146,19 +144,19 @@ export default function SimplePredictionCard({
                     className="mt-2 px-6 py-2 rounded-xl font-bold text-sm transition-all"
                     style={{ backgroundColor: theme.primary, color: theme.primaryForeground }}
                   >
-                    {claiming ? t("operator.claiming") : t("operator.collectWinnings")}
+                    {claiming ? "Claiming..." : "Collect Winnings"}
                   </button>
                 )}
                 {userEntry?.claimed && (
                   <div className="space-y-2 mt-2">
-                    <p className="text-xs" style={{ color: theme.textMuted }}>{t("operator.winningsCollected")}</p>
+                    <p className="text-xs" style={{ color: theme.textMuted }}>Winnings collected ✓</p>
                     {onShareWin && !winShared && (
                       <button
                         onClick={() => { onShareWin(fight); setWinShared(true); }}
                         className="px-5 py-2 rounded-xl font-bold text-sm transition-all hover:opacity-80"
                         style={{ border: `1px solid ${theme.cardBorder}`, color: theme.textPrimary }}
                       >
-                        {t("operator.shareYourWin")}
+                        🏆 SHARE YOUR WIN
                       </button>
                     )}
                   </div>
