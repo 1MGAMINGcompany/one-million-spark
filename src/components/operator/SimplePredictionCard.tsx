@@ -133,10 +133,10 @@ export default function SimplePredictionCard({
           </div>
         )}
         <div className="text-center mb-3">
-          <span className="text-xs font-bold text-green-500 uppercase tracking-wider">✅ Result</span>
+          <span className="text-xs font-bold text-green-500 uppercase tracking-wider">{t("operator.result")}</span>
         </div>
         <p className="text-center text-lg font-bold mb-1" style={{ color: theme.textPrimary }}>
-          {winnerName} Wins!
+          {winnerName} {t("operator.wins")}
         </p>
         {userPicked && (
           <div className="text-center mt-3">
@@ -150,26 +150,26 @@ export default function SimplePredictionCard({
                     className="mt-2 px-6 py-2 rounded-xl font-bold text-sm transition-all"
                     style={{ backgroundColor: theme.primary, color: theme.primaryForeground }}
                   >
-                    {claiming ? "Claiming..." : "Collect Winnings"}
+                    {claiming ? t("operator.claiming") : t("operator.collectWinnings")}
                   </button>
                 )}
                 {userEntry?.claimed && (
                   <div className="space-y-2 mt-2">
-                    <p className="text-xs" style={{ color: theme.textMuted }}>Winnings collected ✓</p>
+                    <p className="text-xs" style={{ color: theme.textMuted }}>{t("operator.winningsCollected")}</p>
                     {onShareWin && !winShared && (
                       <button
                         onClick={() => { onShareWin(fight); setWinShared(true); }}
                         className="px-5 py-2 rounded-xl font-bold text-sm transition-all hover:opacity-80"
                         style={{ border: `1px solid ${theme.cardBorder}`, color: theme.textPrimary }}
                       >
-                        🏆 SHARE YOUR WIN
+                        🏆 {t("operator.shareYourWin")}
                       </button>
                     )}
                   </div>
                 )}
               </>
             ) : (
-              <p className="text-red-400/70 text-sm">Better luck next time</p>
+              <p className="text-red-400/70 text-sm">{t("operator.betterLuck")}</p>
             )}
           </div>
         )}
@@ -195,7 +195,7 @@ export default function SimplePredictionCard({
             {logoA && <img src={logoA} className="w-6 h-6 object-contain" alt="" />}
             <span className="text-base font-bold" style={{ color: theme.textPrimary }}>{nameA}</span>
           </div>
-          <span className="text-xs font-bold" style={{ color: theme.textMuted }}>VS</span>
+          <span className="text-xs font-bold" style={{ color: theme.textMuted }}>{t("operator.vs")}</span>
           <div className="flex items-center gap-2">
             <span className="text-base font-bold" style={{ color: theme.textPrimary }}>{nameB}</span>
             {logoB && <img src={logoB} className="w-6 h-6 object-contain" alt="" />}
@@ -205,9 +205,8 @@ export default function SimplePredictionCard({
           <p className="text-xs text-center mb-2" style={{ color: theme.textMuted }}>{eventDateStr}</p>
         )}
         <div className="text-center rounded-xl py-3 px-4" style={{ backgroundColor: theme.surfaceBg }}>
-          <p className="text-sm" style={{ color: theme.textSecondary }}>Your Pick</p>
-          <p className="text-lg font-bold" style={{ color: theme.textPrimary }}>🎯 {pickedName}</p>
-          {userEntry?.amount_usd && (
+           <p className="text-sm" style={{ color: theme.textSecondary }}>{t("operator.yourPick")}</p>
+           <p className="text-lg font-bold" style={{ color: theme.textPrimary }}>🎯 {pickedName}</p>
             <p className="text-xs mt-1" style={{ color: theme.textMuted }}>
               ${userEntry.amount_usd.toFixed(2)} placed
             </p>
