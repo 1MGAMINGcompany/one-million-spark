@@ -205,7 +205,7 @@ export default function SoccerMatchCard({
             <Input
               type="number"
               inputMode="decimal"
-              placeholder="Enter Amount (USD)"
+              placeholder={t("predictions.enterAmount")}
               value={amount}
               onChange={e => setAmount(e.target.value)}
               className="text-center text-lg font-bold h-12 bg-background border-border"

@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, Eye, Clock, Trophy, Share2, AlertTriangle, Loader2 } from "lucide-react";
 import { usePrivy } from "@privy-io/react-auth";
