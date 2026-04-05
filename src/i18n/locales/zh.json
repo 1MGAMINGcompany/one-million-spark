@@ -1388,6 +1388,8 @@
     "predictionSubmitted": "Prediction submitted!",
     "amountPlaced": "${{amount}} placed successfully",
     "predictionFailed": "Prediction failed",
+    "marketClosed": "该市场已关闭",
+    "eventFinished": "该赛事已结束 — 无法再进行预测",
     "sessionExpired": "Session expired",
     "pleaseLoginAgain": "Please log in again.",
     "tradingWalletNeeded": "Trading wallet setup needed",

@@ -213,6 +213,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       const isActive = ["live", "open", "locked"].includes(f.status);
       const isFuture = d.getTime() > Date.now();
       if (!isActive && !isFuture) return false;
+      // Hide stale locked events where game likely ended (safety net for slow settlement)
+      if (f.status === "locked" && d.getTime() < Date.now() - 6 * 3600_000) return false;
 
       const sport = normalizeOperatorSport(
         f.event_name,
@@ -419,15 +421,22 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       setShowSuccess(true);
       loadUserEntries();
     } catch (err: any) {
-      toast.error(t("operator.predictionFailed"), { description: err.message });
+      const msg = err.message || "";
+      if (msg.includes("expired") || msg.includes("closed")) {
+        toast.error(t("operator.marketClosed"));
+      } else if (msg.includes("finished")) {
+        toast.error(t("operator.eventFinished"));
+      } else {
+        toast.error(t("operator.predictionFailed"), { description: msg });
+      }
     } finally {
       setSubmitting(false);
     }
   };
 
   const handlePredict = (fight: Fight, pick: "fighter_a" | "fighter_b" | "draw") => {
-    if (fight.status !== "open") {
-      toast.error(t("operator.predictionsClosed"));
+    if (fight.status !== "open" && fight.status !== "live") {
+      toast.error(t("operator.marketClosed"));
       return;
     }
     if (!isConnected) {

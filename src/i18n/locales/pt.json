@@ -1443,6 +1443,8 @@
     "predictionSubmitted": "Previsão enviada!",
     "amountPlaced": "${{amount}} apostado com sucesso",
     "predictionFailed": "Previsão falhou",
+    "marketClosed": "Este mercado fechou",
+    "eventFinished": "Este evento terminou — previsões não estão mais disponíveis",
     "sessionExpired": "Sessão expirada",
     "pleaseLoginAgain": "Por favor entre novamente.",
     "tradingWalletNeeded": "Configuração de carteira de trading necessária",

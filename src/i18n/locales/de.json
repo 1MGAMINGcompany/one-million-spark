@@ -1386,6 +1386,8 @@
     "predictionSubmitted": "Prediction submitted!",
     "amountPlaced": "${{amount}} placed successfully",
     "predictionFailed": "Prediction failed",
+    "marketClosed": "Dieser Markt ist geschlossen",
+    "eventFinished": "Dieses Event ist beendet — Vorhersagen sind nicht mehr möglich",
     "sessionExpired": "Session expired",
     "pleaseLoginAgain": "Please log in again.",
     "tradingWalletNeeded": "Trading wallet setup needed",

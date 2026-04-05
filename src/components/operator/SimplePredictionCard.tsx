@@ -78,7 +78,7 @@ export default function SimplePredictionCard({
   const logoB = logoDataB?.url || null;
 
   const hasDrawOption = !!(fight as any).draw_allowed;
-  const isOpen = fight.status === "open";
+  const isOpen = fight.status === "open" || fight.status === "live";
   const isSettled = ["settled", "confirmed", "result_selected"].includes(fight.status);
   const userPicked = userEntry?.fighter_pick;
   const userWon = isSettled && fight.winner === userPicked;
