@@ -1,65 +1,46 @@
 
 
-# Add Live Game Status (Score, Period, Time) to Prediction Cards
+# Fix: Live Game Data Not Showing (WebSocket Heartbeat Bug)
 
-## What we are building
+## What's Wrong
 
-Real-time score, period, and elapsed time on all live prediction cards — matching the Polymarket experience you showed (e.g., "LIVE P2 - 01:16  4-1"). Works for NHL, NBA, MLB, Soccer, Tennis, Cricket, and Esports.
+The Polymarket Sports WebSocket sends **plain text `ping`** frames (not JSON). Our code has two bugs:
 
-## Data source
+1. **Heartbeat response is wrong**: We send `JSON.stringify({ type: "ping" })` on an interval, but the server expects us to **respond** with plain text `"pong"` when we **receive** `"ping"`. We should NOT be initiating pings at all.
 
-Polymarket provides a free Sports WebSocket at `wss://sports-api.polymarket.com/ws` that broadcasts live game data (score, period, elapsed, status) keyed by slug. No auth required. Our `polymarket_slug` field already stored on every fight maps directly to this data.
+2. **The `"ping"` text crashes JSON.parse**: When the server sends `"ping"`, our `onmessage` handler tries `JSON.parse("ping")` which throws, and the empty `catch {}` swallows it silently. We never send `"pong"` back, so the server disconnects us after 10 seconds. Every time.
 
-## Architecture
+The connection establishes, immediately starts getting `"ping"` messages every 5s, fails to respond, and gets killed. This cycles forever with backoff, never receiving any actual game data.
 
-```text
-Polymarket Sports WS  →  useSportsWebSocket (React context)  →  Cards lookup by slug
+## The Fix
+
+**File: `src/hooks/useSportsWebSocket.tsx`**
+
+1. Remove the client-initiated ping interval entirely
+2. In `onmessage`, check if `ev.data === "ping"` BEFORE trying `JSON.parse`, and respond with `ws.send("pong")`
+3. Parse the JSON message format correctly per Polymarket docs: messages have `gameId`, `slug`, `status`, `score`, `period`, `elapsed`, `leagueAbbreviation`
+
+```typescript
+ws.onmessage = (ev) => {
+  // Server sends plain text "ping" — respond with "pong"
+  if (ev.data === "ping") {
+    ws.send("pong");
+    return;
+  }
+  try {
+    const data = JSON.parse(ev.data);
+    // ... parse game state
+  } catch {}
+};
 ```
 
-Single shared WebSocket connection, auto-reconnect with backoff, ping/pong keepalive.
-
-## Implementation steps
-
-### 1. New file: `src/hooks/useSportsWebSocket.tsx`
-- React context + provider wrapping a single WebSocket to `wss://sports-api.polymarket.com/ws`
-- Maintains a `Map<slug, LiveGameState>` with: `score`, `period`, `elapsed`, `status`, `live`, `ended`
-- Handles server ping/pong heartbeat (5s interval)
-- Auto-reconnects with exponential backoff
-- Exposes `useLiveGameState(slug)` hook for cards
-
-### 2. New file: `src/components/predictions/LiveGameBadge.tsx`
-- Sport-aware formatting:
-  - NHL: "● LIVE P2 - 01:16  4-1"
-  - NBA: "● LIVE Q4  98-102"
-  - Soccer: "● LIVE 2H - 67'  2-0"
-  - MLB: "● LIVE Bot 5  3-2"
-  - Tennis: "● LIVE Set 2  6-4, 3-2"
-  - Cricket: "● LIVE 2nd Inn  142/3"
-- Pulsing red dot for in-progress, green check for Final
-- Accepts theme prop for operator styling
-
-### 3. Edit: `src/components/predictions/FightCard.tsx`
-- Add `polymarket_slug` to the `Fight` interface
-- Import `useLiveGameState` from the WebSocket context
-- When live data exists for this slug, render `LiveGameBadge` instead of static "LIVE" label
-- Show score next to team names when available
-- Fall back to current time-based detection when no WS data
-
-### 4. Edit: `src/components/operator/SimplePredictionCard.tsx`
-- Import `useLiveGameState`
-- Replace the generic `getTimeLabel` "● LIVE" span with `LiveGameBadge` when WS data is available
-- Display live score between team names
-- Fall back gracefully to current behavior
-
-### 5. Edit: `src/pages/platform/OperatorApp.tsx` + prediction page wrappers
-- Wrap content with `SportsWebSocketProvider`
-- Provider auto-connects only when mounted, disconnects on unmount
+Also update `parseLiveState` to match the actual Polymarket message fields:
+- `score` is a string like `"3-16"` (not separate `score_a`/`score_b`)
+- `leagueAbbreviation` gives us the sport (e.g., `"nhl"`, `"nba"`, `"epl"`)
+- `status` values: `"InProgress"`, `"Final"`, `"F/OT"`, `"F/SO"`, `"Postponed"`
 
 ## Scope
-- **3 new files** (hook/context, badge component)
-- **3 edited files** (SimplePredictionCard, FightCard, OperatorApp wrapper)
-- No database changes
-- No edge function changes
-- No API keys needed
-- Graceful fallback: if WebSocket is unavailable, cards show current time-based LIVE label
+- **1 file edited**: `src/hooks/useSportsWebSocket.tsx`
+- No other changes needed — LiveGameBadge and card integrations are already correct
+- Will work immediately after publish
 
