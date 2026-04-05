@@ -1832,7 +1832,9 @@ Deno.serve(async (req) => {
         "atp", "wta", "tennis", "tennis-atp", "tennis-wta", "tennis-grand-slam",
         "golf", "f1",
         "cricket", "cricket-ipl", "cricket-psl", "cricket-intl",
+        "cricket-legends", "cricket-t20", "cricket-bbl", "cricket-test",
         "rugby", "table-tennis",
+        "cs2",
       ]);
 
       const summary: Record<string, { fetched: number; imported: number; errors: number }> = {};
