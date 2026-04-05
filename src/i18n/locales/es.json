@@ -1550,6 +1550,8 @@
     "predictionSubmitted": "¡Predicción enviada!",
     "amountPlaced": "${{amount}} apostado exitosamente",
     "predictionFailed": "Predicción fallida",
+    "marketClosed": "Este mercado ha cerrado",
+    "eventFinished": "Este evento ha terminado — las predicciones ya no están disponibles",
     "sessionExpired": "Sesión expirada",
     "pleaseLoginAgain": "Por favor inicia sesión de nuevo.",
     "tradingWalletNeeded": "Se necesita configurar billetera de trading",

@@ -1388,6 +1388,8 @@
     "predictionSubmitted": "Prediction submitted!",
     "amountPlaced": "${{amount}} placed successfully",
     "predictionFailed": "Prediction failed",
+    "marketClosed": "このマーケットは終了しました",
+    "eventFinished": "このイベントは終了しました — 予測はできません",
     "sessionExpired": "Session expired",
     "pleaseLoginAgain": "Please log in again.",
     "tradingWalletNeeded": "Trading wallet setup needed",

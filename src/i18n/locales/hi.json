@@ -1445,6 +1445,8 @@
     "predictionSubmitted": "भविष्यवाणी सबमिट!",
     "amountPlaced": "${{amount}} सफलतापूर्वक लगाया",
     "predictionFailed": "भविष्यवाणी विफल",
+    "marketClosed": "यह बाज़ार बंद हो गया है",
+    "eventFinished": "यह इवेंट समाप्त हो गया है — भविष्यवाणी अब उपलब्ध नहीं है",
     "sessionExpired": "सत्र समाप्त",
     "pleaseLoginAgain": "कृपया फिर से लॉगिन करें।",
     "rewardClaimed": "पुरस्कार मिला!",
