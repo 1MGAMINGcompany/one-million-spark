@@ -77,6 +77,18 @@ export default defineConfig(({ mode }) => ({
   build: {
     rollupOptions: {
       external: ['usb', 'node-hid'],
+      plugins: [
+        {
+          name: 'resolve-ox-to-viem',
+          resolveId(source) {
+            // viem's internal ox depends on ./tempo which only exists in viem's nested ox
+            if (source === 'ox/tempo' || source.startsWith('ox/tempo/')) {
+              return { id: source.replace(/^ox/, 'viem/node_modules/ox'), external: false };
+            }
+            return null;
+          },
+        },
+      ],
       onwarn(warning, warn) {
         // Suppress Privy's /*#__PURE__*/ annotation warnings
         if (warning.code === 'INVALID_ANNOTATION' && warning.message?.includes('#__PURE__')) return;
