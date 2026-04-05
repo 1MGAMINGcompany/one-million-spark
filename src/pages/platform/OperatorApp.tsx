@@ -213,10 +213,13 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       const isActive = ["live", "open", "locked"].includes(f.status);
       const isFuture = d.getTime() > Date.now();
       if (!isActive && !isFuture) return false;
-      // Hide stale locked events where game likely ended (safety net for slow settlement)
-      if (f.status === "locked" && d.getTime() < Date.now() - 4 * 3600_000) return false;
-      // Hide events where Polymarket marked inactive and game started 3+ hours ago
-      if (f.status === "locked" && (f as any).polymarket_active === false && d.getTime() < Date.now() - 3 * 3600_000) return false;
+      // Hide stale events where game likely ended (safety net for slow settlement)
+      const eventAgeMs = Date.now() - d.getTime();
+      const pmInactive = (f as any).polymarket_active === false;
+      // Any locked/live event with polymarket_active=false and started 3h+ ago is finished
+      if ((f.status === "locked" || f.status === "live") && pmInactive && eventAgeMs > 3 * 3600_000) return false;
+      // Hard cutoff: any locked event older than 4h
+      if (f.status === "locked" && eventAgeMs > 4 * 3600_000) return false;
 
       const sport = normalizeOperatorSport(
         f.event_name,
