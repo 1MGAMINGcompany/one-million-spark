@@ -841,7 +841,7 @@ function FighterColumn({
       {isWinner && (
         <div className="mt-2 flex items-center justify-center gap-1 text-primary">
           <Trophy className="w-4 h-4" />
-          <span className="text-xs font-bold">WINNER</span>
+          <span className="text-xs font-bold">{t("predictions.winner")}</span>
         </div>
       )}
     </div>
