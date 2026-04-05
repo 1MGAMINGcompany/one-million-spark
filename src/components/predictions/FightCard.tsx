@@ -885,7 +885,7 @@ function SoccerTeamColumn({
           className="mt-1.5 w-full bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.97] transition-all text-sm py-2.5 font-bold"
           onClick={onPredict}
         >
-          {isBinaryMarket ? (name === "No" ? "Predict No" : "Predict Yes") : "Predict"}
+          {isBinaryMarket ? (name === "No" ? t("predictions.predictNo") : t("predictions.predictYes")) : t("predictions.predict")}
         </Button>
       ) : !isWinner && (
         <p className="mt-1.5 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wide">Predictions Closed</p>
