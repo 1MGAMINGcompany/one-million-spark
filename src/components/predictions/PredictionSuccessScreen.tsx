@@ -208,7 +208,7 @@ export default function PredictionSuccessScreen({
           <div className="flex gap-2">
             {!isFailed && SOCIAL_SHARE_ENABLED && (
               <Button variant="outline" className="gap-1.5" onClick={() => setShowShare(true)}>
-                <Share2 className="w-4 h-4" /> Share Pick
+                <Share2 className="w-4 h-4" /> {t("predictions.sharePick")}
               </Button>
             )}
             <Button onClick={onClose} className="flex-1" size="lg">
