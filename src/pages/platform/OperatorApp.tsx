@@ -143,10 +143,10 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       if (!eventDate) return false;
       const d = new Date(eventDate);
       if (isNaN(d.getTime())) return false;
-      // Show future events, live events, OR recently-started events (3h grace for automation delay)
-      const isLive = f.status === "live";
-      const recentlyStarted = d.getTime() > Date.now() - 3 * 3600000;
-      if (!isLive && !recentlyStarted) return false;
+      // Keep any event with an active status visible, hide only truly past non-active events
+      const isActive = ["live", "open", "locked"].includes(f.status);
+      const isFuture = d.getTime() > Date.now();
+      if (!isActive && !isFuture) return false;
 
       const sport = normalizeOperatorSport(
         f.event_name,

@@ -183,11 +183,16 @@ export default function SimplePredictionCard({
     return (
       <div className="rounded-2xl p-5" style={cardStyle}>
         <div className="flex items-center justify-between mb-2">
-          {sportLeagueLabel && (
-            <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: theme.textMuted }}>
-              {sportLeagueLabel}
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {sportLeagueLabel && (
+              <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: theme.textMuted }}>
+                {sportLeagueLabel}
+              </div>
+            )}
+            {liveState && (liveState.live || liveState.ended) && (
+              <LiveGameBadge state={liveState} theme={theme} />
+            )}
+          </div>
           <GraphButton />
         </div>
         <div className="flex items-center justify-between mb-3">
@@ -195,7 +200,11 @@ export default function SimplePredictionCard({
             {logoA && <img src={logoA} className="w-6 h-6 object-contain" alt="" />}
             <span className="text-base font-bold" style={{ color: theme.textPrimary }}>{nameA}</span>
           </div>
-          <span className="text-xs font-bold" style={{ color: theme.textMuted }}>{t("operator.vs")}</span>
+          {liveState && liveState.live && liveState.score ? (
+            <LiveScoreDisplay state={liveState} theme={theme} />
+          ) : (
+            <span className="text-xs font-bold" style={{ color: theme.textMuted }}>{t("operator.vs")}</span>
+          )}
           <div className="flex items-center gap-2">
             <span className="text-base font-bold" style={{ color: theme.textPrimary }}>{nameB}</span>
             {logoB && <img src={logoB} className="w-6 h-6 object-contain" alt="" />}
