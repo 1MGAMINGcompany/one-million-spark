@@ -1724,7 +1724,7 @@
     "winningsCollected": "Winnings collected ✓",
     "result": "✅ Result",
     "wins": "Wins!",
-    "betToWin": "Bet $10 → Win ${{amount}}",
+    "predictReturn": "Predict ${{predict}} → Return ${{return}}",
     "available": "Available",
     "addFundsTitle": "Add Funds",
     "addFundsDesc": "Send USDC.e on the Polygon network to your wallet address below.",
