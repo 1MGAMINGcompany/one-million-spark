@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface LiveGameState {
   slug: string;
@@ -26,13 +27,22 @@ const SportsWSContext = createContext<SportsWSContextValue>({
 
 const WS_URL = "wss://sports-api.polymarket.com/ws";
 const MAX_BACKOFF = 30000;
+const REST_POLL_INTERVAL = 60_000;
 
 function parseLiveState(msg: any): LiveGameState | null {
   if (!msg?.slug) return null;
 
   const status = (msg.status || "unknown").toString();
-  const live = ["InProgress", "in_progress", "live", "halftime", "in_play"].includes(status);
-  const ended = ["Final", "F/OT", "F/SO", "final", "ended", "finished", "complete", "closed"].includes(status);
+
+  // Use native boolean fields when available, fall back to status-string matching
+  const live = typeof msg.live === "boolean"
+    ? msg.live
+    : ["InProgress", "in_progress", "live", "halftime", "in_play",
+       "running", "inprogress", "Break", "PenaltyShootout", "Awarded"].includes(status);
+
+  const ended = typeof msg.ended === "boolean"
+    ? msg.ended
+    : ["Final", "F/OT", "F/SO", "final", "ended", "finished", "complete", "closed"].includes(status);
 
   // Score can be a string like "3-16" or separate fields
   let score = msg.score as string | undefined;
@@ -69,12 +79,93 @@ function parseLiveState(msg: any): LiveGameState | null {
   };
 }
 
-export function SportsWebSocketProvider({ children }: { children: React.ReactNode }) {
+/** Fetch initial game states from Gamma API via edge function */
+async function fetchInitialStates(slugs: string[]): Promise<Map<string, LiveGameState>> {
+  const result = new Map<string, LiveGameState>();
+  if (slugs.length === 0) return result;
+
+  try {
+    const { data, error } = await supabase.functions.invoke("live-game-state", {
+      body: { slugs },
+    });
+
+    if (error || !data?.ok || !data?.games) {
+      console.warn("[SportsWS] REST fetch failed:", error?.message || data?.error);
+      return result;
+    }
+
+    for (const [slug, state] of Object.entries(data.games)) {
+      const s = state as any;
+      if (s && (s.live || s.ended)) {
+        result.set(slug, {
+          slug,
+          score: s.score,
+          scoreA: s.scoreA,
+          scoreB: s.scoreB,
+          period: s.period,
+          elapsed: s.elapsed,
+          status: s.status,
+          live: s.live,
+          ended: s.ended,
+          sport: s.sport,
+        });
+      }
+    }
+
+    console.log(`[SportsWS] REST: got ${result.size} live/ended states from ${slugs.length} slugs`);
+  } catch (e) {
+    console.warn("[SportsWS] REST fetch error:", e);
+  }
+
+  return result;
+}
+
+interface SportsWebSocketProviderProps {
+  children: React.ReactNode;
+  /** Slugs to track — used for initial REST fetch */
+  slugs?: string[];
+}
+
+export function SportsWebSocketProvider({ children, slugs = [] }: SportsWebSocketProviderProps) {
   const [games, setGames] = useState<Map<string, LiveGameState>>(new Map());
   const [connected, setConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const backoffRef = useRef(1000);
   const mountedRef = useRef(true);
+  const slugsRef = useRef(slugs);
+  slugsRef.current = slugs;
+
+  // REST polling for initial state + fallback
+  useEffect(() => {
+    if (slugs.length === 0) return;
+
+    let active = true;
+
+    const poll = async () => {
+      if (!active) return;
+      const states = await fetchInitialStates(slugsRef.current);
+      if (!active) return;
+      if (states.size > 0) {
+        setGames(prev => {
+          const next = new Map(prev);
+          for (const [slug, state] of states) {
+            // Only set if we don't have fresher WS data
+            if (!next.has(slug)) {
+              next.set(slug, state);
+            }
+          }
+          return next;
+        });
+      }
+    };
+
+    // Initial fetch
+    poll();
+
+    // Poll every 60s as fallback
+    const interval = setInterval(poll, REST_POLL_INTERVAL);
+    return () => { active = false; clearInterval(interval); };
+  }, [slugs.length > 0 ? slugs.join(",") : ""]);
 
   const connect = useCallback(() => {
     if (!mountedRef.current) return;

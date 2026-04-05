@@ -291,6 +291,13 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   // ── Date-grouped fights for display ──
   const dateGroups = useMemo(() => groupByDate(filteredFights), [filteredFights]);
 
+  // Collect polymarket slugs for live tracking
+  const liveSlugs = useMemo(() => {
+    return enrichedFights
+      .map(f => (f as any).polymarket_slug)
+      .filter((s): s is string => !!s);
+  }, [enrichedFights]);
+
   const handleSubmit = async (amountUsd: number) => {
     if (!selectedFight || !selectedPick || !isConnected || !address) return;
     setSubmitting(true);
@@ -445,8 +452,9 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       ))
     : undefined;
 
+
   return (
-    <SportsWebSocketProvider>
+    <SportsWebSocketProvider slugs={liveSlugs}>
     <div className="min-h-screen" style={{ backgroundColor: theme.bg, color: theme.textPrimary }}>
       {/* Navbar */}
       <nav
