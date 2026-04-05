@@ -51,6 +51,52 @@ Deno.serve(async (req) => {
 
     console.log(`[schedule-worker] Run started at ${nowISO}`);
 
+    // ── Phase 0: Backfill NULL scheduled_live_at for started events ──
+    // If event_date has passed but scheduled_live_at is NULL, set it and transition locked→live
+    const { data: backfillEvents } = await supabase
+      .from("prediction_events")
+      .select("id, event_name, event_date, source_provider")
+      .eq("status", "approved")
+      .eq("automation_paused", false)
+      .is("scheduled_live_at", null)
+      .not("event_date", "is", null)
+      .lte("event_date", nowISO);
+
+    for (const evt of backfillEvents ?? []) {
+      console.log(`[schedule-worker] Backfill: setting scheduled_live_at for event ${evt.id} (${evt.event_name})`);
+      const eventDateMs = new Date(evt.event_date!).getTime();
+      await supabase.from("prediction_events").update({
+        scheduled_live_at: evt.event_date,
+        scheduled_lock_at: new Date(eventDateMs - 5 * 60_000).toISOString(),
+      }).eq("id", evt.id);
+
+      // Immediately transition locked/open fights to live
+      const { data: transitioned } = await supabase
+        .from("prediction_fights")
+        .update({ status: "live" })
+        .eq("event_id", evt.id)
+        .in("status", ["locked", "open"])
+        .select("id");
+
+      const count = transitioned?.length ?? 0;
+      if (count > 0) {
+        await supabase.from("automation_logs").insert({
+          action: "backfill_live",
+          event_id: evt.id,
+          source: "prediction-schedule-worker",
+          details: {
+            live_fights: count,
+            event_name: evt.event_name,
+            reason: "backfill_null_scheduled_live_at",
+            provider: evt.source_provider,
+            server_time: nowISO,
+          },
+        });
+        console.log(`[schedule-worker] Backfill: transitioned ${count} fights to live for event ${evt.id}`);
+      }
+      results.push({ action: "backfill_live", event_id: evt.id, ok: true });
+    }
+
     // ── Phase 1: Lock events at scheduled_lock_at ──
     const { data: lockable } = await supabase
       .from("prediction_events")

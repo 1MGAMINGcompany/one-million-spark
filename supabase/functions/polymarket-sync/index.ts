@@ -1089,7 +1089,15 @@ async function importSingleEvent(
     if (category && !existingEvt.category) evtUpdate.category = category;
     // Always update event_date to latest accurate timestamp (fixes stale market listing dates)
     const freshDate = timeInfo.chosen || gEvent.startDate || gEvent.endDate || null;
-    if (freshDate) evtUpdate.event_date = freshDate;
+    if (freshDate) {
+      evtUpdate.event_date = freshDate;
+      // Set scheduled timestamps so schedule-worker can transition locked→live
+      const eventDateMs = new Date(freshDate).getTime();
+      if (!isNaN(eventDateMs)) {
+        evtUpdate.scheduled_lock_at = new Date(eventDateMs - 5 * 60_000).toISOString();
+        evtUpdate.scheduled_live_at = freshDate;
+      }
+    }
     if (Object.keys(evtUpdate).length > 0) {
       await supabase.from("prediction_events").update(evtUpdate).eq("id", existingEvt.id);
     }
@@ -1101,18 +1109,25 @@ async function importSingleEvent(
         .in("status", ["open", "locked", "live"]);
     }
   } else {
+    const newEventDate = timeInfo.chosen || gEvent.startDate || gEvent.endDate || null;
+    const newEventDateMs = newEventDate ? new Date(newEventDate).getTime() : null;
     const { data: newEvt, error } = await supabase
       .from("prediction_events")
       .insert({
         event_name: gEvent.title,
         polymarket_event_id: String(gEvent.id),
         polymarket_slug: gEvent.slug,
-        event_date: timeInfo.chosen || gEvent.startDate || gEvent.endDate || null,
+        event_date: newEventDate,
         source: "polymarket",
         source_provider: "polymarket",
         source_event_id: `pm_${gEvent.id}`,
         status: opts?.eventStatusOverride || "pending_review",
         ...(category ? { category } : {}),
+        // Set scheduled timestamps for schedule-worker lifecycle transitions
+        ...(newEventDateMs && !isNaN(newEventDateMs) ? {
+          scheduled_lock_at: new Date(newEventDateMs - 5 * 60_000).toISOString(),
+          scheduled_live_at: newEventDate,
+        } : {}),
       })
       .select("id")
       .single();

@@ -214,7 +214,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       const isFuture = d.getTime() > Date.now();
       if (!isActive && !isFuture) return false;
       // Hide stale locked events where game likely ended (safety net for slow settlement)
-      if (f.status === "locked" && d.getTime() < Date.now() - 6 * 3600_000) return false;
+      if (f.status === "locked" && d.getTime() < Date.now() - 4 * 3600_000) return false;
 
       const sport = normalizeOperatorSport(
         f.event_name,
@@ -435,7 +435,10 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   };
 
   const handlePredict = (fight: Fight, pick: "fighter_a" | "fighter_b" | "draw") => {
-    if (fight.status !== "open" && fight.status !== "live") {
+    const isStarted = (fight as any).event_date && new Date((fight as any).event_date).getTime() < Date.now();
+    const isPolymarket = !!(fight as any).polymarket_slug;
+    const isTradeableStatus = fight.status === "open" || fight.status === "live" || (fight.status === "locked" && isStarted && isPolymarket);
+    if (!isTradeableStatus) {
       toast.error(t("operator.marketClosed"));
       return;
     }
