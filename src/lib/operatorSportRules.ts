@@ -16,13 +16,15 @@ const SPORT_KEYWORDS: [string[], string][] = [
   [["FUTBOL", "FÚTBOL"], "SOCCER"],
   [["MUAY THAI"], "MMA"],
   [["BARE KNUCKLE", "BKFC"], "BOXING"],
+  // Esports
+  [["COUNTER-STRIKE", "CS2", "DOTA", "LEAGUE OF LEGENDS", "VALORANT", "ESPORTS"], "ESPORTS"],
   // Soccer / Futbol variants
   [["MLS"], "MLS"],
   [["SOCCER", "FUTBOL", "FÚTBOL", "PREMIER LEAGUE", "LA LIGA", "CHAMPIONS LEAGUE",
     "SERIE A", "BUNDESLIGA", "LIGUE 1", "EPL", "COPA", "LIGA MX", "EREDIVISIE",
     "PRIMEIRA LIGA", "SUPER LIG", "SÜPER LIG", "BRAZIL SÉRIE A", "SAUDI PRO LEAGUE",
     "COPA LIBERTADORES", "EUROPA LEAGUE", "UEL", "UCL", "A-LEAGUE", "K-LEAGUE",
-    "J-LEAGUE", "CONCACAF", "CONMEBOL"], "SOCCER"],
+    "J-LEAGUE", "CONCACAF", "CONMEBOL", "SLOVAK SUPER LIGA"], "SOCCER"],
   // Combat
   [["UFC", "MMA", "PFL", "BELLATOR", "ONE CHAMPIONSHIP", "MUAY THAI", "KICKBOXING"], "MMA"],
   [["BOXING", "BARE KNUCKLE", "BKFC"], "BOXING"],
@@ -40,7 +42,7 @@ const SPORT_KEYWORDS: [string[], string][] = [
   [["F1"], "F1"],
   [["NASCAR", "DAYTONA", "INDY 500"], "NASCAR"],
   // Other
-  [["CRICKET", "IPL", "T20", "PSL"], "CRICKET"],
+  [["CRICKET", "IPL", "T20", "PSL", "BBL", "BIG BASH", "LEGENDS CRICKET"], "CRICKET"],
 ];
 
 /**
