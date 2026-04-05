@@ -24,19 +24,19 @@ interface HighlightFight extends Fight {
 
 type Section = "live" | "today" | "upcoming";
 
-function getStatusBadge(status: string) {
+function getStatusBadge(status: string, t: (key: string) => string) {
   switch (status) {
     case "open":
-      return { label: "Open", className: "bg-green-500/20 text-green-400" };
+      return { label: t("predictions.open"), className: "bg-green-500/20 text-green-400" };
     case "locked":
-      return { label: "Locked", className: "bg-yellow-500/20 text-yellow-400" };
+      return { label: t("predictions.locked"), className: "bg-yellow-500/20 text-yellow-400" };
     case "live":
-      return { label: "Live Now", className: "bg-red-500/20 text-red-400 animate-pulse" };
+      return { label: t("predictions.liveNow"), className: "bg-red-500/20 text-red-400 animate-pulse" };
     case "confirmed":
     case "result_selected":
-      return { label: "Result Pending", className: "bg-orange-500/20 text-orange-400" };
+      return { label: t("predictions.resultPending"), className: "bg-orange-500/20 text-orange-400" };
     case "settled":
-      return { label: "Finished", className: "bg-muted text-muted-foreground" };
+      return { label: t("predictions.finished"), className: "bg-muted text-muted-foreground" };
     default:
       return { label: status, className: "bg-muted text-muted-foreground" };
   }
