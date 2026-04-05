@@ -42,18 +42,18 @@ function getStatusBadge(status: string, t: (key: string) => string) {
   }
 }
 
-function getButtonState(status: string): { disabled: boolean; label: string } {
+function getButtonState(status: string, t: (key: string) => string): { disabled: boolean; label: string } {
   switch (status) {
     case "open":
-      return { disabled: false, label: "Predict" };
+      return { disabled: false, label: t("predictions.predict") };
     case "locked":
-      return { disabled: true, label: "Predictions Closed" };
+      return { disabled: true, label: t("predictions.predictionsClosed") };
     case "live":
-      return { disabled: true, label: "Live Now" };
+      return { disabled: true, label: t("predictions.liveNow") };
     case "confirmed":
     case "result_selected":
     case "settled":
-      return { disabled: true, label: "Finished" };
+      return { disabled: true, label: t("predictions.finished") };
     default:
       return { disabled: true, label: "Unavailable" };
   }
