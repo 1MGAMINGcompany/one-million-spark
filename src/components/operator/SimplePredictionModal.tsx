@@ -66,6 +66,7 @@ export default function SimplePredictionModal({
   onSharePick,
 }: Props) {
   const [amount, setAmount] = useState(10);
+  const { t } = useTranslation();
   const [customAmount, setCustomAmount] = useState("");
 
   const pickedName = pick === "draw"
