@@ -1851,7 +1851,7 @@ Deno.serve(async (req) => {
         "cricket", "cricket-ipl", "cricket-psl", "cricket-intl",
         "cricket-legends", "cricket-t20", "cricket-bbl", "cricket-test",
         "cs2",
-        "atp", "wta", "tennis", "tennis-atp", "tennis-wta", "tennis-grand-slam",
+        "atp", "wta",
         "golf", "f1", "rugby", "table-tennis",
       ];
 
