@@ -4,6 +4,8 @@ import { getTeamLogo } from "@/lib/teamLogos";
 import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
 import { formatEventDateTime } from "@/lib/formatEventLocalDateTime";
 import type { Fight } from "@/components/predictions/FightCard";
+import { useLiveGameState } from "@/hooks/useSportsWebSocket";
+import LiveGameBadge, { LiveScoreDisplay } from "@/components/predictions/LiveGameBadge";
 import type { OperatorTheme } from "@/lib/operatorThemes";
 
 interface SimplePredictionCardProps {
