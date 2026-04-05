@@ -768,8 +768,12 @@ Deno.serve(async (req) => {
 
     // ═══════════════════════════════════════════════════
     // EVENT DATE GUARD — reject trades on started events
+    // Skipped for Polymarket-backed events: their markets
+    // intentionally stay open during live games (in-play trading).
     // ═══════════════════════════════════════════════════
-    if (fight.event_id) {
+    const hasPolymarketRouting = !!(fight.polymarket_market_id && fight.polymarket_outcome_a_token);
+
+    if (fight.event_id && !hasPolymarketRouting) {
       const { data: eventData } = await supabase
         .from("prediction_events")
         .select("event_date, status")
