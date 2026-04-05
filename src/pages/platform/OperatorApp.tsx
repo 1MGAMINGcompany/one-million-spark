@@ -208,7 +208,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       }));
     return [{
       label: "Sports",
-      tabs: [{ key: "ALL", label: "All Sports", emoji: "🔥", count: enrichedFights.length }, ...tabs],
+      tabs: [{ key: "ALL", label: t("operator.allSports"), emoji: "🔥", count: enrichedFights.length }, ...tabs],
     }];
   }, [enrichedFights, sportCounts]);
 
@@ -505,7 +505,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                   boxShadow: activeTab === tab ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
                 }}
               >
-                {tab === "events" ? "Events" : `My Picks${userEntries.length > 0 ? ` (${userEntries.length})` : ""}`}
+                {tab === "events" ? t("operator.events") : `${t("operator.myPicks")}${userEntries.length > 0 ? ` (${userEntries.length})` : ""}`}
               </button>
             ))}
           </div>

@@ -508,7 +508,7 @@
   "wallet": {
     "signedInAs": "Signed in as",
     "connect": "Sign In",
-    "disconnect": "Sign Out",
+    "disconnect": "Disconnect",
     "wrongNetwork": "Wrong Network",
     "switchNetwork": "Switch Network",
     "walletRequired": "Account Required",
@@ -522,7 +522,7 @@
     "back": "Back",
     "copyLink": "Copy Link",
     "copied": "Copied!",
-    "openInWalletBrowser": "Open in wallet browser",
+    "openInWalletBrowser": "Open in {{wallet}} Browser",
     "tryInBrowserConnect": "Try connecting in this browser",
     "connectionTimedOut": "Connection timed out",
     "wrongWalletBrowserHint": "Make sure you're opening this page inside your wallet's browser",
@@ -592,7 +592,6 @@
     "desktopModalDescription": "Install the wallet extension or open in wallet browser to continue.",
     "openInPhantom": "Open in Phantom",
     "openInSolflare": "Open in Solflare",
-    "openInWalletBrowser": "Open in {{wallet}} Browser",
     "orOpenInWalletBrowser": "Or open in wallet browser:",
     "openInWallet": "Open in {{wallet}}",
     "opensWalletBrowser": "Opens wallet browser",
@@ -611,7 +610,6 @@
     "alreadyHaveCryptoWallet": "Already have a crypto wallet?",
     "switchWallet": "Switch Wallet",
     "walletLoginNotConfigured": "Wallet login not configured",
-    "disconnect": "Disconnect",
     "loginToPlay": "Log in to Play",
     "loginToPlayDesc": "Sign in with Google, X, or Email to get started.",
     "orUseExternal": "Or connect an external wallet",
@@ -1544,7 +1542,35 @@
   "predictions": {
     "title": "Sport Predictions",
     "badge": "Prediction Markets",
-    "subtitle": "Pick your fighter. Earn rewards. All predictions are final."
+    "subtitle": "Pick your fighter. Earn rewards. All predictions are final.",
+    "predict": "Predict",
+    "predictYes": "Predict Yes",
+    "predictNo": "Predict No",
+    "liveMarket": "Live Market",
+    "predictionsClosed": "Predictions Closed",
+    "liveNow": "Live Now",
+    "open": "Open",
+    "locked": "Locked",
+    "resultPending": "Result Pending",
+    "finished": "Finished",
+    "volume": "Volume",
+    "pool": "Pool",
+    "predictionPlaced": "Prediction Placed!",
+    "tradeFailed": "Trade Failed",
+    "tradeProcessing": "Trade Processing",
+    "tradeSubmitted": "Your trade has been submitted and is being confirmed.",
+    "submitPrediction": "Submit Prediction",
+    "submitting": "Submitting…",
+    "enterAmount": "Enter Amount (USD)",
+    "placePrediction": "Place ${{amount}} Prediction",
+    "close": "Close",
+    "gotIt": "Got it!",
+    "sharePick": "Share Pick",
+    "somethingWentWrong": "Something went wrong. No funds were taken.",
+    "winner": "WINNER",
+    "checkingApproval": "Checking approval…",
+    "approveInWallet": "Approve in wallet…",
+    "confirmingApproval": "Confirming approval…"
   },
   "platform": {
     "hero": {
@@ -1674,6 +1700,16 @@
       "linkCopied": "Link copied!",
       "support": "Support",
       "supportEmail": "1mgaming@proton.me"
-    }
+    },
+    "events": "Events",
+    "myPicks": "My Picks",
+    "allSports": "All Sports",
+    "claiming": "Claiming...",
+    "collectWinnings": "Collect Winnings",
+    "winningsCollected": "Winnings collected ✓",
+    "shareYourWin": "🏆 SHARE YOUR WIN",
+    "processing": "Processing...",
+    "enterAmountMin": "Enter amount ($1 min)",
+    "serviceFee": "Service fee applies"
   }
 }

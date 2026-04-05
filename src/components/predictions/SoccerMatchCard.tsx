@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -74,6 +75,7 @@ export default function SoccerMatchCard({
   readOnly,
 }: SoccerMatchCardProps) {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [selectedFight, setSelectedFight] = useState<Fight | null>(null);
   const [amount, setAmount] = useState("");
 
@@ -205,7 +207,7 @@ export default function SoccerMatchCard({
             <Input
               type="number"
               inputMode="decimal"
-              placeholder="Enter Amount (USD)"
+              placeholder={t("predictions.enterAmount")}
               value={amount}
               onChange={e => setAmount(e.target.value)}
               className="text-center text-lg font-bold h-12 bg-background border-border"

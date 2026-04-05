@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { X, Loader2, Share2 } from "lucide-react";
 import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
 import { getTeamLogo } from "@/lib/teamLogos";
@@ -65,6 +66,7 @@ export default function SimplePredictionModal({
   onSharePick,
 }: Props) {
   const [amount, setAmount] = useState(10);
+  const { t } = useTranslation();
   const [customAmount, setCustomAmount] = useState("");
 
   const pickedName = pick === "draw"
@@ -199,17 +201,17 @@ export default function SimplePredictionModal({
         >
           {submitting ? (
             <span className="flex items-center justify-center gap-2">
-              <Loader2 className="w-5 h-5 animate-spin" /> Processing...
+              <Loader2 className="w-5 h-5 animate-spin" /> {t("operator.processing")}
             </span>
           ) : currentAmount < MIN_USD ? (
-            "Enter amount ($1 min)"
+            t("operator.enterAmountMin")
           ) : (
-            `Place $${currentAmount.toFixed(2)} Prediction`
+            t("predictions.placePrediction", { amount: currentAmount.toFixed(2) })
           )}
         </button>
 
         <p className="text-center text-[10px] text-white/15 mt-3">
-          Service fee applies • {operatorBrandName || "1MG"}
+          {t("operator.serviceFee")} • {operatorBrandName || "1MG"}
         </p>
       </div>
     </div>
