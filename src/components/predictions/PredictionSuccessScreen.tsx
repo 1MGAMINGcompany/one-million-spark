@@ -212,7 +212,7 @@ export default function PredictionSuccessScreen({
               </Button>
             )}
             <Button onClick={onClose} className="flex-1" size="lg">
-              {isFailed ? "Close" : "Got it!"}
+              {isFailed ? t("predictions.close") : t("predictions.gotIt")}
             </Button>
           </div>
         </div>
