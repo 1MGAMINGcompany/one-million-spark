@@ -339,7 +339,7 @@ export interface DateGroup<T> {
  */
 export function groupByDate<T extends Record<string, any>>(
   fights: T[],
-  graceHours = 4,
+  graceHours = 24,
 ): DateGroup<T>[] {
   const now = new Date();
   const todayStr = now.toDateString();

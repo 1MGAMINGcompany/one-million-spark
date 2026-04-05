@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface LiveGameState {
@@ -135,9 +135,12 @@ export function SportsWebSocketProvider({ children, slugs = [] }: SportsWebSocke
   const slugsRef = useRef(slugs);
   slugsRef.current = slugs;
 
+  // Stable dependency key for REST polling
+  const slugKey = useMemo(() => [...slugs].sort().join(","), [slugs]);
+
   // REST polling for initial state + fallback
   useEffect(() => {
-    if (slugs.length === 0) return;
+    if (!slugKey) return;
 
     let active = true;
 
@@ -165,7 +168,7 @@ export function SportsWebSocketProvider({ children, slugs = [] }: SportsWebSocke
     // Poll every 60s as fallback
     const interval = setInterval(poll, REST_POLL_INTERVAL);
     return () => { active = false; clearInterval(interval); };
-  }, [slugs.length > 0 ? slugs.join(",") : ""]);
+  }, [slugKey]);
 
   const connect = useCallback(() => {
     if (!mountedRef.current) return;

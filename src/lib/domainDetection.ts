@@ -29,6 +29,7 @@ const PLATFORM_ROUTES = new Set([
   "dashboard",
   "help",
   "admin",
+  "support",
   "terms-of-service",
   "privacy-policy",
 ]);
