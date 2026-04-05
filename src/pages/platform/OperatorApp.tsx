@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, Fragment } from "react";
-import { SportsWebSocketProvider } from "@/hooks/useSportsWebSocket";
+import { SportsWebSocketProvider, useLiveGameState } from "@/hooks/useSportsWebSocket";
+import LiveGameBadge, { LiveScoreDisplay } from "@/components/predictions/LiveGameBadge";
 import { useTranslation } from "react-i18next";
 import { useOperatorBySubdomain, useOperatorSettings } from "@/hooks/useOperator";
 import { useQuery } from "@tanstack/react-query";
@@ -646,55 +647,16 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
       {/* Featured event hero */}
       {featuredEvent && activeTab === "events" && !searchQuery && (
-        <div className="max-w-4xl mx-auto px-4 pt-4">
-          <div
-            className="rounded-2xl p-5 relative overflow-hidden"
-            style={{
-              backgroundColor: theme.isDark ? "rgba(255,255,255,0.05)" : theme.primary + "08",
-              border: `1px solid ${theme.isDark ? "rgba(255,255,255,0.1)" : theme.primary + "20"}`,
-            }}
-          >
-            <div className="flex items-center gap-2 mb-3">
-              {featuredEvent.status === "live" ? (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500">● LIVE</span>
-              ) : (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: theme.primary + "18", color: theme.primary }}>
-                  <Zap className="w-3 h-3 inline mr-0.5" />{t("operator.upNext")}
-                </span>
-              )}
-              <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: theme.textMuted }}>
-                {(featuredEvent as any)._broadSport && BROAD_SPORTS[(featuredEvent as any)._broadSport]?.label
-                  ? `${BROAD_SPORTS[(featuredEvent as any)._broadSport].label} • ${(featuredEvent as any)._league || ""}`
-                  : (featuredEvent as any)._league || ""}
-              </span>
-            </div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-lg font-bold" style={{ color: theme.textPrimary }}>
-                {resolveOutcomeName(featuredEvent.fighter_a_name, "a", featuredEvent)}
-              </span>
-              <span className="text-sm font-bold" style={{ color: theme.textMuted }}>{t("operator.vs")}</span>
-              <span className="text-lg font-bold text-right" style={{ color: theme.textPrimary }}>
-                {resolveOutcomeName(featuredEvent.fighter_b_name, "b", featuredEvent)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs" style={{ color: theme.textMuted }}>
-                {(featuredEvent as any).event_date ? formatEventDateTime((featuredEvent as any).event_date) : ""}
-              </span>
-              <button
-                onClick={() => {
-                  if (featuredEvent.status === "open") {
-                    handlePredict(featuredEvent, "fighter_a");
-                  }
-                }}
-                className="px-4 py-1.5 rounded-lg text-xs font-bold transition-all"
-                style={{ backgroundColor: theme.primary, color: theme.primaryForeground }}
-              >
-                {t("operator.predictNow")}
-              </button>
-            </div>
-          </div>
-        </div>
+        <FeaturedEventHero
+          fight={featuredEvent}
+          theme={theme}
+          t={t}
+          onPredict={() => {
+            if (featuredEvent.status === "open" || featuredEvent.status === "live") {
+              handlePredict(featuredEvent, "fighter_a");
+            }
+          }}
+        />
       )}
 
       {/* Hero text */}
