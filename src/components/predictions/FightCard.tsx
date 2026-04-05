@@ -888,7 +888,7 @@ function SoccerTeamColumn({
           {isBinaryMarket ? (name === "No" ? t("predictions.predictNo") : t("predictions.predictYes")) : t("predictions.predict")}
         </Button>
       ) : !isWinner && (
-        <p className="mt-1.5 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wide">Predictions Closed</p>
+        <p className="mt-1.5 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wide">{t("predictions.predictionsClosed")}</p>
       )}
       {isWinner && (
         <div className="mt-1 flex items-center justify-center gap-1 text-primary">
