@@ -257,7 +257,7 @@ export default function SimplePredictionCard({
           {liveState && liveState.live && liveState.score ? (
             <LiveScoreDisplay state={liveState} theme={theme} />
           ) : (
-            "VS"
+            t("operator.vs")
           )}
         </span>
         <div className="flex items-center gap-3 flex-1 justify-end text-right">
@@ -284,7 +284,7 @@ export default function SimplePredictionCard({
         >
           <span className="block text-sm font-bold" style={{ color: theme.textPrimary }}>{nameA}</span>
           <span className="block text-xs mt-1" style={{ color: theme.primary }}>
-            Bet $10 → Win ${payoutA.toFixed(2)}
+            {t("operator.betToWin", { amount: payoutA.toFixed(2) })}
           </span>
           <span className="block text-[10px] mt-0.5" style={{ color: theme.textMuted }}>({multiplierA}x)</span>
         </button>
@@ -298,8 +298,8 @@ export default function SimplePredictionCard({
               border: `1px solid ${theme.cardBorder}`,
             }}
           >
-            <span className="block text-sm font-bold" style={{ color: theme.textPrimary }}>Draw</span>
-            <span className="block text-xs mt-1" style={{ color: theme.textMuted }}>Available</span>
+            <span className="block text-sm font-bold" style={{ color: theme.textPrimary }}>{t("operator.draw")}</span>
+            <span className="block text-xs mt-1" style={{ color: theme.textMuted }}>{t("operator.available")}</span>
           </button>
         )}
         <button
@@ -313,7 +313,7 @@ export default function SimplePredictionCard({
         >
           <span className="block text-sm font-bold" style={{ color: theme.textPrimary }}>{nameB}</span>
           <span className="block text-xs mt-1" style={{ color: theme.primary }}>
-            Bet $10 → Win ${payoutB.toFixed(2)}
+            {t("operator.betToWin", { amount: payoutB.toFixed(2) })}
           </span>
           <span className="block text-[10px] mt-0.5" style={{ color: theme.textMuted }}>({multiplierB}x)</span>
         </button>
@@ -325,7 +325,7 @@ export default function SimplePredictionCard({
         if (total <= 0) return null;
         return (
           <p className="text-center text-[11px]" style={{ color: theme.textMuted }}>
-            Total Pool: ${total >= 1000 ? `${(total / 1000).toFixed(0)}K` : total.toFixed(0)}
+            {t("operator.totalPool")}: ${total >= 1000 ? `${(total / 1000).toFixed(0)}K` : total.toFixed(0)}
           </p>
         );
       })()}
