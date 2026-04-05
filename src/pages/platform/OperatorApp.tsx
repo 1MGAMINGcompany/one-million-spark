@@ -46,6 +46,71 @@ interface OperatorAppProps {
   subdomain: string;
 }
 
+/** Extracted so we can call useLiveGameState unconditionally */
+function FeaturedEventHero({ fight, theme, t, onPredict }: {
+  fight: Fight & { _broadSport?: string; _league?: string };
+  theme: ReturnType<typeof getOperatorTheme>;
+  t: (key: string, opts?: any) => string;
+  onPredict: () => void;
+}) {
+  const liveState = useLiveGameState((fight as any).polymarket_slug);
+  const isLive = liveState?.live || fight.status === "live";
+
+  return (
+    <div className="max-w-4xl mx-auto px-4 pt-4">
+      <div
+        className="rounded-2xl p-5 relative overflow-hidden"
+        style={{
+          backgroundColor: theme.isDark ? "rgba(255,255,255,0.05)" : theme.primary + "08",
+          border: `1px solid ${theme.isDark ? "rgba(255,255,255,0.1)" : theme.primary + "20"}`,
+        }}
+      >
+        <div className="flex items-center gap-2 mb-3">
+          {liveState && (liveState.live || liveState.ended) ? (
+            <LiveGameBadge state={liveState} theme={theme} />
+          ) : isLive ? (
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500">● LIVE</span>
+          ) : (
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: theme.primary + "18", color: theme.primary }}>
+              <Zap className="w-3 h-3 inline mr-0.5" />{t("operator.upNext")}
+            </span>
+          )}
+          <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: theme.textMuted }}>
+            {(fight as any)._broadSport && BROAD_SPORTS[(fight as any)._broadSport]?.label
+              ? `${BROAD_SPORTS[(fight as any)._broadSport].label} • ${(fight as any)._league || ""}`
+              : (fight as any)._league || ""}
+          </span>
+        </div>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-lg font-bold" style={{ color: theme.textPrimary }}>
+            {resolveOutcomeName(fight.fighter_a_name, "a", fight)}
+          </span>
+          {liveState && liveState.live && liveState.score ? (
+            <LiveScoreDisplay state={liveState} theme={theme} />
+          ) : (
+            <span className="text-sm font-bold" style={{ color: theme.textMuted }}>{t("operator.vs")}</span>
+          )}
+          <span className="text-lg font-bold text-right" style={{ color: theme.textPrimary }}>
+            {resolveOutcomeName(fight.fighter_b_name, "b", fight)}
+          </span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-xs" style={{ color: theme.textMuted }}>
+            {(fight as any).event_date ? formatEventDateTime((fight as any).event_date) : ""}
+          </span>
+          <button
+            onClick={onPredict}
+            className="px-4 py-1.5 rounded-lg text-xs font-bold transition-all"
+            style={{ backgroundColor: theme.primary, color: theme.primaryForeground }}
+          >
+            {t("operator.predictNow")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const { t } = useTranslation();
   const isMobile = useIsMobile();
