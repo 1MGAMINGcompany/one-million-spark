@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { BarChart3 } from "lucide-react";
 import { getTeamLogo } from "@/lib/teamLogos";
 import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
@@ -59,6 +60,7 @@ export default function SimplePredictionCard({
   onShareWin,
   onGraph,
 }: SimplePredictionCardProps) {
+  const { t } = useTranslation();
   const nameA = resolveOutcomeName(fight.fighter_a_name, "a", fight);
   const nameB = resolveOutcomeName(fight.fighter_b_name, "b", fight);
   const { priceA, priceB } = getOddsFromFight(fight);
@@ -115,7 +117,7 @@ export default function SimplePredictionCard({
         }}
       >
         <BarChart3 className="w-3 h-3" />
-        Graph
+        {t("operator.graph")}
       </button>
     ) : null
   );
