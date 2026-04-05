@@ -234,11 +234,11 @@ export default function SimplePredictionCard({
             <span
               className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
               style={{
-                backgroundColor: timeLabel.isLive ? "#ef444422" : theme.primary + "18",
-                color: timeLabel.isLive ? "#ef4444" : theme.primary,
+                backgroundColor: theme.primary + "18",
+                color: theme.primary,
               }}
             >
-              {timeLabel.isLive ? "● LIVE" : timeLabel.text}
+              {timeLabel.text}
             </span>
           ) : null}
         </div>
