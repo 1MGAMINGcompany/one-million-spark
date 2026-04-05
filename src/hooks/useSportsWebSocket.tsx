@@ -27,7 +27,7 @@ const SportsWSContext = createContext<SportsWSContextValue>({
 
 const WS_URL = "wss://sports-api.polymarket.com/ws";
 const MAX_BACKOFF = 30000;
-const REST_POLL_INTERVAL = 60_000;
+const REST_POLL_INTERVAL = 30_000;
 
 function parseLiveState(msg: any): LiveGameState | null {
   if (!msg?.slug) return null;
@@ -152,10 +152,7 @@ export function SportsWebSocketProvider({ children, slugs = [] }: SportsWebSocke
         setGames(prev => {
           const next = new Map(prev);
           for (const [slug, state] of states) {
-            // Only set if we don't have fresher WS data
-            if (!next.has(slug)) {
-              next.set(slug, state);
-            }
+            next.set(slug, state);
           }
           return next;
         });
