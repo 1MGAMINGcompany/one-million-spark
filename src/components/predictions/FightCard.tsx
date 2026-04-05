@@ -332,6 +332,7 @@ export default function FightCard({
   const { oddsA, oddsB, noData, resolving } = calcOdds(poolA, poolB, fight.price_a, fight.price_b, fight.source);
   const totalPool = poolA + poolB;
   const isPolymarket = fight.source === "polymarket";
+  const { t } = useTranslation();
   const isFeatured = fight.featured === true;
 
   const isClaimable = ["confirmed", "settled"].includes(fight.status);
