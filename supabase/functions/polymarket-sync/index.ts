@@ -609,17 +609,44 @@ function findWinnerMarket(ev: GammaEvent): GammaMarketExt | null {
     "most", "top scorer", "batting average", "home runs",
     "touchdowns", "will they", "will .* make", "season wins",
     "trade", "signed", "contract", "agreement", "champion",
+    // Cricket props
+    "toss winner", "toss", "top batter", "top bowler",
+    "completed match", "highest opening", "most sixes",
+    "most fours", "first wicket", "first boundary",
+    "man of the match", "century", "run out",
+    "highest individual", "powerplay", "death overs",
+    // Esports props
+    "game 1", "game 2", "game 3", "game1", "game2", "game3",
+    "map 1", "map 2", "map 3", "map1", "map2", "map3",
+    "round ", "pistol round", "first blood", "first kill",
+    "total kills", "total maps", "ace",
+    // Draw-only / special
+    "draw or", "go the distance",
   ];
+
+  // Also reject by slug patterns (catches things rejectWords miss)
+  const slugRejectPatterns = [
+    /-toss-winner/i, /-completed-match/i, /-top-bat/i, /-top-bowl/i,
+    /-game[0-9]/i, /-map[0-9]/i, /-round[0-9]/i,
+    /-most-sixes/i, /-most-fours/i, /-first-wicket/i,
+    /-first-blood/i, /-first-kill/i, /-total-kills/i,
+  ];
+  const evSlug = (ev.slug || "").toLowerCase();
+  if (slugRejectPatterns.some(re => re.test(evSlug))) return null;
 
   for (const m of ev.markets || []) {
     const outcomes = safeJsonParse(m.outcomes);
     const question = (m.question || "").toLowerCase();
+    const mSlug = (m.slug || "").toLowerCase();
 
     // Must have 2 or 3 outcomes only (team A, team B, optional draw)
     if (outcomes.length < 2 || outcomes.length > 3) continue;
 
     // Reject prop keywords in the question
     if (rejectWords.some(w => question.includes(w))) continue;
+
+    // Reject prop keywords in market slug
+    if (slugRejectPatterns.some(re => re.test(mSlug))) continue;
 
     // Must contain "win" or "vs" pattern
     if (question.includes("win") || question.includes("vs") || MATCHUP_RE.test(question)) {
@@ -633,8 +660,9 @@ function findWinnerMarket(ev: GammaEvent): GammaMarketExt | null {
     const m = markets[0];
     const outcomes = safeJsonParse(m.outcomes);
     const question = (m.question || "").toLowerCase();
+    const mSlug = (m.slug || "").toLowerCase();
     if (outcomes.length >= 2 && outcomes.length <= 3) {
-      if (!rejectWords.some(w => question.includes(w))) {
+      if (!rejectWords.some(w => question.includes(w)) && !slugRejectPatterns.some(re => re.test(mSlug))) {
         return m as GammaMarketExt;
       }
     }
