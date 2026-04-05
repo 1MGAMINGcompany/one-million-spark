@@ -213,7 +213,6 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       label: "Sports",
       tabs: [{ key: "ALL", label: t("operator.allSports"), emoji: "🔥", count: enrichedFights.length }, ...tabs],
     }];
-    }];
   }, [enrichedFights, sportCounts]);
 
   // ── Featured event ──
