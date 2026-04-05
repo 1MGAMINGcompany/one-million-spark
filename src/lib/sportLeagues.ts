@@ -46,6 +46,7 @@ const SPORT_TO_BROAD: Record<string, string> = {
   F1: "F1",
   NASCAR: "F1",
   RUGBY: "RUGBY",
+  ESPORTS: "ESPORTS",
 };
 
 /**
