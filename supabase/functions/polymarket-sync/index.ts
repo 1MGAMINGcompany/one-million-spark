@@ -285,20 +285,15 @@ const LEAGUE_SOURCES: Record<string, LeagueSource> = {
   "golf":   { key: "golf",   label: "Golf",   sportType: "golf",   fetchStrategy: "search", searchSeed: ["PGA", "golf", "PGA Tour", "Masters golf"] },
   // ─── Motorsport ───
   "f1":     { key: "f1",     label: "Formula 1", sportType: "f1", fetchStrategy: "search", searchSeed: ["Formula 1 Grand Prix", "F1 vs", "Grand Prix winner"] },
-  // ─── Cricket ───
-  "cricket":       { key: "cricket",       label: "Cricket",       sportType: "cricket", fetchStrategy: "search", searchSeed: ["Indian Premier League", "IPL vs", "PSL vs", "cricket vs", "T20 cricket vs"] },
-  "cricket-ipl":   { key: "cricket-ipl",   label: "IPL",           sportType: "cricket", fetchStrategy: "search", searchSeed: ["Indian Premier League", "IPL vs", "IPL 2026"] },
-  "cricket-psl":   { key: "cricket-psl",   label: "PSL",           sportType: "cricket", fetchStrategy: "search", searchSeed: ["Pakistan Super League", "PSL vs"] },
-  "cricket-intl":  { key: "cricket-intl",  label: "Cricket Intl",  sportType: "cricket", fetchStrategy: "search", searchSeed: ["cricket international", "cricket vs", "T20 international"] },
-  // ─── Rugby ───
-  "rugby":    { key: "rugby",    label: "Rugby",    sportType: "rugby", fetchStrategy: "search", searchSeed: ["rugby vs", "Six Nations", "rugby union"] },
-  // ─── Esports ───
-  "cs2":      { key: "cs2",      label: "Counter-Strike", sportType: "esports", fetchStrategy: "search", searchSeed: ["Counter-Strike vs", "CS2 vs", "CS2"] },
-  // ─── Additional Cricket leagues ───
-  "cricket-legends": { key: "cricket-legends", label: "Legends", sportType: "cricket", fetchStrategy: "search", searchSeed: ["Legends Cricket League", "LLC vs"] },
-  "cricket-t20":     { key: "cricket-t20",     label: "T20",     sportType: "cricket", fetchStrategy: "search", searchSeed: ["T20 cricket vs", "National T20", "T20 Cup"] },
-  "cricket-bbl":     { key: "cricket-bbl",     label: "BBL",     sportType: "cricket", fetchStrategy: "search", searchSeed: ["Big Bash League", "BBL vs"] },
-  "cricket-test":    { key: "cricket-test",    label: "Test",    sportType: "cricket", fetchStrategy: "search", searchSeed: ["Test cricket", "Test match vs"] },
+  // ─── Cricket (tag/series-based — search was returning stale results) ───
+  "cricket":         { key: "cricket",         label: "Cricket",         sportType: "cricket", fetchStrategy: "tag", tagId: "101988", seriesId: "11213" },
+  "cricket-ipl":     { key: "cricket-ipl",     label: "IPL",             sportType: "cricket", fetchStrategy: "tag", tagId: "101988", seriesId: "11213" },
+  "cricket-psl":     { key: "cricket-psl",     label: "PSL",             sportType: "cricket", fetchStrategy: "tag", tagId: "103805", seriesId: "11214" },
+  "cricket-intl":    { key: "cricket-intl",    label: "Cricket Intl",    sportType: "cricket", fetchStrategy: "search", searchSeed: ["cricket international", "cricket vs", "T20 international"] },
+  "cricket-legends": { key: "cricket-legends", label: "Legends",         sportType: "cricket", fetchStrategy: "tag", tagId: "104203", seriesId: "11337" },
+  "cricket-t20":     { key: "cricket-t20",     label: "T20 Brisbane",    sportType: "cricket", fetchStrategy: "tag", tagId: "104447", seriesId: "11513" },
+  "cricket-bbl":     { key: "cricket-bbl",     label: "BBL",             sportType: "cricket", fetchStrategy: "search", searchSeed: ["Big Bash League", "BBL vs"] },
+  "cricket-test":    { key: "cricket-test",    label: "Test",            sportType: "cricket", fetchStrategy: "search", searchSeed: ["Test cricket", "Test match vs"] },
   // ─── Other ───
   "table-tennis": { key: "table-tennis", label: "Table Tennis", sportType: "tennis", fetchStrategy: "search", searchSeed: ["table tennis", "ping pong"] },
 };
