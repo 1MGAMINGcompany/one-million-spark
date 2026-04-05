@@ -355,9 +355,9 @@ export function groupByDate<T extends Record<string, any>>(
     const dateStr = d.toDateString();
     let label: string;
     if (dateStr === todayStr) {
-      label = "Today";
+      label = "today";
     } else if (dateStr === tomorrowStr) {
-      label = "Tomorrow";
+      label = "tomorrow";
     } else {
       label = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
     }

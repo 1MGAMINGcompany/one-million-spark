@@ -20,15 +20,15 @@ interface SimplePredictionCardProps {
   onGraph?: (fight: Fight) => void;
 }
 
-function getTimeLabel(eventDate: string | null | undefined): { text: string; isLive: boolean } | null {
+function getTimeLabel(eventDate: string | null | undefined, t: (key: string, opts?: any) => string): { text: string; isLive: boolean } | null {
   if (!eventDate) return null;
   const d = new Date(eventDate);
   const now = Date.now();
   const diff = d.getTime() - now;
   // Never show LIVE from time heuristic — only LiveGameBadge should do that
   if (diff < 0) return null;
-  if (diff < 3600000) return { text: `Starts in ${Math.max(1, Math.round(diff / 60000))}m`, isLive: false };
-  if (diff < 86400000) return { text: `Starts in ${Math.round(diff / 3600000)}h`, isLive: false };
+  if (diff < 3600000) return { text: t("operator.startsInMin", { min: Math.max(1, Math.round(diff / 60000)) }), isLive: false };
+  if (diff < 86400000) return { text: t("operator.startsInHour", { hour: Math.round(diff / 3600000) }), isLive: false };
   return null;
 }
 
@@ -97,7 +97,7 @@ export default function SimplePredictionCard({
     : broadSportLabel
       ? broadSportLabel.toUpperCase()
       : leagueName;
-  const timeLabel = getTimeLabel((fight as any).event_date);
+  const timeLabel = getTimeLabel((fight as any).event_date, t);
 
   const cardStyle = {
     backgroundColor: theme.cardBg,
@@ -142,7 +142,7 @@ export default function SimplePredictionCard({
           <div className="text-center mt-3">
             {userWon ? (
               <>
-                <p className="text-green-500 font-bold text-sm">🎉 You Won!</p>
+                <p className="text-green-500 font-bold text-sm">{t("operator.youWon")}</p>
                 {!userEntry?.claimed && onClaim && (
                   <button
                     onClick={() => onClaim(fight.id)}
@@ -209,7 +209,7 @@ export default function SimplePredictionCard({
            <p className="text-lg font-bold" style={{ color: theme.textPrimary }}>🎯 {pickedName}</p>
           {userEntry?.amount_usd && (
             <p className="text-xs mt-1" style={{ color: theme.textMuted }}>
-              ${userEntry.amount_usd.toFixed(2)} placed
+              {t("operator.amountPlacedLabel", { amount: userEntry.amount_usd.toFixed(2) })}
             </p>
           )}
         </div>
