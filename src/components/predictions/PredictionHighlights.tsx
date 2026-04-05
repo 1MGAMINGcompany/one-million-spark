@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { Swords, Trophy, Lock, Radio, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
