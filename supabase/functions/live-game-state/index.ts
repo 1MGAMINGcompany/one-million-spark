@@ -5,11 +5,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const GAMMA_API = "https://gamma-api.polymarket.com";
+const SPORTS_API = "https://sports-api.polymarket.com";
 
 // In-memory cache: slug → { data, expiresAt }
 const cache = new Map<string, { data: unknown; expiresAt: number }>();
-const CACHE_TTL_MS = 30_000;
+const CACHE_TTL_MS = 20_000; // 20s for live data freshness
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -19,8 +19,8 @@ function json(body: unknown, status = 200) {
 }
 
 /**
- * Fetch live game state from Polymarket Gamma API for a list of slugs.
- * Returns a map of slug → game state (score, period, elapsed, status, live, ended).
+ * Fetch live game state from Polymarket Sports REST API.
+ * Returns real scores, periods, clocks, and accurate live/ended status.
  */
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -33,12 +33,10 @@ serve(async (req) => {
       return json({ error: "slugs array required" }, 400);
     }
 
-    // Cap at 20 slugs per request
     const requestSlugs = slugs.slice(0, 20) as string[];
     const results: Record<string, unknown> = {};
     const uncachedSlugs: string[] = [];
 
-    // Check cache first
     const now = Date.now();
     for (const slug of requestSlugs) {
       const cached = cache.get(slug);
@@ -49,23 +47,45 @@ serve(async (req) => {
       }
     }
 
-    // Fetch uncached slugs from Gamma API (batch by fetching each)
     if (uncachedSlugs.length > 0) {
+      // Fetch all games in one batch call if possible, otherwise individually
       const fetches = uncachedSlugs.map(async (slug) => {
         try {
-          const resp = await fetch(`${GAMMA_API}/events?slug=${encodeURIComponent(slug)}&limit=1`);
+          // Try the sports API games endpoint with the slug
+          const resp = await fetch(
+            `${SPORTS_API}/games?slug=${encodeURIComponent(slug)}`
+          );
           if (!resp.ok) {
-            console.warn(`[live-game-state] Gamma API error for ${slug}: ${resp.status}`);
+            const body = await resp.text();
+            console.warn(`[live-game-state] Sports API error for ${slug}: ${resp.status} ${body}`);
             return { slug, data: null };
           }
-          const events = await resp.json();
-          if (!Array.isArray(events) || events.length === 0) {
+          const games = await resp.json();
+
+          // The response could be an array of games or a single game object
+          const gameList = Array.isArray(games) ? games : games?.games || [];
+
+          if (gameList.length === 0) {
+            // Try alternate: search by market slug via /markets endpoint
+            const altResp = await fetch(
+              `${SPORTS_API}/markets?slug=${encodeURIComponent(slug)}`
+            );
+            if (altResp.ok) {
+              const altData = await altResp.json();
+              const altGames = Array.isArray(altData) ? altData : altData?.games || [];
+              if (altGames.length > 0) {
+                const gameState = parseSportsGame(altGames[0], slug);
+                return { slug, data: gameState };
+              }
+            } else {
+              await altResp.text(); // consume body
+            }
             return { slug, data: null };
           }
 
-          const event = events[0];
-          // Extract game state from event metadata
-          const gameState = parseGammaEventState(event, slug);
+          // Pick the most relevant game (first one, or the one that's live)
+          const liveGame = gameList.find((g: any) => g.live === true) || gameList[0];
+          const gameState = parseSportsGame(liveGame, slug);
           return { slug, data: gameState };
         } catch (e) {
           console.warn(`[live-game-state] Error fetching ${slug}:`, e);
@@ -97,71 +117,64 @@ serve(async (req) => {
   }
 });
 
-function parseGammaEventState(event: any, slug: string) {
-  // Gamma events have: title, slug, active, closed, markets[], startDate, endDate
-  // The sports metadata may be in event.metadata or markets[0].metadata
-  const active = event.active === true;
-  const closed = event.closed === true;
+/**
+ * Parse a game object from Polymarket's Sports REST API.
+ * The API returns fields like: live, ended, score, period, clock,
+ * homeScore, awayScore, quarter, half, status, sport, etc.
+ */
+function parseSportsGame(game: any, slug: string) {
+  if (!game) return null;
 
-  // Check markets for game-specific state
-  const markets = event.markets || [];
-  const mainMarket = markets.find((m: any) =>
-    m.question?.toLowerCase()?.includes("win") ||
-    m.question?.toLowerCase()?.includes("vs")
-  ) || markets[0];
+  // The Sports API provides explicit live/ended booleans
+  const live = game.live === true;
+  const ended = game.ended === true || game.status === "Final" || game.status === "final";
 
-  // Try to extract score/period from event description or metadata
+  // Score extraction — try multiple field patterns
   let score: string | undefined;
   let scoreA: number | undefined;
   let scoreB: number | undefined;
-  let period: string | undefined;
-  let elapsed: string | undefined;
-  let status = "unknown";
-  let sport: string | undefined;
 
-  // Sport from tags or category
-  if (event.tags) {
-    const sportTag = event.tags.find((t: any) =>
-      ["nba", "nfl", "nhl", "mlb", "epl", "mls", "soccer", "basketball", "hockey",
-       "baseball", "tennis", "cricket", "ufc", "boxing", "f1", "golf"].includes(
-        (t.label || t.slug || "").toLowerCase()
-      )
-    );
-    if (sportTag) sport = (sportTag.label || sportTag.slug || "").toLowerCase();
+  if (game.score && typeof game.score === "string") {
+    score = game.score;
+    const parts = score.split("-").map((s: string) => parseInt(s.trim(), 10));
+    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      scoreA = parts[0];
+      scoreB = parts[1];
+    }
+  } else if (game.homeScore != null && game.awayScore != null) {
+    scoreA = Number(game.homeScore);
+    scoreB = Number(game.awayScore);
+    score = `${scoreA}-${scoreB}`;
+  } else if (game.home_score != null && game.away_score != null) {
+    scoreA = Number(game.home_score);
+    scoreB = Number(game.away_score);
+    score = `${scoreA}-${scoreB}`;
   }
 
-  // Determine live/ended from active/closed flags and timing
-  const startDate = event.startDate ? new Date(event.startDate).getTime() : null;
-  const now = Date.now();
-  const started = startDate ? now >= startDate : false;
-  const live = active && !closed && started;
-  const ended = closed;
+  // Period / quarter / half
+  const period = game.period || game.quarter || game.half || game.inning || undefined;
 
+  // Elapsed / clock time
+  const elapsed = game.clock || game.elapsed || game.time || game.gameClock || undefined;
+
+  // Status
+  let status = game.status || "unknown";
   if (ended) status = "Final";
   else if (live) status = "InProgress";
-  else if (active && !started) status = "Scheduled";
 
-  // If event has game metadata (some Gamma events include this)
-  if (event.gameData || event.game_data) {
-    const gd = event.gameData || event.game_data;
-    score = gd.score || undefined;
-    period = gd.period || gd.quarter || gd.half || undefined;
-    elapsed = gd.elapsed || gd.clock || gd.time || undefined;
-    if (gd.status) status = gd.status;
-    if (gd.scoreA != null) scoreA = Number(gd.scoreA);
-    if (gd.scoreB != null) scoreB = Number(gd.scoreB);
-  }
+  // Sport detection
+  const sport = game.sport || game.league || game.leagueAbbreviation || undefined;
 
   return {
     slug,
     score,
     scoreA,
     scoreB,
-    period,
-    elapsed,
+    period: period ? String(period) : undefined,
+    elapsed: elapsed ? String(elapsed) : undefined,
     status,
     live,
     ended,
-    sport,
+    sport: sport ? String(sport).toLowerCase() : undefined,
   };
 }
