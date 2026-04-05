@@ -59,6 +59,7 @@ export default function SimplePredictionCard({
   onShareWin,
   onGraph,
 }: SimplePredictionCardProps) {
+  const { t } = useTranslation();
   const nameA = resolveOutcomeName(fight.fighter_a_name, "a", fight);
   const nameB = resolveOutcomeName(fight.fighter_b_name, "b", fight);
   const { priceA, priceB } = getOddsFromFight(fight);
