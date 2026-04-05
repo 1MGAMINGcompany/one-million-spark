@@ -23,7 +23,7 @@ const TREASURY_WALLET = "0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d";
 // Bridged USDC.e — canonical token for all prediction money flows
 const USDC_CONTRACT = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
 const USDC_DECIMALS = 6;
-const POLYGON_RPC = "https://polygon-rpc.com";
+const POLYGON_RPC = "https://polygon-bor-rpc.publicnode.com";
 
 // Polygon CTF Exchange contract (Polymarket's Conditional Tokens Framework)
 const CTF_EXCHANGE = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E";

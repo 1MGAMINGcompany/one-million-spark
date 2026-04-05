@@ -77,7 +77,7 @@ function usePrivyWalletInner(): PrivyWalletState {
     if (!walletAddress) return;
     try {
       setLoading(true);
-      const res = await fetch("https://polygon-rpc.com", {
+      const res = await fetch("https://polygon-bor-rpc.publicnode.com", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
