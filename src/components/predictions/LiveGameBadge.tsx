@@ -48,10 +48,21 @@ export default function LiveGameBadge({ state, theme, className = "" }: LiveGame
   );
 }
 
-function formatPeriod(period?: string, elapsed?: string, sport?: string): string {
-  if (!period && !elapsed) return "";
+function formatPeriod(period?: string, elapsed?: string, sport?: string, status?: string): string {
+  if (!period && !elapsed && !status) return "";
   const p = period || "";
   const e = elapsed || "";
+  const s = (status || "").toLowerCase();
+
+  // Halftime / Break
+  if (s === "break" || s === "halftime" || s === "ht") {
+    return "HT";
+  }
+
+  // Penalty shootout
+  if (s === "penaltyshootout" || s === "penalties") {
+    return e ? `PEN ${e}` : "PEN";
+  }
 
   // NHL / Hockey
   if (sport?.includes("hockey") || sport?.includes("nhl") || sport?.includes("ice")) {
@@ -65,8 +76,10 @@ function formatPeriod(period?: string, elapsed?: string, sport?: string): string
     return e ? `${label} ${e}` : label;
   }
 
-  // Soccer / Football
-  if (sport?.includes("soccer") || sport?.includes("football") || sport?.includes("futbol")) {
+  // Soccer / Football / EPL / MLS / La Liga etc
+  if (sport?.includes("soccer") || sport?.includes("football") || sport?.includes("futbol") ||
+      sport?.includes("epl") || sport?.includes("mls") || sport?.includes("laliga") ||
+      sport?.includes("bundesliga") || sport?.includes("serie") || sport?.includes("ligue")) {
     const halfLabel = p === "2" || p === "2H" ? "2H" : p === "1" || p === "1H" ? "1H" : p;
     return e ? `${halfLabel} ${e}'` : halfLabel;
   }
@@ -84,6 +97,12 @@ function formatPeriod(period?: string, elapsed?: string, sport?: string): string
   // Cricket
   if (sport?.includes("cricket")) {
     return p || "";
+  }
+
+  // Esports
+  if (sport?.includes("esport") || sport?.includes("csgo") || sport?.includes("dota") || sport?.includes("lol")) {
+    if (p && p.includes("/")) return `Map ${p.split("/")[0]}`;
+    return p ? `Map ${p}` : "";
   }
 
   // Generic fallback
