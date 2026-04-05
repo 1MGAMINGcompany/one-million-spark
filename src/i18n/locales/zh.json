@@ -1370,7 +1370,6 @@
     "winningsCollected": "奖金已领取 ✓",
     "result": "✅ 结果",
     "wins": "获胜！",
-    "betToWin": "投注$10 → 赢${{amount}}",
     "available": "可用",
     "addFundsTitle": "添加资金",
     "addFundsDesc": "通过Polygon网络将USDC.e发送到下方的钱包地址。",
@@ -1447,7 +1446,9 @@
     "amountPlacedLabel": "已下注 ${{amount}}",
     "startsInMin": "{{min}}分钟后开始",
     "startsInHour": "{{hour}}小时后开始",
-    "poweredByLabel": "技术支持"
+    "poweredByLabel": "技术支持",
+    "predictReturn": "预测 ${{predict}} → 回报 ${{return}}",
+    "supportEmailLabel": "客服"
   },
   "platform": {
     "hero": {
@@ -1531,7 +1532,9 @@
       "contact": "Contact",
       "terms": "Terms",
       "privacy": "Privacy",
-      "contactEmail": "1mgaming@proton.me"
+      "contactEmail": "1mgaming@proton.me",
+      "disclaimer": "免责声明",
+      "acceptableUse": "可接受使用"
     },
     "nav": {
       "signIn": "Sign In",
@@ -1803,5 +1806,71 @@
   "creatorDeposit": {
     "title": "Creator Deposit (Refundable)",
     "desc": "Creating a room requires a small temporary Solana storage deposit. You get this back when the game ends — win, lose, forfeit, or cancel."
+  },
+  "legal": {
+    "backToHome": "← 返回首页",
+    "lastUpdated": "最后更新：2025年4月",
+    "terms": {
+      "title": "服务条款",
+      "s1Title": "平台性质",
+      "s1Body": "1MG.live是预测市场平台，不是赌博服务。",
+      "s2Title": "资格",
+      "s2Body": "用户必须年满18岁。",
+      "s3Title": "预测不可更改",
+      "s3Body": "所有预测一经提交即为最终决定。",
+      "s4Title": "平台费用",
+      "s4Body": "每次预测收取最高2.25%的费用。",
+      "s5Title": "运营商内容",
+      "s5Body": "1MG.live提供技术平台。运营商对其内容负责。",
+      "s6Title": "合规性",
+      "s6Body": "用户有责任确保其参与在当地法律允许范围内。"
+    },
+    "privacy": {
+      "title": "隐私政策",
+      "s1Title": "收集的数据",
+      "s1Body": "我们收集钱包地址、电子邮件、预测历史和基本分析数据。",
+      "s2Title": "数据使用方式",
+      "s2Body": "您的数据用于运营平台和处理预测。",
+      "s3Title": "数据共享",
+      "s3Body": "我们绝不会将您的个人数据出售给第三方。",
+      "s4Title": "数据删除",
+      "s4Body": "您可以联系1mgaming@proton.me请求删除数据。",
+      "s5Title": "Cookie和分析",
+      "s5Body": "我们使用本地存储来保存语言偏好和会话管理。"
+    },
+    "disclaimer": {
+      "title": "免责声明",
+      "s1Title": "非赌博",
+      "s1Body": "1MG.live是预测市场平台，不是赌博服务。",
+      "s2Title": "金融风险",
+      "s2Body": "参与预测市场涉及金融风险。仅使用可承受损失的金额。",
+      "s3Title": "无保证",
+      "s3Body": "过去的市场表现不能保证未来的结果。",
+      "s4Title": "非金融建议",
+      "s4Body": "1MG.live不提供金融或投资建议。",
+      "s5Title": "现实世界结果",
+      "s5Body": "预测结果取决于我们无法控制的现实世界事件。",
+      "s6Title": "市场概率",
+      "s6Body": "显示的概率是群体来源的，可能与实际概率不同。",
+      "s7Title": "管辖权限制",
+      "s7Body": "本平台不在禁止预测市场的管辖区提供服务。",
+      "s8Title": "责任限制",
+      "s8Body": "1MG.live不对预测或市场条件造成的损失负责。"
+    },
+    "acceptableUse": {
+      "title": "可接受使用政策",
+      "s1Title": "禁止市场操纵",
+      "s1Body": "用户不得试图操纵市场结果。",
+      "s2Title": "禁止使用内幕信息",
+      "s2Body": "利用非公开信息进行交易严格禁止。",
+      "s3Title": "禁止自动交易",
+      "s3Body": "未经明确授权不允许使用交易机器人。",
+      "s4Title": "每人一个账户",
+      "s4Body": "每人只能操作一个账户。",
+      "s5Title": "禁止管辖区",
+      "s5Body": "用户不得从禁止管辖区访问平台。",
+      "s6Title": "违规",
+      "s6Body": "违规可能导致立即暂停账户并永久封禁。"
+    }
   }
 }

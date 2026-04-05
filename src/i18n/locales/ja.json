@@ -1370,7 +1370,6 @@
     "winningsCollected": "賞金受取済み ✓",
     "result": "✅ 結果",
     "wins": "勝利！",
-    "betToWin": "$10を賭ける → ${{amount}}を獲得",
     "available": "利用可能",
     "addFundsTitle": "資金を追加",
     "addFundsDesc": "PolygonネットワークでUSDC.eを以下のウォレットアドレスに送信してください。",
@@ -1447,7 +1446,9 @@
     "amountPlacedLabel": "${{amount}} ベット済み",
     "startsInMin": "{{min}}分後に開始",
     "startsInHour": "{{hour}}時間後に開始",
-    "poweredByLabel": "提供元"
+    "poweredByLabel": "提供元",
+    "predictReturn": "${{predict}}予測 → ${{return}}リターン",
+    "supportEmailLabel": "サポート"
   },
   "platform": {
     "hero": {
@@ -1531,7 +1532,9 @@
       "contact": "Contact",
       "terms": "Terms",
       "privacy": "Privacy",
-      "contactEmail": "1mgaming@proton.me"
+      "contactEmail": "1mgaming@proton.me",
+      "disclaimer": "免責事項",
+      "acceptableUse": "利用規約"
     },
     "nav": {
       "signIn": "Sign In",
@@ -1803,5 +1806,71 @@
   "creatorDeposit": {
     "title": "Creator Deposit (Refundable)",
     "desc": "Creating a room requires a small temporary Solana storage deposit. You get this back when the game ends — win, lose, forfeit, or cancel."
+  },
+  "legal": {
+    "backToHome": "← ホームに戻る",
+    "lastUpdated": "最終更新：2025年4月",
+    "terms": {
+      "title": "利用規約",
+      "s1Title": "プラットフォームの性質",
+      "s1Body": "1MG.liveは予測市場プラットフォームであり、ギャンブルサービスではありません。",
+      "s2Title": "資格",
+      "s2Body": "ユーザーは18歳以上である必要があります。",
+      "s3Title": "予測は最終的",
+      "s3Body": "すべての予測は送信後に最終的なものとなります。",
+      "s4Title": "プラットフォーム手数料",
+      "s4Body": "各予測に最大2.25%の手数料がかかります。",
+      "s5Title": "オペレーターコンテンツ",
+      "s5Body": "1MG.liveは技術を提供します。オペレーターは独自のコンテンツに責任を負います。",
+      "s6Title": "規制遵守",
+      "s6Body": "ユーザーは自分の管轄区域での参加の合法性を確認する責任があります。"
+    },
+    "privacy": {
+      "title": "プライバシーポリシー",
+      "s1Title": "収集するデータ",
+      "s1Body": "ウォレットアドレス、メールアドレス、予測履歴、基本的な分析データを収集します。",
+      "s2Title": "データの使用方法",
+      "s2Body": "データはプラットフォームの運営と予測の処理に使用されます。",
+      "s3Title": "データ共有",
+      "s3Body": "個人データを第三者に販売することはありません。",
+      "s4Title": "データ削除",
+      "s4Body": "1mgaming@proton.meに連絡してデータ削除を要求できます。",
+      "s5Title": "Cookieと分析",
+      "s5Body": "言語設定とセッション管理にローカルストレージを使用します。"
+    },
+    "disclaimer": {
+      "title": "免責事項",
+      "s1Title": "ギャンブルではない",
+      "s1Body": "1MG.liveは予測市場プラットフォームであり、ギャンブルサービスではありません。",
+      "s2Title": "金融リスク",
+      "s2Body": "参加には金融リスクが伴います。失っても良い金額のみで予測してください。",
+      "s3Title": "保証なし",
+      "s3Body": "過去の市場パフォーマンスは将来の結果を保証しません。",
+      "s4Title": "金融アドバイスではない",
+      "s4Body": "1MG.liveは金融や投資のアドバイスを提供しません。",
+      "s5Title": "現実世界の結果",
+      "s5Body": "予測結果は私たちのコントロール外の現実の出来事に依存します。",
+      "s6Title": "市場確率",
+      "s6Body": "表示される確率は集合的なもので、実際の確率と異なる場合があります。",
+      "s7Title": "管轄区域の制限",
+      "s7Body": "予測市場が禁止されている管轄区域ではご利用いただけません。",
+      "s8Title": "責任の制限",
+      "s8Body": "1MG.liveは予測や市場状況から生じる損失に対して責任を負いません。"
+    },
+    "acceptableUse": {
+      "title": "利用規約ポリシー",
+      "s1Title": "市場操作の禁止",
+      "s1Body": "市場結果を操作しようとしてはなりません。",
+      "s2Title": "インサイダー情報の禁止",
+      "s2Body": "非公開情報での取引は厳禁です。",
+      "s3Title": "自動取引の禁止",
+      "s3Body": "明示的な許可なくトレーディングボットは許可されていません。",
+      "s4Title": "一人一アカウント",
+      "s4Body": "各個人は1つのアカウントのみ運用できます。",
+      "s5Title": "禁止管轄区域",
+      "s5Body": "禁止管轄区域からプラットフォームにアクセスしてはなりません。",
+      "s6Title": "違反",
+      "s6Body": "違反はアカウントの即時停止と永久追放につながる可能性があります。"
+    }
   }
 }

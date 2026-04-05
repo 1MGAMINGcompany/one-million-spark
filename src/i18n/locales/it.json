@@ -1370,7 +1370,6 @@
     "winningsCollected": "Vincite riscosse ✓",
     "result": "✅ Risultato",
     "wins": "Vince!",
-    "betToWin": "Scommetti $10 → Vinci ${{amount}}",
     "available": "Disponibile",
     "addFundsTitle": "Aggiungi fondi",
     "addFundsDesc": "Invia USDC.e sulla rete Polygon all'indirizzo del tuo portafoglio.",
@@ -1447,7 +1446,9 @@
     "amountPlacedLabel": "${{amount}} piazzato",
     "startsInMin": "Inizia tra {{min}}m",
     "startsInHour": "Inizia tra {{hour}}h",
-    "poweredByLabel": "Sviluppato da"
+    "poweredByLabel": "Sviluppato da",
+    "predictReturn": "Prevedi ${{predict}} → Ritorno ${{return}}",
+    "supportEmailLabel": "Supporto"
   },
   "platform": {
     "hero": {
@@ -1531,7 +1532,9 @@
       "contact": "Contact",
       "terms": "Terms",
       "privacy": "Privacy",
-      "contactEmail": "1mgaming@proton.me"
+      "contactEmail": "1mgaming@proton.me",
+      "disclaimer": "Disclaimer",
+      "acceptableUse": "Uso Accettabile"
     },
     "nav": {
       "signIn": "Sign In",
@@ -1803,5 +1806,71 @@
   "creatorDeposit": {
     "title": "Creator Deposit (Refundable)",
     "desc": "Creating a room requires a small temporary Solana storage deposit. You get this back when the game ends — win, lose, forfeit, or cancel."
+  },
+  "legal": {
+    "backToHome": "← Torna alla Home",
+    "lastUpdated": "Ultimo aggiornamento: aprile 2025",
+    "terms": {
+      "title": "Termini di Servizio",
+      "s1Title": "Natura della Piattaforma",
+      "s1Body": "1MG.live è una piattaforma di mercati predittivi, non un servizio di gioco d'azzardo.",
+      "s2Title": "Idoneità",
+      "s2Body": "Gli utenti devono avere almeno 18 anni.",
+      "s3Title": "Le Previsioni Sono Definitive",
+      "s3Body": "Tutte le previsioni sono definitive una volta inviate.",
+      "s4Title": "Commissioni della Piattaforma",
+      "s4Body": "Si applica una commissione fino al 2,25% per ogni previsione.",
+      "s5Title": "Contenuti dell'Operatore",
+      "s5Body": "1MG.live fornisce la tecnologia. Gli operatori sono responsabili dei propri contenuti.",
+      "s6Title": "Conformità Normativa",
+      "s6Body": "Gli utenti sono responsabili di garantire la legalità della loro partecipazione."
+    },
+    "privacy": {
+      "title": "Informativa sulla Privacy",
+      "s1Title": "Dati Raccolti",
+      "s1Body": "Raccogliamo indirizzi wallet, email, cronologia previsioni e dati analitici.",
+      "s2Title": "Uso dei Dati",
+      "s2Body": "I tuoi dati vengono utilizzati per gestire la piattaforma e elaborare le previsioni.",
+      "s3Title": "Condivisione Dati",
+      "s3Body": "Non vendiamo mai i tuoi dati personali a terzi.",
+      "s4Title": "Cancellazione Dati",
+      "s4Body": "Puoi richiedere la cancellazione dei dati contattando 1mgaming@proton.me.",
+      "s5Title": "Cookie e Analisi",
+      "s5Body": "Utilizziamo lo storage locale per le preferenze linguistiche e la gestione delle sessioni."
+    },
+    "disclaimer": {
+      "title": "Disclaimer",
+      "s1Title": "Non è Gioco d'Azzardo",
+      "s1Body": "1MG.live è una piattaforma di mercati predittivi, NON un servizio di gioco d'azzardo.",
+      "s2Title": "Rischio Finanziario",
+      "s2Body": "La partecipazione comporta rischi finanziari. Prevedi solo importi che puoi permetterti di perdere.",
+      "s3Title": "Nessuna Garanzia",
+      "s3Body": "Le performance passate non garantiscono risultati futuri.",
+      "s4Title": "Non è Consulenza Finanziaria",
+      "s4Body": "1MG.live non fornisce consulenza finanziaria o di investimento.",
+      "s5Title": "Risultati Reali",
+      "s5Body": "I risultati dipendono da eventi reali al di fuori del nostro controllo.",
+      "s6Title": "Probabilità di Mercato",
+      "s6Body": "Le probabilità mostrate sono collettive e possono differire dalle probabilità reali.",
+      "s7Title": "Restrizioni Giurisdizionali",
+      "s7Body": "Questa piattaforma non è disponibile nelle giurisdizioni che vietano i mercati predittivi.",
+      "s8Title": "Limitazione di Responsabilità",
+      "s8Body": "1MG.live non è responsabile per perdite derivanti da previsioni o condizioni di mercato."
+    },
+    "acceptableUse": {
+      "title": "Politica di Uso Accettabile",
+      "s1Title": "Nessuna Manipolazione del Mercato",
+      "s1Body": "Gli utenti non devono tentare di manipolare i risultati del mercato.",
+      "s2Title": "Nessuna Informazione Privilegiata",
+      "s2Body": "Il trading con informazioni non pubbliche è severamente vietato.",
+      "s3Title": "Nessun Trading Automatizzato",
+      "s3Body": "I bot di trading non sono consentiti senza autorizzazione esplicita.",
+      "s4Title": "Un Account per Persona",
+      "s4Body": "Ogni persona può gestire un solo account.",
+      "s5Title": "Giurisdizioni Proibite",
+      "s5Body": "Gli utenti non devono accedere alla piattaforma da giurisdizioni proibite.",
+      "s6Title": "Violazioni",
+      "s6Body": "Le violazioni possono comportare la sospensione immediata dell'account e il ban permanente."
+    }
   }
 }
