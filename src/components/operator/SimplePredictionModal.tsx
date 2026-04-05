@@ -211,7 +211,7 @@ export default function SimplePredictionModal({
         </button>
 
         <p className="text-center text-[10px] text-white/15 mt-3">
-          Service fee applies • {operatorBrandName || "1MG"}
+          {t("operator.serviceFee")} • {operatorBrandName || "1MG"}
         </p>
       </div>
     </div>

@@ -75,6 +75,7 @@ export default function SoccerMatchCard({
   readOnly,
 }: SoccerMatchCardProps) {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [selectedFight, setSelectedFight] = useState<Fight | null>(null);
   const [amount, setAmount] = useState("");
 
