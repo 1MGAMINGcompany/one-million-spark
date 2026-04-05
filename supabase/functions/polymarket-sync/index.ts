@@ -1840,17 +1840,19 @@ Deno.serve(async (req) => {
       console.log(`[polymarket-sync] daily_import started, batch=${requestedBatch || "all"}`);
 
       // Sport routing sets
-      const COMBAT_AND_SOCCER_KEYS = new Set([
+      // Auto-approved sports — visible to all operators immediately
+      const AUTO_APPROVED_KEYS = new Set([
         "ufc", "mma", "boxing", "bkfc",
         "epl", "mls", "ucl", "uel", "la-liga", "bundesliga",
         "serie-a", "ligue-1", "liga-mx", "copa-libertadores",
         "brazil-serie-a", "eredivisie", "copa-sudamericana",
         "j-league", "k-league", "a-league", "super-lig",
         "primeira-liga", "concacaf", "conmebol", "fifa-friendlies",
+        // Major American sports — auto-approve for in-play trading
+        "nba", "nhl", "mlb", "wnba", "ncaab", "cfb",
       ]);
 
       const PLATFORM_ONLY_KEYS = new Set([
-        "nba", "nhl", "mlb", "ncaab", "cfb", "wnba",
         "atp", "wta", "tennis", "tennis-atp", "tennis-wta", "tennis-grand-slam",
         "golf", "f1",
         "cricket", "cricket-ipl", "cricket-psl", "cricket-intl",
@@ -1898,9 +1900,9 @@ Deno.serve(async (req) => {
         const cfg = LEAGUE_SOURCES[leagueKey];
         if (!cfg) continue;
 
-        const isCombatOrSoccer = COMBAT_AND_SOCCER_KEYS.has(leagueKey);
-        const vis = isCombatOrSoccer ? "all" : "platform";
-        const statusOverride = isCombatOrSoccer ? "approved" : "pending_review";
+        const isAutoApproved = AUTO_APPROVED_KEYS.has(leagueKey);
+        const vis = isAutoApproved ? "all" : "platform";
+        const statusOverride = isAutoApproved ? "approved" : "pending_review";
         const tradingOn = true;
 
         try {
