@@ -69,6 +69,7 @@ function FloatingIcons() {
 
 /* ── Phone Mockup ── */
 function PhoneMockup() {
+  const { t } = useTranslation();
   return (
     <div className="relative mx-auto w-[240px] sm:w-[280px]">
       <div
