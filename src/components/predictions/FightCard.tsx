@@ -639,7 +639,7 @@ export default function FightCard({
             <span>{isPolymarket && totalPool === 0 ? "Volume" : "Pool"}</span>
             <span className="font-bold text-primary text-[11px]">
               {isPolymarket && totalPool === 0
-                ? (volume > 0 ? formatVolume(volume) : "Live Market")
+                ? (volume > 0 ? formatVolume(volume) : t("predictions.liveMarket"))
                 : `$${totalPool.toFixed(2)}`}
             </span>
           </div>
