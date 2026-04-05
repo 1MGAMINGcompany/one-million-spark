@@ -1089,7 +1089,15 @@ async function importSingleEvent(
     if (category && !existingEvt.category) evtUpdate.category = category;
     // Always update event_date to latest accurate timestamp (fixes stale market listing dates)
     const freshDate = timeInfo.chosen || gEvent.startDate || gEvent.endDate || null;
-    if (freshDate) evtUpdate.event_date = freshDate;
+    if (freshDate) {
+      evtUpdate.event_date = freshDate;
+      // Set scheduled timestamps so schedule-worker can transition locked→live
+      const eventDateMs = new Date(freshDate).getTime();
+      if (!isNaN(eventDateMs)) {
+        evtUpdate.scheduled_lock_at = new Date(eventDateMs - 5 * 60_000).toISOString();
+        evtUpdate.scheduled_live_at = freshDate;
+      }
+    }
     if (Object.keys(evtUpdate).length > 0) {
       await supabase.from("prediction_events").update(evtUpdate).eq("id", existingEvt.id);
     }
@@ -1101,18 +1109,25 @@ async function importSingleEvent(
         .in("status", ["open", "locked", "live"]);
     }
   } else {
+    const newEventDate = timeInfo.chosen || gEvent.startDate || gEvent.endDate || null;
+    const newEventDateMs = newEventDate ? new Date(newEventDate).getTime() : null;
     const { data: newEvt, error } = await supabase
       .from("prediction_events")
       .insert({
         event_name: gEvent.title,
         polymarket_event_id: String(gEvent.id),
         polymarket_slug: gEvent.slug,
-        event_date: timeInfo.chosen || gEvent.startDate || gEvent.endDate || null,
+        event_date: newEventDate,
         source: "polymarket",
         source_provider: "polymarket",
         source_event_id: `pm_${gEvent.id}`,
         status: opts?.eventStatusOverride || "pending_review",
         ...(category ? { category } : {}),
+        // Set scheduled timestamps for schedule-worker lifecycle transitions
+        ...(newEventDateMs && !isNaN(newEventDateMs) ? {
+          scheduled_lock_at: new Date(newEventDateMs - 5 * 60_000).toISOString(),
+          scheduled_live_at: newEventDate,
+        } : {}),
       })
       .select("id")
       .single();
@@ -1825,17 +1840,19 @@ Deno.serve(async (req) => {
       console.log(`[polymarket-sync] daily_import started, batch=${requestedBatch || "all"}`);
 
       // Sport routing sets
-      const COMBAT_AND_SOCCER_KEYS = new Set([
+      // Auto-approved sports — visible to all operators immediately
+      const AUTO_APPROVED_KEYS = new Set([
         "ufc", "mma", "boxing", "bkfc",
         "epl", "mls", "ucl", "uel", "la-liga", "bundesliga",
         "serie-a", "ligue-1", "liga-mx", "copa-libertadores",
         "brazil-serie-a", "eredivisie", "copa-sudamericana",
         "j-league", "k-league", "a-league", "super-lig",
         "primeira-liga", "concacaf", "conmebol", "fifa-friendlies",
+        // Major American sports — auto-approve for in-play trading
+        "nba", "nhl", "mlb", "wnba", "ncaab", "cfb",
       ]);
 
       const PLATFORM_ONLY_KEYS = new Set([
-        "nba", "nhl", "mlb", "ncaab", "cfb", "wnba",
         "atp", "wta", "tennis", "tennis-atp", "tennis-wta", "tennis-grand-slam",
         "golf", "f1",
         "cricket", "cricket-ipl", "cricket-psl", "cricket-intl",
@@ -1883,9 +1900,9 @@ Deno.serve(async (req) => {
         const cfg = LEAGUE_SOURCES[leagueKey];
         if (!cfg) continue;
 
-        const isCombatOrSoccer = COMBAT_AND_SOCCER_KEYS.has(leagueKey);
-        const vis = isCombatOrSoccer ? "all" : "platform";
-        const statusOverride = isCombatOrSoccer ? "approved" : "pending_review";
+        const isAutoApproved = AUTO_APPROVED_KEYS.has(leagueKey);
+        const vis = isAutoApproved ? "all" : "platform";
+        const statusOverride = isAutoApproved ? "approved" : "pending_review";
         const tradingOn = true;
 
         try {

@@ -78,7 +78,9 @@ export default function SimplePredictionCard({
   const logoB = logoDataB?.url || null;
 
   const hasDrawOption = !!(fight as any).draw_allowed;
-  const isOpen = fight.status === "open" || fight.status === "live";
+  const isStarted = (fight as any).event_date && new Date((fight as any).event_date).getTime() < Date.now();
+  const isPolymarket = !!(fight as any).polymarket_slug;
+  const isOpen = fight.status === "open" || fight.status === "live" || (fight.status === "locked" && isStarted && isPolymarket);
   const isSettled = ["settled", "confirmed", "result_selected"].includes(fight.status);
   const userPicked = userEntry?.fighter_pick;
   const userWon = isSettled && fight.winner === userPicked;
