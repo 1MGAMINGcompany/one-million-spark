@@ -1,133 +1,98 @@
 
 
-# Fix Event Time Handling, Live Trading, and Event Visibility
+# Fix: Live Game Data, Missing Events, and Stale Visibility on Operator App
 
 ## Root Cause Analysis
 
-**Problem 1 — Markets expire at game start**: `polymarket_end_date` is set to `market.endDate` from Polymarket Gamma API. For NBA/soccer games, this equals the game start time (kickoff). The `prediction-submit` edge function (line 850-856) rejects any trade where `polymarket_end_date <= now()`, so all live-game predictions fail with `market_expired`.
+Three distinct problems found:
 
-**Problem 2 — Frontend blocks "live" status**: `handlePredict()` (OperatorApp line 429) only allows `fight.status === "open"`. `SimplePredictionCard` also uses `isOpen = fight.status === "open"` to enable buttons. If the schedule-worker sets status to "live" or "locked", buttons become disabled and clicks are rejected.
+### Problem 1 — Pacers vs Cavaliers (and other games) not in DB
+The `polymarket-sync` worker imports events from Polymarket's Gamma API. Today's NBA games that ARE in the DB were imported during previous sync runs. The Pacers vs Cavaliers game for today simply was **never imported** — it doesn't exist in `prediction_fights` at all. This is a sync coverage gap, not a display bug. The sync worker may not have run recently, or the event may have been filtered out during import.
 
-**Problem 3 — Finished events still visible**: The DB query fetches `status IN ('open', 'live', 'locked')` which is correct, but the schedule-worker may not transition finished events to "settled" promptly. No explicit filter for `ended` live game state exists.
+### Problem 2 — Games stuck at "locked" status, never become "live"
+All of today's started games (NBA, Soccer, NHL) are stuck at `status = 'locked'`. The `prediction-schedule-worker` transitions `locked → live` only when `scheduled_live_at` is set and has passed. **But `scheduled_live_at` is NULL for every event checked.** The sync worker is not populating `scheduled_live_at` during import, so no game ever transitions to "live" status automatically.
 
-**Problem 4 — Silent failures**: The submission handler (line 395-404) does show toast on error, but `handlePredict` blocks before reaching submission for non-"open" statuses.
+Since games never reach `status = 'live'`:
+- `LiveGameBadge` never shows score/period data on cards (the badge IS wired up and works — it just needs a `polymarket_slug` and the game to be visible)
+- The previous fix allowing `status === "live"` for predictions has no effect because nothing reaches that status
+- Cards for started games show as disabled (locked = not open/live)
 
----
+### Problem 3 — Old/finished games still visible
+The filter hides locked games only after 6 hours past `event_date`. Games that started 1-3 hours ago are still visible but grayed out (locked + disabled buttons). This creates the appearance of stale content.
 
-## Changes (6 files, all minimal and safe)
+## Proposed Changes
 
-### 1. `supabase/functions/prediction-submit/index.ts` — Fix market expiration logic
+### 1. Fix `polymarket-sync` — Set `scheduled_live_at` during import
+**File: `supabase/functions/polymarket-sync/index.ts`**
 
-**Line 850-856**: Replace the `polymarket_end_date` check with a safe fallback. If `polymarket_end_date` equals `event_date` (meaning it's just the start time), add a 6-hour grace window. Only expire if the market's `polymarket_active` is explicitly false AND `polymarket_end_date` has passed.
+When upserting events, set `scheduled_live_at = event_date` (game start time) so the schedule-worker can transition fights from `locked` to `live` when the game starts.
 
-```
-Before:
-if (polymarket_end_date && new Date(polymarket_end_date) <= new Date())
-  → reject "market_expired"
+Also set `scheduled_lock_at = event_date - 5 minutes` if not already set, so games get locked just before kickoff.
 
-After:
-// Determine effective close time:
-// If polymarket_end_date == event_date (start time), extend by 6 hours
-// Otherwise use polymarket_end_date as-is
-const endDate = new Date(fight.polymarket_end_date);
-const eventDate = fight.event_date ? new Date(fight.event_date) : null;
-const isSameAsStart = eventDate && Math.abs(endDate.getTime() - eventDate.getTime()) < 60_000;
-const effectiveClose = isSameAsStart
-  ? new Date(endDate.getTime() + 6 * 3600_000)
-  : endDate;
+### 2. Fix `prediction-schedule-worker` — Backfill NULL `scheduled_live_at`
+**File: `supabase/functions/prediction-schedule-worker/index.ts`**
 
-if (effectiveClose <= new Date()) {
-  → reject "market_expired"
-}
-```
+Add a Phase 0 at the top: for any `prediction_events` with `status = 'approved'` and `scheduled_live_at IS NULL` and `event_date <= now()`, auto-set `scheduled_live_at = event_date` and immediately transition locked fights to live. This fixes all existing stuck events.
 
-This preserves the safety check but extends the window when `endDate` equals game start time. MLB games that already have correct +7 day end dates are unaffected.
+### 3. Fix client-side visibility — Show locked games as tradeable if in-play
+**File: `src/pages/platform/OperatorApp.tsx`**
 
-### 2. `src/pages/platform/OperatorApp.tsx` — Allow predictions on "live" status
+The `handlePredict` gate currently allows `open` and `live`. Also allow `locked` for Polymarket-backed events where `event_date` has passed (game has started). This enables in-play trading even when the schedule-worker hasn't caught up.
 
-**Line 429**: Change `handlePredict` to allow both "open" and "live" statuses:
 ```typescript
-if (fight.status !== "open" && fight.status !== "live") {
-  toast.error(t("operator.predictionsClosed"));
+// In handlePredict:
+const isStarted = (fight as any).event_date && new Date((fight as any).event_date).getTime() < Date.now();
+const isPolymarket = !!(fight as any).polymarket_slug;
+if (fight.status !== "open" && fight.status !== "live" && !(fight.status === "locked" && isStarted && isPolymarket)) {
+  toast.error(t("operator.marketClosed"));
   return;
 }
 ```
 
-**Line 720**: The `FeaturedEventHero` already allows "open" or "live" — no change needed.
+### 4. Fix `SimplePredictionCard` — Enable buttons for locked+started Polymarket events
+**File: `src/components/operator/SimplePredictionCard.tsx`**
 
-### 3. `src/components/operator/SimplePredictionCard.tsx` — Enable buttons for "live" status
-
-**Line 81**: Change `isOpen` to include "live":
+Update `isOpen` logic to match:
 ```typescript
-const isOpen = fight.status === "open" || fight.status === "live";
+const isStarted = (fight as any).event_date && new Date((fight as any).event_date).getTime() < Date.now();
+const isPolymarket = !!(fight as any).polymarket_slug;
+const isOpen = fight.status === "open" || fight.status === "live" || (fight.status === "locked" && isStarted && isPolymarket);
 ```
 
-This single change propagates to all button `disabled` and `onClick` guards.
+### 5. Hide truly finished events more aggressively
+**File: `src/pages/platform/OperatorApp.tsx`**
 
-### 4. `src/pages/platform/OperatorApp.tsx` — Hide finished events
+For locked events where `event_date` is more than **4 hours** ago (reduced from 6h), hide from view. For events where live game data confirms `ended = true`, hide immediately.
 
-**Line 206-215**: Add a check using live game state context to filter out ended events. The `useLiveGameState` hook can't be called per-fight in a filter, so instead add a post-filter in the rendering layer.
-
-Actually, the DB query already filters to `status IN ('open', 'live', 'locked')` — settled/finished events won't appear. The real issue is events that are "locked" but the game ended. The schedule-worker handles transitioning these.
-
-For immediate UX improvement, add a client-side filter in `enrichedFights` that hides events where `status` is "locked" AND `event_date` is more than 6 hours ago (safety net for slow settlement):
-
+Add a filter using the `SportsWSContext` games map:
 ```typescript
-// In allFights filter, add:
-if (f.status === "locked" && d.getTime() < Date.now() - 6 * 3600_000) return false;
+// In allFights filter:
+if (f.status === "locked" && d.getTime() < Date.now() - 4 * 3600_000) return false;
 ```
 
-### 5. `src/pages/platform/OperatorApp.tsx` — Better error messages for closed markets
+### 6. Trigger a sync run to import missing games
+After deploying, manually invoke `polymarket-sync` to import today's missing NBA games (Pacers vs Cavaliers, etc.).
 
-**Line 421-422**: Enhance the catch block to show specific error messages:
-```typescript
-catch (err: any) {
-  const msg = err.message || "";
-  if (msg.includes("expired") || msg.includes("closed")) {
-    toast.error(t("operator.marketClosed", "This market has closed"));
-  } else if (msg.includes("started")) {
-    toast.error(t("operator.eventFinished", "This event has finished"));
-  } else {
-    toast.error(t("operator.predictionFailed"), { description: msg });
-  }
-}
-```
-
-### 6. `src/i18n/locales/en.json` — Add new error keys
-
-Add:
-```json
-"operator.marketClosed": "This market has closed",
-"operator.eventFinished": "This event has finished — predictions are no longer available"
-```
-
-Add equivalent translations to all 10 locale files.
-
----
-
-## What is NOT touched (safety)
-
-| Area | Status |
-|---|---|
-| Payouts / claims / settlement | Untouched |
-| `prediction-claim` edge function | Untouched |
-| `prediction-auto-settle` | Untouched |
-| Audit logging | Preserved (all audit calls remain) |
-| Auth / Privy / JWT | Untouched |
-| Database schema | No migrations |
-| Operator routing / theme | Untouched |
-| `polymarket-sync` ingestion | Untouched (data stays as-is) |
-
-## Live game data display
-
-Already implemented in previous build — `LiveGameBadge` and `LiveScoreDisplay` components are active on all card variants and the featured hero. The `useSportsWebSocket` hook provides real-time scores via WebSocket + 30s REST fallback. No additional changes needed.
-
-## Files to modify
+## Files to Modify
 
 | File | Change |
 |---|---|
-| `supabase/functions/prediction-submit/index.ts` | Fix `polymarket_end_date` expiration with 6h grace when end_date equals start time |
-| `src/pages/platform/OperatorApp.tsx` | Allow "live" in `handlePredict`; hide stale locked events; better error messages |
-| `src/components/operator/SimplePredictionCard.tsx` | `isOpen` includes "live" status |
-| `src/i18n/locales/*.json` (10 files) | Add `marketClosed` and `eventFinished` keys |
+| `supabase/functions/polymarket-sync/index.ts` | Set `scheduled_lock_at` and `scheduled_live_at` from `event_date` during upsert |
+| `supabase/functions/prediction-schedule-worker/index.ts` | Backfill NULL `scheduled_live_at` for started events; auto-transition to live |
+| `src/pages/platform/OperatorApp.tsx` | Allow locked+started Polymarket events for predictions; tighten finished-event filter to 4h |
+| `src/components/operator/SimplePredictionCard.tsx` | Enable buttons for locked+started Polymarket events |
+
+## What is NOT Touched
+- Payouts, claims, settlement logic
+- Auth / Privy / JWT
+- Database schema (no migrations)
+- Edge function: `prediction-submit` (already has 6h grace window)
+- Theme system, routing, operator config
+
+## Expected Result
+- Games transition to `live` status when `event_date` passes
+- LiveGameBadge shows real scores/periods/clock from Polymarket Sports API
+- Predictions work during live games (even if status is still `locked`)
+- Finished games disappear after 4 hours (or immediately when live data confirms ended)
+- Missing games appear after next sync run
 
