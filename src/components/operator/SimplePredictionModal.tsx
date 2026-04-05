@@ -201,12 +201,12 @@ export default function SimplePredictionModal({
         >
           {submitting ? (
             <span className="flex items-center justify-center gap-2">
-              <Loader2 className="w-5 h-5 animate-spin" /> Processing...
+              <Loader2 className="w-5 h-5 animate-spin" /> {t("operator.processing")}
             </span>
           ) : currentAmount < MIN_USD ? (
-            "Enter amount ($1 min)"
+            t("operator.enterAmountMin")
           ) : (
-            `Place $${currentAmount.toFixed(2)} Prediction`
+            t("predictions.placePrediction", { amount: currentAmount.toFixed(2) })
           )}
         </button>
 
