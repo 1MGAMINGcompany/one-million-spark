@@ -20,6 +20,7 @@ export const BROAD_SPORTS: Record<string, { label: string; emoji: string }> = {
   GOLF: { label: "Golf", emoji: "⛳" },
   F1: { label: "F1", emoji: "🏎️" },
   RUGBY: { label: "Rugby", emoji: "🏉" },
+  ESPORTS: { label: "Esports", emoji: "🎮" },
 };
 
 // ── Normalized sport → broad sport mapping ──
