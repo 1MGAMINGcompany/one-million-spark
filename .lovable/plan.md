@@ -1,59 +1,65 @@
 
 
-# Fix: Prediction Failing with "event_already_started"
+# Add Live Game Status (Score, Period, Time) to Prediction Cards
 
-## Root Cause
+## What we are building
 
-Your prediction on **Golden Knights vs. Oilers** failed because of an overly strict event-date guard in the `prediction-submit` edge function.
+Real-time score, period, and elapsed time on all live prediction cards — matching the Polymarket experience you showed (e.g., "LIVE P2 - 01:16  4-1"). Works for NHL, NBA, MLB, Soccer, Tennis, Cricket, and Esports.
 
-The fight's `event_date` is `2026-04-05 02:00:00 UTC`. You tried to predict at `03:51 UTC` — almost 2 hours after the event start time. The backend code (line 779-784) checks:
+## Data source
 
-```
-if (eventStart <= Date.now()) → reject with "event_already_started"
-```
+Polymarket provides a free Sports WebSocket at `wss://sports-api.polymarket.com/ws` that broadcasts live game data (score, period, elapsed, status) keyed by slug. No auth required. Our `polymarket_slug` field already stored on every fight maps directly to this data.
 
-This is wrong for Polymarket-backed events. On Polymarket, markets stay open during live games (that's the whole point of in-play trading). The `polymarket_end_date` and `polymarket_active` checks already handle market closure for PM events. The event-date guard should only apply to native (non-Polymarket) events.
+## Architecture
 
-## The Fix
-
-**File: `supabase/functions/prediction-submit/index.ts` (lines ~770-798)**
-
-Wrap the event-date guard and sibling-locked check in a condition that skips them for Polymarket-backed events:
-
-```typescript
-// EVENT DATE GUARD — only for native (non-Polymarket) events
-// Polymarket manages its own market lifecycle; their markets
-// intentionally stay open during live games for in-play trading.
-if (fight.event_id && !isPolymarketBacked) {
-  // ... existing event_date check ...
-  // ... existing sibling locked check ...
-}
+```text
+Polymarket Sports WS  →  useSportsWebSocket (React context)  →  Cards lookup by slug
 ```
 
-However, there's a sequencing problem: `isPolymarketBacked` is computed on line 818, AFTER the event-date guard on line 772. So we need to either:
-- Move the `isPolymarketBacked` computation earlier (before the guard), or
-- Use a simpler inline check: `fight.polymarket_market_id && fight.polymarket_outcome_a_token`
+Single shared WebSocket connection, auto-reconnect with backoff, ping/pong keepalive.
 
-The simplest fix is to add the polymarket check inline:
+## Implementation steps
 
-```typescript
-const hasPolymarketRouting = !!(fight.polymarket_market_id && fight.polymarket_outcome_a_token);
+### 1. New file: `src/hooks/useSportsWebSocket.tsx`
+- React context + provider wrapping a single WebSocket to `wss://sports-api.polymarket.com/ws`
+- Maintains a `Map<slug, LiveGameState>` with: `score`, `period`, `elapsed`, `status`, `live`, `ended`
+- Handles server ping/pong heartbeat (5s interval)
+- Auto-reconnects with exponential backoff
+- Exposes `useLiveGameState(slug)` hook for cards
 
-if (fight.event_id && !hasPolymarketRouting) {
-  // existing event_date and sibling checks stay as-is
-}
-```
+### 2. New file: `src/components/predictions/LiveGameBadge.tsx`
+- Sport-aware formatting:
+  - NHL: "● LIVE P2 - 01:16  4-1"
+  - NBA: "● LIVE Q4  98-102"
+  - Soccer: "● LIVE 2H - 67'  2-0"
+  - MLB: "● LIVE Bot 5  3-2"
+  - Tennis: "● LIVE Set 2  6-4, 3-2"
+  - Cricket: "● LIVE 2nd Inn  142/3"
+- Pulsing red dot for in-progress, green check for Final
+- Accepts theme prop for operator styling
 
-## What This Changes
+### 3. Edit: `src/components/predictions/FightCard.tsx`
+- Add `polymarket_slug` to the `Fight` interface
+- Import `useLiveGameState` from the WebSocket context
+- When live data exists for this slug, render `LiveGameBadge` instead of static "LIVE" label
+- Show score next to team names when available
+- Fall back to current time-based detection when no WS data
 
-- Polymarket-backed events: The event-date guard is skipped. Market open/close is governed by `polymarket_active`, `polymarket_end_date`, and `status` checks (which already exist).
-- Native events: The event-date guard continues to work exactly as before.
-- No other changes to payments, auth, fee collection, or any other part of the flow.
+### 4. Edit: `src/components/operator/SimplePredictionCard.tsx`
+- Import `useLiveGameState`
+- Replace the generic `getTimeLabel` "● LIVE" span with `LiveGameBadge` when WS data is available
+- Display live score between team names
+- Fall back gracefully to current behavior
+
+### 5. Edit: `src/pages/platform/OperatorApp.tsx` + prediction page wrappers
+- Wrap content with `SportsWebSocketProvider`
+- Provider auto-connects only when mounted, disconnects on unmount
 
 ## Scope
-
-- **1 file edited**: `supabase/functions/prediction-submit/index.ts`
-- **No database changes**
-- **No frontend changes**
-- Edge function auto-deploys on save
+- **3 new files** (hook/context, badge component)
+- **3 edited files** (SimplePredictionCard, FightCard, OperatorApp wrapper)
+- No database changes
+- No edge function changes
+- No API keys needed
+- Graceful fallback: if WebSocket is unavailable, cards show current time-based LIVE label
 
