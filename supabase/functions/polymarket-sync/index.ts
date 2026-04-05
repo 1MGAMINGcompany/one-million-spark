@@ -1811,12 +1811,13 @@ Deno.serve(async (req) => {
 
     // ══════════════════════════════════════════════════
     // ACTION: daily_import — Automated daily import with sport routing
+    // Split into 3 batches to avoid CPU timeout. Pass batch=1|2|3 or omit for all.
     // ══════════════════════════════════════════════════
     if (action === "daily_import") {
-      console.log("[polymarket-sync] daily_import started");
+      const requestedBatch = body?.batch ? Number(body.batch) : 0; // 0 = all
+      console.log(`[polymarket-sync] daily_import started, batch=${requestedBatch || "all"}`);
 
-      // Sport routing: combat + soccer → visibility "all", status "approved", trading on
-      // Everything else → visibility "platform", status "open"
+      // Sport routing sets
       const COMBAT_AND_SOCCER_KEYS = new Set([
         "ufc", "mma", "boxing", "bkfc",
         "epl", "mls", "ucl", "uel", "la-liga", "bundesliga",
@@ -1826,7 +1827,6 @@ Deno.serve(async (req) => {
         "primeira-liga", "concacaf", "conmebol", "fifa-friendlies",
       ]);
 
-      // Platform sports — now also get trading_allowed=true so operator apps can display them
       const PLATFORM_ONLY_KEYS = new Set([
         "nba", "nhl", "mlb", "ncaab", "cfb", "wnba",
         "atp", "wta", "tennis", "tennis-atp", "tennis-wta", "tennis-grand-slam",
@@ -1837,21 +1837,48 @@ Deno.serve(async (req) => {
         "cs2",
       ]);
 
+      // Batch 1: Priority sports (NHL, NBA, MLB, cricket, esports, tennis, golf, etc.)
+      // These were previously starved of CPU time
+      const BATCH_1: string[] = [
+        "nhl", "nba", "mlb", "ncaab", "cfb", "wnba",
+        "cricket", "cricket-ipl", "cricket-psl", "cricket-intl",
+        "cricket-legends", "cricket-t20", "cricket-bbl", "cricket-test",
+        "cs2",
+        "atp", "wta", "tennis", "tennis-atp", "tennis-wta", "tennis-grand-slam",
+        "golf", "f1", "rugby", "table-tennis",
+      ];
+
+      // Batch 2: Combat sports + top soccer leagues
+      const BATCH_2: string[] = [
+        "ufc", "mma", "boxing", "bkfc",
+        "epl", "mls", "ucl", "uel", "la-liga", "bundesliga",
+        "serie-a", "ligue-1", "liga-mx",
+      ];
+
+      // Batch 3: Remaining soccer leagues
+      const BATCH_3: string[] = [
+        "copa-libertadores", "brazil-serie-a", "eredivisie",
+        "copa-sudamericana", "j-league", "k-league", "a-league",
+        "super-lig", "primeira-liga", "concacaf", "conmebol", "fifa-friendlies",
+      ];
+
+      let leagueKeys: string[];
+      if (requestedBatch === 1) leagueKeys = BATCH_1;
+      else if (requestedBatch === 2) leagueKeys = BATCH_2;
+      else if (requestedBatch === 3) leagueKeys = BATCH_3;
+      else leagueKeys = [...BATCH_1, ...BATCH_2, ...BATCH_3]; // all (may timeout)
+
       const summary: Record<string, { fetched: number; imported: number; errors: number }> = {};
       let totalImported = 0;
       let totalErrors = 0;
 
-      // Process all leagues
-      const allLeagueKeys = [...COMBAT_AND_SOCCER_KEYS, ...PLATFORM_ONLY_KEYS];
-
-      for (const leagueKey of allLeagueKeys) {
+      for (const leagueKey of leagueKeys) {
         const cfg = LEAGUE_SOURCES[leagueKey];
         if (!cfg) continue;
 
         const isCombatOrSoccer = COMBAT_AND_SOCCER_KEYS.has(leagueKey);
         const vis = isCombatOrSoccer ? "all" : "platform";
         const statusOverride = isCombatOrSoccer ? "approved" : "pending_review";
-        // Enable trading for ALL sports so operator apps can display and trade them
         const tradingOn = true;
 
         try {
@@ -1888,9 +1915,10 @@ Deno.serve(async (req) => {
       }
 
       // Log summary
+      const batchLabel = requestedBatch ? `batch_${requestedBatch}` : "all";
       await supabase.from("admin_activity_log").insert({
         action: "daily_auto_import",
-        description: `Daily import: ${totalImported} fights imported across ${Object.keys(summary).length} leagues. ${totalErrors} errors.`,
+        description: `Import ${batchLabel}: ${totalImported} fights across ${Object.keys(summary).length} leagues. ${totalErrors} errors.`,
         admin_wallet: "system_cron",
       });
 
@@ -1898,13 +1926,14 @@ Deno.serve(async (req) => {
         action: "daily_auto_import",
         source: "polymarket-sync",
         admin_wallet: null,
-        details: { total_imported: totalImported, total_errors: totalErrors, summary },
+        details: { batch: batchLabel, total_imported: totalImported, total_errors: totalErrors, summary },
       });
 
-      console.log(`[polymarket-sync] daily_import complete: ${totalImported} imported, ${totalErrors} errors`);
+      console.log(`[polymarket-sync] daily_import ${batchLabel} complete: ${totalImported} imported, ${totalErrors} errors`);
 
       return json({
         success: true,
+        batch: batchLabel,
         total_imported: totalImported,
         total_errors: totalErrors,
         leagues_processed: Object.keys(summary).length,
