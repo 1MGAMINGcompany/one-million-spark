@@ -96,6 +96,7 @@ const SLUG_PREFIX_TO_LEAGUE: Record<string, string> = {
   uru: "Uruguayan Liga",
   par: "Paraguayan Liga",
   bol: "Bolivian Liga",
+  svk1: "Slovak Super Liga",
   // US sports
   nba: "NBA",
   nhl: "NHL",
@@ -109,10 +110,18 @@ const SLUG_PREFIX_TO_LEAGUE: Record<string, string> = {
   bel2: "Bellator",
   one: "ONE",
   bkfc: "BKFC",
-  // Cricket
+  // Cricket — granular subdivision
   cricipl: "IPL",
   cricpsl: "PSL",
   cric: "International",
+  cricleg: "Legends Cricket League",
+  crict20: "National T20",
+  cricbbl: "BBL",
+  crictest: "Test Cricket",
+  cricwc: "Cricket World Cup",
+  cricodi: "ODI",
+  cricsaf: "South Africa",
+  cricaus: "Australia",
   // Tennis
   atp: "ATP",
   wta: "WTA",
@@ -121,6 +130,8 @@ const SLUG_PREFIX_TO_LEAGUE: Record<string, string> = {
   // F1
   f1: "Formula 1",
   nascar: "NASCAR",
+  // Esports
+  cs2: "Counter-Strike",
 };
 
 /**
