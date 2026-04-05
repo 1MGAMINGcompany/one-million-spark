@@ -27,7 +27,7 @@ export const POLYGON_RPCS = [
   "https://polygon-bor-rpc.publicnode.com",
   "https://polygon.drpc.org",
   "https://rpc.ankr.com/polygon",
-  "https://polygon-rpc.com",
+  "https://polygon.llamarpc.com",
 ] as const;
 
 /** User-facing symbol — never expose "USDC.e" to users */

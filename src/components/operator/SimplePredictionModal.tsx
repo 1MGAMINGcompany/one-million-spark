@@ -173,7 +173,7 @@ export default function SimplePredictionModal({
         {currentAmount >= MIN_USD && (
           <div className="rounded-xl bg-white/5 p-4 mb-6 space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-white/50">Bet ${currentAmount.toFixed(2)} → Win</span>
+              <span className="text-white/50">Predict ${currentAmount.toFixed(2)} → Return</span>
               <span className="font-bold text-lg" style={{ color: themeColor }}>${payout.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-sm">

@@ -20,6 +20,7 @@
     {
       "src": "/apple-touch-icon.png?v=2",
       "sizes": "180x180",
+      "purpose": "any"
       "type": "image/png"
     }
   ]

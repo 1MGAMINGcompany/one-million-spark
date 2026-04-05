@@ -228,7 +228,7 @@ const POLYGON_RPCS = [
   "https://polygon-bor-rpc.publicnode.com",
   "https://polygon.drpc.org",
   "https://rpc.ankr.com/polygon",
-  "https://polygon-rpc.com",
+  "https://polygon.llamarpc.com",
 ];
 
 /** Try a JSON-RPC call across multiple endpoints, return first valid result */

@@ -24,7 +24,7 @@ const DAILY_CEILING_USD = 5_000;
 // Bridged USDC.e — canonical token for all prediction money flows
 const USDC_CONTRACT = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
 const USDC_DECIMALS = 6;
-const POLYGON_RPC = "https://polygon-rpc.com";
+const POLYGON_RPC = "https://polygon-bor-rpc.publicnode.com";
 
 const erc20TransferAbi = parseAbi([
   "function transfer(address to, uint256 amount) returns (bool)",
