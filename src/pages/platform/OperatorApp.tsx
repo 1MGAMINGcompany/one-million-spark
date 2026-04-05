@@ -208,7 +208,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       }));
     return [{
       label: "Sports",
-      tabs: [{ key: "ALL", label: "All Sports", emoji: "🔥", count: enrichedFights.length }, ...tabs],
+      tabs: [{ key: "ALL", label: t("operator.allSports"), emoji: "🔥", count: enrichedFights.length }, ...tabs],
     }];
   }, [enrichedFights, sportCounts]);
 
