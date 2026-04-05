@@ -94,13 +94,17 @@ const SLUG_SPORT_MAP: Record<string, string> = {
   tur: "SOCCER", sau: "SOCCER", por: "SOCCER", sco: "SOCCER", bel: "SOCCER",
   aus: "SOCCER", chi: "SOCCER", col: "SOCCER", per: "SOCCER", ven: "SOCCER",
   ecu: "SOCCER", uru: "SOCCER", bol: "SOCCER", par: "SOCCER", ros: "SOCCER",
+  svk1: "SOCCER",
   nba: "NBA", nhl: "NHL", mlb: "MLB", nfl: "NFL",
   cbb: "NCAA", cfb: "NCAA",
   ufc: "MMA", pfl: "MMA", one: "MMA",
   bkfc: "BOXING", floyd: "BOXING",
   cricipl: "CRICKET", cricpsl: "CRICKET", cric: "CRICKET",
+  cricleg: "CRICKET", crict20: "CRICKET", cricbbl: "CRICKET",
+  crictest: "CRICKET", cricwc: "CRICKET",
   atp: "TENNIS", wta: "TENNIS",
   pga: "GOLF", f1: "F1", nascar: "NASCAR",
+  cs2: "ESPORTS",
 };
 
 function sportFromSlug(slug: string): string | null {
