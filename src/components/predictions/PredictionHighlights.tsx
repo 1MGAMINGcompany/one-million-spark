@@ -110,13 +110,14 @@ function HighlightCard({
   onPredict?: (fight: Fight, pick: "fighter_a" | "fighter_b") => void;
   compact?: boolean;
 }) {
+  const { t } = useTranslation();
   const poolA = (fight.pool_a_usd ?? 0) > 0 ? fight.pool_a_usd! : fight.pool_a_lamports / 1_000_000_000;
   const poolB = (fight.pool_b_usd ?? 0) > 0 ? fight.pool_b_usd! : fight.pool_b_lamports / 1_000_000_000;
   const { oddsA, oddsB, noData, resolving } = calcOdds(poolA, poolB, fight.price_a, fight.price_b, fight.source);
   const totalPool = poolA + poolB;
   const isPolymarketPool = fight.source === "polymarket" && totalPool === 0;
-  const badge = getStatusBadge(fight.status);
-  const btn = getButtonState(fight.status);
+  const badge = getStatusBadge(fight.status, t);
+  const btn = getButtonState(fight.status, t);
 
   return (
     <Card className="bg-card border-border/50 overflow-hidden">
