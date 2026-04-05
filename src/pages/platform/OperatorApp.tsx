@@ -446,6 +446,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     : undefined;
 
   return (
+    <SportsWebSocketProvider>
     <div className="min-h-screen" style={{ backgroundColor: theme.bg, color: theme.textPrimary }}>
       {/* Navbar */}
       <nav
