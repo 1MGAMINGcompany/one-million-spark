@@ -847,12 +847,18 @@ Deno.serve(async (req) => {
         return json({ error: "This Polymarket market is no longer active", error_code: "market_inactive" }, 400);
       }
 
-      if (
-        fight.polymarket_end_date &&
-        new Date(fight.polymarket_end_date) <= new Date()
-      ) {
-        await auditLog(supabase, null, normalizedWallet, "tradability_check_failed", { fight_id }, { error_code: "market_expired", end_date: fight.polymarket_end_date });
-        return json({ error: "This market has expired", error_code: "market_expired" }, 400);
+      if (fight.polymarket_end_date) {
+        const pmEnd = new Date(fight.polymarket_end_date);
+        const evDate = fight.event_date ? new Date(fight.event_date) : null;
+        // If polymarket_end_date ≈ event_date (start time), extend by 6 hours for in-play trading
+        const isSameAsStart = evDate && Math.abs(pmEnd.getTime() - evDate.getTime()) < 60_000;
+        const effectiveClose = isSameAsStart
+          ? new Date(pmEnd.getTime() + 6 * 3600_000)
+          : pmEnd;
+        if (effectiveClose <= new Date()) {
+          await auditLog(supabase, null, normalizedWallet, "tradability_check_failed", { fight_id }, { error_code: "market_expired", end_date: fight.polymarket_end_date, effective_close: effectiveClose.toISOString() });
+          return json({ error: "This market has closed", error_code: "market_expired" }, 400);
+        }
       }
 
       const lastSynced = fight.polymarket_last_synced_at
