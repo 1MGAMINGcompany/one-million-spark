@@ -56,6 +56,7 @@ export default function TradeTicket({
   nativeUsdcFormatted = null,
   isPolymarket = false,
 }: TradeTicketProps) {
+  const { t } = useTranslation();
   const isApproving = ["checking_allowance", "approval_required", "waiting_wallet", "approval_submitted", "waiting_confirmation"].includes(approvalStep);
   const { getQuote, quoting } = useSwapToUsdce();
   const [swapping, setSwapping] = useState(false);
