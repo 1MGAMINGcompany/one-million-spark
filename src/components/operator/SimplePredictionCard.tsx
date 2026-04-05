@@ -68,6 +68,9 @@ export default function SimplePredictionCard({
   const multiplierA = priceA > 0 ? (1 / priceA).toFixed(2) : "—";
   const multiplierB = priceB > 0 ? (1 / priceB).toFixed(2) : "—";
 
+  // Live game data from Polymarket Sports WebSocket
+  const liveState = useLiveGameState((fight as any).polymarket_slug);
+
   const logoDataA = getTeamLogo(nameA, fight.event_name);
   const logoDataB = getTeamLogo(nameB, fight.event_name);
   const logoA = logoDataA?.url || null;
