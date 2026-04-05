@@ -1,68 +1,60 @@
 
 
-# Fix: Cricket Event Discovery + LIVE Status Accuracy
+# Fix: False LIVE Labels + No Score/Period Data
 
-## Two Issues Found
+## Root Cause
 
-### Issue 1: Cricket only shows 4 events (should be 70+)
+Two separate bugs are creating the symptoms you see:
 
-**Root cause**: Cricket leagues use `fetchStrategy: "search"` with search seeds like `"IPL vs"`, `"PSL vs"`. But Polymarket's `/public-search` API returns almost zero results for these queries (it returns old 2023/2024 events). Meanwhile, Polymarket's `/sports` endpoint lists **proper series IDs** for every cricket league:
+### Bug 1: False "LIVE" labels
+The `live-game-state` edge function marks games as `live` using this logic: `active && !closed && started`. But Polymarket's `active` flag means **the market is open for trading**, NOT that the game is in progress. And `startDate` is often the **market listing time**, not the game kickoff. So any open market with a past listing date gets flagged as "live" — even NHL games that start hours later.
 
-| League | Sport Key | Series ID | Open Events |
-|--------|-----------|-----------|-------------|
-| IPL | cricipl | 11213 | 36 |
-| PSL | cricpsl | 11214 | 36 |
-| Legends | criclcl | 11337 | 26 |
-| T20 Brisbane | crictbcl | 11513 | 8 |
+The fallback `getTimeLabel()` in `SimplePredictionCard.tsx` compounds this: it marks anything with `event_date` in the past within 3 hours as "● LIVE" regardless of actual game status.
 
-**Fix**: Switch all cricket league sources from `fetchStrategy: "search"` to `fetchStrategy: "tag"` with proper tag IDs extracted from the `/sports` endpoint's `tags` field. The `/sports` data gives us both the `series` ID and `tags` (which include the sport-specific tag ID alongside 100639). We use `series_id + tag_id=100639` which is the proven pattern already working for NBA, NHL, etc.
+### Bug 2: No scores, periods, or game time
+The Gamma API (`/events?slug=...`) does **not** provide real-time game data (scores, periods, elapsed time). The `gameData` field we check for doesn't exist on Gamma responses. It only has market-level metadata (active/closed/prices). So even when `LiveGameBadge` renders, it has no score/period/elapsed data to display.
 
-### Issue 2: LIVE status mismatch with Polymarket
+The WebSocket (`wss://sports-api.polymarket.com/ws`) is the only source for real-time game state, but it only broadcasts **changes** — if you connect and no score changes happen, you get nothing.
 
-**Root cause**: `getTimeLabel()` in `SimplePredictionCard.tsx` marks any event as "LIVE" if its `event_date` is in the past but within the last 3 hours. This is a rough heuristic. The Polymarket screenshot shows the same match as "0-0" (not started yet or just started), while our app shows "LIVE" — the times may differ because we stored the Polymarket `startDate` (market listing time) rather than the actual game kickoff time. The `chooseSportsDisplayTime` function has the right priority chain, but some events may have been imported before this fix was added, storing incorrect dates.
+## Fix Plan
 
-**Fix**: 
-1. During daily import, always re-check and update `event_date` using `chooseSportsDisplayTime` even for existing events (not just new ones)
-2. Add a `re-sync-dates` action to the sync function that updates event dates for all open fights using the Gamma API
+### Step 1: Fix the edge function to use Polymarket's Sports REST API
 
-## Plan
+Replace the Gamma API call with Polymarket's **Sports API** (`https://sports-api.polymarket.com/games`), which actually returns real-time game state including scores, periods, clocks, and proper live/ended status. This is the same data source that feeds their WebSocket.
 
-### Step 1: Update `LEAGUE_SOURCES` in `polymarket-sync/index.ts`
+Query by slug or game ID to get:
+- `score` (e.g., "3-2")
+- `period` / `quarter` / `half`
+- `elapsed` / `clock`
+- `live` (true boolean — means game is actually in progress)
+- `ended` (true boolean)
 
-Replace all cricket league entries from search-based to series-based discovery using the tag IDs from Polymarket's `/sports` endpoint:
+**File**: `supabase/functions/live-game-state/index.ts`
 
-```
-"cricket-ipl":    series="11213", tags from "1,100639,517,101988" → tagId="101988"
-"cricket-psl":    series="11214", tags "103805" → tagId="103805"
-"cricket-lcl":    series="11337", tagId="104203"
-"cricket-tbcl":   series="11513", tagId="104447"
-```
+### Step 2: Fix the false LIVE heuristic in SimplePredictionCard
 
-Also add newly discovered leagues (CPL, SA20, T20 Blast, etc.) that Polymarket supports but we don't import yet.
+Change `getTimeLabel()` so it **never** shows "LIVE" on its own. The time heuristic should only show countdown labels ("Starts in 2h", "Today"). Only `LiveGameBadge` (backed by real data from the WS or REST API) should show "LIVE".
 
-Change `fetchStrategy` from `"search"` to `"tag"` and add the `tagId` and/or `seriesId` fields. The existing `fetchByLeagueSource` already handles series_id + tag_id=100639 lookup, so these will immediately start using the proper API.
+When `event_date` is in the past but no live data exists, show nothing (no badge) rather than a false "LIVE".
 
-### Step 2: Add cricket leagues to daily import batches
+**File**: `src/components/operator/SimplePredictionCard.tsx`
 
-Add the new cricket league keys (criclcl, crictbcl, etc.) to `BATCH_1` and `PLATFORM_ONLY_KEYS` in the `daily_import` action.
+### Step 3: Fix edge function live detection
 
-### Step 3: Fix event_date accuracy for existing events
+Stop using Gamma's `active` flag to determine if a game is live. Instead, only set `live: true` when the Sports API explicitly confirms the game is in progress.
 
-In `importSingleEvent`, when an existing event is found, also update `event_date` if the Gamma API provides a newer/different timestamp. This prevents stale market listing dates from causing wrong LIVE status.
-
-### Step 4: Run initial sync
-
-After deploying, trigger a manual `daily_import` batch=1 to populate the new cricket events.
+**File**: `supabase/functions/live-game-state/index.ts`
 
 ## Files Changed
 
 | File | Change |
 |------|--------|
-| `supabase/functions/polymarket-sync/index.ts` | Update cricket LEAGUE_SOURCES to use tag/series IDs; add new cricket leagues; fix event_date updates for existing events |
+| `supabase/functions/live-game-state/index.ts` | Switch from Gamma API to Sports REST API for actual game state data |
+| `src/components/operator/SimplePredictionCard.tsx` | Remove false LIVE heuristic from `getTimeLabel()` — only show countdown labels |
 
-## Scope
-- 1 file edited (polymarket-sync edge function)
-- No database changes
-- No UI changes needed (events will auto-appear once imported)
-- No new API keys
+## Result
+- Games only show "LIVE" when Polymarket confirms they're actually in progress
+- Live games display real scores, periods, and elapsed time
+- NHL games that haven't started yet show "Starts in Xh" instead of false "LIVE"
+- No new API keys needed (Sports API is public)
 
