@@ -108,8 +108,10 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         .in("status", ["open", "live", "locked"])
         .not("event_date", "is", null)
         .gte("event_date", cutoff)
+        .not("fighter_a_name", "in", '("Yes","No","Over","Under")')
+        .not("fighter_b_name", "in", '("Yes","No","Over","Under")')
         .order("event_date", { ascending: true })
-        .limit(500);
+        .limit(1000);
       return ((data || []) as any[]).map((f: any) => ({
         ...f,
         _category: f.prediction_events?.category || null,

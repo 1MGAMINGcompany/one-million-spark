@@ -238,9 +238,12 @@ const CRICKET_LEAGUES: LeagueRule[] = [
   { keywords: ["IPL", "INDIAN PREMIER"], league: "IPL" },
   { keywords: ["PSL"], league: "PSL" },
   { keywords: ["T20 WORLD", "T20I"], league: "T20 International" },
+  { keywords: ["NATIONAL T20"], league: "National T20" },
   { keywords: ["TEST MATCH", "TEST CRICKET"], league: "Test Cricket" },
   { keywords: ["BBL", "BIG BASH"], league: "BBL" },
   { keywords: ["ODI", "ONE DAY"], league: "ODI" },
+  { keywords: ["LEGENDS CRICKET", "LLC"], league: "Legends Cricket League" },
+  { keywords: ["WORLD CUP CRICKET", "CRICKET WORLD"], league: "Cricket World Cup" },
 ];
 
 const TENNIS_LEAGUES: LeagueRule[] = [
@@ -250,6 +253,13 @@ const TENNIS_LEAGUES: LeagueRule[] = [
   { keywords: ["AUSTRALIAN OPEN"], league: "Australian Open" },
   { keywords: ["ATP"], league: "ATP" },
   { keywords: ["WTA"], league: "WTA" },
+];
+
+const ESPORTS_LEAGUES: LeagueRule[] = [
+  { keywords: ["COUNTER-STRIKE", "CS2", "CS:GO"], league: "Counter-Strike" },
+  { keywords: ["DOTA", "DOTA 2"], league: "Dota 2" },
+  { keywords: ["LEAGUE OF LEGENDS", "LOL"], league: "League of Legends" },
+  { keywords: ["VALORANT"], league: "Valorant" },
 ];
 
 const LEAGUE_RULES: Record<string, LeagueRule[]> = {
@@ -262,6 +272,7 @@ const LEAGUE_RULES: Record<string, LeagueRule[]> = {
   BOXING: BOXING_LEAGUES,
   CRICKET: CRICKET_LEAGUES,
   TENNIS: TENNIS_LEAGUES,
+  ESPORTS: ESPORTS_LEAGUES,
 };
 
 /**
