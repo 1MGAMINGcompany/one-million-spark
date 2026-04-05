@@ -880,5 +880,6 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         theme={theme}
       />
     </div>
+    </SportsWebSocketProvider>
   );
 }
