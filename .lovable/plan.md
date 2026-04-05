@@ -1,44 +1,59 @@
 
 
-# Diagnosis: Why Events Are Still Missing After Publishing
+# Fix: Prediction Failing with "event_already_started"
 
-## What's Actually Wrong
+## Root Cause
 
-### 1. The new cron job (jobid 11) has NEVER fired
-The 4x daily cron job was created but has **zero runs** in `cron.job_run_details`. It was created after the 00:00 UTC window, so the first fire will be at **06:00 UTC today** (~3 hours from now). The old daily cron (jobid 9) was unscheduled, so **no imports have happened since April 4 at 06:00 UTC**. That means:
-- Zero new NHL games imported since the April 11+ batch
-- Zero new cricket/esports/tennis events imported
-- The code changes are deployed (edge function auto-deploys), but the function hasn't been **triggered**
+Your prediction on **Golden Knights vs. Oilers** failed because of an overly strict event-date guard in the `prediction-submit` edge function.
 
-### 2. Frontend is published but there's no new data to show
-You published the frontend correctly. The Esports tab, cricket subdivisions, and server-side prop filtering are all live. But since the sync hasn't run, the database still has the same old inventory.
+The fight's `event_date` is `2026-04-05 02:00:00 UTC`. You tried to predict at `03:51 UTC` — almost 2 hours after the event start time. The backend code (line 779-784) checks:
 
-### 3. NHL tag 899 should have current-week games
-NHL uses tag-based fetching (tagId `899`). When the sync runs, it should pull all available NHL events from Polymarket. The gap exists purely because the sync hasn't fired since April 4.
+```
+if (eventStart <= Date.now()) → reject with "event_already_started"
+```
 
-## Plan: Force an Immediate Sync + Verify Cron
+This is wrong for Polymarket-backed events. On Polymarket, markets stay open during live games (that's the whole point of in-play trading). The `polymarket_end_date` and `polymarket_active` checks already handle market closure for PM events. The event-date guard should only apply to native (non-Polymarket) events.
 
-### Step 1: Manually trigger the daily import NOW
-Call the `polymarket-sync` edge function with `{"action": "daily_import"}` to force an immediate import across all 40+ leagues. This will populate NHL current-week, cricket, esports, and tennis events immediately.
+## The Fix
 
-### Step 2: Verify results in the database
-After the sync completes, query the database to confirm:
-- NHL games for April 5-10 are present
-- Cricket events beyond just IPL exist
-- CS2/Esports events imported
-- Tennis events imported
+**File: `supabase/functions/prediction-submit/index.ts` (lines ~770-798)**
 
-### Step 3: Verify the 06:00 UTC cron fires
-After 06:00 UTC, check `cron.job_run_details` for jobid 11 to confirm the automated 4x daily schedule is working going forward.
+Wrap the event-date guard and sibling-locked check in a condition that skips them for Polymarket-backed events:
 
-### Step 4: If cron still doesn't fire, recreate it
-If jobid 11 still shows zero runs after 06:00 UTC, we'll delete and recreate the cron job to ensure it's properly registered.
+```typescript
+// EVENT DATE GUARD — only for native (non-Polymarket) events
+// Polymarket manages its own market lifecycle; their markets
+// intentionally stay open during live games for in-play trading.
+if (fight.event_id && !isPolymarketBacked) {
+  // ... existing event_date check ...
+  // ... existing sibling locked check ...
+}
+```
 
-## No Code Changes Needed
-The code is correct and deployed. The issue is purely that the sync hasn't been triggered since the changes went live. One manual trigger will populate everything.
+However, there's a sequencing problem: `isPolymarketBacked` is computed on line 818, AFTER the event-date guard on line 772. So we need to either:
+- Move the `isPolymarketBacked` computation earlier (before the guard), or
+- Use a simpler inline check: `fight.polymarket_market_id && fight.polymarket_outcome_a_token`
 
-## Technical Details
-- Edge function `polymarket-sync` with `daily_import` action processes all leagues in `COMBAT_AND_SOCCER_KEYS` + `PLATFORM_ONLY_KEYS`
-- NHL uses tag 899 (reliable), Cricket uses search seeds, CS2 uses search seeds
-- All platform sports now get `trading_allowed: true` so operator apps display them
+The simplest fix is to add the polymarket check inline:
+
+```typescript
+const hasPolymarketRouting = !!(fight.polymarket_market_id && fight.polymarket_outcome_a_token);
+
+if (fight.event_id && !hasPolymarketRouting) {
+  // existing event_date and sibling checks stay as-is
+}
+```
+
+## What This Changes
+
+- Polymarket-backed events: The event-date guard is skipped. Market open/close is governed by `polymarket_active`, `polymarket_end_date`, and `status` checks (which already exist).
+- Native events: The event-date guard continues to work exactly as before.
+- No other changes to payments, auth, fee collection, or any other part of the flow.
+
+## Scope
+
+- **1 file edited**: `supabase/functions/prediction-submit/index.ts`
+- **No database changes**
+- **No frontend changes**
+- Edge function auto-deploys on save
 
