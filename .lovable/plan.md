@@ -1,46 +1,63 @@
 
 
-# Fix: Live Game Data Not Showing (WebSocket Heartbeat Bug)
+# Fix: Live Game Data Display on Operator App
 
-## What's Wrong
+## What's Actually Happening
 
-The Polymarket Sports WebSocket sends **plain text `ping`** frames (not JSON). Our code has two bugs:
+The Polymarket Sports WebSocket (`wss://sports-api.polymarket.com/ws`) is **real and officially documented**. Our implementation is close but has gaps that prevent data from showing:
 
-1. **Heartbeat response is wrong**: We send `JSON.stringify({ type: "ping" })` on an interval, but the server expects us to **respond** with plain text `"pong"` when we **receive** `"ping"`. We should NOT be initiating pings at all.
+1. **No initial snapshot**: The WS only broadcasts on state changes (score change, period change, game end). If you connect mid-game and nothing changes for 30 seconds, you see nothing.
+2. **Missing status values**: Polymarket sends `live` and `ended` as **boolean fields** directly in the payload. Our parser redundantly re-derives these from status strings and misses sport-specific statuses like `"running"` (esports), `"inprogress"` (tennis), `"Break"` (soccer halftime).
+3. **No REST fallback for current state**: We need to fetch current game state on page load, then use the WS for real-time updates.
 
-2. **The `"ping"` text crashes JSON.parse**: When the server sends `"ping"`, our `onmessage` handler tries `JSON.parse("ping")` which throws, and the empty `catch {}` swallows it silently. We never send `"pong"` back, so the server disconnects us after 10 seconds. Every time.
+## The Fix (3 steps)
 
-The connection establishes, immediately starts getting `"ping"` messages every 5s, fails to respond, and gets killed. This cycles forever with backoff, never receiving any actual game data.
+### Step 1: Add REST polling for initial state via Gamma API
 
-## The Fix
+Create an edge function `live-game-state` that:
+- Accepts a list of `polymarket_slug` values
+- For each slug, fetches current game state from Polymarket's Gamma API (`https://gamma-api.polymarket.com/events?slug={slug}`)
+- Returns current scores, periods, and status
+- Caches results for 30 seconds to avoid rate limits
+- Called once on page load and every 60 seconds as a fallback
 
-**File: `src/hooks/useSportsWebSocket.tsx`**
+### Step 2: Update `useSportsWebSocket.tsx`
 
-1. Remove the client-initiated ping interval entirely
-2. In `onmessage`, check if `ev.data === "ping"` BEFORE trying `JSON.parse`, and respond with `ws.send("pong")`
-3. Parse the JSON message format correctly per Polymarket docs: messages have `gameId`, `slug`, `status`, `score`, `period`, `elapsed`, `leagueAbbreviation`
+- On mount, call the `live-game-state` edge function with all visible slugs to get **initial state**
+- Continue using the WebSocket for real-time updates (our ping/pong implementation is correct per docs)
+- Use Polymarket's native `live` and `ended` boolean fields directly from the payload instead of re-deriving them
+- Add missing status values: `"running"`, `"inprogress"`, `"Break"`, `"PenaltyShootout"`, `"Awarded"`
+- Accept a `slugs` prop in the provider so cards can register which slugs need tracking
 
-```typescript
-ws.onmessage = (ev) => {
-  // Server sends plain text "ping" — respond with "pong"
-  if (ev.data === "ping") {
-    ws.send("pong");
-    return;
-  }
-  try {
-    const data = JSON.parse(ev.data);
-    // ... parse game state
-  } catch {}
-};
+### Step 3: Update `LiveGameBadge.tsx` formatting
+
+- Add `"Break"` status → show "HT" (halftime) for soccer
+- Add esports period formatting (`1/3`, `2/3` → "Map 1", "Map 2")
+- Handle tennis `"inprogress"` status
+
+## Files Changed
+
+| File | Change |
+|------|--------|
+| `supabase/functions/live-game-state/index.ts` | **New** — REST proxy to fetch current game state from Gamma API |
+| `src/hooks/useSportsWebSocket.tsx` | Update parser, add REST polling for initial state, accept slugs |
+| `src/components/predictions/LiveGameBadge.tsx` | Add Break/halftime formatting, esports maps |
+| `src/components/operator/SimplePredictionCard.tsx` | Pass slug list to provider for tracking |
+| `src/pages/platform/OperatorApp.tsx` | Pass visible fight slugs to the provider |
+| `supabase/config.toml` | Add `live-game-state` function config |
+
+## Technical Detail
+
+The Gamma API provides event metadata including game state. For each fight with a `polymarket_slug`, we can query:
+```
+GET https://gamma-api.polymarket.com/events?slug={slug}
 ```
 
-Also update `parseLiveState` to match the actual Polymarket message fields:
-- `score` is a string like `"3-16"` (not separate `score_a`/`score_b`)
-- `leagueAbbreviation` gives us the sport (e.g., `"nhl"`, `"nba"`, `"epl"`)
-- `status` values: `"InProgress"`, `"Final"`, `"F/OT"`, `"F/SO"`, `"Postponed"`
+This gives us the current state snapshot. The WebSocket then layers real-time updates on top. This two-tier approach ensures:
+- **Immediate data on page load** (REST)
+- **Real-time updates** (WebSocket)
+- **Graceful fallback** if the WS disconnects (REST polls every 60s)
 
-## Scope
-- **1 file edited**: `src/hooks/useSportsWebSocket.tsx`
-- No other changes needed — LiveGameBadge and card integrations are already correct
-- Will work immediately after publish
+## No API keys needed
+Both the Gamma API and Sports WebSocket are public / no auth required.
 
