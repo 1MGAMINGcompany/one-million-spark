@@ -30,7 +30,7 @@ export default function LiveGameBadge({ state, theme, className = "" }: LiveGame
   if (!state.live) return null;
 
   const sport = (state.sport || "").toLowerCase();
-  const periodLabel = formatPeriod(state.period, state.elapsed, sport);
+  const periodLabel = formatPeriod(state.period, state.elapsed, sport, state.status);
 
   return (
     <span
