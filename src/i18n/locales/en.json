@@ -1740,6 +1740,73 @@
     "amountPlacedLabel": "${{amount}} placed",
     "startsInMin": "Starts in {{min}}m",
     "startsInHour": "Starts in {{hour}}h",
-    "poweredByLabel": "Powered by"
+    "poweredByLabel": "Powered by",
+    "supportEmailLabel": "Support"
+  },
+  "legal": {
+    "backToHome": "← Back to Home",
+    "lastUpdated": "Last updated: April 2025",
+    "terms": {
+      "title": "Terms of Service",
+      "s1Title": "Nature of Platform",
+      "s1Body": "1MG.live is a prediction market platform, not a gambling service. Users trade on probable outcomes of real-world events using USDC stablecoin. Game outcomes are determined by crowd-sourced market sentiment and real-world results.",
+      "s2Title": "Eligibility",
+      "s2Body": "Users must be at least 18 years old or the age of majority in their jurisdiction. By using this platform, you confirm you meet this requirement.",
+      "s3Title": "Predictions Are Final",
+      "s3Body": "All predictions are final once submitted. You cannot cancel, modify, or withdraw a prediction after it has been placed. Ensure you review all details before confirming.",
+      "s4Title": "Platform Fees",
+      "s4Body": "A platform fee of up to 2.25% applies to each prediction. Operator apps may charge an additional fee set by the operator. All fees are disclosed before you confirm a prediction.",
+      "s5Title": "Operator Content",
+      "s5Body": "1MG.live provides the technology platform. Individual operator apps are run by independent operators. 1MG.live is not responsible for operator-specific content, branding, or custom events created by operators.",
+      "s6Title": "Regulatory Compliance",
+      "s6Body": "1MG.live operates as a prediction market platform. Users are responsible for ensuring participation is lawful in their jurisdiction. The platform does not operate in jurisdictions where prediction markets are explicitly prohibited."
+    },
+    "privacy": {
+      "title": "Privacy Policy",
+      "s1Title": "Data We Collect",
+      "s1Body": "We collect wallet addresses, email addresses (if provided), prediction history, and basic analytics data such as device type and language preference.",
+      "s2Title": "How We Use Your Data",
+      "s2Body": "Your data is used to operate the platform, process predictions, display your history, and improve the user experience through analytics.",
+      "s3Title": "Data Sharing",
+      "s3Body": "We never sell your personal data to third parties. Data may be shared with payment processors and blockchain networks as required to execute predictions.",
+      "s4Title": "Data Deletion",
+      "s4Body": "You may request deletion of your account data by contacting 1mgaming@proton.me. On-chain transaction history cannot be deleted due to the nature of blockchain technology.",
+      "s5Title": "Cookies & Analytics",
+      "s5Body": "We use local storage for language preferences and session management. Analytics data is collected anonymously to improve the platform experience."
+    },
+    "disclaimer": {
+      "title": "Disclaimer",
+      "s1Title": "Not Gambling",
+      "s1Body": "1MG.live is a prediction market platform, NOT a gambling service. Prediction markets are information-driven tools where users trade on the probable outcomes of real-world events.",
+      "s2Title": "Financial Risk",
+      "s2Body": "Participation in prediction markets involves financial risk. Only predict with amounts you can afford to lose. You may lose your entire prediction amount.",
+      "s3Title": "No Guarantees",
+      "s3Body": "Past market performance does not guarantee future results. Predictions are based on crowd-sourced market sentiment and may not accurately reflect actual probabilities of outcomes.",
+      "s4Title": "Not Financial Advice",
+      "s4Body": "1MG.live does not provide financial, investment, or legal advice. All market information is provided for informational purposes only. Consult a qualified professional before making financial decisions.",
+      "s5Title": "Real-World Outcomes",
+      "s5Body": "Prediction results depend on real-world outcomes that are outside our control. Events may be cancelled, postponed, or have disputed results. We follow established resolution procedures in all cases.",
+      "s6Title": "Market Probabilities",
+      "s6Body": "Market probabilities displayed on the platform are crowd-sourced and represent collective market sentiment. They are not guarantees and may differ significantly from actual outcome probabilities.",
+      "s7Title": "Jurisdiction Restrictions",
+      "s7Body": "This platform is not available in jurisdictions where prediction markets are prohibited. Users are solely responsible for ensuring their participation complies with local laws and regulations.",
+      "s8Title": "Limitation of Liability",
+      "s8Body": "1MG.live and its operators are not liable for any losses resulting from predictions, platform downtime, market conditions, or any other circumstances beyond our reasonable control."
+    },
+    "acceptableUse": {
+      "title": "Acceptable Use Policy",
+      "s1Title": "No Market Manipulation",
+      "s1Body": "Users must not attempt to manipulate market outcomes through coordinated trading, false information dissemination, or any other deceptive practices.",
+      "s2Title": "No Insider Information",
+      "s2Body": "Trading on material non-public information that could influence event outcomes is strictly prohibited.",
+      "s3Title": "No Automated Trading",
+      "s3Body": "Automated trading bots, scripts, or other programmatic trading tools are not permitted without explicit written authorization from 1MG.live.",
+      "s4Title": "One Account Per Person",
+      "s4Body": "Each individual may operate only one account. Creating multiple accounts to circumvent limits, manipulate markets, or gain unfair advantages is prohibited.",
+      "s5Title": "Prohibited Jurisdictions",
+      "s5Body": "Users must not access or use the platform from jurisdictions where prediction markets are prohibited. Use of VPNs or other tools to circumvent geographic restrictions is not allowed.",
+      "s6Title": "Violations",
+      "s6Body": "Violations of this policy may result in immediate account suspension, forfeiture of funds, and permanent ban from the platform. 1MG.live reserves the right to take action at its sole discretion."
+    }
   }
 }
