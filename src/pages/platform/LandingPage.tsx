@@ -535,8 +535,10 @@ export default function LandingPage() {
               <a href="/buy-predictions-app" className="hover:text-white/60 transition-colors">{t("platform.footer.buyApp")}</a>
               <a href="/help/are-prediction-markets-legal" className="hover:text-white/60 transition-colors">{t("platform.footer.whyLegal")}</a>
               <a href="mailto:1mgaming@proton.me" className="hover:text-white/60 transition-colors">{t("platform.footer.contact")}</a>
-              <a href="/terms-of-service" className="hover:text-white/60 transition-colors">{t("platform.footer.terms")}</a>
-              <a href="/privacy-policy" className="hover:text-white/60 transition-colors">{t("platform.footer.privacy")}</a>
+              <a href="/terms" className="hover:text-white/60 transition-colors">{t("platform.footer.terms")}</a>
+              <a href="/privacy" className="hover:text-white/60 transition-colors">{t("platform.footer.privacy")}</a>
+              <a href="/disclaimer" className="hover:text-white/60 transition-colors">{t("platform.footer.disclaimer")}</a>
+              <a href="/acceptable-use" className="hover:text-white/60 transition-colors">{t("platform.footer.acceptableUse")}</a>
             </div>
           </div>
           <div className="flex items-center justify-center gap-2 text-xs text-white/20">

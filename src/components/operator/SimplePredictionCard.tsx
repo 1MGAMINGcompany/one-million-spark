@@ -284,7 +284,7 @@ export default function SimplePredictionCard({
         >
           <span className="block text-sm font-bold" style={{ color: theme.textPrimary }}>{nameA}</span>
           <span className="block text-xs mt-1" style={{ color: theme.primary }}>
-            {t("operator.betToWin", { amount: payoutA.toFixed(2) })}
+            {t("operator.predictReturn", { predict: 10, return: payoutA.toFixed(2) })}
           </span>
           <span className="block text-[10px] mt-0.5" style={{ color: theme.textMuted }}>({multiplierA}x)</span>
         </button>
@@ -313,7 +313,7 @@ export default function SimplePredictionCard({
         >
           <span className="block text-sm font-bold" style={{ color: theme.textPrimary }}>{nameB}</span>
           <span className="block text-xs mt-1" style={{ color: theme.primary }}>
-            {t("operator.betToWin", { amount: payoutB.toFixed(2) })}
+            {t("operator.predictReturn", { predict: 10, return: payoutB.toFixed(2) })}
           </span>
           <span className="block text-[10px] mt-0.5" style={{ color: theme.textMuted }}>({multiplierB}x)</span>
         </button>
