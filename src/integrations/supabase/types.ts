@@ -865,6 +865,7 @@ export type Database = {
           logo_url: string | null
           status: string
           subdomain: string
+          support_email: string | null
           theme: string
           updated_at: string
           user_id: string
@@ -880,6 +881,7 @@ export type Database = {
           logo_url?: string | null
           status?: string
           subdomain: string
+          support_email?: string | null
           theme?: string
           updated_at?: string
           user_id: string
@@ -895,6 +897,7 @@ export type Database = {
           logo_url?: string | null
           status?: string
           subdomain?: string
+          support_email?: string | null
           theme?: string
           updated_at?: string
           user_id?: string

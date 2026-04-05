@@ -139,13 +139,13 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const allFights = useMemo(() => {
     return (operatorFights || []).filter(f => {
       if (!isValidOperatorEvent(f as any)) return false;
-      // All events get 24h grace to match groupByDate
-      const graceMs = 24 * 3600000;
       const eventDate = (f as any).event_date;
       if (!eventDate) return false;
       const d = new Date(eventDate);
       if (isNaN(d.getTime())) return false;
-      if (d.getTime() < Date.now() - graceMs) return false;
+      // Only show future events OR currently live events
+      const isLive = f.status === "live";
+      if (!isLive && d.getTime() < Date.now()) return false;
 
       const sport = normalizeOperatorSport(
         f.event_name,
@@ -832,9 +832,19 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       </div>
 
       <footer
-        className="py-6 text-center space-y-2"
+        className="py-6 text-center space-y-3"
         style={{ borderTop: `1px solid ${theme.cardBorder}`, color: theme.textMuted }}
       >
+        {(operator as any).support_email && (
+          <p className="text-xs">
+            {t("operator.supportEmailLabel")}: <a href={`mailto:${(operator as any).support_email}`} className="underline hover:opacity-80" style={{ color: theme.primary }}>{(operator as any).support_email}</a>
+          </p>
+        )}
+        <div className="flex flex-wrap items-center justify-center gap-3 text-[11px]">
+          <a href="https://1mg.live/terms" target="_blank" rel="noopener noreferrer" className="hover:opacity-80 transition-opacity" style={{ color: theme.textMuted }}>{t("legal.terms.title")}</a>
+          <a href="https://1mg.live/privacy" target="_blank" rel="noopener noreferrer" className="hover:opacity-80 transition-opacity" style={{ color: theme.textMuted }}>{t("legal.privacy.title")}</a>
+          <a href="https://1mg.live/disclaimer" target="_blank" rel="noopener noreferrer" className="hover:opacity-80 transition-opacity" style={{ color: theme.textMuted }}>{t("legal.disclaimer.title")}</a>
+        </div>
         <p className="text-xs">
           {t("operator.poweredBy")} <span style={{ color: theme.primary }}>1MG.live</span>
         </p>

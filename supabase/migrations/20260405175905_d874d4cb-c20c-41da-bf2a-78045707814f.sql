@@ -1,0 +1,1 @@
+ALTER TABLE public.operators ADD COLUMN IF NOT EXISTS support_email text;

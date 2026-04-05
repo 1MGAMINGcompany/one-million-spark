@@ -13,6 +13,10 @@ import BuyPredictionsApp from "./BuyPredictionsApp";
 import HelpCenter from "@/pages/HelpCenter";
 import HelpArticle from "@/pages/HelpArticle";
 import PlatformAdmin from "./PlatformAdmin";
+import PlatformTermsOfService from "./PlatformTermsOfService";
+import PlatformPrivacyPolicy from "./PlatformPrivacyPolicy";
+import Disclaimer from "./Disclaimer";
+import AcceptableUse from "./AcceptableUse";
 import TermsOfService from "@/pages/TermsOfService";
 import PrivacyPolicy from "@/pages/PrivacyPolicy";
 
@@ -98,6 +102,10 @@ export default function PlatformApp({ context }: PlatformAppProps) {
       <Route path="/help" element={<HelpCenter />} />
       <Route path="/help/:slug" element={<HelpArticle />} />
       <Route path="/admin" element={<PlatformAdmin />} />
+      <Route path="/terms" element={<PlatformTermsOfService />} />
+      <Route path="/privacy" element={<PlatformPrivacyPolicy />} />
+      <Route path="/disclaimer" element={<Disclaimer />} />
+      <Route path="/acceptable-use" element={<AcceptableUse />} />
       <Route path="/terms-of-service" element={<TermsOfService />} />
       <Route path="/privacy-policy" element={<PrivacyPolicy />} />
       {/* Catch-all: treat any unknown path as a potential operator slug */}
