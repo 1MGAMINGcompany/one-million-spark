@@ -1084,9 +1084,21 @@ async function importSingleEvent(
   let eventId: string;
   if (existingEvt) {
     eventId = existingEvt.id;
-    // Backfill category if currently null
-    if (category && !existingEvt.category) {
-      await supabase.from("prediction_events").update({ category }).eq("id", existingEvt.id);
+    // Backfill category if currently null + always refresh event_date for accuracy
+    const evtUpdate: Record<string, unknown> = {};
+    if (category && !existingEvt.category) evtUpdate.category = category;
+    // Always update event_date to latest accurate timestamp (fixes stale market listing dates)
+    const freshDate = timeInfo.chosen || gEvent.startDate || gEvent.endDate || null;
+    if (freshDate) evtUpdate.event_date = freshDate;
+    if (Object.keys(evtUpdate).length > 0) {
+      await supabase.from("prediction_events").update(evtUpdate).eq("id", existingEvt.id);
+    }
+    // Also update event_date on existing fights for this event
+    if (freshDate) {
+      await supabase.from("prediction_fights")
+        .update({ event_date: freshDate })
+        .eq("event_id", existingEvt.id)
+        .in("status", ["open", "locked", "live"]);
     }
   } else {
     const { data: newEvt, error } = await supabase
