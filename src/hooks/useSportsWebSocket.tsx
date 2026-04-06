@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from "react";
-import { supabase } from "@/integrations/supabase/client";
 
 export interface LiveGameState {
   slug: string;
@@ -27,32 +26,88 @@ const SportsWSContext = createContext<SportsWSContextValue>({
 
 const WS_URL = "wss://sports-api.polymarket.com/ws";
 const MAX_BACKOFF = 30000;
-const REST_POLL_INTERVAL = 30_000;
 
-function parseLiveState(msg: any): LiveGameState | null {
-  if (!msg?.slug) return null;
+/**
+ * Build a normalized match key from a WS message's league + teams.
+ * Returns e.g. "nba|cha|min" (sorted team codes, lowercased).
+ */
+function buildMatchKey(league: string, teamA: string, teamB: string): string {
+  const l = (league || "").toLowerCase();
+  const codes = [teamA, teamB].map(t => (t || "").toLowerCase().trim()).sort();
+  return `${l}|${codes[0]}|${codes[1]}`;
+}
 
+/**
+ * Extract a match key from a polymarket_slug like "nba-cha-min-2026-04-05".
+ * Strategy: take the league prefix and the two team codes that follow.
+ * Slug format varies by sport but generally: {league}-{team1}-{team2}-{date}
+ * Some slugs have suffixes like "-cam" for specific outcomes — skip those.
+ */
+function slugToMatchKey(slug: string): string | null {
+  if (!slug) return null;
+  // Split on "-" and try to identify: league, team codes, date
+  const parts = slug.split("-");
+  if (parts.length < 4) return null;
+  
+  const league = parts[0].toLowerCase();
+  
+  // Find the date portion (YYYY-MM-DD) — typically the last 3 parts
+  // Look for a 4-digit year
+  let dateStartIdx = -1;
+  for (let i = 1; i < parts.length; i++) {
+    if (/^\d{4}$/.test(parts[i]) && i + 2 < parts.length) {
+      dateStartIdx = i;
+      break;
+    }
+  }
+  
+  if (dateStartIdx < 2) return null; // Need at least 2 parts between league and date
+  
+  // Team codes are between league and date
+  const teamParts = parts.slice(1, dateStartIdx);
+  if (teamParts.length < 2) return null;
+  
+  // Take first two as team codes (handles 3-letter codes like "phi", "bos")
+  // Some slugs have combined codes or longer names — take first two parts
+  const codes = teamParts.slice(0, 2).map(t => t.toLowerCase()).sort();
+  return `${league}|${codes[0]}|${codes[1]}`;
+}
+
+/**
+ * Parse a WebSocket message from the Polymarket Sports API.
+ * Messages have: gameId, leagueAbbreviation, homeTeam, awayTeam, score, period, elapsed, live, ended, status
+ */
+function parseLiveMessage(msg: any, slugLookup: Map<string, string>): LiveGameState | null {
+  if (!msg) return null;
+  
+  // Build match key from WS data
+  const league = msg.leagueAbbreviation || "";
+  const home = msg.homeTeam || "";
+  const away = msg.awayTeam || "";
+  
+  if (!league || (!home && !away)) return null;
+  
+  const key = buildMatchKey(league, home, away);
+  const slug = slugLookup.get(key);
+  if (!slug) return null; // No matching fight in our DB
+  
   const status = (msg.status || "unknown").toString();
-
-  // Use native boolean fields when available, fall back to status-string matching
   const live = typeof msg.live === "boolean"
     ? msg.live
     : ["InProgress", "in_progress", "live", "halftime", "in_play",
        "running", "inprogress", "Break", "PenaltyShootout", "Awarded"].includes(status);
-
   const ended = typeof msg.ended === "boolean"
     ? msg.ended
     : ["Final", "F/OT", "F/SO", "final", "ended", "finished", "complete", "closed"].includes(status);
 
-  // Score can be a string like "3-16" or separate fields
   let score = msg.score as string | undefined;
   let scoreA: number | undefined;
   let scoreB: number | undefined;
 
   if (typeof score === "string" && score.includes("-")) {
-    const parts = score.split("-");
-    scoreA = Number(parts[0]);
-    scoreB = Number(parts[1]);
+    const p = score.split("-");
+    scoreA = Number(p[0]);
+    scoreB = Number(p[1]);
   } else {
     scoreA = msg.score_a ?? msg.home_score ?? msg.scoreA ?? undefined;
     scoreB = msg.score_b ?? msg.away_score ?? msg.scoreB ?? undefined;
@@ -61,11 +116,10 @@ function parseLiveState(msg: any): LiveGameState | null {
     }
   }
 
-  // Sport from leagueAbbreviation or sport field
-  const sport = msg.leagueAbbreviation || msg.sport || undefined;
+  const sport = league.toLowerCase() || undefined;
 
   return {
-    slug: msg.slug,
+    slug,
     score,
     scoreA: scoreA != null ? Number(scoreA) : undefined,
     scoreB: scoreB != null ? Number(scoreB) : undefined,
@@ -79,50 +133,9 @@ function parseLiveState(msg: any): LiveGameState | null {
   };
 }
 
-/** Fetch initial game states from Gamma API via edge function */
-async function fetchInitialStates(slugs: string[]): Promise<Map<string, LiveGameState>> {
-  const result = new Map<string, LiveGameState>();
-  if (slugs.length === 0) return result;
-
-  try {
-    const { data, error } = await supabase.functions.invoke("live-game-state", {
-      body: { slugs },
-    });
-
-    if (error || !data?.ok || !data?.games) {
-      console.warn("[SportsWS] REST fetch failed:", error?.message || data?.error);
-      return result;
-    }
-
-    for (const [slug, state] of Object.entries(data.games)) {
-      const s = state as any;
-      if (s && (s.live || s.ended)) {
-        result.set(slug, {
-          slug,
-          score: s.score,
-          scoreA: s.scoreA,
-          scoreB: s.scoreB,
-          period: s.period,
-          elapsed: s.elapsed,
-          status: s.status,
-          live: s.live,
-          ended: s.ended,
-          sport: s.sport,
-        });
-      }
-    }
-
-    console.log(`[SportsWS] REST: got ${result.size} live/ended states from ${slugs.length} slugs`);
-  } catch (e) {
-    console.warn("[SportsWS] REST fetch error:", e);
-  }
-
-  return result;
-}
-
 interface SportsWebSocketProviderProps {
   children: React.ReactNode;
-  /** Slugs to track — used for initial REST fetch */
+  /** polymarket_slug values to track */
   slugs?: string[];
 }
 
@@ -135,37 +148,18 @@ export function SportsWebSocketProvider({ children, slugs = [] }: SportsWebSocke
   const slugsRef = useRef(slugs);
   slugsRef.current = slugs;
 
-  // Stable dependency key for REST polling
-  const slugKey = useMemo(() => [...slugs].sort().join(","), [slugs]);
-
-  // REST polling for initial state + fallback
-  useEffect(() => {
-    if (!slugKey) return;
-
-    let active = true;
-
-    const poll = async () => {
-      if (!active) return;
-      const states = await fetchInitialStates(slugsRef.current);
-      if (!active) return;
-      if (states.size > 0) {
-        setGames(prev => {
-          const next = new Map(prev);
-          for (const [slug, state] of states) {
-            next.set(slug, state);
-          }
-          return next;
-        });
-      }
-    };
-
-    // Initial fetch
-    poll();
-
-    // Poll every 60s as fallback
-    const interval = setInterval(poll, REST_POLL_INTERVAL);
-    return () => { active = false; clearInterval(interval); };
-  }, [slugKey]);
+  // Build a lookup map: matchKey → polymarket_slug
+  // This allows us to match WS broadcasts (which use league+teams) to our DB slugs
+  const slugLookup = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const slug of slugs) {
+      const key = slugToMatchKey(slug);
+      if (key) map.set(key, slug);
+    }
+    return map;
+  }, [slugs]);
+  const slugLookupRef = useRef(slugLookup);
+  slugLookupRef.current = slugLookup;
 
   const connect = useCallback(() => {
     if (!mountedRef.current) return;
@@ -181,7 +175,6 @@ export function SportsWebSocketProvider({ children, slugs = [] }: SportsWebSocke
       };
 
       ws.onmessage = (ev) => {
-        // Server sends plain text "ping" — respond with "pong"
         if (ev.data === "ping") {
           if (ws.readyState === WebSocket.OPEN) {
             ws.send("pong");
@@ -196,7 +189,7 @@ export function SportsWebSocketProvider({ children, slugs = [] }: SportsWebSocke
             const next = new Map(prev);
             let changed = false;
             for (const msg of messages) {
-              const state = parseLiveState(msg);
+              const state = parseLiveMessage(msg, slugLookupRef.current);
               if (state) {
                 next.set(state.slug, state);
                 changed = true;
