@@ -195,11 +195,31 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
   const loadUserEntries = useCallback(async () => {
     if (!address) return;
-    const { data } = await supabase.from("prediction_entries").select("*").eq("wallet", address.toLowerCase());
+    let query = supabase.from("prediction_entries").select("*").eq("wallet", address.toLowerCase());
+    if (operator?.id) {
+      query = query.eq("source_operator_id", operator.id);
+    }
+    const { data } = await query;
     if (data) setUserEntries(data);
-  }, [address]);
+  }, [address, operator?.id]);
 
   useEffect(() => { loadUserEntries(); }, [loadUserEntries]);
+
+  // ── Fetch fights for My Picks independently (includes settled/locked/finished) ──
+  const userFightIds = useMemo(() => userEntries.map((e: any) => e.fight_id), [userEntries]);
+  const { data: picksFights } = useQuery({
+    queryKey: ["picks_fights", userFightIds],
+    queryFn: async () => {
+      if (userFightIds.length === 0) return [];
+      const { data } = await (supabase as any)
+        .from("prediction_fights")
+        .select("*")
+        .in("id", userFightIds);
+      return (data || []) as Fight[];
+    },
+    enabled: userFightIds.length > 0,
+    staleTime: 30_000,
+  });
 
   // ── STRICT client-side validation pipeline ──
   const allFights = useMemo(() => {
@@ -321,11 +341,15 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
   // ── Filtered fights ──
   const filteredFights = useMemo(() => {
-    let fights = enrichedFights;
+    // My Picks: use independently-fetched fights, bypass all browse filters
     if (activeTab === "picks") {
-      const userFightIds = new Set(userEntries.map((e: any) => e.fight_id));
-      fights = fights.filter(f => userFightIds.has(f.id));
+      return (picksFights || []).sort((a, b) => {
+        const da = new Date((a as any).event_date || 0).getTime();
+        const db = new Date((b as any).event_date || 0).getTime();
+        return db - da; // newest first
+      });
     }
+    let fights = enrichedFights;
     if (broadSportFilter !== "ALL") {
       fights = fights.filter(f => f._broadSport === broadSportFilter);
     }
@@ -360,7 +384,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       fights = fights.filter(f => f.id !== featuredEvent.id);
     }
     return fights;
-  }, [enrichedFights, broadSportFilter, leagueFilter, searchQuery, activeTab, userEntries, timeFilter, featuredEvent]);
+  }, [enrichedFights, broadSportFilter, leagueFilter, searchQuery, activeTab, picksFights, timeFilter, featuredEvent]);
 
   // ── Date-grouped fights for display ──
   const dateGroups = useMemo(() => groupByDate(filteredFights), [filteredFights]);
