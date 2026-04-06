@@ -277,7 +277,10 @@ export default function SimplePredictionCard({
             </span>
           ) : null}
         </div>
-        <GraphButton />
+        <div className="flex items-center gap-1">
+          <TipsButton />
+          <GraphButton />
+        </div>
       </div>
 
       {/* Team names */}

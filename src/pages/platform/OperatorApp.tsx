@@ -20,6 +20,7 @@ import SimplePredictionCard from "@/components/operator/SimplePredictionCard";
 import SimplePredictionModal from "@/components/operator/SimplePredictionModal";
 import OperatorBalanceBanner from "@/components/operator/OperatorBalanceBanner";
 import MarketGraphModal from "@/components/operator/MarketGraphModal";
+import MarketTipsModal from "@/components/operator/MarketTipsModal";
 import SocialShareModal, { type ShareVariant } from "@/components/SocialShareModal";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
