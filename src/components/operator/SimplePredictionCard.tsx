@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { BarChart3 } from "lucide-react";
+import { BarChart3, Lightbulb } from "lucide-react";
 import { getTeamLogo } from "@/lib/teamLogos";
 import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
 import { formatEventDateTime } from "@/lib/formatEventLocalDateTime";
@@ -18,6 +18,7 @@ interface SimplePredictionCardProps {
   theme: OperatorTheme;
   onShareWin?: (fight: Fight) => void;
   onGraph?: (fight: Fight) => void;
+  onTips?: (fight: Fight) => void;
 }
 
 function getTimeLabel(eventDate: string | null | undefined, t: (key: string, opts?: any) => string): { text: string; isLive: boolean } | null {
