@@ -170,11 +170,12 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // Get all active Polymarket-backed fights
+    // Get all Polymarket-backed fights that need price updates.
+    // NOTE: Do NOT filter on polymarket_active — it flips to false when games
+    // go live, but we still need to keep prices fresh for in-play trading.
     const { data: fights, error } = await supabase
       .from("prediction_fights")
-      .select("id, polymarket_outcome_a_token, polymarket_outcome_b_token, polymarket_condition_id, polymarket_market_id, fighter_a_photo, fighter_b_photo, home_logo, away_logo, fighter_a_name, fighter_b_name, event_name, title, source, polymarket_question, event_id")
-      .eq("polymarket_active", true)
+      .select("id, polymarket_outcome_a_token, polymarket_outcome_b_token, polymarket_condition_id, polymarket_market_id, fighter_a_photo, fighter_b_photo, home_logo, away_logo, fighter_a_name, fighter_b_name, event_name, title, source, polymarket_question, event_id, trading_allowed")
       .not("polymarket_outcome_a_token", "is", null)
       .in("status", ["open", "locked", "live"]);
 
@@ -393,6 +394,12 @@ Deno.serve(async (req) => {
             price_b: priceB,
             polymarket_last_synced_at: new Date().toISOString(),
           };
+
+          // Auto-enable trading for valid Polymarket-backed fights
+          if (fight.trading_allowed === false && fight.polymarket_outcome_a_token && fight.polymarket_outcome_b_token) {
+            updatePayload.trading_allowed = true;
+            enriched.push(`${fight.id}: auto_enabled_trading`);
+          }
 
           // ── Auto-close resolved markets ──
           if (marketResolved) {

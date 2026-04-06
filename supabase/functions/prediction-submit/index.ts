@@ -871,11 +871,16 @@ Deno.serve(async (req) => {
         ? new Date(fight.polymarket_last_synced_at).getTime()
         : 0;
       const priceAge = Date.now() - lastSynced;
-      if (lastSynced === 0 || priceAge > MAX_PRICE_STALENESS_MS) {
+      // For live/locked Polymarket events, use a relaxed 30-minute staleness threshold
+      // since price sync now covers these but may still lag during heavy load.
+      const effectiveStaleness = polymarketInPlay
+        ? 30 * 60 * 1000  // 30 minutes for in-play
+        : MAX_PRICE_STALENESS_MS; // 10 minutes for pre-game
+      if (lastSynced === 0 || priceAge > effectiveStaleness) {
         await auditLog(supabase, null, normalizedWallet, "stale_quote_rejected", { fight_id }, {
           error_code: "stale_quote",
           price_age_ms: priceAge,
-          threshold_ms: MAX_PRICE_STALENESS_MS,
+          threshold_ms: effectiveStaleness,
           last_synced: fight.polymarket_last_synced_at || "never",
         });
         return json({ error: "Market price data is stale. Please try again shortly.", error_code: "stale_quote" }, 400);
