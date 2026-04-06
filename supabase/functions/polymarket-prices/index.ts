@@ -175,7 +175,7 @@ Deno.serve(async (req) => {
     // go live, but we still need to keep prices fresh for in-play trading.
     const { data: fights, error } = await supabase
       .from("prediction_fights")
-      .select("id, polymarket_outcome_a_token, polymarket_outcome_b_token, polymarket_condition_id, polymarket_market_id, fighter_a_photo, fighter_b_photo, home_logo, away_logo, fighter_a_name, fighter_b_name, event_name, title, source, polymarket_question, event_id")
+      .select("id, polymarket_outcome_a_token, polymarket_outcome_b_token, polymarket_condition_id, polymarket_market_id, fighter_a_photo, fighter_b_photo, home_logo, away_logo, fighter_a_name, fighter_b_name, event_name, title, source, polymarket_question, event_id, trading_allowed")
       .not("polymarket_outcome_a_token", "is", null)
       .in("status", ["open", "locked", "live"]);
 
