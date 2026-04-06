@@ -89,8 +89,11 @@ export default function SocialShareModal(props: ShareModalProps) {
   const winAmount = amountWon ?? solWon;
   const isSolWin = amountWon == null && solWon != null;
 
-  const brandName = operatorBrandName || "1MGAMING";
-  const brandLogo = operatorLogoUrl || pyramidLogo;
+  const domain = detectDomain();
+  const isPlatform = domain.type === "platform" || domain.type === "operator";
+
+  const brandName = operatorBrandName || (isPlatform ? "1MG.live" : "1MGAMING");
+  const brandLogo = operatorLogoUrl || (isPlatform ? PLATFORM_LOGO : pyramidLogo);
 
   const cardRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
