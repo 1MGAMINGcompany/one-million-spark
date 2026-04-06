@@ -204,6 +204,9 @@ export default function OperatorOnboarding() {
             1MG charges a low 1.5% platform fee (covers gas, backend, support &amp; money flow).
             Your operator fee is added on top — you keep 100% of your fee revenue.
           </p>
+          <p className="text-xs text-blue-400/80 mt-2">
+            💡 Pro tip: Our demo platform charges 15%. Set your fee to 5% and you'll be 3x more competitive from day one.
+          </p>
         </div>
       ),
     },
