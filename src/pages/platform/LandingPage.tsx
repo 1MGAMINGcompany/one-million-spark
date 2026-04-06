@@ -208,6 +208,9 @@ function RevenueCalculator() {
             </div>
           </div>
         </div>
+          <p className="text-sm text-white/50 text-center mt-4">
+            Our own demo app runs at 15%. Set your fee lower and your platform is immediately more competitive — attracting users from day one.
+          </p>
       </div>
     </section>
   );
