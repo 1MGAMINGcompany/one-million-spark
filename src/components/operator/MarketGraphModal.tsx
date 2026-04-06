@@ -329,7 +329,7 @@ export default function MarketGraphModal({ fight, open, onClose, theme }: Market
         {/* Source badge */}
         {fight.source === "polymarket" && (
           <p className="text-[10px] text-center" style={{ color: theme.textMuted }}>
-            Powered by live Polymarket data
+            Powered by 1mg.live
           </p>
         )}
 

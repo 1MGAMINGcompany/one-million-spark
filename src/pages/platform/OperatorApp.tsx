@@ -20,6 +20,7 @@ import SimplePredictionCard from "@/components/operator/SimplePredictionCard";
 import SimplePredictionModal from "@/components/operator/SimplePredictionModal";
 import OperatorBalanceBanner from "@/components/operator/OperatorBalanceBanner";
 import MarketGraphModal from "@/components/operator/MarketGraphModal";
+import MarketTipsModal from "@/components/operator/MarketTipsModal";
 import SocialShareModal, { type ShareVariant } from "@/components/SocialShareModal";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
@@ -152,6 +153,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"events" | "picks">("events");
   const [graphFight, setGraphFight] = useState<Fight | null>(null);
+  const [tipsFight, setTipsFight] = useState<Fight | null>(null);
   const [sportPickerOpen, setSportPickerOpen] = useState(false);
   const [timeFilter, setTimeFilter] = useState<"all" | "today" | "week">("all");
   const [showFundsModal, setShowFundsModal] = useState(false);
@@ -872,6 +874,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                       theme={theme}
                       onShareWin={handleShareWin}
                       onGraph={(f) => setGraphFight(f)}
+                      onTips={(f) => setTipsFight(f)}
                     />
                   );
                 })}
@@ -892,6 +895,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                 theme={theme}
                 onShareWin={handleShareWin}
                 onGraph={(f) => setGraphFight(f)}
+                onTips={(f) => setTipsFight(f)}
               />
             );
           })
@@ -955,6 +959,16 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           fight={graphFight}
           open={!!graphFight}
           onClose={() => setGraphFight(null)}
+          theme={theme}
+        />
+      )}
+
+      {/* Market Tips Modal */}
+      {tipsFight && (
+        <MarketTipsModal
+          fight={tipsFight}
+          open={!!tipsFight}
+          onClose={() => setTipsFight(null)}
           theme={theme}
         />
       )}

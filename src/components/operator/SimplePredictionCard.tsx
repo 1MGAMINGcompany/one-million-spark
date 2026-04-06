@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { BarChart3 } from "lucide-react";
+import { BarChart3, Lightbulb } from "lucide-react";
 import { getTeamLogo } from "@/lib/teamLogos";
 import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
 import { formatEventDateTime } from "@/lib/formatEventLocalDateTime";
@@ -18,6 +18,7 @@ interface SimplePredictionCardProps {
   theme: OperatorTheme;
   onShareWin?: (fight: Fight) => void;
   onGraph?: (fight: Fight) => void;
+  onTips?: (fight: Fight) => void;
 }
 
 function getTimeLabel(eventDate: string | null | undefined, t: (key: string, opts?: any) => string): { text: string; isLive: boolean } | null {
@@ -59,6 +60,7 @@ export default function SimplePredictionCard({
   theme,
   onShareWin,
   onGraph,
+  onTips,
 }: SimplePredictionCardProps) {
   const { t } = useTranslation();
   const nameA = resolveOutcomeName(fight.fighter_a_name, "a", fight);
@@ -119,7 +121,24 @@ export default function SimplePredictionCard({
         }}
       >
         <BarChart3 className="w-3 h-3" />
-        {t("operator.graph")}
+        Graph
+      </button>
+    ) : null
+  );
+
+  const TipsButton = () => (
+    onTips ? (
+      <button
+        onClick={(e) => { e.stopPropagation(); onTips(fight); }}
+        className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-all hover:opacity-80"
+        style={{
+          backgroundColor: theme.surfaceBg,
+          border: `1px solid ${theme.cardBorder}`,
+          color: theme.textSecondary,
+        }}
+      >
+        <Lightbulb className="w-3 h-3" />
+        Tips
       </button>
     ) : null
   );
@@ -195,7 +214,10 @@ export default function SimplePredictionCard({
               <LiveGameBadge state={liveState} theme={theme} />
             )}
           </div>
-          <GraphButton />
+          <div className="flex items-center gap-1">
+            <TipsButton />
+            <GraphButton />
+          </div>
         </div>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -255,7 +277,10 @@ export default function SimplePredictionCard({
             </span>
           ) : null}
         </div>
-        <GraphButton />
+        <div className="flex items-center gap-1">
+          <TipsButton />
+          <GraphButton />
+        </div>
       </div>
 
       {/* Team names */}

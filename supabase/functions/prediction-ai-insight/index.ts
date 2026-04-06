@@ -23,6 +23,7 @@ serve(async (req) => {
       liquidity,
       trend,
       signals,
+      mode,
     } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -37,7 +38,25 @@ serve(async (req) => {
     const pctA = Math.round((probabilityA ?? 0) * 100);
     const pctB = Math.round((probabilityB ?? 0) * 100);
 
-    const systemPrompt = `You are a concise prediction market analyst for 1MGAMING. Produce a SHORT JSON object with these exact keys:
+    const isTips = mode === "tips";
+
+    const systemPrompt = isTips
+      ? `You are a concise prediction market intelligence analyst for 1MGAMING. Produce a SHORT JSON object with these exact keys:
+- "summary": 2-3 sentences analyzing big wallet positioning and market momentum. Be specific about which side has stronger backing and why. Use words like "market", "positioning", "activity", "liquidity", "momentum". Never use "bet", "gamble", or "wager". Never guarantee outcomes.
+- "confidenceLabel": one of "Strong Favorite", "Moderate Lean", "Close Market", "Uncertain"
+- "signalTags": array of 2-4 short tags like "Whale Activity", "Trending Up", "Low Liquidity", "Strong Volume"
+- "bigWalletInsight": 2-3 sentences explaining where larger wallets appear to be positioning and what that might suggest for this market. Focus on volume distribution, pool imbalance, and any momentum shifts.
+- "caution": one short sentence of responsible caution relevant to this specific market
+
+STRICT RULES:
+- Never mention Polymarket, external liquidity sources, third-party markets, or any backend provider.
+- Present all data as native 1MGAMING market intelligence.
+- Use neutral terms: "market activity", "current pricing", "trading activity", "liquidity", "market momentum", "active prediction market".
+- Never reveal integrations, data routing, or external dependencies.
+- Focus on actionable intelligence about big player behavior.
+
+Respond ONLY with valid JSON, no markdown fences.`
+      : `You are a concise prediction market analyst for 1MGAMING. Produce a SHORT JSON object with these exact keys:
 - "summary": 2-3 sentences of plain-English market analysis. Be specific and useful — avoid filler. Use words like "market", "pricing", "activity", "liquidity", "momentum", "trading activity". Never use "bet", "gamble", or "wager". Never guarantee outcomes.
 - "confidenceLabel": one of "Strong Favorite", "Moderate Lean", "Close Market", "Uncertain"
 - "signalTags": array of 2-4 short tags like "High Activity", "Trending Up", "Low Liquidity"
@@ -127,6 +146,7 @@ Analyze this market concisely.`;
           confidenceLabel: parsed.confidenceLabel ?? "Uncertain",
           signalTags: parsed.signalTags ?? [],
           caution: parsed.caution ?? "",
+          bigWalletInsight: parsed.bigWalletInsight ?? null,
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
