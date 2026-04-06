@@ -285,7 +285,7 @@ export default function FightPredictions() {
   const loadUserEntries = useCallback(async () => {
     if (!address) return;
     try {
-      const { data } = await supabase.from("prediction_entries").select("*").eq("wallet", address);
+      const { data } = await supabase.from("prediction_entries").select("*").eq("wallet", address.toLowerCase());
       if (data) setUserEntries(data);
     } catch (err) {
       console.warn("[FightPredictions] loadUserEntries failed:", err);

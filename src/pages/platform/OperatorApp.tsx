@@ -195,7 +195,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
   const loadUserEntries = useCallback(async () => {
     if (!address) return;
-    const { data } = await supabase.from("prediction_entries").select("*").eq("wallet", address);
+    const { data } = await supabase.from("prediction_entries").select("*").eq("wallet", address.toLowerCase());
     if (data) setUserEntries(data);
   }, [address]);
 
