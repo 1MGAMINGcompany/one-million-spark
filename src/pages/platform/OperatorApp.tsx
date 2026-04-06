@@ -874,6 +874,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                       theme={theme}
                       onShareWin={handleShareWin}
                       onGraph={(f) => setGraphFight(f)}
+                      onTips={(f) => setTipsFight(f)}
                     />
                   );
                 })}
@@ -894,6 +895,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                 theme={theme}
                 onShareWin={handleShareWin}
                 onGraph={(f) => setGraphFight(f)}
+                onTips={(f) => setTipsFight(f)}
               />
             );
           })
@@ -957,6 +959,16 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           fight={graphFight}
           open={!!graphFight}
           onClose={() => setGraphFight(null)}
+          theme={theme}
+        />
+      )}
+
+      {/* Market Tips Modal */}
+      {tipsFight && (
+        <MarketTipsModal
+          fight={tipsFight}
+          open={!!tipsFight}
+          onClose={() => setTipsFight(null)}
           theme={theme}
         />
       )}
