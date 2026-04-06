@@ -5,6 +5,9 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import whoWinsBanner from "@/assets/who-wins-banner.jpeg";
 import pyramidLogo from "@/assets/1m-pyramid-logo-hd.png";
 import { supabase } from "@/integrations/supabase/client";
+import { detectDomain } from "@/lib/domainDetection";
+
+const PLATFORM_LOGO = "/images/1mg-bethebookie.png";
 
 function shortWallet(addr: string, chars = 4) {
   if (!addr || addr.length < 10) return addr;
@@ -86,8 +89,11 @@ export default function SocialShareModal(props: ShareModalProps) {
   const winAmount = amountWon ?? solWon;
   const isSolWin = amountWon == null && solWon != null;
 
-  const brandName = operatorBrandName || "1MGAMING";
-  const brandLogo = operatorLogoUrl || pyramidLogo;
+  const domain = detectDomain();
+  const isPlatform = domain.type === "platform" || domain.type === "operator";
+
+  const brandName = operatorBrandName || (isPlatform ? "1MG.live" : "1MGAMING");
+  const brandLogo = operatorLogoUrl || (isPlatform ? PLATFORM_LOGO : pyramidLogo);
 
   const cardRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
@@ -157,20 +163,11 @@ export default function SocialShareModal(props: ShareModalProps) {
             className="relative overflow-hidden rounded-2xl border border-primary/30 shadow-2xl"
             style={{ background: "hsl(var(--card))" }}
           >
-            {/* Hero image — WHO WINS? banner */}
-            <div className="relative w-full overflow-hidden">
-              <img
-                src={whoWinsBanner}
-                alt="WHO WINS?"
-                className="w-full h-auto object-cover"
-                crossOrigin="anonymous"
-              />
-              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[hsl(var(--card))]" />
-              <div className="absolute top-3 left-3 flex items-center gap-2">
-                <img src={brandLogo} alt={brandName} className="w-7 h-7 rounded" crossOrigin="anonymous" />
-                <span className="text-[11px] font-bold text-white/90 tracking-wider font-['Cinzel']">{brandName}</span>
-              </div>
-              <div className="absolute top-3 right-3">
+            {/* Hero / header */}
+            {isPlatform ? (
+              <div className="relative w-full px-5 pt-5 pb-3 flex flex-col items-center gap-2">
+                <img src={brandLogo} alt={brandName} className="w-16 h-16 rounded-xl object-contain" crossOrigin="anonymous" />
+                <span className="text-sm font-bold text-foreground tracking-wider font-['Cinzel']">{brandName}</span>
                 <span className={`text-[10px] font-extrabold px-3 py-1 rounded-full tracking-wider ${
                   variant === "prediction"
                     ? "bg-primary/90 text-primary-foreground"
@@ -179,7 +176,30 @@ export default function SocialShareModal(props: ShareModalProps) {
                   {resultLabel}
                 </span>
               </div>
-            </div>
+            ) : (
+              <div className="relative w-full overflow-hidden">
+                <img
+                  src={whoWinsBanner}
+                  alt="WHO WINS?"
+                  className="w-full h-auto object-cover"
+                  crossOrigin="anonymous"
+                />
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[hsl(var(--card))]" />
+                <div className="absolute top-3 left-3 flex items-center gap-2">
+                  <img src={brandLogo} alt={brandName} className="w-7 h-7 rounded" crossOrigin="anonymous" />
+                  <span className="text-[11px] font-bold text-white/90 tracking-wider font-['Cinzel']">{brandName}</span>
+                </div>
+                <div className="absolute top-3 right-3">
+                  <span className={`text-[10px] font-extrabold px-3 py-1 rounded-full tracking-wider ${
+                    variant === "prediction"
+                      ? "bg-primary/90 text-primary-foreground"
+                      : "bg-green-500/90 text-white"
+                  }`}>
+                    {resultLabel}
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Content body */}
             <div className="px-5 pb-5 pt-2 space-y-3">
@@ -204,8 +224,10 @@ export default function SocialShareModal(props: ShareModalProps) {
                   )}
                   {/* Hype tagline */}
                   <p className="text-[10px] text-center text-muted-foreground tracking-wide">
-                    Fight Predictions (BKFC · Muay Thai · MMA · Futbol)<br />
-                    Players vs Players • Winners take the pot
+                    {isPlatform
+                      ? <>Sports Predictions · Players vs Players<br />Winners take the pot</>
+                      : <>Fight Predictions (BKFC · Muay Thai · MMA · Futbol)<br />Players vs Players • Winners take the pot</>
+                    }
                   </p>
                 </>
               )}
@@ -304,11 +326,16 @@ export default function SocialShareModal(props: ShareModalProps) {
 }
 
 function buildCaption(p: ShareModalProps, url: string): string {
+  const domain = detectDomain();
+  const isPlatform = domain.type === "platform" || domain.type === "operator";
   const emoji = sportEmoji(p.sport);
-  const brand = p.operatorBrandName || "1MGAMING";
-  const brandAt = p.operatorBrandName ? brand : "@1MGaming";
+  const brand = p.operatorBrandName || (isPlatform ? "1MG.live" : "1MGAMING");
+  const brandAt = p.operatorBrandName ? brand : (isPlatform ? "1MG.live" : "@1MGaming");
   if (p.variant === "prediction") {
-    return `WHO WINS? 👊\n${emoji} My pick: ${p.fighterPick}${p.amountUsd ? ` | $${p.amountUsd.toFixed(2)}` : ""}\nFight Predictions (BKFC · Muay Thai · MMA · Futbol)\nPlayers vs Players • Winners take the pot\n👇 Make your pick\n🌐 ${url}`;
+    const tagline = isPlatform
+      ? "Sports Predictions · Players vs Players · Winners take the pot"
+      : "Fight Predictions (BKFC · Muay Thai · MMA · Futbol)\nPlayers vs Players • Winners take the pot";
+    return `${isPlatform ? "🎯 My Pick" : "WHO WINS? 👊"}\n${emoji} ${p.fighterPick}${p.amountUsd ? ` | $${p.amountUsd.toFixed(2)}` : ""}\n${tagline}\n👇 Make your pick\n🌐 ${url}`;
   }
   if (p.variant === "claim_win") {
     const won = p.amountWon ?? p.solWon;
