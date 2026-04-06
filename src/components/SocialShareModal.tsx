@@ -326,11 +326,16 @@ export default function SocialShareModal(props: ShareModalProps) {
 }
 
 function buildCaption(p: ShareModalProps, url: string): string {
+  const domain = detectDomain();
+  const isPlatform = domain.type === "platform" || domain.type === "operator";
   const emoji = sportEmoji(p.sport);
-  const brand = p.operatorBrandName || "1MGAMING";
-  const brandAt = p.operatorBrandName ? brand : "@1MGaming";
+  const brand = p.operatorBrandName || (isPlatform ? "1MG.live" : "1MGAMING");
+  const brandAt = p.operatorBrandName ? brand : (isPlatform ? "1MG.live" : "@1MGaming");
   if (p.variant === "prediction") {
-    return `WHO WINS? 👊\n${emoji} My pick: ${p.fighterPick}${p.amountUsd ? ` | $${p.amountUsd.toFixed(2)}` : ""}\nFight Predictions (BKFC · Muay Thai · MMA · Futbol)\nPlayers vs Players • Winners take the pot\n👇 Make your pick\n🌐 ${url}`;
+    const tagline = isPlatform
+      ? "Sports Predictions · Players vs Players · Winners take the pot"
+      : "Fight Predictions (BKFC · Muay Thai · MMA · Futbol)\nPlayers vs Players • Winners take the pot";
+    return `${isPlatform ? "🎯 My Pick" : "WHO WINS? 👊"}\n${emoji} ${p.fighterPick}${p.amountUsd ? ` | $${p.amountUsd.toFixed(2)}` : ""}\n${tagline}\n👇 Make your pick\n🌐 ${url}`;
   }
   if (p.variant === "claim_win") {
     const won = p.amountWon ?? p.solWon;
