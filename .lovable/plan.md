@@ -1,80 +1,53 @@
 
 
-# Rebrand Graph Footer + Add Tips Button to Operator Cards
+# Fix Operator Purchase Verification: Dynamic Amounts + Replay Protection
 
-## Part 1: Remove Polymarket Branding from Graph Modal
+## Problem
+1. `verifyTxOnChain` hardcodes `MIN_AMOUNT_RAW = 2400 USDC`. Partial promo discounts fail verification because the on-chain transfer is less than $2,400.
+2. No replay protection — the same `tx_hash` could activate multiple operator accounts.
+3. The `operators` table has no column to store the purchase transaction hash.
 
-**File: `src/components/operator/MarketGraphModal.tsx`**
+## Changes
 
-Lines 329-334 — change "Powered by live Polymarket data" to "Powered by 1mg.live":
+### 1. Database Migration
+Add `purchase_tx_hash` column to `operators` table with a unique constraint:
 
-```tsx
-{fight.source === "polymarket" && (
-  <p className="text-[10px] text-center" style={{ color: theme.textMuted }}>
-    Powered by 1mg.live
-  </p>
-)}
+```sql
+ALTER TABLE operators ADD COLUMN purchase_tx_hash text;
+CREATE UNIQUE INDEX idx_operators_purchase_tx_hash ON operators (purchase_tx_hash) WHERE purchase_tx_hash IS NOT NULL;
 ```
 
-Single line change, no logic impact.
+### 2. Edge Function: `supabase/functions/operator-manage/index.ts`
 
----
+**a) Make `verifyTxOnChain` accept a `minAmountRaw` parameter:**
+```typescript
+async function verifyTxOnChain(txHash: string, minAmountRaw: bigint): Promise<...>
+```
+Replace the hardcoded `MIN_AMOUNT_RAW` reference inside with the parameter. Remove the top-level `MIN_AMOUNT_RAW` constant.
 
-## Part 2: Add Tips Button + Tips Modal
+**b) Partial discount path (lines 112-114):** Pass the discounted amount:
+```typescript
+const minRaw = BigInt(Math.round(discountedPrice)) * BigInt(10 ** 6);
+const verification = await verifyTxOnChain(txHash, minRaw);
+```
 
-### 2a. Add `onTips` callback to `SimplePredictionCard`
+**c) Full-price path (lines 126-128):** Pass the full $2,400:
+```typescript
+const verification = await verifyTxOnChain(txHash, BigInt(2400) * BigInt(10 ** 6));
+```
 
-**File: `src/components/operator/SimplePredictionCard.tsx`**
+**d) Replay protection:** Before verification, check uniqueness:
+```typescript
+const { data: replay } = await sb.from("operators")
+  .select("id").eq("purchase_tx_hash", txHash).maybeSingle();
+if (replay) return jsonResp({ error: "tx_already_used" }, 409);
+```
 
-- Add `onTips?: (fight: Fight) => void` to the props interface
-- Add a `TipsButton` component next to the existing `GraphButton`, styled identically but with a `Lightbulb` icon and "Tips" label
-- Render `<TipsButton />` next to `<GraphButton />` in all card states (open, live, picked)
-
-### 2b. Create `MarketTipsModal` component
-
-**New file: `src/components/operator/MarketTipsModal.tsx`**
-
-A themed modal (same shell as `MarketGraphModal`) that:
-
-1. **Header**: "Tips" with Lightbulb icon, event title, team names
-2. **Smart Money section**: Uses existing `src/lib/smart-money.ts` to show Activity, Momentum, Whale Signal, and Quick Read — rendered as themed stat cards
-3. **AI Analysis section**: Calls the existing `prediction-ai-insight` edge function (already built, already sanitized to never mention Polymarket) to get a 2-3 sentence market summary, confidence label, signal tags, and caution note
-4. **Big Wallet Chat**: A single AI-generated paragraph explaining what large wallet activity suggests for this event, using data from smart-money signals + the AI insight summary. This uses the same `prediction-ai-insight` edge function with an enhanced prompt asking specifically about big player positioning
-5. **Footer**: "Powered by 1mg.live" (no Polymarket references)
-
-All text uses prediction-safe terminology (no "bet", "gamble", "wager"). Inherits operator theme.
-
-### 2c. Wire Tips into OperatorApp
-
-**File: `src/pages/platform/OperatorApp.tsx`**
-
-- Add `tipsFight` state (same pattern as `graphFight`)
-- Pass `onTips={(f) => setTipsFight(f)}` to each `SimplePredictionCard`
-- Render `<MarketTipsModal>` at the bottom alongside `<MarketGraphModal>`
-
-### 2d. Enhance the AI insight edge function for Tips context
-
-**File: `supabase/functions/prediction-ai-insight/index.ts`**
-
-Add an optional `mode: "tips"` parameter. When `mode === "tips"`, use an extended system prompt that also includes:
-- Big wallet activity analysis (based on volume/liquidity signals passed in)
-- Actionable positioning guidance ("Where are the big wallets leaning?")
-- All under 1mg.live branding, zero Polymarket references
-
-Same model, same endpoint, just a richer prompt for the tips use case.
-
----
+**e) Store tx_hash on activation:** In all insert/update calls within `confirm_purchase`, include `purchase_tx_hash: txHash`.
 
 ## What Does NOT Change
-- Settlement, payouts, claims — untouched
-- Auth, routing, operator themes — untouched
-- 1mgaming.com flagship — untouched
-- Graph modal logic/chart — untouched (only footer text changes)
-- Existing `PredictionInsightsPanel` on flagship — untouched
-
-## Technical Details
-- Reuses existing `prediction-ai-insight` edge function + `smart-money.ts` — no new API dependencies
-- The Tips modal is purely informational — no trading actions
-- AI responses are cached client-side (5-min TTL, same as existing insights)
-- The `prediction-ai-insight` prompt already forbids Polymarket mentions
+- Frontend (`PurchasePage.tsx`) — already sends the correct discounted amount
+- Promo code validation logic — unchanged
+- All other actions (`create_operator`, `settle_event`, etc.) — untouched
+- Gas sponsorship is handled by Privy dashboard config — no code changes needed
 
