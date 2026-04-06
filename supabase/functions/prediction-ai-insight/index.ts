@@ -146,6 +146,7 @@ Analyze this market concisely.`;
           confidenceLabel: parsed.confidenceLabel ?? "Uncertain",
           signalTags: parsed.signalTags ?? [],
           caution: parsed.caution ?? "",
+          bigWalletInsight: parsed.bigWalletInsight ?? null,
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
