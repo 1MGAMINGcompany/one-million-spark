@@ -224,8 +224,10 @@ export default function SocialShareModal(props: ShareModalProps) {
                   )}
                   {/* Hype tagline */}
                   <p className="text-[10px] text-center text-muted-foreground tracking-wide">
-                    Fight Predictions (BKFC · Muay Thai · MMA · Futbol)<br />
-                    Players vs Players • Winners take the pot
+                    {isPlatform
+                      ? <>Sports Predictions · Players vs Players<br />Winners take the pot</>
+                      : <>Fight Predictions (BKFC · Muay Thai · MMA · Futbol)<br />Players vs Players • Winners take the pot</>
+                    }
                   </p>
                 </>
               )}
