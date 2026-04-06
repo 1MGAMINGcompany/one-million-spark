@@ -395,6 +395,12 @@ Deno.serve(async (req) => {
             polymarket_last_synced_at: new Date().toISOString(),
           };
 
+          // Auto-enable trading for valid Polymarket-backed fights
+          if (fight.trading_allowed === false && fight.polymarket_outcome_a_token && fight.polymarket_outcome_b_token) {
+            updatePayload.trading_allowed = true;
+            enriched.push(`${fight.id}: auto_enabled_trading`);
+          }
+
           // ── Auto-close resolved markets ──
           if (marketResolved) {
             updatePayload.polymarket_active = false;
