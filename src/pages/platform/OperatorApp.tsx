@@ -754,7 +754,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
             }}
           />
         </div>
-      </div>
+      </div>}
 
       {/* Featured event hero */}
       {featuredEvent && activeTab === "events" && !searchQuery && (
