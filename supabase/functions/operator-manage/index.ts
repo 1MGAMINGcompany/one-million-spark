@@ -108,29 +108,39 @@ Deno.serve(async (req) => {
         }
 
         // Partial discount — still need tx verification but with lower amount
-        // For now, just verify tx normally and increment promo usage
         if (!txHash) return jsonResp({ error: "tx_hash_required_for_partial_discount", discounted_price: discountedPrice }, 400);
-        const verification = await verifyTxOnChain(txHash);
+
+        // Replay protection
+        const { data: replay } = await sb.from("operators").select("id").eq("purchase_tx_hash", txHash).maybeSingle();
+        if (replay) return jsonResp({ error: "tx_already_used" }, 409);
+
+        const minRaw = BigInt(Math.round(discountedPrice)) * BigInt(10 ** 6);
+        const verification = await verifyTxOnChain(txHash, minRaw);
         if (!verification.valid) return jsonResp({ error: verification.error || "verification_failed" }, 400);
         await sb.from("promo_codes").update({ uses_count: promo.uses_count + 1 }).eq("id", promo.id);
         const { data: existing } = await sb.from("operators").select("id, status").eq("user_id", privyDid).maybeSingle();
         if (existing) {
-          await sb.from("operators").update({ status: "active", updated_at: new Date().toISOString() }).eq("id", existing.id);
+          await sb.from("operators").update({ status: "active", purchase_tx_hash: txHash, updated_at: new Date().toISOString() }).eq("id", existing.id);
         } else {
-          await sb.from("operators").insert({ user_id: privyDid, brand_name: "My App", subdomain: "pending-" + Date.now(), status: "active" });
+          await sb.from("operators").insert({ user_id: privyDid, brand_name: "My App", subdomain: "pending-" + Date.now(), status: "active", purchase_tx_hash: txHash });
         }
         return jsonResp({ success: true, status: "active", promo_applied: true });
       }
 
       // No promo code — standard payment verification
       if (!txHash || typeof txHash !== "string" || txHash.length < 60) return jsonResp({ error: "invalid_tx_hash" }, 400);
-      const verification = await verifyTxOnChain(txHash);
+
+      // Replay protection
+      const { data: replay } = await sb.from("operators").select("id").eq("purchase_tx_hash", txHash).maybeSingle();
+      if (replay) return jsonResp({ error: "tx_already_used" }, 409);
+
+      const verification = await verifyTxOnChain(txHash, FULL_PRICE_RAW);
       if (!verification.valid) return jsonResp({ error: verification.error || "verification_failed" }, 400);
       const { data: existing } = await sb.from("operators").select("id, status").eq("user_id", privyDid).maybeSingle();
       if (existing) {
-        await sb.from("operators").update({ status: "active", updated_at: new Date().toISOString() }).eq("id", existing.id);
+        await sb.from("operators").update({ status: "active", purchase_tx_hash: txHash, updated_at: new Date().toISOString() }).eq("id", existing.id);
       } else {
-        await sb.from("operators").insert({ user_id: privyDid, brand_name: "My App", subdomain: "pending-" + Date.now(), status: "active" });
+        await sb.from("operators").insert({ user_id: privyDid, brand_name: "My App", subdomain: "pending-" + Date.now(), status: "active", purchase_tx_hash: txHash });
       }
       return jsonResp({ success: true, status: "active" });
     }
