@@ -598,10 +598,11 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         </div>
       </nav>
 
-      {/* Balance banner */}
+      {/* Balance banner — show combined smart wallet + EOA balance */}
       {isConnected && (
         <OperatorBalanceBanner
           balanceUsdce={usdc_balance}
+          eoaAddress={eoaAddress}
           theme={theme}
           onAddFunds={handleAddFunds}
         />
