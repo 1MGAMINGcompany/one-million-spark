@@ -214,7 +214,10 @@ export default function SimplePredictionCard({
               <LiveGameBadge state={liveState} theme={theme} />
             )}
           </div>
-          <GraphButton />
+          <div className="flex items-center gap-1">
+            <TipsButton />
+            <GraphButton />
+          </div>
         </div>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
