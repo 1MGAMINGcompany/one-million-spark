@@ -15,17 +15,15 @@ interface MarketTipsModalProps {
 }
 
 export default function MarketTipsModal({ fight, open, onClose, theme }: MarketTipsModalProps) {
-  if (!open || !fight) return null;
+  const nameA = fight ? resolveOutcomeName(fight.fighter_a_name, "a", fight) : "";
+  const nameB = fight ? resolveOutcomeName(fight.fighter_b_name, "b", fight) : "";
 
-  const nameA = resolveOutcomeName(fight.fighter_a_name, "a", fight);
-  const nameB = resolveOutcomeName(fight.fighter_b_name, "b", fight);
-
-  const pA = fight.price_a ?? 0;
-  const pB = fight.price_b ?? 0;
-  const poolAUsd = fight.pool_a_usd ?? 0;
-  const poolBUsd = fight.pool_b_usd ?? 0;
-  const volume = (fight as any).polymarket_volume_usd ?? 0;
-  const liquidity = (fight as any).polymarket_liquidity ?? 0;
+  const pA = fight?.price_a ?? 0;
+  const pB = fight?.price_b ?? 0;
+  const poolAUsd = fight?.pool_a_usd ?? 0;
+  const poolBUsd = fight?.pool_b_usd ?? 0;
+  const volume = (fight as any)?.polymarket_volume_usd ?? 0;
+  const liquidity = (fight as any)?.polymarket_liquidity ?? 0;
 
   const smartMoney = useMemo(() => buildSmartMoneySummary({
     priceA: pA,
@@ -37,8 +35,9 @@ export default function MarketTipsModal({ fight, open, onClose, theme }: MarketT
 
   // AI insight query
   const { data: aiInsight, isLoading: aiLoading } = useQuery({
-    queryKey: ["tips-insight", fight.id],
+    queryKey: ["tips-insight", fight?.id],
     queryFn: async () => {
+      if (!fight) return null;
       const { data, error } = await supabase.functions.invoke("prediction-ai-insight", {
         body: {
           mode: "tips",
@@ -58,8 +57,10 @@ export default function MarketTipsModal({ fight, open, onClose, theme }: MarketT
       return data;
     },
     staleTime: 5 * 60 * 1000,
-    enabled: open,
+    enabled: open && !!fight,
   });
+
+  if (!open || !fight) return null;
 
   const signalColor = (label: string) => {
     if (label.includes("Unusual") || label.includes("Large") || label.includes("Multiple") || label.includes("Building"))

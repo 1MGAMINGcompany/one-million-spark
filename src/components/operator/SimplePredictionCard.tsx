@@ -60,6 +60,7 @@ export default function SimplePredictionCard({
   theme,
   onShareWin,
   onGraph,
+  onTips,
 }: SimplePredictionCardProps) {
   const { t } = useTranslation();
   const nameA = resolveOutcomeName(fight.fighter_a_name, "a", fight);
@@ -120,7 +121,24 @@ export default function SimplePredictionCard({
         }}
       >
         <BarChart3 className="w-3 h-3" />
-        {t("operator.graph")}
+        Graph
+      </button>
+    ) : null
+  );
+
+  const TipsButton = () => (
+    onTips ? (
+      <button
+        onClick={(e) => { e.stopPropagation(); onTips(fight); }}
+        className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-all hover:opacity-80"
+        style={{
+          backgroundColor: theme.surfaceBg,
+          border: `1px solid ${theme.cardBorder}`,
+          color: theme.textSecondary,
+        }}
+      >
+        <Lightbulb className="w-3 h-3" />
+        Tips
       </button>
     ) : null
   );
