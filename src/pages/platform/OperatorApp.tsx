@@ -633,8 +633,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         </div>
       )}
 
-      {/* Level 1: Broad Sport Tabs (scrollable chips) */}
-      <div className="max-w-4xl mx-auto px-4 pt-3 space-y-2">
+      {/* Level 1: Broad Sport Tabs (scrollable chips) — hidden in My Picks */}
+      {activeTab !== "picks" && <div className="max-w-4xl mx-auto px-4 pt-3 space-y-2">
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
           {/* All Sports button → opens modal */}
           <button
