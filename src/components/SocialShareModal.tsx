@@ -163,20 +163,11 @@ export default function SocialShareModal(props: ShareModalProps) {
             className="relative overflow-hidden rounded-2xl border border-primary/30 shadow-2xl"
             style={{ background: "hsl(var(--card))" }}
           >
-            {/* Hero image — WHO WINS? banner */}
-            <div className="relative w-full overflow-hidden">
-              <img
-                src={whoWinsBanner}
-                alt="WHO WINS?"
-                className="w-full h-auto object-cover"
-                crossOrigin="anonymous"
-              />
-              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[hsl(var(--card))]" />
-              <div className="absolute top-3 left-3 flex items-center gap-2">
-                <img src={brandLogo} alt={brandName} className="w-7 h-7 rounded" crossOrigin="anonymous" />
-                <span className="text-[11px] font-bold text-white/90 tracking-wider font-['Cinzel']">{brandName}</span>
-              </div>
-              <div className="absolute top-3 right-3">
+            {/* Hero / header */}
+            {isPlatform ? (
+              <div className="relative w-full px-5 pt-5 pb-3 flex flex-col items-center gap-2">
+                <img src={brandLogo} alt={brandName} className="w-16 h-16 rounded-xl object-contain" crossOrigin="anonymous" />
+                <span className="text-sm font-bold text-foreground tracking-wider font-['Cinzel']">{brandName}</span>
                 <span className={`text-[10px] font-extrabold px-3 py-1 rounded-full tracking-wider ${
                   variant === "prediction"
                     ? "bg-primary/90 text-primary-foreground"
@@ -185,7 +176,30 @@ export default function SocialShareModal(props: ShareModalProps) {
                   {resultLabel}
                 </span>
               </div>
-            </div>
+            ) : (
+              <div className="relative w-full overflow-hidden">
+                <img
+                  src={whoWinsBanner}
+                  alt="WHO WINS?"
+                  className="w-full h-auto object-cover"
+                  crossOrigin="anonymous"
+                />
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[hsl(var(--card))]" />
+                <div className="absolute top-3 left-3 flex items-center gap-2">
+                  <img src={brandLogo} alt={brandName} className="w-7 h-7 rounded" crossOrigin="anonymous" />
+                  <span className="text-[11px] font-bold text-white/90 tracking-wider font-['Cinzel']">{brandName}</span>
+                </div>
+                <div className="absolute top-3 right-3">
+                  <span className={`text-[10px] font-extrabold px-3 py-1 rounded-full tracking-wider ${
+                    variant === "prediction"
+                      ? "bg-primary/90 text-primary-foreground"
+                      : "bg-green-500/90 text-white"
+                  }`}>
+                    {resultLabel}
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Content body */}
             <div className="px-5 pb-5 pt-2 space-y-3">
