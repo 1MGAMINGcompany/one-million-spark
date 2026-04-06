@@ -1,78 +1,80 @@
 
-What I confirmed
 
-- The wallet case fix is already in place: both `src/pages/platform/OperatorApp.tsx` and `src/pages/FightPredictions.tsx` now query `prediction_entries` with `address.toLowerCase()`.
-- That explains why `My Picks (2)` now appears: the wallet lookup is working.
-- The remaining issue is not the wallet query anymore. It is a separate display/parity problem.
+# Rebrand Graph Footer + Add Tips Button to Operator Cards
 
-Exact root causes
+## Part 1: Remove Polymarket Branding from Graph Modal
 
-1. `My Picks` count and `My Picks` cards come from different datasets.
-- In `src/pages/platform/OperatorApp.tsx`, the tab label uses `userEntries.length`.
-- But the cards are rendered from `filteredFights`, which comes from `operatorFights`.
-- `operatorFights` only includes fights that are currently:
-  - `open`, `live`, or `locked`
-  - have a valid `event_date`
-  - pass operator sport validation
-  - survive stale/old-event cutoffs
-- So the UI can correctly count 2 entries while showing zero cards if those entries belong to fights that are no longer in the active event feed.
+**File: `src/components/operator/MarketGraphModal.tsx`**
 
-2. The operator app is still applying event-browsing filters inside `My Picks`.
-- In picks mode, the code still applies:
-  - broad sport filter
-  - league filter
-  - time filter
-  - search query
-- Your screenshot shows a Baseball league filter active while you said the new prediction was NHL.
-- That means the pick can exist and still be hidden before rendering.
+Lines 329-334 — change "Powered by live Polymarket data" to "Powered by 1mg.live":
 
-3. Operator `My Picks` is not scoped to the current operator app.
-- `loadUserEntries()` fetches all entries for the wallet:
-  - no `source_operator_id` filter
-  - no current-operator scoping
-- So `/demo` can count entries from other operator apps or flagship, while the rendered fight list only knows about the current operator feed.
-- Even when the count happens to be “correct,” this is still a real mismatch in the implementation.
+```tsx
+{fight.source === "polymarket" && (
+  <p className="text-[10px] text-center" style={{ color: theme.textMuted }}>
+    Powered by 1mg.live
+  </p>
+)}
+```
 
-4. The balance banner is not guaranteed to read the same address the backend debits.
-- `OperatorApp` shows balance from `usePolygonUSDC()`.
-- `usePolygonUSDC()` reads only `walletAddress` from `usePrivyWallet()`, which prefers the smart wallet.
-- But `prediction-submit` can debit either:
-  - `wallet` (smart wallet), or
-  - `wallet_eoa`
-  depending on which address actually has allowance.
-- So the trade can succeed while the banner keeps watching the wrong address.
+Single line change, no logic impact.
 
-5. The current “Balance” UI is only a liquid-wallet read, not a full trading-balance view.
-- It does not reconcile:
-  - which address was actually charged
-  - liquid USDC.e vs funds moved for trading
-  - any “in play” exposure
-- High-confidence conclusion: this is why the number can stay unchanged even after a successful prediction.
+---
 
-Smallest safe fix plan
+## Part 2: Add Tips Button + Tips Modal
 
-Phase 1 — highest impact, lowest risk
-- Fix `My Picks` on operator apps to render from the user’s actual entry history, not from the active event browse feed.
-- Fetch the fights by the user’s `fight_id`s so picked events still appear even if they are no longer `open/live/locked`.
-- Scope operator `My Picks` to the current operator app.
-- Make the badge count use the exact same scoped dataset that the tab renders.
-- Stop applying browse filters to `My Picks`, or reset them when switching tabs.
+### 2a. Add `onTips` callback to `SimplePredictionCard`
 
-Phase 2 — balance parity
-- Align the displayed balance source with the same smart-wallet/EOA resolution used by `prediction-submit`.
-- Refetch balance immediately after a successful submit, not only on the 15s poll.
-- If needed, relabel the banner so it reflects what is actually being shown: liquid USDC.e, not total funds in play.
+**File: `src/components/operator/SimplePredictionCard.tsx`**
 
-Phase 3 — optional polish
-- Split `My Picks` into Open / Live / Settled / Claimed sections.
-- Add a small notice when user filters are hiding picks.
-- Optionally add a separate “funds in play / portfolio” summary for better Polymarket-style clarity.
+- Add `onTips?: (fight: Fight) => void` to the props interface
+- Add a `TipsButton` component next to the existing `GraphButton`, styled identically but with a `Lightbulb` icon and "Tips" label
+- Render `<TipsButton />` next to `<GraphButton />` in all card states (open, live, picked)
 
-What NOT to touch
-- Do not change payout logic.
-- Do not change claim logic.
-- Do not change settlement/reconciliation.
-- Do not change auth, routing, or operator theme logic.
-- Keep the fix isolated to:
-  - operator `My Picks` data loading/rendering
-  - operator balance source/display parity
+### 2b. Create `MarketTipsModal` component
+
+**New file: `src/components/operator/MarketTipsModal.tsx`**
+
+A themed modal (same shell as `MarketGraphModal`) that:
+
+1. **Header**: "Tips" with Lightbulb icon, event title, team names
+2. **Smart Money section**: Uses existing `src/lib/smart-money.ts` to show Activity, Momentum, Whale Signal, and Quick Read — rendered as themed stat cards
+3. **AI Analysis section**: Calls the existing `prediction-ai-insight` edge function (already built, already sanitized to never mention Polymarket) to get a 2-3 sentence market summary, confidence label, signal tags, and caution note
+4. **Big Wallet Chat**: A single AI-generated paragraph explaining what large wallet activity suggests for this event, using data from smart-money signals + the AI insight summary. This uses the same `prediction-ai-insight` edge function with an enhanced prompt asking specifically about big player positioning
+5. **Footer**: "Powered by 1mg.live" (no Polymarket references)
+
+All text uses prediction-safe terminology (no "bet", "gamble", "wager"). Inherits operator theme.
+
+### 2c. Wire Tips into OperatorApp
+
+**File: `src/pages/platform/OperatorApp.tsx`**
+
+- Add `tipsFight` state (same pattern as `graphFight`)
+- Pass `onTips={(f) => setTipsFight(f)}` to each `SimplePredictionCard`
+- Render `<MarketTipsModal>` at the bottom alongside `<MarketGraphModal>`
+
+### 2d. Enhance the AI insight edge function for Tips context
+
+**File: `supabase/functions/prediction-ai-insight/index.ts`**
+
+Add an optional `mode: "tips"` parameter. When `mode === "tips"`, use an extended system prompt that also includes:
+- Big wallet activity analysis (based on volume/liquidity signals passed in)
+- Actionable positioning guidance ("Where are the big wallets leaning?")
+- All under 1mg.live branding, zero Polymarket references
+
+Same model, same endpoint, just a richer prompt for the tips use case.
+
+---
+
+## What Does NOT Change
+- Settlement, payouts, claims — untouched
+- Auth, routing, operator themes — untouched
+- 1mgaming.com flagship — untouched
+- Graph modal logic/chart — untouched (only footer text changes)
+- Existing `PredictionInsightsPanel` on flagship — untouched
+
+## Technical Details
+- Reuses existing `prediction-ai-insight` edge function + `smart-money.ts` — no new API dependencies
+- The Tips modal is purely informational — no trading actions
+- AI responses are cached client-side (5-min TTL, same as existing insights)
+- The `prediction-ai-insight` prompt already forbids Polymarket mentions
+
