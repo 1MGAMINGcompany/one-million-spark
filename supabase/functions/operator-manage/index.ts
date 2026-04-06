@@ -37,7 +37,7 @@ const POLYGON_RPCS = [
 
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
-async function verifyTxOnChain(txHash: string): Promise<{ valid: boolean; error?: string }> {
+async function verifyTxOnChain(txHash: string, minAmountRaw: bigint): Promise<{ valid: boolean; error?: string }> {
   for (const rpc of POLYGON_RPCS) {
     try {
       const res = await fetch(rpc, {
@@ -55,7 +55,7 @@ async function verifyTxOnChain(txHash: string): Promise<{ valid: boolean; error?
         if (!log.topics || log.topics[0] !== TRANSFER_TOPIC) return false;
         const recipient = "0x" + (log.topics[2] || "").slice(26).toLowerCase();
         if (recipient !== TREASURY) return false;
-        return BigInt(log.data || "0x0") >= MIN_AMOUNT_RAW;
+        return BigInt(log.data || "0x0") >= minAmountRaw;
       });
       if (!transferLog) return { valid: false, error: "no_matching_transfer" };
       return { valid: true };
