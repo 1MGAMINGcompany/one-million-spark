@@ -27,7 +27,7 @@ function extractPrivyDid(token: string): string | null {
 const TREASURY = "0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d".toLowerCase();
 // Bridged USDC.e — canonical token for all prediction money flows (including purchase)
 const USDC_CONTRACT = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174".toLowerCase();
-const MIN_AMOUNT_RAW = BigInt(2400) * BigInt(10 ** 6);
+const FULL_PRICE_RAW = BigInt(2400) * BigInt(10 ** 6);
 
 const POLYGON_RPCS = [
   "https://polygon-bor-rpc.publicnode.com",
