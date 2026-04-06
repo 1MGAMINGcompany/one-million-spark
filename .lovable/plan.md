@@ -1,50 +1,44 @@
 
 
-# Rebrand Share Card for 1mg.live / Operator Apps
+# Fix: Predictions Not Appearing in "My Picks" + Balance Not Refreshing
 
-## Problem
-The `SocialShareModal` always shows 1mgaming.com branding:
-- The "WHO WINS?" fighter banner image (`who-wins-banner.jpeg`)
-- The gold pyramid logo (`1m-pyramid-logo-hd.png`) as fallback
-- Gold accent colors from 1mgaming.com theme
-- Tagline references "BKFC · Muay Thai · MMA · Futbol"
+## Root Cause
 
-When an operator app user on 1mg.live shares a pick, the card should show **their operator's branding** or fall back to the **1mg.live "BE THE BOOKIE..."** identity with blue accent colors.
+### Problem 1 — "My Picks" shows nothing (PRIMARY)
+**Case-sensitivity mismatch.** The database stores wallet addresses in lowercase (e.g. `0x3ed68845cf4528c80ff62094b52eeabca29db5a4`), but Privy returns checksummed mixed-case addresses (e.g. `0x3Ed68845Cf4528C80fF62094B52EEAbca29DB5A4`). PostgreSQL `eq` comparison is case-sensitive, so:
 
-## What Changes
+```sql
+-- Returns 0 rows when address has uppercase letters
+SELECT * FROM prediction_entries WHERE wallet = '0x3Ed68845Cf...'
+```
 
-### File: `src/components/SocialShareModal.tsx`
+The query at line 198 of `OperatorApp.tsx` uses `.eq("wallet", address)` without lowercasing, so it never finds the user's entries.
 
-**1. Copy the uploaded 1mg.live logo into the project**
-- Copy `user-uploads://1mg-behtebookie.png` to `public/images/1mg-bethebookie.png`
+**This also explains why the balance appears unchanged** — the prediction DID execute (trade order is `filled`, entry exists), but the user's USDC.e was spent on the Polymarket fee/trade. The balance polling (every 15s) should eventually reflect the deduction, but since it's only $1, the change may be too small to notice in the formatted display.
 
-**2. Domain-aware banner and fallback logo**
-- Import `detectDomain` from `@/lib/domainDetection`
-- When domain is `platform` or `operator`:
-  - **Remove** the "WHO WINS?" fighter banner entirely — replace with a clean header using the operator's logo (large, centered) or the 1mg.live logo
-  - Set `brandLogo` fallback to `/images/1mg-bethebookie.png` instead of the pyramid
-  - Set `brandName` fallback to `"1MG.live"` instead of `"1MGAMING"`
-- When domain is `flagship`: keep current behavior unchanged
+### Problem 2 — Balance display granularity
+The USDC balance is formatted to 2 decimal places. A $1 prediction with a 2% fee means only $0.02 was deducted from the user's actual wallet (the fee portion). The $0.98 net amount goes through Polymarket's CLOB as a trade, not directly from the user's USDC balance. So the balance change is minimal and may look unchanged.
 
-**3. Color adaptation for platform/operator context**
-- The card border currently uses `border-primary/30` which inherits gold on 1mgaming.com but should be blue on 1mg.live — this already works via CSS variables, no change needed
-- The result badge (`MY PICK`) uses `bg-primary/90` — also inherits correctly from theme
+## Fix Plan
 
-**4. Tagline text for platform/operator**
-- Change "Fight Predictions (BKFC · Muay Thai · MMA · Futbol)" to "Sports Predictions · Players vs Players · Winners take the pot" when on platform/operator domain
-- Update `buildCaption()` similarly for X/WhatsApp/Telegram share text
+### File 1: `src/pages/platform/OperatorApp.tsx`
+**Single change** — lowercase the wallet address when querying prediction_entries:
 
-**5. Share URL already correct**
-- `buildShareUrl` already returns `https://1mg.live/{subdomain}` for operator apps — no change needed
+Line 198: Change `.eq("wallet", address)` to `.eq("wallet", address.toLowerCase())`
 
-## What Does NOT Change
-- 1mgaming.com flagship share card — completely untouched
-- Share button logic, analytics logging, download/copy functions
-- Operator logo passthrough from `OperatorApp.tsx` — already works
-- Settlement, payouts, auth — untouched
+This ensures the query matches the lowercase addresses stored by the backend.
+
+### File 2: `src/pages/FightPredictions.tsx`  
+**Same fix** — line 288 also queries prediction_entries by wallet without lowercasing. Apply the same `.toLowerCase()` fix for consistency.
+
+## What is NOT Changed
+- Backend submission logic — working correctly (trade filled)
+- Balance hooks — polling already works, the small deduction is expected
+- Settlement, payouts, claims — untouched
+- Auth, routing, themes — untouched
 
 ## Expected Result
-- Operator with logo: card shows their logo prominently, clean header (no fighter banner)
-- Operator without logo: card shows the 1mg.live "BE THE BOOKIE..." logo
-- 1mgaming.com: unchanged gold pyramid + WHO WINS? banner
+- After placing a prediction, "My Picks" tab shows the entry immediately
+- Existing past entries also appear correctly
+- Balance reflects the small fee deduction on next poll cycle
 
