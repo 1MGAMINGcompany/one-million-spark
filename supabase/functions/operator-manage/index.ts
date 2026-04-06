@@ -27,7 +27,7 @@ function extractPrivyDid(token: string): string | null {
 const TREASURY = "0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d".toLowerCase();
 // Bridged USDC.e — canonical token for all prediction money flows (including purchase)
 const USDC_CONTRACT = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174".toLowerCase();
-const MIN_AMOUNT_RAW = BigInt(2400) * BigInt(10 ** 6);
+const FULL_PRICE_RAW = BigInt(2400) * BigInt(10 ** 6);
 
 const POLYGON_RPCS = [
   "https://polygon-bor-rpc.publicnode.com",
@@ -37,7 +37,7 @@ const POLYGON_RPCS = [
 
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
-async function verifyTxOnChain(txHash: string): Promise<{ valid: boolean; error?: string }> {
+async function verifyTxOnChain(txHash: string, minAmountRaw: bigint): Promise<{ valid: boolean; error?: string }> {
   for (const rpc of POLYGON_RPCS) {
     try {
       const res = await fetch(rpc, {
@@ -55,7 +55,7 @@ async function verifyTxOnChain(txHash: string): Promise<{ valid: boolean; error?
         if (!log.topics || log.topics[0] !== TRANSFER_TOPIC) return false;
         const recipient = "0x" + (log.topics[2] || "").slice(26).toLowerCase();
         if (recipient !== TREASURY) return false;
-        return BigInt(log.data || "0x0") >= MIN_AMOUNT_RAW;
+        return BigInt(log.data || "0x0") >= minAmountRaw;
       });
       if (!transferLog) return { valid: false, error: "no_matching_transfer" };
       return { valid: true };
@@ -108,29 +108,39 @@ Deno.serve(async (req) => {
         }
 
         // Partial discount — still need tx verification but with lower amount
-        // For now, just verify tx normally and increment promo usage
         if (!txHash) return jsonResp({ error: "tx_hash_required_for_partial_discount", discounted_price: discountedPrice }, 400);
-        const verification = await verifyTxOnChain(txHash);
+
+        // Replay protection
+        const { data: replay } = await sb.from("operators").select("id").eq("purchase_tx_hash", txHash).maybeSingle();
+        if (replay) return jsonResp({ error: "tx_already_used" }, 409);
+
+        const minRaw = BigInt(Math.round(discountedPrice)) * BigInt(10 ** 6);
+        const verification = await verifyTxOnChain(txHash, minRaw);
         if (!verification.valid) return jsonResp({ error: verification.error || "verification_failed" }, 400);
         await sb.from("promo_codes").update({ uses_count: promo.uses_count + 1 }).eq("id", promo.id);
         const { data: existing } = await sb.from("operators").select("id, status").eq("user_id", privyDid).maybeSingle();
         if (existing) {
-          await sb.from("operators").update({ status: "active", updated_at: new Date().toISOString() }).eq("id", existing.id);
+          await sb.from("operators").update({ status: "active", purchase_tx_hash: txHash, updated_at: new Date().toISOString() }).eq("id", existing.id);
         } else {
-          await sb.from("operators").insert({ user_id: privyDid, brand_name: "My App", subdomain: "pending-" + Date.now(), status: "active" });
+          await sb.from("operators").insert({ user_id: privyDid, brand_name: "My App", subdomain: "pending-" + Date.now(), status: "active", purchase_tx_hash: txHash });
         }
         return jsonResp({ success: true, status: "active", promo_applied: true });
       }
 
       // No promo code — standard payment verification
       if (!txHash || typeof txHash !== "string" || txHash.length < 60) return jsonResp({ error: "invalid_tx_hash" }, 400);
-      const verification = await verifyTxOnChain(txHash);
+
+      // Replay protection
+      const { data: replay } = await sb.from("operators").select("id").eq("purchase_tx_hash", txHash).maybeSingle();
+      if (replay) return jsonResp({ error: "tx_already_used" }, 409);
+
+      const verification = await verifyTxOnChain(txHash, FULL_PRICE_RAW);
       if (!verification.valid) return jsonResp({ error: verification.error || "verification_failed" }, 400);
       const { data: existing } = await sb.from("operators").select("id, status").eq("user_id", privyDid).maybeSingle();
       if (existing) {
-        await sb.from("operators").update({ status: "active", updated_at: new Date().toISOString() }).eq("id", existing.id);
+        await sb.from("operators").update({ status: "active", purchase_tx_hash: txHash, updated_at: new Date().toISOString() }).eq("id", existing.id);
       } else {
-        await sb.from("operators").insert({ user_id: privyDid, brand_name: "My App", subdomain: "pending-" + Date.now(), status: "active" });
+        await sb.from("operators").insert({ user_id: privyDid, brand_name: "My App", subdomain: "pending-" + Date.now(), status: "active", purchase_tx_hash: txHash });
       }
       return jsonResp({ success: true, status: "active" });
     }

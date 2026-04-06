@@ -863,6 +863,7 @@ export type Database = {
           fee_percent: number
           id: string
           logo_url: string | null
+          purchase_tx_hash: string | null
           status: string
           subdomain: string
           support_email: string | null
@@ -879,6 +880,7 @@ export type Database = {
           fee_percent?: number
           id?: string
           logo_url?: string | null
+          purchase_tx_hash?: string | null
           status?: string
           subdomain: string
           support_email?: string | null
@@ -895,6 +897,7 @@ export type Database = {
           fee_percent?: number
           id?: string
           logo_url?: string | null
+          purchase_tx_hash?: string | null
           status?: string
           subdomain?: string
           support_email?: string | null
