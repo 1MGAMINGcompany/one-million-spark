@@ -1,53 +1,67 @@
 
 
-# Fix Operator Purchase Verification: Dynamic Amounts + Replay Protection
+# Fix Prediction Settlement Pipeline — Result Detection Not Working
 
-## Problem
-1. `verifyTxOnChain` hardcodes `MIN_AMOUNT_RAW = 2400 USDC`. Partial promo discounts fail verification because the on-chain transfer is less than $2,400.
-2. No replay protection — the same `tx_hash` could activate multiple operator accounts.
-3. The `operators` table has no column to store the purchase transaction hash.
+## Root Cause
 
-## Changes
-
-### 1. Database Migration
-Add `purchase_tx_hash` column to `operators` table with a unique constraint:
-
-```sql
-ALTER TABLE operators ADD COLUMN purchase_tx_hash text;
-CREATE UNIQUE INDEX idx_operators_purchase_tx_hash ON operators (purchase_tx_hash) WHERE purchase_tx_hash IS NOT NULL;
+The `prediction-result-detect` edge function queries Polymarket's Gamma API using:
+```
+GET /markets?condition_id={conditionId}&limit=1
 ```
 
-### 2. Edge Function: `supabase/functions/operator-manage/index.ts`
+This filter is **broken** — it returns unrelated markets (e.g., a 2020 Biden COVID market instead of Lightning vs Sabres). The automation logs confirm every check returns `result_detect_unclear` with `outcomePrices: ["0", "0"]` from wrong markets.
 
-**a) Make `verifyTxOnChain` accept a `minAmountRaw` parameter:**
-```typescript
-async function verifyTxOnChain(txHash: string, minAmountRaw: bigint): Promise<...>
+Meanwhile, every fight in the database already has a reliable `polymarket_market_id` (numeric ID like `1552106`). Querying `/markets/{id}` returns the correct data instantly. The Lightning vs Sabres market **is resolved** on Polymarket (closed=true, prices=["0","1"], Sabres won), but our worker never sees it.
+
+**Result**: 128 fights stuck in `live`, no winners populated, no "Collect Winnings" button, no payouts.
+
+## Fix Plan (3 changes)
+
+### 1. Fix `fetchGammaMarket` to use market ID (Critical)
+
+**File**: `supabase/functions/prediction-result-detect/index.ts`
+
+Change the fetch function to prefer `polymarket_market_id` (numeric) over `condition_id`:
+
 ```
-Replace the hardcoded `MIN_AMOUNT_RAW` reference inside with the parameter. Remove the top-level `MIN_AMOUNT_RAW` constant.
+-- Current (broken):
+  /markets?condition_id={conditionId}&limit=1
 
-**b) Partial discount path (lines 112-114):** Pass the discounted amount:
-```typescript
-const minRaw = BigInt(Math.round(discountedPrice)) * BigInt(10 ** 6);
-const verification = await verifyTxOnChain(txHash, minRaw);
+-- Fixed (primary):
+  /markets/{marketId}          ← direct lookup, always correct
+
+-- Fallback (secondary):
+  /markets?condition_id={conditionId}&limit=1
+  + validate returned conditionId matches requested one
 ```
 
-**c) Full-price path (lines 126-128):** Pass the full $2,400:
-```typescript
-const verification = await verifyTxOnChain(txHash, BigInt(2400) * BigInt(10 ** 6));
-```
+Update the DB query to also select `polymarket_market_id` from `prediction_fights`. Pass it to the fetch function. If `polymarket_market_id` exists, use `/markets/{id}` directly. If not, fall back to condition_id query but verify the returned conditionId matches.
 
-**d) Replay protection:** Before verification, check uniqueness:
-```typescript
-const { data: replay } = await sb.from("operators")
-  .select("id").eq("purchase_tx_hash", txHash).maybeSingle();
-if (replay) return jsonResp({ error: "tx_already_used" }, 409);
-```
+### 2. Fix winner detection for named outcomes
 
-**e) Store tx_hash on activation:** In all insert/update calls within `confirm_purchase`, include `purchase_tx_hash: txHash`.
+**File**: `supabase/functions/prediction-result-detect/index.ts`
+
+Current `detectWinner` only checks price thresholds. But Polymarket returns `outcomes: ["Lightning", "Sabres"]` — the function needs to map outcome names to fighter_a/fighter_b using the fight's `fighter_a_name` / `fighter_b_name`. Additionally, use `polymarket_outcome_a_token` / `polymarket_outcome_b_token` for token-based matching when outcome names don't directly match.
+
+Steps:
+- Parse `outcomes` array from the market response
+- Match by token ID first (if stored), then by name similarity
+- Map the winning outcome index to `fighter_a` or `fighter_b`
+
+### 3. Run one-time remediation for stuck fights
+
+After deploying the fixed worker, manually invoke it to process the 128 stuck fights. The cron job (every 2 minutes) will handle this automatically going forward, but we should trigger one immediate run.
 
 ## What Does NOT Change
-- Frontend (`PurchasePage.tsx`) — already sends the correct discounted amount
-- Promo code validation logic — unchanged
-- All other actions (`create_operator`, `settle_event`, etc.) — untouched
-- Gas sponsorship is handled by Privy dashboard config — no code changes needed
+- My Picks UI (already correct — shows "Collect Winnings" when winner is set)
+- `prediction-auto-settle` (works correctly once fights reach `confirmed`)
+- `prediction-auto-claim` (works correctly once fights reach `settled`)
+- Balance display / polling hooks
+- Frontend prediction submission flow
+
+## Expected Outcome
+After this fix:
+1. Lightning vs Sabres → `confirmed`, winner = `fighter_b` (Sabres), user sees "You Won!" + "Collect Winnings"
+2. All 128 stuck `live` fights get checked against correct Polymarket data
+3. Future games auto-settle correctly via the 2-minute cron
 
