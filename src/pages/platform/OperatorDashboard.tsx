@@ -437,6 +437,8 @@ export default function OperatorDashboard() {
           <p>{t("operator.dashboard.feeDisclosure1")}</p>
           <p>{t("operator.dashboard.feeDisclosure2")}</p>
         </div>
+        </>
+        )}
       </div>
     </div>
   );
