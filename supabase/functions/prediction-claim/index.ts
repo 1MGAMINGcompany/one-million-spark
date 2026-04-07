@@ -97,16 +97,20 @@ async function transferUsdcToWinner(
       args: [account.address],
     });
 
-    const balanceRes = await fetch(POLYGON_RPC, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0", id: 1,
-        method: "eth_call",
-        params: [{ to: USDC_CONTRACT, data: balanceData }, "latest"],
-      }),
+    const balanceJson = await callWithFallback(async (rpc) => {
+      const res = await fetch(rpc, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0", id: 1,
+          method: "eth_call",
+          params: [{ to: USDC_CONTRACT, data: balanceData }, "latest"],
+        }),
+      });
+      const j = await res.json();
+      if (j.error || !j.result) throw new Error(j.error?.message || "no_result");
+      return j;
     });
-    const balanceJson = await balanceRes.json();
     if (balanceJson.result) {
       const balance = BigInt(balanceJson.result);
       if (balance < amountRaw) {
@@ -125,36 +129,44 @@ async function transferUsdcToWinner(
     });
 
     // Get nonce
-    const nonceRes = await fetch(POLYGON_RPC, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0", id: 2,
-        method: "eth_getTransactionCount",
-        params: [account.address, "latest"],
-      }),
+    const nonceJson = await callWithFallback(async (rpc) => {
+      const res = await fetch(rpc, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0", id: 2,
+          method: "eth_getTransactionCount",
+          params: [account.address, "latest"],
+        }),
+      });
+      const j = await res.json();
+      if (j.error || !j.result) throw new Error(j.error?.message || "no_result");
+      return j;
     });
-    const nonceJson = await nonceRes.json();
     const nonce = Number(BigInt(nonceJson.result));
 
     // Get gas price
-    const gasPriceRes = await fetch(POLYGON_RPC, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0", id: 3,
-        method: "eth_gasPrice",
-        params: [],
-      }),
+    const gasPriceJson = await callWithFallback(async (rpc) => {
+      const res = await fetch(rpc, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0", id: 3,
+          method: "eth_gasPrice",
+          params: [],
+        }),
+      });
+      const j = await res.json();
+      if (j.error || !j.result) throw new Error(j.error?.message || "no_result");
+      return j;
     });
-    const gasPriceJson = await gasPriceRes.json();
     const gasPrice = BigInt(gasPriceJson.result);
 
-    // Send transaction
+    // Send transaction — use first working RPC
     const walletClient = createWalletClient({
       account,
       chain: polygon,
-      transport: http(POLYGON_RPC),
+      transport: http(RPC_PROVIDERS[0]),
     });
 
     const txHash = await walletClient.sendTransaction({

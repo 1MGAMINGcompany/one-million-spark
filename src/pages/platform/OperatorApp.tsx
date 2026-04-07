@@ -12,7 +12,7 @@ import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
 import { usePolymarketSession } from "@/hooks/usePolymarketSession";
 import { usePolymarketPrices } from "@/hooks/usePolymarketPrices";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Globe, Trophy, Loader2, ShieldCheck, Search, CalendarPlus, ChevronDown, Zap, Copy, ExternalLink } from "lucide-react";
+import { Globe, Trophy, Loader2, ShieldCheck, Search, CalendarPlus, ChevronDown, Zap, Copy, ExternalLink, CreditCard, ArrowUpRight, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { dbg } from "@/lib/debugLog";
 import { Button } from "@/components/ui/button";
@@ -157,6 +157,9 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [sportPickerOpen, setSportPickerOpen] = useState(false);
   const [timeFilter, setTimeFilter] = useState<"all" | "today" | "week">("all");
   const [showFundsModal, setShowFundsModal] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [withdrawDest, setWithdrawDest] = useState("");
+  const [withdrawAmount, setWithdrawAmount] = useState("");
 
   // Social share state
   const [shareOpen, setShareOpen] = useState(false);
