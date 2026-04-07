@@ -12,7 +12,7 @@ import type { OperatorTheme } from "@/lib/operatorThemes";
 interface SimplePredictionCardProps {
   fight: Fight & { _broadSport?: string; _league?: string };
   onPredict: (fight: Fight, pick: "fighter_a" | "fighter_b" | "draw") => void;
-  userEntry?: { fighter_pick: string; amount_usd: number | null; claimed: boolean } | null;
+  userEntry?: { fighter_pick: string; amount_usd: number | null; claimed: boolean; reward_usd?: number | null } | null;
   onClaim?: (fightId: string) => void;
   claiming?: boolean;
   theme: OperatorTheme;
