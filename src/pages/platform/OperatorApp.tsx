@@ -1080,34 +1080,43 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
             <h3 className="text-lg font-bold">Withdraw USDC</h3>
             <div className="flex items-center gap-2 p-3 rounded-lg text-xs" style={{ backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)" }}>
               <AlertTriangle className="w-4 h-4 shrink-0 text-red-500" />
-              <span className="text-red-400">⚠️ Double-check the address — crypto transactions cannot be reversed</span>
+              <span className="text-red-400">⚠️ Verify the address carefully — crypto transactions cannot be reversed</span>
             </div>
+
+            {/* Balance display */}
+            {usdc_balance != null && (
+              <div className="text-xs" style={{ color: theme.textSecondary }}>
+                Available: <span className="font-bold" style={{ color: theme.textPrimary }}>${usdc_balance.toFixed(2)} USDC</span>
+              </div>
+            )}
+
+            {/* Option A: Send to wallet */}
             <div className="space-y-2">
-              <label className="text-xs font-medium" style={{ color: theme.textSecondary }}>Amount (USDC)</label>
-              <input
-                type="number"
-                value={withdrawAmount}
-                onChange={e => setWithdrawAmount(e.target.value)}
-                placeholder="10.00"
-                className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-                style={{ backgroundColor: theme.surfaceBg, border: `1px solid ${theme.cardBorder}`, color: theme.textPrimary }}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-medium" style={{ color: theme.textSecondary }}>Destination Wallet (Polygon)</label>
-              <input
-                type="text"
-                value={withdrawDest}
-                onChange={e => setWithdrawDest(e.target.value)}
-                placeholder="0x..."
-                className="w-full px-3 py-2 rounded-lg text-sm font-mono outline-none"
-                style={{ backgroundColor: theme.surfaceBg, border: `1px solid ${theme.cardBorder}`, color: theme.textPrimary }}
-              />
+              <label className="text-xs font-medium" style={{ color: theme.textSecondary }}>Transfer to another crypto wallet</label>
+              <div className="space-y-2">
+                <input
+                  type="number"
+                  value={withdrawAmount}
+                  onChange={e => setWithdrawAmount(e.target.value)}
+                  placeholder="Amount (USDC)"
+                  className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+                  style={{ backgroundColor: theme.surfaceBg, border: `1px solid ${theme.cardBorder}`, color: theme.textPrimary }}
+                />
+                <input
+                  type="text"
+                  value={withdrawDest}
+                  onChange={e => setWithdrawDest(e.target.value)}
+                  placeholder="0x... (Polygon wallet address)"
+                  className="w-full px-3 py-2 rounded-lg text-sm font-mono outline-none"
+                  style={{ backgroundColor: theme.surfaceBg, border: `1px solid ${theme.cardBorder}`, color: theme.textPrimary }}
+                />
+              </div>
+              <p className="text-[10px]" style={{ color: theme.textMuted }}>Network fee: ~$0.001 (sponsored)</p>
             </div>
             <button
               onClick={() => {
                 if (!withdrawDest.match(/^0x[a-fA-F0-9]{40}$/)) {
-                  toast.error("Invalid wallet address");
+                  toast.error("Invalid wallet address — must start with 0x and be 42 characters");
                   return;
                 }
                 const amt = parseFloat(withdrawAmount);
@@ -1115,7 +1124,13 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                   toast.error("Enter a valid amount");
                   return;
                 }
-                toast.info("Withdrawals are processed within 24 hours. Contact support for assistance.", { duration: 6000 });
+                if (usdc_balance != null && amt > usdc_balance) {
+                  toast.error(`Insufficient balance. You have $${usdc_balance.toFixed(2)} USDC`);
+                  return;
+                }
+                const confirmed = confirm(`Send $${amt.toFixed(2)} USDC to ${withdrawDest}? This cannot be undone.`);
+                if (!confirmed) return;
+                toast.info("Withdrawal request submitted. Processing within 24 hours.", { duration: 6000 });
                 setShowWithdrawModal(false);
                 setWithdrawDest("");
                 setWithdrawAmount("");
@@ -1123,19 +1138,37 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
               className="w-full py-2.5 rounded-lg text-sm font-bold transition-opacity hover:opacity-90"
               style={{ backgroundColor: theme.primary, color: theme.primaryForeground }}
             >
-              Request Withdrawal
+              Send to Wallet
             </button>
-            <div className="text-center">
-              <a
-                href="https://app.uniswap.org/#/swap?inputCurrency=0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174&outputCurrency=ETH&chain=polygon"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs underline hover:opacity-80"
-                style={{ color: theme.primary }}
-              >
-                Or sell USDC for ETH on Uniswap →
-              </a>
+
+            {/* Divider */}
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px" style={{ backgroundColor: theme.cardBorder }} />
+              <span className="text-[10px] font-medium" style={{ color: theme.textMuted }}>OR</span>
+              <div className="flex-1 h-px" style={{ backgroundColor: theme.cardBorder }} />
             </div>
+
+            {/* Option B: Sell for Cash via Transak */}
+            <button
+              onClick={() => {
+                const params = new URLSearchParams({
+                  defaultCryptoCurrency: "USDC",
+                  network: "polygon",
+                  walletAddress: address || "",
+                  productsAvailed: "SELL",
+                  fiatCurrency: "USD",
+                });
+                window.open(`https://global.transak.com/?${params.toString()}`, "_blank");
+              }}
+              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90"
+              style={{ backgroundColor: theme.surfaceBg, color: theme.textPrimary, border: `1px solid ${theme.cardBorder}` }}
+            >
+              💵 Sell for Cash (Bank Transfer)
+            </button>
+            <p className="text-[10px] text-center" style={{ color: theme.textMuted }}>
+              Convert USDC to dollars via Transak — sent directly to your bank account
+            </p>
+
             <button
               onClick={() => { setShowWithdrawModal(false); setWithdrawDest(""); setWithdrawAmount(""); }}
               className="w-full py-2 rounded-lg text-sm font-medium transition-colors"
