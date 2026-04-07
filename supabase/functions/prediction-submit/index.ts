@@ -927,7 +927,7 @@ Deno.serve(async (req) => {
     if (isPolymarketBacked) {
       const { data: pmSession } = await supabase
         .from("polymarket_user_sessions")
-        .select("id, status, safe_deployed, approvals_set")
+        .select("id, status, safe_deployed, approvals_set, pm_api_key, pm_trading_key, expires_at")
         .eq("wallet", normalizedWallet)
         .in("status", ["active", "pending"])
         .order("created_at", { ascending: false })
@@ -940,6 +940,24 @@ Deno.serve(async (req) => {
         });
         return json({
           error: "Trading wallet not set up. Please complete setup first.",
+          error_code: "trading_wallet_setup_required",
+        }, 403);
+      }
+
+      // Tighten: reject partial/incomplete sessions before fee collection
+      const isExpired = pmSession.expires_at && new Date(pmSession.expires_at).getTime() < Date.now();
+      const isReady = pmSession.status === "active" && pmSession.safe_deployed && pmSession.approvals_set && pmSession.pm_api_key && pmSession.pm_trading_key && !isExpired;
+      if (!isReady) {
+        await auditLog(supabase, null, normalizedWallet, "pm_session_not_ready", { fight_id }, {
+          status: pmSession.status,
+          safe_deployed: pmSession.safe_deployed,
+          approvals_set: pmSession.approvals_set,
+          has_api_key: !!pmSession.pm_api_key,
+          has_trading_key: !!pmSession.pm_trading_key,
+          expired: !!isExpired,
+        });
+        return json({
+          error: "Trading wallet setup incomplete. Please complete setup first.",
           error_code: "trading_wallet_setup_required",
         }, 403);
       }
