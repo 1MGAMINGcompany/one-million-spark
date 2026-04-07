@@ -226,12 +226,12 @@ Deno.serve(async (req) => {
     }
 
     // Fetch fights that have a Polymarket ID and are in an unresolved status
+    // Also include fights that have a winner but got reverted to wrong status (recovery path)
     const { data: fights, error: fetchErr } = await supabase
       .from("prediction_fights")
       .select(
-        "id, fighter_a_name, fighter_b_name, polymarket_condition_id, polymarket_market_id, polymarket_outcome_a_token, polymarket_outcome_b_token, status, winner",
+        "id, fighter_a_name, fighter_b_name, polymarket_condition_id, polymarket_market_id, polymarket_outcome_a_token, polymarket_outcome_b_token, status, winner, confirmed_at, settled_at",
       )
-      .is("winner", null)
       .in("status", ["live", "locked", "open"])
       .order("event_date", { ascending: false, nullsFirst: false })
       .limit(100);
@@ -241,13 +241,41 @@ Deno.serve(async (req) => {
       return json({ detected: 0, message: "No unresolved Polymarket fights" });
     }
 
-    // Filter to fights that have at least one Polymarket identifier
-    const eligibleFights = fights.filter(
-      (f: FightRow) => f.polymarket_market_id || f.polymarket_condition_id,
+    // Recovery: fights that already have a winner but are stuck in wrong status
+    const recoveryFights = (fights as any[]).filter(
+      (f) => f.winner && ["live", "locked", "open"].includes(f.status),
+    );
+    for (const f of recoveryFights) {
+      const claimsOpenAt = new Date(Date.now() + CLAIMS_DELAY_MS).toISOString();
+      await supabase.from("prediction_fights")
+        .update({
+          status: "confirmed",
+          confirmed_at: f.confirmed_at || new Date().toISOString(),
+          claims_open_at: claimsOpenAt,
+        })
+        .eq("id", f.id)
+        .in("status", ["live", "locked", "open"]);
+      
+      await supabase.from("automation_logs").insert({
+        action: "result_detect_recovery",
+        fight_id: f.id,
+        source: "prediction-result-detect",
+        details: { winner: f.winner, from_status: f.status, reason: "winner_already_set_but_status_wrong" },
+      });
+      console.log(`[result-detect] RECOVERY: fight ${f.id} winner=${f.winner} status=${f.status} → confirmed`);
+    }
+
+    // Filter to only fights that still need winner detection
+    const unresolvedFights = (fights as any[]).filter((f) => !f.winner);
+
+    // Filter to fights that have at least one Polymarket identifier and no winner yet
+    const eligibleFights = unresolvedFights.filter(
+      (f: any) => f.polymarket_market_id || f.polymarket_condition_id,
     );
 
+    const recovered = recoveryFights.length;
     if (eligibleFights.length === 0) {
-      return json({ detected: 0, message: "No fights with Polymarket IDs" });
+      return json({ detected: 0, recovered, message: "No fights with Polymarket IDs needing detection" });
     }
 
     const now = new Date();
