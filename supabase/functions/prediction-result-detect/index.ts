@@ -234,7 +234,7 @@ Deno.serve(async (req) => {
       .is("winner", null)
       .in("status", ["live", "locked", "open"])
       .order("event_date", { ascending: false, nullsFirst: false })
-      .limit(500);
+      .limit(100);
 
     if (fetchErr) throw fetchErr;
     if (!fights || fights.length === 0) {
