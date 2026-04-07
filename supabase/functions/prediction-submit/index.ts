@@ -922,6 +922,30 @@ Deno.serve(async (req) => {
     }
 
     // ═══════════════════════════════════════════════════
+    // 5b) EARLY PM SESSION CHECK — before any fee collection
+    // ═══════════════════════════════════════════════════
+    if (isPolymarketBacked) {
+      const { data: pmSession } = await supabase
+        .from("polymarket_user_sessions")
+        .select("id, status, safe_deployed, approvals_set")
+        .eq("wallet", normalizedWallet)
+        .in("status", ["active", "pending"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!pmSession) {
+        await auditLog(supabase, null, normalizedWallet, "pm_early_session_check_failed", { fight_id }, {
+          reason: "no_trading_session_before_fee",
+        });
+        return json({
+          error: "Trading wallet not set up. Please complete setup first.",
+          error_code: "trading_wallet_setup_required",
+        }, 403);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════
     // 6) EXPLICIT FEE MODEL
     // ═══════════════════════════════════════════════════
     // Source-aware fee: match frontend logic exactly
@@ -1472,7 +1496,7 @@ Deno.serve(async (req) => {
 
         return json({
           error: "Trading session not set up. Please complete Polymarket wallet setup first.",
-          error_code: "no_trading_session",
+          error_code: "trading_wallet_setup_required",
           trade_order_id: tradeOrderId,
         }, 403);
       }
