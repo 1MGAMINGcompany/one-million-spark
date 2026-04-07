@@ -436,52 +436,38 @@ Deno.serve(async (req) => {
 
       let pmRewardUsd = 0;
 
-      if (hasRealPMOrder) {
-        // Real Polymarket trades: each winning share resolves to exactly $1.00
-        const totalFilledShares = (tradeOrders || []).reduce(
-          (s: number, o: any) => s + Number(o.filled_shares || 0), 0,
-        );
-        pmRewardUsd = Number(totalFilledShares.toFixed(6));
-      } else {
-        // Local-only simulation: no real PM order was placed.
-        // Use local pool math based on actual USDC stakes, NOT the global PM pool.
-        const userStake = (tradeOrders || []).reduce(
-          (s: number, o: any) => s + Number(o.filled_amount_usdc || 0), 0,
-        );
+      if (!hasRealPMOrder) {
+        // No real Polymarket order was placed — there are no on-chain tokens to redeem.
+        // Mark entries as not_executed so the UI shows the correct state.
+        await supabase.from("prediction_entries")
+          .update({
+            polymarket_status: "not_executed",
+          })
+          .in("id", entryIds);
 
-        // Get ALL trade orders for this fight to compute the local pool
-        const { data: allFightOrders } = await supabase
-          .from("prediction_trade_orders")
-          .select("filled_amount_usdc, side")
-          .eq("fight_id", fight_id)
-          .in("status", ["filled", "submitted"]);
+        await supabase.from("automation_logs").insert({
+          action: "claim_rejected_no_pm_order",
+          source: "prediction-claim",
+          fight_id,
+          details: {
+            wallet: walletLower,
+            entries: entryIds.length,
+            note: "No polymarket_order_id — trade was never executed on Polymarket CLOB",
+          },
+        });
 
-        const localPool = (allFightOrders || []).reduce(
-          (s: number, o: any) => s + Number(o.filled_amount_usdc || 0), 0,
-        );
-
-        // Winner side orders total
-        const winningSide = fight.winner === "fighter_a" ? "BUY" : "BUY";
-        // All orders on the winning side — but since the user picked the winner,
-        // their proportional share of the total local pool is the reward
-        const winnerStakeTotal = (allFightOrders || []).reduce(
-          (s: number, o: any) => s + Number(o.filled_amount_usdc || 0), 0,
-        );
-
-        // Simple: winner takes their proportional share of the full local pool
-        // Since there's only one user in demo, reward = localPool
-        pmRewardUsd = winnerStakeTotal > 0
-          ? Number(((userStake / winnerStakeTotal) * localPool).toFixed(6))
-          : userStake;
-
-        console.log(`[prediction-claim] Local-only PM event: userStake=$${userStake}, localPool=$${localPool}, reward=$${pmRewardUsd}`);
+        return json({
+          error: "This prediction was never executed on Polymarket. No position exists to claim.",
+          error_code: "no_pm_order",
+          entries: entryIds.length,
+        }, 400);
       }
 
-      // Fallback: estimate from entry shares if no trade orders found at all
-      if (pmRewardUsd <= 0) {
-        const entryShares = entries.reduce((s: number, e: any) => s + Number(e.shares || 0), 0);
-        pmRewardUsd = entryShares / 100;
-      }
+      // Real Polymarket trades: each winning share resolves to exactly $1.00
+      const totalFilledShares = (tradeOrders || []).reduce(
+        (s: number, o: any) => s + Number(o.filled_shares || 0), 0,
+      );
+      pmRewardUsd = Number(totalFilledShares.toFixed(6));
 
       if (pmRewardUsd <= 0) {
         return json({ error: "No winning shares found in trade orders" }, 400);
@@ -489,40 +475,6 @@ Deno.serve(async (req) => {
 
       if (pmRewardUsd > MAX_CLAIM_USD) {
         return json({ error: "Claim exceeds safety limit — contact support", max_usd: MAX_CLAIM_USD, reward_usd: pmRewardUsd }, 400);
-      }
-
-      // 2. For local-only trades, skip CTF redemption entirely
-      if (!hasRealPMOrder) {
-        // Mark as claimed with the correct (small) reward — no on-chain action needed
-        await supabase.from("prediction_entries")
-          .update({
-            claimed: true,
-            reward_usd: pmRewardUsd,
-            reward_lamports: 0,
-            polymarket_status: "local_settled",
-          })
-          .in("id", entryIds);
-
-        await supabase.from("automation_logs").insert({
-          action: "local_pm_claim_settled",
-          source: "prediction-claim",
-          fight_id,
-          details: {
-            wallet: walletLower,
-            reward_usd: pmRewardUsd,
-            entries: entryIds.length,
-            note: "Local-only simulation — no Polymarket order was executed",
-          },
-        });
-
-        return json({
-          success: true,
-          reward_usd: pmRewardUsd,
-          entries_claimed: entryIds.length,
-          payout_method: "local_pool",
-          source: "polymarket_local",
-          message: "Prediction settled with local pool math. No Polymarket position existed.",
-        });
       }
 
       // 3. Real PM order path: Get PM session for derived wallet credentials

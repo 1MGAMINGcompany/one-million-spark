@@ -1416,42 +1416,36 @@ Deno.serve(async (req) => {
             });
           }
         } else {
-          // CLOB rejection — detect geo-block and fall through to native pool
+          // CLOB rejection — Polymarket order was NOT placed.
+          // Do NOT fall through to native pool — return a clear error so the UI
+          // does not create a fake "filled" entry that looks claimable.
           const isGeoBlock = orderResult.error?.includes("restricted in your region") ||
             orderResult.error?.includes("403") ||
             orderResult.status === "clob_error";
 
-          if (isGeoBlock) {
-            // Geo-blocked: fall through to native pool accounting instead of failing
-            useNativePool = true;
-            polymarket_status = "clob_geo_blocked";
+          const errorCode = isGeoBlock ? "clob_geo_blocked" : "clob_rejected";
+          const errorMsg = isGeoBlock
+            ? "Polymarket is restricted in your region. Order was not placed."
+            : "Order was rejected by the exchange. Please try again.";
 
-            await auditLog(supabase, tradeOrderId, normalizedWallet, "clob_geo_blocked_fallback", null, {
-              clob_error: orderResult.error?.substring(0, 200),
-              fallback: "native_pool",
-            });
+          await updateTradeOrder(supabase, tradeOrderId, {
+            status: "failed",
+            error_code: errorCode,
+            error_message: orderResult.error?.substring(0, 500) || errorMsg,
+            finalized_at: new Date().toISOString(),
+          });
 
-            console.log(`[prediction-submit] CLOB geo-blocked for ${normalizedWallet} — falling through to native pool`);
-          } else {
-            // Non-geo-block CLOB rejection — still fall to native pool for now
-            useNativePool = true;
-            polymarket_status = orderResult.status;
+          await auditLog(supabase, tradeOrderId, normalizedWallet, "clob_order_failed_no_fallback", null, {
+            clob_error: orderResult.error?.substring(0, 200),
+            clob_status: orderResult.status,
+            error_code: errorCode,
+          });
 
-            await updateTradeOrder(supabase, tradeOrderId, {
-              error_code: "clob_rejected",
-              error_message: orderResult.error
-                ? orderResult.error.substring(0, 500)
-                : "CLOB order rejected",
-            });
-
-            await auditLog(supabase, tradeOrderId, normalizedWallet, "clob_rejected_native_fallback", null, {
-              reason: "clob_rejected",
-              clob_status: orderResult.status,
-              clob_error: orderResult.error?.substring(0, 200),
-            });
-
-            console.log(`[prediction-submit] CLOB rejected for ${normalizedWallet} — falling through to native pool`);
-          }
+          return json({
+            error: errorMsg,
+            error_code: errorCode,
+            trade_order_id: tradeOrderId,
+          }, isGeoBlock ? 403 : 502);
         }
 
         if (!useNativePool) {
@@ -1459,6 +1453,28 @@ Deno.serve(async (req) => {
             `[prediction-submit] Polymarket order: user=${normalizedWallet}, token=${tokenId}, amount=$${net_amount_usdc}, price=${expectedPrice}, status=${polymarket_status}, fee_collected=${feeCollected}`,
           );
         }
+      }
+
+      // If no CLOB session exists, the order cannot be placed on Polymarket.
+      // Do NOT create a fake "filled" entry — return an error.
+      if (useNativePool) {
+        await updateTradeOrder(supabase, tradeOrderId, {
+          status: "failed",
+          error_code: "no_trading_session",
+          error_message: "No Polymarket trading session. Complete wallet setup first.",
+          finalized_at: new Date().toISOString(),
+        });
+
+        await auditLog(supabase, tradeOrderId, normalizedWallet, "pm_trade_rejected_no_session", null, {
+          reason: "no_clob_session",
+          note: "native_pool_fallback_removed",
+        });
+
+        return json({
+          error: "Trading session not set up. Please complete Polymarket wallet setup first.",
+          error_code: "no_trading_session",
+          trade_order_id: tradeOrderId,
+        }, 403);
       }
 
       // If we need native pool fallback (no creds, geo-blocked, or CLOB rejected)
