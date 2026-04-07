@@ -159,5 +159,6 @@ export function usePolygonUSDC(): PolygonUSDCBalance & { refetch: () => void } {
     symbol: "USDC",
     is_loading: isLoading,
     error,
+    refetch: fetchData,
   };
 }
