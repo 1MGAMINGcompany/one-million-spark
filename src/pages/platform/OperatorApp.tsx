@@ -428,8 +428,16 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         const approved = await ensureAllowance(feeUsdc);
         if (!approved) { setSubmitting(false); return; }
       }
-      const { data, error } = await supabase.functions.invoke("prediction-submit", {
-        body: {
+      // Use fetch directly so we can read the JSON body on non-2xx responses
+      const submitUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/prediction-submit`;
+      const submitResp = await fetch(submitUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-privy-token": privyToken,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({
           fight_id: selectedFight.id,
           wallet: address,
           wallet_eoa: eoaAddress ?? undefined,
@@ -437,14 +445,17 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           amount_usd: amountUsd,
           chain: "polygon",
           source_operator_id: operator?.id,
-        },
-        headers: { "x-privy-token": privyToken },
+        }),
       });
-      if (error || data?.error) {
-        const msg = data?.error || error?.message || "Backend error";
+      const data = await submitResp.json().catch(() => ({}));
+      if (!submitResp.ok || data?.error) {
+        const msg = data?.error || "Backend error";
         const errorCode = data?.error_code || "";
         if (errorCode === "trading_wallet_setup_required" || errorCode === "no_trading_session") {
-          toast.error(t("operator.tradingWalletNeeded"));
+          toast.error(t("operator.tradingWalletNeeded"), {
+            description: "Setting up your trading wallet…",
+            duration: 6000,
+          });
           setupTradingWallet().catch(() => {});
           setSubmitting(false);
           return;

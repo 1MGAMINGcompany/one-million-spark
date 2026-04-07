@@ -568,24 +568,32 @@ export default function FightPredictions() {
       }
 
       // Step 4: Submit prediction — backend handles fee collection via relayer
+      // Use fetch directly so we can read JSON body on non-2xx responses (e.g. 403)
       dbg("predict:step4_submit", { fightId: selectedFight.id, amount: amountUsd });
-      const { data, error } = await supabase.functions.invoke("prediction-submit", {
-        body: {
+      const submitUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/prediction-submit`;
+      const submitResp = await fetch(submitUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-privy-token": privyToken,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({
           fight_id: selectedFight.id,
           wallet: address,
           wallet_eoa: eoaAddress ?? undefined,
           fighter_pick: selectedPick,
           amount_usd: amountUsd,
           chain: "polygon",
-        },
-        headers: { "x-privy-token": privyToken },
+        }),
       });
+      const data = await submitResp.json().catch(() => ({}));
 
-      if (error || data?.error) {
-        const backendMsg = data?.error || error?.message || "Backend error";
+      if (!submitResp.ok || data?.error) {
+        const backendMsg = data?.error || "Backend error";
         const errorCode = data?.error_code || "";
         const isRelayerError = errorCode.startsWith("rpc_") || errorCode === "relayer_not_configured" || errorCode === "relayer_tx_failed" || errorCode === "fee_collection_failed";
-        const isSetupRequired = errorCode === "trading_wallet_setup_required";
+        const isSetupRequired = errorCode === "trading_wallet_setup_required" || errorCode === "no_trading_session";
         dbg("predict:backend_error", { backendMsg, errorCode, isRelayerError, isSetupRequired });
         const isGeoBlocked = errorCode === "geo_blocked" || backendMsg.toLowerCase().includes("region") || backendMsg.toLowerCase().includes("restricted") || backendMsg.toLowerCase().includes("geo");
         if (isGeoBlocked) {
