@@ -12,7 +12,7 @@ import type { OperatorTheme } from "@/lib/operatorThemes";
 interface SimplePredictionCardProps {
   fight: Fight & { _broadSport?: string; _league?: string };
   onPredict: (fight: Fight, pick: "fighter_a" | "fighter_b" | "draw") => void;
-  userEntry?: { fighter_pick: string; amount_usd: number | null; claimed: boolean; reward_usd?: number | null } | null;
+  userEntry?: { fighter_pick: string; amount_usd: number | null; claimed: boolean; reward_usd?: number | null; polymarket_status?: string | null; polymarket_order_id?: string | null } | null;
   onClaim?: (fightId: string) => void;
   claiming?: boolean;
   theme: OperatorTheme;
@@ -146,6 +146,13 @@ export default function SimplePredictionCard({
   // Settled state
   if (isSettled && fight.winner) {
     const winnerName = fight.winner === "fighter_a" ? nameA : nameB;
+
+    // Detect if this was a Polymarket fight where the user's trade was never executed
+    const isPolymarketFight = !!(fight as any).polymarket_market_id;
+    const hasNoRealOrder = isPolymarketFight && userPicked && !userEntry?.polymarket_order_id;
+    const isNotExecuted = userEntry?.polymarket_status === "not_executed";
+    const orderNeverExecuted = hasNoRealOrder || isNotExecuted;
+
     return (
       <div className="rounded-2xl p-5" style={cardStyle}>
         {sportLeagueLabel && (
@@ -161,7 +168,14 @@ export default function SimplePredictionCard({
         </p>
         {userPicked && (
           <div className="text-center mt-3">
-            {userWon ? (
+            {orderNeverExecuted ? (
+              <>
+                <p className="text-amber-400 font-bold text-sm">⚠️ Trade Not Executed</p>
+                <p className="text-xs mt-1" style={{ color: theme.textMuted }}>
+                  Your order was not placed on the exchange. No funds were committed.
+                </p>
+              </>
+            ) : userWon ? (
               <>
                 <p className="text-green-500 font-bold text-sm">{t("operator.youWon")}</p>
                 {userEntry?.reward_usd != null && userEntry.reward_usd > 0 && (
