@@ -210,6 +210,13 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
   useEffect(() => { loadUserEntries(); }, [loadUserEntries]);
 
+  // Auto-refresh user entries every 15s so settlement results appear without manual reload
+  useEffect(() => {
+    if (!address) return;
+    const interval = setInterval(loadUserEntries, 15_000);
+    return () => clearInterval(interval);
+  }, [address, loadUserEntries]);
+
   // ── Fetch fights for My Picks independently (includes settled/locked/finished) ──
   const userFightIds = useMemo(() => userEntries.map((e: any) => e.fight_id), [userEntries]);
   const { data: picksFights } = useQuery({
@@ -223,7 +230,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       return (data || []) as Fight[];
     },
     enabled: userFightIds.length > 0,
-    staleTime: 30_000,
+    staleTime: 10_000,
+    refetchInterval: 15_000,
   });
 
   // ── STRICT client-side validation pipeline ──

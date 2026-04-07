@@ -268,13 +268,14 @@ Deno.serve(async (req) => {
     // Filter to only fights that still need winner detection
     const unresolvedFights = (fights as any[]).filter((f) => !f.winner);
 
-    // Filter to fights that have at least one Polymarket identifier
-    const eligibleFights = fights.filter(
-      (f: FightRow) => f.polymarket_market_id || f.polymarket_condition_id,
+    // Filter to fights that have at least one Polymarket identifier and no winner yet
+    const eligibleFights = unresolvedFights.filter(
+      (f: any) => f.polymarket_market_id || f.polymarket_condition_id,
     );
 
+    const recovered = recoveryFights.length;
     if (eligibleFights.length === 0) {
-      return json({ detected: 0, message: "No fights with Polymarket IDs" });
+      return json({ detected: 0, recovered, message: "No fights with Polymarket IDs needing detection" });
     }
 
     const now = new Date();
