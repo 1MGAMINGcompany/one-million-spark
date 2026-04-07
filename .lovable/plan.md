@@ -1,68 +1,69 @@
 
 
-# Fix Claim Failed + Balance Issues
+# Fix Plan: Wrong Reward Amount ($98) + Share Card Logo
 
-## Problem Summary
+## Issue 1: $98 Reward is Fictional
 
-Two issues:
+**Root cause**: The claim function calculates reward as `filled_shares × $1.00`. For this user:
+- `filled_shares = 98` (from `prediction_trade_orders`)
+- So reward = 98 × $1.00 = **$98.00**
 
-1. **"Claim Failed"**: The `prediction-claim` function uses **parimutuel pool math** (`userShares / totalWinningShares * totalPool`) for ALL events, including Polymarket-backed ones. Since `pool_a_usd` and `pool_b_usd` reflect the entire Polymarket pool (millions of dollars) but `shares_a`/`shares_b` only track local user shares (~98), the calculated reward is absurdly large (e.g. $1.6M), which exceeds the $500 safety cap → 400 error.
+But `98` is the **native share count** (100 shares per $1, at $0.01/share). The actual stake was only **$0.98** (`filled_amount_usdc = 0.98`). Additionally, `polymarket_order_id` is null for all this user's trades — meaning the orders were **never actually executed on Polymarket's CLOB**. There are no conditional tokens on-chain to redeem. The CTF redemption silently fails, the $98 reward gets written to the database, and the balance never changes because no real money moved.
 
-2. **Balance not changing**: The claim never succeeds, so no payout is sent. Additionally, the current architecture tries to pay from a "treasury wallet" via `transferUsdcToWinner()`, but there is no treasury — all funds flow through Polymarket directly.
+**Why balance is stuck at $2.44**: The "Collect Winnings" button triggered the claim, which marked the entry as `claimed: true` with `polymarket_status: redemption_pending` — but the CTF redemption returned nothing (no tokens exist), and the USDC transfer from the derived EOA found $0 balance. So the entry says "claimed" but nothing was paid.
 
-## Root Cause
+**The fix**: When `polymarket_order_id` is null, the trade was simulated locally, not placed on Polymarket. The reward calculation must use the actual cost basis (`filled_amount_usdc`) and pool odds, not the $1-per-share Polymarket resolution model.
 
-For Polymarket-backed events, winnings are held **in the user's Polymarket position** (via their derived EOA / Gnosis Safe). When a market resolves, the user's winning conditional tokens can be redeemed for USDC directly on the CTF Exchange contract. The current code ignores this entirely and tries to do a treasury-to-user USDC transfer that doesn't exist.
+### Changes
 
-## Fix Plan
+**File: `supabase/functions/prediction-claim/index.ts`** (lines 421-555)
 
-### 1. Rewrite Polymarket claim path in `prediction-claim`
+In the Polymarket claim path:
+- Check if `polymarket_order_id` exists in trade orders
+- If **no real PM order**: skip CTF redemption entirely. Calculate reward using local pool math: `(userShares / totalWinningShares) × totalPool` with the *local* shares/pool values (shares_b=98, pool from local entries only, not Polymarket's $1.6M pool)
+- If **real PM order exists**: keep current CTF redemption path but use `filled_amount_usdc / avg_fill_price` for accurate share count
 
-**File**: `supabase/functions/prediction-claim/index.ts`
+Also fix the pool values used in reward calculation — currently `pool_a_usd` and `pool_b_usd` contain the **entire Polymarket market pool** ($1.6M), not local user deposits. The local pool is just the sum of `filled_amount_usdc` from all `prediction_trade_orders` for this fight.
 
-Remove the treasury payout for Polymarket events entirely. Replace with:
+Specific logic:
+```
+// If no polymarket_order_id → local simulation, use local pool
+const hasRealPMOrder = tradeOrders.some(o => o.polymarket_order_id);
 
-- Look up the user's `prediction_trade_orders` for this fight to get `filled_shares` and `avg_fill_price`
-- Calculate reward as: `filled_shares × $1.00` (each winning share resolves to $1 on Polymarket)
-- Subtract the original cost: `profit = reward - (filled_shares × avg_fill_price)`
-- Use the user's Polymarket session credentials (`pm_api_key`, `pm_api_secret`, `pm_passphrase`) to call the Polymarket CLOB API to redeem/merge winning conditional tokens
-- If redemption isn't available yet (market not fully resolved on-chain), mark entries as `redemption_pending` and let the auto-claim worker handle it later
-- Update `prediction_entries` with the actual reward amount
+if (!hasRealPMOrder) {
+  // Sum all local entries' filled_amount_usdc for this fight as the pool
+  const localPool = allFightOrders.reduce(sum filled_amount_usdc)
+  const userStake = userOrders.reduce(sum filled_amount_usdc)  
+  // Winner takes proportional share of local pool
+  reward = (userStake / winnerTotalStake) * localPool
+  // Skip CTF redemption — no on-chain position exists
+}
+```
 
-Key changes:
-- Remove `calculateReward()` usage for Polymarket events
-- Remove `transferUsdcToWinner()` call for Polymarket events  
-- Add CTF redemption via Polymarket API using stored user credentials
-- The reward goes directly to the user's derived EOA, then can be withdrawn to their Privy wallet
+**File: `supabase/functions/prediction-auto-claim/index.ts`**
 
-### 2. Rewrite Polymarket claim path in `prediction-auto-claim`
+Same fix — detect null `polymarket_order_id` and use local pool math instead of `filled_shares × $1.00`.
 
-**File**: `supabase/functions/prediction-auto-claim/index.ts`
+### Data Repair
 
-Same logic change — stop using parimutuel math and treasury transfers for Polymarket events. Instead:
-- For each unclaimed winning entry on a Polymarket fight, look up the trade order
-- Calculate reward from `filled_shares × $1.00`  
-- Trigger CTF redemption using stored PM credentials
-- Mark entries as claimed with accurate `reward_usd`
+Reset the incorrectly claimed entry so it can be re-claimed with correct math:
+- Entry `3b12bf1f`: set `claimed = false`, `reward_usd = null`, `polymarket_status = 'pending'`
 
-### 3. Fix reward display in the card
+## Issue 2: Share Card Logo Too Small
 
-**File**: `src/components/operator/SimplePredictionCard.tsx`
+**Root cause**: In `SocialShareModal.tsx` line 169, the logo is rendered at `w-16 h-16` (64×64 CSS pixels). On a phone screen this is tiny, especially for operator logos that may have text in them.
 
-Currently the card shows "You Won!" but no dollar amount. After the claim function returns the correct `reward_usd`, add display of the winnings amount on the settled card (e.g., "+$0.98").
+**File: `src/components/SocialShareModal.tsx`** (line 169)
 
-### 4. Add withdraw-to-wallet flow (if needed)
+- Increase logo from `w-16 h-16` to `w-28 h-28` (112px)
+- Keep `object-contain` so it scales proportionally
+- Add `bg-white/5 p-2` for visual padding around the logo
 
-After CTF redemption, USDC lands in the user's **derived EOA** (the Polymarket trading wallet), not their main Privy embedded wallet. The existing balance hook (`usePolygonUSDC`) checks the Privy wallet address. We may need a "withdraw" step or update the balance display to also show the derived EOA balance.
+## Summary
 
-## What Does NOT Change
-- Frontend claim button and toast logic (already correct)
-- Fight status detection and scheduling (already fixed)
-- Balance polling hooks (already poll every 15s)
-- Native/manual event claim path (keeps parimutuel math)
-
-## Expected Outcome
-- Clicking "Collect Winnings" triggers CTF redemption on Polymarket
-- User sees accurate reward amount (~$0.98 for a $1.00 winning bet at ~0.50 odds)
-- Balance updates once USDC is redeemed to their trading wallet
+| Issue | Root Cause | Fix |
+|-------|-----------|-----|
+| $98 reward | `filled_shares(98) × $1` treats native shares as PM shares | Use `filled_amount_usdc` and local pool math when `polymarket_order_id` is null |
+| Balance unchanged | CTF redemption fails silently (no on-chain position) | Skip CTF for non-PM-executed trades; use local pool payout |
+| Logo too small | `w-16 h-16` on share card | Increase to `w-28 h-28` |
 
