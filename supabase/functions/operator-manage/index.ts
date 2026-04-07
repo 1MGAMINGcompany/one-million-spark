@@ -37,6 +37,54 @@ const POLYGON_RPCS = [
 
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
+
+async function sendWelcomeEmail(slug: string, feePercent: number) {
+  if (!RESEND_API_KEY) { console.warn("[email] RESEND_API_KEY not set, skipping"); return; }
+  const operatorUrl = `https://1mg.live/${slug}`;
+  const dashboardUrl = `https://1mg.live/dashboard`;
+  const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#06080f;color:#fff;border-radius:16px">
+    <h1 style="color:#d4a017;font-size:24px">🎉 Welcome to 1MG.live!</h1>
+    <p style="color:#ccc">Your branded predictions platform is ready right now.</p>
+    <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:16px;margin:16px 0">
+      <p style="margin:4px 0;color:#fff"><strong>Your Platform:</strong> <a href="${operatorUrl}" style="color:#3b82f6">${operatorUrl}</a></p>
+      <p style="margin:4px 0;color:#fff"><strong>Dashboard:</strong> <a href="${dashboardUrl}" style="color:#3b82f6">${dashboardUrl}</a></p>
+      <p style="margin:4px 0;color:#fff"><strong>Your Fee:</strong> ${feePercent}% on every prediction</p>
+    </div>
+    <h3 style="color:#d4a017">Quick Start Guide:</h3>
+    <ol style="color:#ccc;padding-left:20px">
+      <li>Visit your dashboard to customize your platform</li>
+      <li>100+ live sports events are already loaded</li>
+      <li>Share your platform link with your audience</li>
+      <li>Earn ${feePercent}% on every prediction placed</li>
+    </ol>
+    <p style="color:#888;font-size:12px;margin-top:24px">Questions? Contact: <a href="mailto:1mgaming@proton.me" style="color:#3b82f6">1mgaming@proton.me</a></p>
+    <p style="color:#555;font-size:11px;margin-top:12px">Powered by 1MG.live — The World's Sports Prediction Platform</p>
+  </div>`;
+
+  // Notify admin about new operator
+  try {
+    await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: "1MG.live <noreply@1mg.live>",
+        to: ["1mgaming@proton.me"],
+        subject: `🎉 New Operator Activated: ${slug}`,
+        html: `<div style="font-family:Arial,sans-serif;padding:16px;background:#111;color:#fff;border-radius:12px">
+          <h2 style="color:#d4a017">New Operator Activated</h2>
+          <p>Slug: <strong>${slug}</strong></p>
+          <p>Fee: ${feePercent}%</p>
+          <p>Platform: <a href="${operatorUrl}" style="color:#3b82f6">${operatorUrl}</a></p>
+          <p>Dashboard: <a href="${dashboardUrl}" style="color:#3b82f6">${dashboardUrl}</a></p>
+          <p style="color:#888;font-size:11px;margin-top:16px">Automated notification from 1MG.live</p>
+        </div>`,
+      }),
+    });
+    console.log(`[email] Admin notified about new operator: ${slug}`);
+  } catch (e) { console.error("[email] admin notify failed:", e); }
+}
+
 async function verifyTxOnChain(txHash: string, minAmountRaw: bigint): Promise<{ valid: boolean; error?: string }> {
   for (const rpc of POLYGON_RPCS) {
     try {
@@ -98,11 +146,13 @@ Deno.serve(async (req) => {
         if (discountedPrice === 0) {
           // Full discount — activate without payment
           await sb.from("promo_codes").update({ uses_count: promo.uses_count + 1 }).eq("id", promo.id);
-          const { data: existing } = await sb.from("operators").select("id, status").eq("user_id", privyDid).maybeSingle();
+          const { data: existing } = await sb.from("operators").select("id, status, subdomain, fee_percent").eq("user_id", privyDid).maybeSingle();
           if (existing) {
             await sb.from("operators").update({ status: "active", updated_at: new Date().toISOString() }).eq("id", existing.id);
+            sendWelcomeEmail(existing.subdomain || "your-app", existing.fee_percent ?? 5).catch(e => console.error("[email]", e));
           } else {
             await sb.from("operators").insert({ user_id: privyDid, brand_name: "My App", subdomain: "pending-" + Date.now(), status: "active" });
+            sendWelcomeEmail("pending-" + Date.now(), 5).catch(e => console.error("[email]", e));
           }
           return jsonResp({ success: true, status: "active", promo_applied: true, amount_charged: 0 });
         }
@@ -118,11 +168,13 @@ Deno.serve(async (req) => {
         const verification = await verifyTxOnChain(txHash, minRaw);
         if (!verification.valid) return jsonResp({ error: verification.error || "verification_failed" }, 400);
         await sb.from("promo_codes").update({ uses_count: promo.uses_count + 1 }).eq("id", promo.id);
-        const { data: existing } = await sb.from("operators").select("id, status").eq("user_id", privyDid).maybeSingle();
+        const { data: existing } = await sb.from("operators").select("id, status, subdomain, fee_percent").eq("user_id", privyDid).maybeSingle();
         if (existing) {
           await sb.from("operators").update({ status: "active", purchase_tx_hash: txHash, updated_at: new Date().toISOString() }).eq("id", existing.id);
+          sendWelcomeEmail(existing.subdomain || "your-app", existing.fee_percent ?? 5).catch(e => console.error("[email]", e));
         } else {
           await sb.from("operators").insert({ user_id: privyDid, brand_name: "My App", subdomain: "pending-" + Date.now(), status: "active", purchase_tx_hash: txHash });
+          sendWelcomeEmail("pending", 5).catch(e => console.error("[email]", e));
         }
         return jsonResp({ success: true, status: "active", promo_applied: true });
       }
@@ -136,11 +188,13 @@ Deno.serve(async (req) => {
 
       const verification = await verifyTxOnChain(txHash, FULL_PRICE_RAW);
       if (!verification.valid) return jsonResp({ error: verification.error || "verification_failed" }, 400);
-      const { data: existing } = await sb.from("operators").select("id, status").eq("user_id", privyDid).maybeSingle();
+      const { data: existing } = await sb.from("operators").select("id, status, subdomain, fee_percent").eq("user_id", privyDid).maybeSingle();
       if (existing) {
         await sb.from("operators").update({ status: "active", purchase_tx_hash: txHash, updated_at: new Date().toISOString() }).eq("id", existing.id);
+        sendWelcomeEmail(existing.subdomain || "your-app", existing.fee_percent ?? 5).catch(e => console.error("[email]", e));
       } else {
         await sb.from("operators").insert({ user_id: privyDid, brand_name: "My App", subdomain: "pending-" + Date.now(), status: "active", purchase_tx_hash: txHash });
+        sendWelcomeEmail("pending", 5).catch(e => console.error("[email]", e));
       }
       return jsonResp({ success: true, status: "active" });
     }
@@ -174,6 +228,7 @@ Deno.serve(async (req) => {
           operator_id: existing.id, allowed_sports: body.allowed_sports || ["Soccer", "MMA", "Boxing"],
           show_polymarket_events: true, show_platform_events: true,
         }, { onConflict: "operator_id" });
+        sendWelcomeEmail(body.subdomain, body.fee_percent ?? 5).catch(e => console.error("[email]", e));
         return jsonResp({ operator: { id: existing.id } });
       }
       const { data: subCheck } = await sb.from("operators").select("id").eq("subdomain", body.subdomain).maybeSingle();
@@ -234,7 +289,6 @@ Deno.serve(async (req) => {
       const ALLOWED_SPORTS = new Set([
         "NFL", "NBA", "NHL", "SOCCER", "MMA", "BOXING", "MLB", "TENNIS",
         "GOLF", "NCAA", "CRICKET", "F1", "NASCAR", "MLS",
-        // Accept common aliases
         "UFC", "FUTBOL", "PGA", "FORMULA 1", "BARE KNUCKLE", "BKFC",
       ]);
       if (!sport || !ALLOWED_SPORTS.has(sport)) {
@@ -272,7 +326,6 @@ Deno.serve(async (req) => {
       if (!op) return jsonResp({ error: "not_found" }, 404);
       const fightId = body.fight_id;
       if (fightId) {
-        // Verify ownership
         const { data: fight } = await sb.from("prediction_fights").select("id, operator_id, status").eq("id", fightId).single();
         if (!fight || fight.operator_id !== op.id) return jsonResp({ error: "not_your_event" }, 403);
         if (fight.status !== "open") return jsonResp({ error: "already_closed" }, 400);
@@ -290,7 +343,6 @@ Deno.serve(async (req) => {
       if (!fight_id || !winner) return jsonResp({ error: "fight_id and winner required" }, 400);
       if (!["fighter_a", "fighter_b", "draw"].includes(winner)) return jsonResp({ error: "invalid winner value" }, 400);
 
-      // Verify ownership + status
       const { data: fight } = await sb.from("prediction_fights")
         .select("id, operator_id, status, winner, settled_at")
         .eq("id", fight_id).single();
@@ -301,7 +353,6 @@ Deno.serve(async (req) => {
       const now = new Date().toISOString();
 
       if (winner === "draw") {
-        // Draw = refund scenario — mark as cancelled/refund
         await sb.from("prediction_fights").update({
           status: "cancelled", winner: "draw", trading_allowed: false,
           refund_status: "pending", updated_at: now,
@@ -311,17 +362,15 @@ Deno.serve(async (req) => {
         return jsonResp({ success: true, outcome: "draw_refund_pending" });
       }
 
-      // Set winner + mark as confirmed (auto-claim worker picks it up)
-      const claimsOpenAt = new Date(Date.now() + 3 * 60 * 1000).toISOString(); // 3 min buffer
+      const claimsOpenAt = new Date(Date.now() + 3 * 60 * 1000).toISOString();
       await sb.from("prediction_fights").update({
         winner, status: "confirmed", confirmed_at: now, claims_open_at: claimsOpenAt,
         trading_allowed: false, updated_at: now,
-      }).eq("id", fight_id).eq("status", fight.status); // CAS guard
+      }).eq("id", fight_id).eq("status", fight.status);
 
       await sb.from("operator_events").update({ status: "settled", updated_at: now })
         .eq("id", body.event_id).eq("operator_id", op.id);
 
-      // Log settlement
       await sb.from("automation_logs").insert({
         action: "operator_settle_event", fight_id, source: "operator-manage",
         details: { winner, operator_id: op.id, settled_by: privyDid },
@@ -335,7 +384,6 @@ Deno.serve(async (req) => {
       const { data: op } = await sb.from("operators").select("id").eq("user_id", privyDid).single();
       if (!op) return jsonResp({ error: "not_found" }, 404);
 
-      // Calculate available balance
       const { data: revData } = await sb.from("operator_revenue").select("operator_fee_usdc").eq("operator_id", op.id);
       const totalEarned = (revData || []).reduce((s: number, r: any) => s + Number(r.operator_fee_usdc || 0), 0);
 
