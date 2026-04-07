@@ -23,7 +23,23 @@ const TREASURY_WALLET = "0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d";
 // Bridged USDC.e — canonical token for all prediction money flows
 const USDC_CONTRACT = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
 const USDC_DECIMALS = 6;
-const POLYGON_RPC = "https://polygon-bor-rpc.publicnode.com";
+const RPC_PROVIDERS = [
+  "https://polygon-bor-rpc.publicnode.com",
+  "https://rpc.ankr.com/polygon",
+  "https://polygon.llamarpc.com",
+  "https://polygon-rpc.com",
+];
+
+/** Try an async operation across multiple RPC endpoints */
+async function callWithFallback<T>(fn: (rpc: string) => Promise<T>): Promise<T> {
+  for (const rpc of RPC_PROVIDERS) {
+    try { return await fn(rpc); }
+    catch (e: any) { console.warn(`[prediction-claim] RPC ${rpc} failed:`, e.message); }
+  }
+  throw new Error("All RPC providers failed");
+}
+
+const POLYGON_RPC = RPC_PROVIDERS[0]; // default for walletClient transport
 
 // Polygon CTF Exchange contract (Polymarket's Conditional Tokens Framework)
 const CTF_EXCHANGE = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E";

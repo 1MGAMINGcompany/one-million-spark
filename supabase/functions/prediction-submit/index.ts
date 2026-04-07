@@ -536,7 +536,7 @@ Deno.serve(async (req) => {
   let normalizedWallet: string | null = null;
 
   // ── REQUIRED Privy JWT verification for identity binding ──
-  // Local-only validation: no remote Privy API call (avoids unreliable REST endpoint)
+  // Cryptographic JWKS verification: validates signature against Privy public keys
   let privyDid: string | null = null;
   {
     const privyToken = req.headers.get("x-privy-token");
@@ -553,22 +553,56 @@ Deno.serve(async (req) => {
       const parts = privyToken.split(".");
       if (parts.length !== 3) throw new Error("malformed_jwt");
 
+      // Decode header to get key ID (kid)
+      const headerB64 = parts[0].replace(/-/g, "+").replace(/_/g, "/");
+      const header = JSON.parse(atob(headerB64));
+
+      // Decode payload for claims verification
       const payloadB64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
       const payloadJson = atob(payloadB64);
       const jwtPayload = JSON.parse(payloadJson);
 
+      // Verify claims first (fast fail)
       const now = Math.floor(Date.now() / 1000);
       if (jwtPayload.exp && jwtPayload.exp < now) throw new Error("token_expired");
       if (jwtPayload.iss !== "privy.io") throw new Error("invalid_issuer");
       if (jwtPayload.aud !== appId) throw new Error("invalid_audience");
 
+      // Fetch Privy JWKS and verify signature cryptographically
+      const jwksUrl = `https://auth.privy.io/api/v1/apps/${appId}/jwks.json`;
+      const jwksRes = await fetch(jwksUrl);
+      if (!jwksRes.ok) throw new Error("jwks_fetch_failed");
+      const { keys } = await jwksRes.json();
+
+      const matchingKey = keys.find((k: any) => k.kid === header.kid);
+      if (!matchingKey) throw new Error("unknown_signing_key");
+
+      // Determine algorithm from JWK
+      const alg = matchingKey.kty === "EC"
+        ? { name: "ECDSA", namedCurve: matchingKey.crv || "P-256" }
+        : { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" };
+      const verifyAlg = matchingKey.kty === "EC"
+        ? { name: "ECDSA", hash: "SHA-256" }
+        : { name: "RSASSA-PKCS1-v1_5" };
+
+      const cryptoKey = await crypto.subtle.importKey(
+        "jwk", matchingKey, alg, false, ["verify"],
+      );
+
+      const data = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
+      const sigB64 = parts[2].replace(/-/g, "+").replace(/_/g, "/");
+      const sig = Uint8Array.from(atob(sigB64), c => c.charCodeAt(0));
+
+      const valid = await crypto.subtle.verify(verifyAlg, cryptoKey, sig, data);
+      if (!valid) throw new Error("invalid_jwt_signature");
+
       privyDid = (jwtPayload.sub as string) || null;
       if (!privyDid) throw new Error("no_did_in_token");
 
-      console.log("[prediction-submit] JWT locally verified, DID:", privyDid.slice(0, 20));
+      console.log("[prediction-submit] JWT cryptographically verified, DID:", privyDid.slice(0, 20));
     } catch (e) {
       await auditLog(supabase, null, null, "auth_required_failed", null, {
-        reason: "jwt_decode_failed",
+        reason: "jwt_verification_failed",
         error: (e as Error).message,
       });
       return json({ error: "Authentication failed", error_code: "auth_failed" }, 401);
