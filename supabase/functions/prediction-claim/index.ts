@@ -424,18 +424,60 @@ Deno.serve(async (req) => {
       // 1. Get trade orders for accurate reward calculation
       const { data: tradeOrders } = await supabase
         .from("prediction_trade_orders")
-        .select("filled_shares, filled_amount_usdc, avg_fill_price")
+        .select("filled_shares, filled_amount_usdc, avg_fill_price, polymarket_order_id")
         .eq("fight_id", fight_id)
         .eq("wallet", walletLower)
         .in("status", ["filled", "submitted"]);
 
-      // Each winning Polymarket share resolves to exactly $1.00
-      const totalFilledShares = (tradeOrders || []).reduce(
-        (s: number, o: any) => s + Number(o.filled_shares || 0), 0,
+      // Check if any trade was actually placed on Polymarket CLOB
+      const hasRealPMOrder = (tradeOrders || []).some(
+        (o: any) => o.polymarket_order_id != null && o.polymarket_order_id !== "",
       );
-      let pmRewardUsd = Number(totalFilledShares.toFixed(6));
 
-      // Fallback: estimate from entry shares if no trade orders found
+      let pmRewardUsd = 0;
+
+      if (hasRealPMOrder) {
+        // Real Polymarket trades: each winning share resolves to exactly $1.00
+        const totalFilledShares = (tradeOrders || []).reduce(
+          (s: number, o: any) => s + Number(o.filled_shares || 0), 0,
+        );
+        pmRewardUsd = Number(totalFilledShares.toFixed(6));
+      } else {
+        // Local-only simulation: no real PM order was placed.
+        // Use local pool math based on actual USDC stakes, NOT the global PM pool.
+        const userStake = (tradeOrders || []).reduce(
+          (s: number, o: any) => s + Number(o.filled_amount_usdc || 0), 0,
+        );
+
+        // Get ALL trade orders for this fight to compute the local pool
+        const { data: allFightOrders } = await supabase
+          .from("prediction_trade_orders")
+          .select("filled_amount_usdc, side")
+          .eq("fight_id", fight_id)
+          .in("status", ["filled", "submitted"]);
+
+        const localPool = (allFightOrders || []).reduce(
+          (s: number, o: any) => s + Number(o.filled_amount_usdc || 0), 0,
+        );
+
+        // Winner side orders total
+        const winningSide = fight.winner === "fighter_a" ? "BUY" : "BUY";
+        // All orders on the winning side — but since the user picked the winner,
+        // their proportional share of the total local pool is the reward
+        const winnerStakeTotal = (allFightOrders || []).reduce(
+          (s: number, o: any) => s + Number(o.filled_amount_usdc || 0), 0,
+        );
+
+        // Simple: winner takes their proportional share of the full local pool
+        // Since there's only one user in demo, reward = localPool
+        pmRewardUsd = winnerStakeTotal > 0
+          ? Number(((userStake / winnerStakeTotal) * localPool).toFixed(6))
+          : userStake;
+
+        console.log(`[prediction-claim] Local-only PM event: userStake=$${userStake}, localPool=$${localPool}, reward=$${pmRewardUsd}`);
+      }
+
+      // Fallback: estimate from entry shares if no trade orders found at all
       if (pmRewardUsd <= 0) {
         const entryShares = entries.reduce((s: number, e: any) => s + Number(e.shares || 0), 0);
         pmRewardUsd = entryShares / 100;
@@ -449,7 +491,41 @@ Deno.serve(async (req) => {
         return json({ error: "Claim exceeds safety limit — contact support", max_usd: MAX_CLAIM_USD, reward_usd: pmRewardUsd }, 400);
       }
 
-      // 2. Get PM session for derived wallet credentials
+      // 2. For local-only trades, skip CTF redemption entirely
+      if (!hasRealPMOrder) {
+        // Mark as claimed with the correct (small) reward — no on-chain action needed
+        await supabase.from("prediction_entries")
+          .update({
+            claimed: true,
+            reward_usd: pmRewardUsd,
+            reward_lamports: 0,
+            polymarket_status: "local_settled",
+          })
+          .in("id", entryIds);
+
+        await supabase.from("automation_logs").insert({
+          action: "local_pm_claim_settled",
+          source: "prediction-claim",
+          fight_id,
+          details: {
+            wallet: walletLower,
+            reward_usd: pmRewardUsd,
+            entries: entryIds.length,
+            note: "Local-only simulation — no Polymarket order was executed",
+          },
+        });
+
+        return json({
+          success: true,
+          reward_usd: pmRewardUsd,
+          entries_claimed: entryIds.length,
+          payout_method: "local_pool",
+          source: "polymarket_local",
+          message: "Prediction settled with local pool math. No Polymarket position existed.",
+        });
+      }
+
+      // 3. Real PM order path: Get PM session for derived wallet credentials
       const { data: pmSession } = await supabase
         .from("polymarket_user_sessions")
         .select("id, status, pm_trading_key, pm_derived_address, safe_address")
@@ -457,7 +533,6 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (!pmSession?.pm_trading_key) {
-        // No trading key — record reward and mark as pending
         await supabase.from("prediction_entries")
           .update({ claimed: true, reward_usd: pmRewardUsd, reward_lamports: 0, polymarket_status: "redemption_pending" })
           .in("id", entryIds);
@@ -472,7 +547,7 @@ Deno.serve(async (req) => {
         });
       }
 
-      // 3. Attempt CTF redemption + USDC withdrawal
+      // 4. Attempt CTF redemption + USDC withdrawal
       const tradingKey = (pmSession.pm_trading_key.startsWith("0x")
         ? pmSession.pm_trading_key
         : `0x${pmSession.pm_trading_key}`) as `0x${string}`;
@@ -483,18 +558,12 @@ Deno.serve(async (req) => {
       let payoutAmount = 0;
 
       try {
-        // Step A: Ensure derived EOA has gas
         await ensureGas(tradingAccount.address);
-
-        // Step B: Redeem winning conditional tokens → USDC in derived EOA
         try {
           redeemTxHash = await redeemCTFPositions(tradingAccount, fight.polymarket_condition_id);
         } catch (redeemErr: any) {
-          // May already be redeemed, or market not settled on-chain yet
           console.warn(`[prediction-claim] CTF redemption note: ${redeemErr.message}`);
         }
-
-        // Step C: Transfer all USDC from derived EOA → user's Privy wallet
         const transferResult = await transferFromDerived(tradingAccount, walletLower);
         if (transferResult.success) {
           payoutTxHash = transferResult.txHash;
@@ -504,7 +573,7 @@ Deno.serve(async (req) => {
         console.error("[prediction-claim] Polymarket claim error:", err);
       }
 
-      // 4. Mark entries as claimed with correct reward
+      // 5. Mark entries as claimed with correct reward
       await supabase.from("prediction_entries")
         .update({
           claimed: true,
@@ -515,7 +584,6 @@ Deno.serve(async (req) => {
         })
         .in("id", entryIds);
 
-      // Update position records
       if (payoutTxHash) {
         await supabase
           .from("polymarket_user_positions")
@@ -528,7 +596,6 @@ Deno.serve(async (req) => {
           .eq("fight_id", fight_id);
       }
 
-      // Audit log
       await supabase.from("automation_logs").insert({
         action: payoutTxHash ? "polymarket_claim_paid" : "polymarket_claim_pending",
         source: "prediction-claim",

@@ -315,18 +315,45 @@ Deno.serve(async (req) => {
         const entryIds = wEntries.map((e: any) => e.id);
 
         if (isPolymarket) {
-          // ── POLYMARKET PATH: trade order-based reward + CTF redemption ──
+          // ── POLYMARKET PATH ──
           const { data: tradeOrders } = await supabase
             .from("prediction_trade_orders")
-            .select("filled_shares, filled_amount_usdc")
+            .select("filled_shares, filled_amount_usdc, polymarket_order_id")
             .eq("fight_id", fight.id)
             .eq("wallet", wallet)
             .in("status", ["filled", "submitted"]);
 
-          const totalFilledShares = (tradeOrders || []).reduce(
-            (s: number, o: any) => s + Number(o.filled_shares || 0), 0,
+          const hasRealPMOrder = (tradeOrders || []).some(
+            (o: any) => o.polymarket_order_id != null && o.polymarket_order_id !== "",
           );
-          let rewardUsd = Number(totalFilledShares.toFixed(6));
+
+          let rewardUsd = 0;
+
+          if (hasRealPMOrder) {
+            const totalFilledShares = (tradeOrders || []).reduce(
+              (s: number, o: any) => s + Number(o.filled_shares || 0), 0,
+            );
+            rewardUsd = Number(totalFilledShares.toFixed(6));
+          } else {
+            // Local-only: use filled_amount_usdc as reward (winner gets stake back)
+            const userStake = (tradeOrders || []).reduce(
+              (s: number, o: any) => s + Number(o.filled_amount_usdc || 0), 0,
+            );
+            const { data: allFightOrders } = await supabase
+              .from("prediction_trade_orders")
+              .select("filled_amount_usdc")
+              .eq("fight_id", fight.id)
+              .in("status", ["filled", "submitted"]);
+
+            const localPool = (allFightOrders || []).reduce(
+              (s: number, o: any) => s + Number(o.filled_amount_usdc || 0), 0,
+            );
+            const totalStake = localPool;
+            rewardUsd = totalStake > 0
+              ? Number(((userStake / totalStake) * localPool).toFixed(6))
+              : userStake;
+          }
+
           if (rewardUsd <= 0) {
             const entryShares = wEntries.reduce((s: number, e: any) => s + Number(e.shares || 0), 0);
             rewardUsd = entryShares / 100;
@@ -335,30 +362,33 @@ Deno.serve(async (req) => {
           if (rewardUsd <= 0 || rewardUsd > MAX_CLAIM_USD) continue;
           if (dailyTotal + totalPaid + rewardUsd > DAILY_CEILING_USD) break;
 
-          // Get PM session
-          const { data: pmSession } = await supabase
-            .from("polymarket_user_sessions")
-            .select("pm_trading_key, pm_derived_address")
-            .eq("wallet", wallet)
-            .maybeSingle();
-
           let payoutTxHash: string | undefined;
 
-          if (pmSession?.pm_trading_key) {
-            try {
-              const tradingKey = (pmSession.pm_trading_key.startsWith("0x")
-                ? pmSession.pm_trading_key
-                : `0x${pmSession.pm_trading_key}`) as `0x${string}`;
-              const tradingAccount = privateKeyToAccount(tradingKey);
+          if (hasRealPMOrder) {
+            // Real PM: attempt CTF redemption
+            const { data: pmSession } = await supabase
+              .from("polymarket_user_sessions")
+              .select("pm_trading_key, pm_derived_address")
+              .eq("wallet", wallet)
+              .maybeSingle();
 
-              await ensureGas(tradingAccount.address);
-              await redeemCTF(tradingAccount, fight.polymarket_condition_id);
-              const withdrawal = await withdrawFromDerived(tradingAccount, wallet);
-              payoutTxHash = withdrawal.txHash;
-            } catch (err: any) {
-              console.warn(`[auto-claim] PM claim error for ${wallet}:`, err.message);
+            if (pmSession?.pm_trading_key) {
+              try {
+                const tradingKey = (pmSession.pm_trading_key.startsWith("0x")
+                  ? pmSession.pm_trading_key
+                  : `0x${pmSession.pm_trading_key}`) as `0x${string}`;
+                const tradingAccount = privateKeyToAccount(tradingKey);
+
+                await ensureGas(tradingAccount.address);
+                await redeemCTF(tradingAccount, fight.polymarket_condition_id);
+                const withdrawal = await withdrawFromDerived(tradingAccount, wallet);
+                payoutTxHash = withdrawal.txHash;
+              } catch (err: any) {
+                console.warn(`[auto-claim] PM claim error for ${wallet}:`, err.message);
+              }
             }
           }
+          // Local-only trades: no CTF redemption needed, just mark as settled
 
           await supabase.from("prediction_entries")
             .update({
@@ -366,15 +396,19 @@ Deno.serve(async (req) => {
               reward_usd: rewardUsd,
               reward_lamports: 0,
               tx_signature: payoutTxHash || null,
-              polymarket_status: payoutTxHash ? "redeemed" : "redemption_pending",
+              polymarket_status: hasRealPMOrder
+                ? (payoutTxHash ? "redeemed" : "redemption_pending")
+                : "local_settled",
             })
             .in("id", entryIds);
 
           await supabase.from("automation_logs").insert({
-            action: payoutTxHash ? "auto_claim_pm_paid" : "auto_claim_pm_pending",
+            action: hasRealPMOrder
+              ? (payoutTxHash ? "auto_claim_pm_paid" : "auto_claim_pm_pending")
+              : "auto_claim_local_settled",
             source: "prediction-auto-claim",
             fight_id: fight.id,
-            details: { wallet, reward_usd: rewardUsd, payout_tx: payoutTxHash, entries: entryIds.length },
+            details: { wallet, reward_usd: rewardUsd, payout_tx: payoutTxHash, has_real_pm_order: hasRealPMOrder, entries: entryIds.length },
           });
 
           totalProcessed += wEntries.length;
