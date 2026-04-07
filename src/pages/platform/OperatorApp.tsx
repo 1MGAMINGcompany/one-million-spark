@@ -443,7 +443,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       if (error || data?.error) {
         const msg = data?.error || error?.message || "Backend error";
         const errorCode = data?.error_code || "";
-        if (errorCode === "trading_wallet_setup_required") {
+        if (errorCode === "trading_wallet_setup_required" || errorCode === "no_trading_session") {
           toast.error(t("operator.tradingWalletNeeded"));
           setupTradingWallet().catch(() => {});
           setSubmitting(false);
