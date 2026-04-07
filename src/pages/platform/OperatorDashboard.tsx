@@ -274,6 +274,17 @@ export default function OperatorDashboard() {
       </nav>
 
       <div className="max-w-6xl mx-auto px-4 py-8">
+        <div className="flex gap-1 mb-6 bg-white/[0.03] p-1 rounded-lg w-fit">
+          {(["overview", "analytics", "events"] as const).map(tab => (
+            <button key={tab} onClick={() => setDashTab(tab)} className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${dashTab === tab ? "bg-white/10 text-white" : "text-white/40 hover:text-white/60"}`}>
+              {tab === "overview" ? "Overview" : tab === "analytics" ? "📊 Analytics" : "Events"}
+            </button>
+          ))}
+        </div>
+        {dashTab === "analytics" && operator ? (
+          <OperatorAnalyticsTab operatorId={operator.id} feePercent={operator.fee_percent} />
+        ) : (
+        <>
         {/* Your App Details card */}
         <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5 mb-8">
           <h3 className="text-sm font-semibold text-white/60 mb-3">{t("operator.dashboard.appDetails")}</h3>
