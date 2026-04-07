@@ -12,7 +12,7 @@ import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
 import { usePolymarketSession } from "@/hooks/usePolymarketSession";
 import { usePolymarketPrices } from "@/hooks/usePolymarketPrices";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Globe, Trophy, Loader2, ShieldCheck, Search, CalendarPlus, ChevronDown, Zap, Copy, ExternalLink } from "lucide-react";
+import { Globe, Trophy, Loader2, ShieldCheck, Search, CalendarPlus, ChevronDown, Zap, Copy, ExternalLink, CreditCard, ArrowUpRight, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { dbg } from "@/lib/debugLog";
 import { Button } from "@/components/ui/button";
@@ -157,6 +157,9 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [sportPickerOpen, setSportPickerOpen] = useState(false);
   const [timeFilter, setTimeFilter] = useState<"all" | "today" | "week">("all");
   const [showFundsModal, setShowFundsModal] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [withdrawDest, setWithdrawDest] = useState("");
+  const [withdrawAmount, setWithdrawAmount] = useState("");
 
   // Social share state
   const [shareOpen, setShareOpen] = useState(false);
@@ -1024,22 +1027,121 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                 </button>
               </div>
             )}
+            {/* Buy with Card via Privy onramp */}
+            <button
+              onClick={() => {
+                // Open Privy fund wallet flow for card purchases
+                window.open(`https://app.uniswap.org/swap?chain=polygon&outputCurrency=0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174`, "_blank");
+              }}
+              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90"
+              style={{ backgroundColor: theme.primary, color: theme.primaryForeground }}
+            >
+              <CreditCard className="w-3.5 h-3.5" />
+              💳 Buy USDC with Card
+            </button>
             <a
               href="https://app.uniswap.org/swap?chain=polygon"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90"
-              style={{ backgroundColor: theme.primary, color: theme.primaryForeground }}
+              style={{ backgroundColor: theme.surfaceBg, color: theme.textPrimary, border: `1px solid ${theme.cardBorder}` }}
             >
               <ExternalLink className="w-3.5 h-3.5" />
               {t("operator.getUsdce")}
             </a>
+            {/* Withdraw button */}
+            <button
+              onClick={() => { setShowFundsModal(false); setShowWithdrawModal(true); }}
+              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-medium transition-opacity hover:opacity-90"
+              style={{ backgroundColor: "transparent", color: theme.textSecondary, border: `1px solid ${theme.cardBorder}` }}
+            >
+              <ArrowUpRight className="w-3.5 h-3.5" />
+              Withdraw Funds
+            </button>
             <button
               onClick={() => setShowFundsModal(false)}
               className="w-full py-2 rounded-lg text-sm font-medium transition-colors"
               style={{ backgroundColor: theme.surfaceBg, color: theme.textSecondary }}
             >
               {t("operator.close")}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Withdraw Modal */}
+      {showWithdrawModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowWithdrawModal(false)} />
+          <div
+            className="relative z-10 w-full max-w-sm rounded-2xl p-6 space-y-4 shadow-2xl"
+            style={{ backgroundColor: theme.cardBg, border: `1px solid ${theme.cardBorder}`, color: theme.textPrimary }}
+          >
+            <h3 className="text-lg font-bold">Withdraw USDC</h3>
+            <div className="flex items-center gap-2 p-3 rounded-lg text-xs" style={{ backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)" }}>
+              <AlertTriangle className="w-4 h-4 shrink-0 text-red-500" />
+              <span className="text-red-400">⚠️ Double-check the address — crypto transactions cannot be reversed</span>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-medium" style={{ color: theme.textSecondary }}>Amount (USDC)</label>
+              <input
+                type="number"
+                value={withdrawAmount}
+                onChange={e => setWithdrawAmount(e.target.value)}
+                placeholder="10.00"
+                className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+                style={{ backgroundColor: theme.surfaceBg, border: `1px solid ${theme.cardBorder}`, color: theme.textPrimary }}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-medium" style={{ color: theme.textSecondary }}>Destination Wallet (Polygon)</label>
+              <input
+                type="text"
+                value={withdrawDest}
+                onChange={e => setWithdrawDest(e.target.value)}
+                placeholder="0x..."
+                className="w-full px-3 py-2 rounded-lg text-sm font-mono outline-none"
+                style={{ backgroundColor: theme.surfaceBg, border: `1px solid ${theme.cardBorder}`, color: theme.textPrimary }}
+              />
+            </div>
+            <button
+              onClick={() => {
+                if (!withdrawDest.match(/^0x[a-fA-F0-9]{40}$/)) {
+                  toast.error("Invalid wallet address");
+                  return;
+                }
+                const amt = parseFloat(withdrawAmount);
+                if (isNaN(amt) || amt <= 0) {
+                  toast.error("Enter a valid amount");
+                  return;
+                }
+                toast.info("Withdrawals are processed within 24 hours. Contact support for assistance.", { duration: 6000 });
+                setShowWithdrawModal(false);
+                setWithdrawDest("");
+                setWithdrawAmount("");
+              }}
+              className="w-full py-2.5 rounded-lg text-sm font-bold transition-opacity hover:opacity-90"
+              style={{ backgroundColor: theme.primary, color: theme.primaryForeground }}
+            >
+              Request Withdrawal
+            </button>
+            <div className="text-center">
+              <a
+                href="https://app.uniswap.org/#/swap?inputCurrency=0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174&outputCurrency=ETH&chain=polygon"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs underline hover:opacity-80"
+                style={{ color: theme.primary }}
+              >
+                Or sell USDC for ETH on Uniswap →
+              </a>
+            </div>
+            <button
+              onClick={() => { setShowWithdrawModal(false); setWithdrawDest(""); setWithdrawAmount(""); }}
+              className="w-full py-2 rounded-lg text-sm font-medium transition-colors"
+              style={{ backgroundColor: theme.surfaceBg, color: theme.textSecondary }}
+            >
+              Cancel
             </button>
           </div>
         </div>

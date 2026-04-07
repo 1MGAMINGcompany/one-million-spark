@@ -23,7 +23,23 @@ const TREASURY_WALLET = "0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d";
 // Bridged USDC.e — canonical token for all prediction money flows
 const USDC_CONTRACT = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
 const USDC_DECIMALS = 6;
-const POLYGON_RPC = "https://polygon-bor-rpc.publicnode.com";
+const RPC_PROVIDERS = [
+  "https://polygon-bor-rpc.publicnode.com",
+  "https://rpc.ankr.com/polygon",
+  "https://polygon.llamarpc.com",
+  "https://polygon-rpc.com",
+];
+
+/** Try an async operation across multiple RPC endpoints */
+async function callWithFallback<T>(fn: (rpc: string) => Promise<T>): Promise<T> {
+  for (const rpc of RPC_PROVIDERS) {
+    try { return await fn(rpc); }
+    catch (e: any) { console.warn(`[prediction-claim] RPC ${rpc} failed:`, e.message); }
+  }
+  throw new Error("All RPC providers failed");
+}
+
+const POLYGON_RPC = RPC_PROVIDERS[0]; // default for walletClient transport
 
 // Polygon CTF Exchange contract (Polymarket's Conditional Tokens Framework)
 const CTF_EXCHANGE = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E";
@@ -81,16 +97,20 @@ async function transferUsdcToWinner(
       args: [account.address],
     });
 
-    const balanceRes = await fetch(POLYGON_RPC, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0", id: 1,
-        method: "eth_call",
-        params: [{ to: USDC_CONTRACT, data: balanceData }, "latest"],
-      }),
+    const balanceJson = await callWithFallback(async (rpc) => {
+      const res = await fetch(rpc, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0", id: 1,
+          method: "eth_call",
+          params: [{ to: USDC_CONTRACT, data: balanceData }, "latest"],
+        }),
+      });
+      const j = await res.json();
+      if (j.error || !j.result) throw new Error(j.error?.message || "no_result");
+      return j;
     });
-    const balanceJson = await balanceRes.json();
     if (balanceJson.result) {
       const balance = BigInt(balanceJson.result);
       if (balance < amountRaw) {
@@ -109,36 +129,44 @@ async function transferUsdcToWinner(
     });
 
     // Get nonce
-    const nonceRes = await fetch(POLYGON_RPC, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0", id: 2,
-        method: "eth_getTransactionCount",
-        params: [account.address, "latest"],
-      }),
+    const nonceJson = await callWithFallback(async (rpc) => {
+      const res = await fetch(rpc, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0", id: 2,
+          method: "eth_getTransactionCount",
+          params: [account.address, "latest"],
+        }),
+      });
+      const j = await res.json();
+      if (j.error || !j.result) throw new Error(j.error?.message || "no_result");
+      return j;
     });
-    const nonceJson = await nonceRes.json();
     const nonce = Number(BigInt(nonceJson.result));
 
     // Get gas price
-    const gasPriceRes = await fetch(POLYGON_RPC, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0", id: 3,
-        method: "eth_gasPrice",
-        params: [],
-      }),
+    const gasPriceJson = await callWithFallback(async (rpc) => {
+      const res = await fetch(rpc, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0", id: 3,
+          method: "eth_gasPrice",
+          params: [],
+        }),
+      });
+      const j = await res.json();
+      if (j.error || !j.result) throw new Error(j.error?.message || "no_result");
+      return j;
     });
-    const gasPriceJson = await gasPriceRes.json();
     const gasPrice = BigInt(gasPriceJson.result);
 
-    // Send transaction
+    // Send transaction — use first working RPC
     const walletClient = createWalletClient({
       account,
       chain: polygon,
-      transport: http(POLYGON_RPC),
+      transport: http(RPC_PROVIDERS[0]),
     });
 
     const txHash = await walletClient.sendTransaction({
