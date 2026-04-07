@@ -79,7 +79,7 @@ async function rpcCall(callData: string, to: string): Promise<string | null> {
   return null;
 }
 
-export function usePolygonUSDC(): PolygonUSDCBalance {
+export function usePolygonUSDC(): PolygonUSDCBalance & { refetch: () => void } {
   const { walletAddress, isPrivyUser } = usePrivyWallet();
   const [balanceRaw, setBalanceRaw] = useState<string | null>(null);
   const [allowanceRaw, setAllowanceRaw] = useState<string | null>(null);
@@ -159,5 +159,6 @@ export function usePolygonUSDC(): PolygonUSDCBalance {
     symbol: "USDC",
     is_loading: isLoading,
     error,
+    refetch: fetchData,
   };
 }

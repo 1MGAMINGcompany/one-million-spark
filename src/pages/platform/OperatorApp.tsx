@@ -121,7 +121,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const { authenticated, login, getAccessToken } = usePrivy();
   const { walletAddress: address, eoaAddress, isPrivyUser } = usePrivyWallet();
   const { state: allowanceState, ensureAllowance, reset: resetAllowance } = useAllowanceGate();
-  const { usdc_balance } = usePolygonUSDC();
+  const { usdc_balance, refetch: refetchBalance } = usePolygonUSDC();
   const { hasSession, canTrade, setupTradingWallet } = usePolymarketSession();
   usePolymarketPrices();
 
@@ -458,6 +458,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       });
       setShowSuccess(true);
       loadUserEntries();
+      setTimeout(() => refetchBalance(), 3000);
     } catch (err: any) {
       const msg = err.message || "";
       if (msg.includes("expired") || msg.includes("closed")) {
@@ -499,6 +500,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       if (error || data?.error) throw new Error(data?.error || error?.message);
       toast.success(t("operator.rewardClaimed"), { description: t("operator.rewardSent", { amount: (data.reward_usd || 0).toFixed(2) }) });
       loadUserEntries();
+      setTimeout(() => refetchBalance(), 3000);
     } catch (err: any) {
       toast.error(t("operator.claimFailed"), { description: err.message });
     } finally {

@@ -133,3 +133,6 @@ verify_jwt = false
 
 [functions.prediction-ai-insight]
 verify_jwt = false
+
+[functions.prediction-result-detect]
+verify_jwt = false
