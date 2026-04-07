@@ -1,75 +1,68 @@
 
-Issue identified:
-- The demo prediction exists for the wallet in your screenshot.
-- Lightning vs. Sabres already has `winner = fighter_b`, `confirmed_at`, and `claims_open_at` in the database, but its current `status` is still `live`.
-- That means the new My Picks UI is not the problem. The card component only shows the payout/result state when the fight is `confirmed`, `settled`, or `result_selected`.
-- Root cause: `prediction-result-detect` confirms the fight correctly, then `prediction-schedule-worker` keeps forcing the same event back to `live` every minute. That breaks the payout pipeline and keeps the card stuck on the generic “Your Pick” view.
-- The balance is not changing because no payout has actually been sent yet. The balance hooks already poll every 15s.
 
-Plan
+# Fix Claim Failed + Balance Issues
 
-1. Stop the scheduler from reviving resolved fights
-- File: `supabase/functions/prediction-schedule-worker/index.ts`
-- Fix the blanket `status: "live"` updates at:
-  - lines 73-79
-  - lines 186-191
-  - lines 243-248
-- Only transition fights to `live` if they are truly unresolved:
-  - `winner IS NULL`
-  - `confirmed_at IS NULL`
-  - `settled_at IS NULL`
-  - status is still `open`/`locked`
-- Also tighten stale-live diagnostics so already resolved fights are not treated as active events.
+## Problem Summary
 
-2. Add self-healing for fights already corrupted
-- File: `supabase/functions/prediction-schedule-worker/index.ts`
-- Add an early repair phase before normal scheduling:
-  - if a fight is `open`/`locked`/`live` but already has `winner` or `confirmed_at`
-    - restore it to `confirmed` if `claims_open_at` is still in the future
-    - restore it to `settled` if `claims_open_at` has already passed
-- This will repair Lightning vs. Sabres and any other fights that were already overwritten.
+Two issues:
 
-3. Make the result/settlement pipeline resilient
-- Files:
-  - `supabase/functions/prediction-result-detect/index.ts`
-  - `supabase/functions/prediction-auto-settle/index.ts`
-- `prediction-result-detect` currently scans only fights where `winner IS NULL` (lines 229-237), so corrupted rows are skipped forever.
-- Add a recovery path so fights with a stored winner but bad unresolved status can be normalized instead of ignored.
-- Keep `prediction-auto-settle` focused on confirmed fights, but ensure repaired rows can flow into settlement immediately.
+1. **"Claim Failed"**: The `prediction-claim` function uses **parimutuel pool math** (`userShares / totalWinningShares * totalPool`) for ALL events, including Polymarket-backed ones. Since `pool_a_usd` and `pool_b_usd` reflect the entire Polymarket pool (millions of dollars) but `shares_a`/`shares_b` only track local user shares (~98), the calculated reward is absurdly large (e.g. $1.6M), which exceeds the $500 safety cap → 400 error.
 
-4. Improve My Picks refresh behavior
-- File: `src/pages/platform/OperatorApp.tsx`
-- Replace the manual `loadUserEntries()` state flow with a query-based refetch strategy, or add timed/on-focus refetches for:
-  - `prediction_entries`
-  - `picksFights`
-- This makes backend changes show up in the demo app without relying on multiple manual refresh attempts.
+2. **Balance not changing**: The claim never succeeds, so no payout is sent. Additionally, the current architecture tries to pay from a "treasury wallet" via `transferUsdcToWinner()`, but there is no treasury — all funds flow through Polymarket directly.
 
-5. Keep the existing My Picks result UI
-- File: `src/components/operator/SimplePredictionCard.tsx`
-- No major redesign needed.
-- The result/claim UI already exists at:
-  - lines 86-88
-  - lines 146-199
-- After the status bug is fixed, the same card should automatically show:
-  - winner
-  - won/lost state
-  - collect winnings button
-  - claimed state
+## Root Cause
 
-Technical details
-- Frontend is already wired correctly:
-  - `src/pages/platform/OperatorApp.tsx:213-227` fetches My Picks fights independently
-  - `src/pages/platform/OperatorApp.tsx:348-355` bypasses browse filters for My Picks
-  - `src/pages/platform/OperatorApp.tsx:869-883` passes the user entry into the card
-- Balance display is not the main bug:
-  - `src/hooks/usePolygonUSDC.ts` already polls every 15s
-  - `src/components/operator/OperatorBalanceBanner.tsx` also polls the EOA every 15s
-- The real blocker is backend state corruption:
-  - `supabase/functions/prediction-result-detect/index.ts` correctly set the Lightning vs. Sabres winner
-  - `supabase/functions/prediction-schedule-worker/index.ts` then repeatedly changed the fight back to `live`
+For Polymarket-backed events, winnings are held **in the user's Polymarket position** (via their derived EOA / Gnosis Safe). When a market resolves, the user's winning conditional tokens can be redeemed for USDC directly on the CTF Exchange contract. The current code ignores this entirely and tries to do a treasury-to-user USDC transfer that doesn't exist.
 
-Expected outcome
-- Lightning vs. Sabres will stop bouncing back to `live`.
-- The demo account’s My Picks card will switch into the resolved state.
-- The user will see the correct win/loss result and, if still needed, a claim path.
-- Once payout actually runs, the balance banner should reflect it normally.
+## Fix Plan
+
+### 1. Rewrite Polymarket claim path in `prediction-claim`
+
+**File**: `supabase/functions/prediction-claim/index.ts`
+
+Remove the treasury payout for Polymarket events entirely. Replace with:
+
+- Look up the user's `prediction_trade_orders` for this fight to get `filled_shares` and `avg_fill_price`
+- Calculate reward as: `filled_shares × $1.00` (each winning share resolves to $1 on Polymarket)
+- Subtract the original cost: `profit = reward - (filled_shares × avg_fill_price)`
+- Use the user's Polymarket session credentials (`pm_api_key`, `pm_api_secret`, `pm_passphrase`) to call the Polymarket CLOB API to redeem/merge winning conditional tokens
+- If redemption isn't available yet (market not fully resolved on-chain), mark entries as `redemption_pending` and let the auto-claim worker handle it later
+- Update `prediction_entries` with the actual reward amount
+
+Key changes:
+- Remove `calculateReward()` usage for Polymarket events
+- Remove `transferUsdcToWinner()` call for Polymarket events  
+- Add CTF redemption via Polymarket API using stored user credentials
+- The reward goes directly to the user's derived EOA, then can be withdrawn to their Privy wallet
+
+### 2. Rewrite Polymarket claim path in `prediction-auto-claim`
+
+**File**: `supabase/functions/prediction-auto-claim/index.ts`
+
+Same logic change — stop using parimutuel math and treasury transfers for Polymarket events. Instead:
+- For each unclaimed winning entry on a Polymarket fight, look up the trade order
+- Calculate reward from `filled_shares × $1.00`  
+- Trigger CTF redemption using stored PM credentials
+- Mark entries as claimed with accurate `reward_usd`
+
+### 3. Fix reward display in the card
+
+**File**: `src/components/operator/SimplePredictionCard.tsx`
+
+Currently the card shows "You Won!" but no dollar amount. After the claim function returns the correct `reward_usd`, add display of the winnings amount on the settled card (e.g., "+$0.98").
+
+### 4. Add withdraw-to-wallet flow (if needed)
+
+After CTF redemption, USDC lands in the user's **derived EOA** (the Polymarket trading wallet), not their main Privy embedded wallet. The existing balance hook (`usePolygonUSDC`) checks the Privy wallet address. We may need a "withdraw" step or update the balance display to also show the derived EOA balance.
+
+## What Does NOT Change
+- Frontend claim button and toast logic (already correct)
+- Fight status detection and scheduling (already fixed)
+- Balance polling hooks (already poll every 15s)
+- Native/manual event claim path (keeps parimutuel math)
+
+## Expected Outcome
+- Clicking "Collect Winnings" triggers CTF redemption on Polymarket
+- User sees accurate reward amount (~$0.98 for a $1.00 winning bet at ~0.50 odds)
+- Balance updates once USDC is redeemed to their trading wallet
+
