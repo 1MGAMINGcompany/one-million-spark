@@ -164,6 +164,9 @@ export default function SimplePredictionCard({
             {userWon ? (
               <>
                 <p className="text-green-500 font-bold text-sm">{t("operator.youWon")}</p>
+                {userEntry?.reward_usd != null && userEntry.reward_usd > 0 && (
+                  <p className="text-green-400 text-lg font-bold mt-1">+${userEntry.reward_usd.toFixed(2)}</p>
+                )}
                 {!userEntry?.claimed && onClaim && (
                   <button
                     onClick={() => onClaim(fight.id)}
