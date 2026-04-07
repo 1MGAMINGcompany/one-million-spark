@@ -166,7 +166,7 @@ export default function SocialShareModal(props: ShareModalProps) {
             {/* Hero / header */}
             {isPlatform ? (
               <div className="relative w-full px-5 pt-5 pb-3 flex flex-col items-center gap-2">
-                <img src={brandLogo} alt={brandName} className="w-16 h-16 rounded-xl object-contain" crossOrigin="anonymous" />
+                <img src={brandLogo} alt={brandName} className="w-28 h-28 rounded-2xl object-contain bg-white/5 p-2" crossOrigin="anonymous" />
                 <span className="text-sm font-bold text-foreground tracking-wider font-['Cinzel']">{brandName}</span>
                 <span className={`text-[10px] font-extrabold px-3 py-1 rounded-full tracking-wider ${
                   variant === "prediction"
