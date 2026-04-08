@@ -1,65 +1,47 @@
 
 
-# Audit: Changes from Privy Login Fix Sessions
+# Fix: Sign-In Button Does Nothing on 1mg.live/demo
 
-## Summary
-The code changes are **mostly safe for production** (where `VITE_PRIVY_APP_ID` is set), but there is one real regression risk and a few minor issues.
+## Root Cause
 
----
+The `VITE_PRIVY_APP_ID` secret IS configured in the project, but it is only available during the **build process** as an environment variable. The safety guards we added earlier work correctly: when `isPrivyConfigured` is `false`, `usePrivyLogin()` returns a no-op function that silently logs a warning to the console.
 
-## Finding 1 — CRITICAL: Conditional hook call in `useWallet.ts`
+The problem is that the no-op is **completely invisible** to the user. When someone taps "Sign In", literally nothing happens — no toast, no feedback, no error. This makes it impossible to diagnose whether:
+- The secret didn't reach the build (build-time issue)
+- Privy's modal opened but immediately closed (domain/cookie issue — the CNAME was pending)
+- The function simply wasn't called
 
-Line 22 calls a hook conditionally:
-```typescript
-const privyState = isPrivyConfigured ? usePrivyInner() : { ... };
-```
-This violates React's rules of hooks. While `isPrivyConfigured` is a module-level constant (so the call order never actually changes at runtime), this pattern can confuse React's internal hook slot tracking in edge cases with hot module reload or strict mode double-rendering, and may be the source of the `Cannot read properties of undefined (reading 'current')` crash you saw.
+Since you just configured the CNAME and it may now be verified, the fix has two parts:
 
-**Fix**: Refactor to the same early-return pattern used in `usePrivyWallet`, `usePrivyLogin`, etc.
+## What to Fix
 
----
+### 1. Add visible feedback when login is a no-op
+When `isPrivyConfigured` is false, instead of silently warning to console, show a toast to the user so you can immediately tell if the secret is missing from the build.
 
-## Finding 2 — MEDIUM: 6 files still call `usePrivy()` directly
+**File:** `src/hooks/usePrivyLogin.ts`
+- Change `noopLogin` from `console.warn(...)` to also call `toast.error("Authentication is not configured for this build.")`
 
-These files import and call `usePrivy()` from `@privy-io/react-auth` directly, bypassing the safety guards:
+### 2. Add visible feedback when Privy login() is called but nothing happens
+Even when Privy IS configured, the modal can fail silently (domain not verified, cookies blocked). Add a timeout-based fallback: if `login()` is called and no `onComplete` or `onError` fires within 5 seconds, show a diagnostic toast.
 
-- `src/pages/platform/OperatorApp.tsx` (line 124)
-- `src/pages/platform/OperatorOnboarding.tsx` (line 24)
-- `src/pages/platform/OperatorDashboard.tsx` (line 33)
-- `src/pages/platform/PlatformApp.tsx` (lines 35, 43)
-- `src/pages/FightPredictions.tsx` (line 191)
-- `src/pages/AddFunds.tsx` (line 209)
+**File:** `src/hooks/usePrivyLogin.ts`
+- In `loginWithDebug`, start a 5-second timeout
+- Clear it in both `onComplete` and `onError` callbacks
+- If it fires, show: "Login dialog didn't appear. Check domain configuration or try again."
 
-When `VITE_PRIVY_APP_ID` is missing, the `PrivyProviderWrapper` skips mounting the provider, and these `usePrivy()` calls crash because there is no context. On your production site (where the env var IS set), this is fine. But on preview/staging builds it will crash.
+### 3. Add a diagnostic log on app boot
+On mount, log whether Privy is configured so you can check the console on 1mg.live to confirm the secret reached the build.
 
-**Fix**: Wrap these in a safe helper or gate the components behind `isPrivyConfigured`.
+**File:** `src/components/PrivyProviderWrapper.tsx`
+- Add a `console.info` at the top: `[Privy] configured=${isPrivyConfigured}, appId=${PRIVY_APP_ID ? "set" : "missing"}`
 
----
+## Files to Edit
+- `src/hooks/usePrivyLogin.ts`
+- `src/components/PrivyProviderWrapper.tsx`
 
-## Finding 3 — LOW: `PrivyLoginButton` still reads env var directly
-
-Line 8 reads `import.meta.env.VITE_PRIVY_APP_ID` directly instead of using the shared `isPrivyConfigured` from `privyConfig.ts`. Not a bug, but inconsistent with the centralization goal.
-
----
-
-## Finding 4 — OK: All other changes are clean
-
-- `usePrivyLogin.ts` — correct early-return pattern, error handling is solid
-- `usePrivyWallet.ts` — clean, exposes `walletReady` and `hydratingWallet` correctly
-- `usePolymarketSession.ts` — correct early-return pattern
-- `usePrivySolBalance.ts` — correct early-return pattern
-- `PrivyProviderWrapper.tsx` — clean, no hardcoded fallback ID
-- `OperatorOnboarding.tsx` and `OperatorDashboard.tsx` — correctly use `usePrivyLogin()` hook
-
----
-
-## Recommended Fix Plan
-
-1. **Fix `useWallet.ts`** — Refactor the conditional hook into an early-return pattern (split into outer + inner function like the other hooks)
-2. **Wrap direct `usePrivy()` calls** — In `OperatorApp`, `PlatformApp`, `FightPredictions`, and `AddFunds`, either:
-   - Gate the component behind `isPrivyConfigured`, or
-   - Create a safe `usePrivySafe()` wrapper that returns defaults when unconfigured
-3. **Minor cleanup** — Use `isPrivyConfigured` in `PrivyLoginButton` instead of reading env var directly
-
-These fixes ensure nothing breaks on preview builds or if the env var is ever missing, while keeping production behavior identical.
+## Expected Outcome
+After deploying:
+- If you see a toast "Authentication is not configured" → the secret isn't reaching the build; we'll fix the build config
+- If you see a toast "Login dialog didn't appear" → the CNAME/domain verification is still pending
+- If the Privy modal opens → the fix worked and login should proceed normally
 
