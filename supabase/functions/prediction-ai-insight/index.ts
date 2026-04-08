@@ -61,7 +61,7 @@ STRICT RULES:
 - Never reveal integrations, data routing, or external dependencies.
 - Focus on actionable intelligence about big player behavior.
 
-Respond ONLY with valid JSON, no markdown fences.`
+Respond ONLY with valid JSON, no markdown fences.${langInstruction}`
       : `You are a concise prediction market analyst for 1MGAMING. Produce a SHORT JSON object with these exact keys:
 - "summary": 2-3 sentences of plain-English market analysis. Be specific and useful — avoid filler. Use words like "market", "pricing", "activity", "liquidity", "momentum", "trading activity". Never use "bet", "gamble", or "wager". Never guarantee outcomes.
 - "confidenceLabel": one of "Strong Favorite", "Moderate Lean", "Close Market", "Uncertain"
@@ -74,7 +74,7 @@ STRICT RULES:
 - Use neutral terms: "market activity", "current pricing", "trading activity", "liquidity", "market momentum", "active prediction market".
 - Never reveal integrations, data routing, or external dependencies.
 
-Respond ONLY with valid JSON, no markdown fences.`;
+Respond ONLY with valid JSON, no markdown fences.${langInstruction}`;
 
     const userPrompt = `Market: ${title}
 Sport: ${sport || "unknown"}
