@@ -32,7 +32,7 @@ function extractPrivyDid(token: string): string | null {
 }
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const { ready, authenticated } = usePrivy();
+  const { ready, authenticated } = usePrivySafe();
   if (!ready) return null;
   if (!authenticated) return <Navigate to="/" replace />;
   return <>{children}</>;

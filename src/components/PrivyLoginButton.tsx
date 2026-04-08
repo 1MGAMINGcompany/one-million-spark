@@ -9,7 +9,7 @@ import { isPrivyConfigured } from "@/lib/privyConfig";
 export function PrivyLoginButton() {
   const { t } = useTranslation();
 
-  if (!PRIVY_APP_ID) {
+  if (!isPrivyConfigured) {
     return (
       <div className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
         {t("wallet.walletLoginNotConfigured")}
@@ -22,7 +22,7 @@ export function PrivyLoginButton() {
 
 function PrivyLoginButtonInner() {
   const { t } = useTranslation();
-  const { ready, authenticated, logout } = usePrivy();
+  const { ready, authenticated, logout } = usePrivySafe();
   const { login } = usePrivyLogin();
   const { isPrivyUser, shortAddress, hydratingWallet } = usePrivyWallet();
 
