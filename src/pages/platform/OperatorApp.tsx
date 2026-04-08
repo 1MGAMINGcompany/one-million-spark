@@ -6,6 +6,7 @@ import { useOperatorBySubdomain, useOperatorSettings } from "@/hooks/useOperator
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePrivy } from "@privy-io/react-auth";
+import { usePrivyLogin } from "@/hooks/usePrivyLogin";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
 import { useAllowanceGate } from "@/hooks/useAllowanceGate";
 import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
@@ -120,7 +121,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const { data: operator, isLoading } = useOperatorBySubdomain(subdomain);
   const { data: settings } = useOperatorSettings(operator?.id ?? null);
 
-  const { authenticated, login, getAccessToken } = usePrivy();
+  const { authenticated, getAccessToken } = usePrivy();
+  const { login } = usePrivyLogin();
   const { walletAddress: address, eoaAddress, isPrivyUser } = usePrivyWallet();
   const { state: allowanceState, ensureAllowance, reset: resetAllowance } = useAllowanceGate();
   const { usdc_balance, refetch: refetchBalance } = usePolygonUSDC();

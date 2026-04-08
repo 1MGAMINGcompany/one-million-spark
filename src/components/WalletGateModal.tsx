@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { usePrivy } from "@privy-io/react-auth";
+import { usePrivyLogin } from "@/hooks/usePrivyLogin";
 import {
   Dialog,
   DialogContent,
@@ -24,7 +24,7 @@ export function WalletGateModal({
   title,
   description,
 }: WalletGateModalProps) {
-  const { login } = usePrivy();
+  const { login } = usePrivyLogin();
   const { t } = useTranslation();
 
   const handlePrivyLogin = () => {

@@ -20,6 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { usePrivy } from "@privy-io/react-auth";
+import { usePrivyLogin } from "@/hooks/usePrivyLogin";
 import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
 import { useSeoMeta } from "@/components/seo/SeoMeta";
 
@@ -219,7 +220,8 @@ function RevenueCalculator() {
 export default function LandingPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { ready, authenticated, login, logout, user } = usePrivy();
+  const { ready, authenticated, logout, user } = usePrivy();
+  const { login } = usePrivyLogin();
 
   useSeoMeta({
     title: "1MG.live — Launch Your Own Predictions App in Minutes",

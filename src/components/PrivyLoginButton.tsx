@@ -1,9 +1,9 @@
 import { usePrivy } from "@privy-io/react-auth";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
+import { usePrivyLogin } from "@/hooks/usePrivyLogin";
 import { Button } from "@/components/ui/button";
 import { LogOut, Wallet } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
 
 const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID || "cmlq6g2dn00760cl2djbh9dfy";
 
@@ -23,28 +23,13 @@ export function PrivyLoginButton() {
 
 function PrivyLoginButtonInner() {
   const { t } = useTranslation();
-  const { ready, authenticated, login, logout } = usePrivy();
+  const { ready, authenticated, logout } = usePrivy();
+  const { login } = usePrivyLogin();
   const { isPrivyUser, shortAddress } = usePrivyWallet();
 
   if (!ready) {
     return null;
   }
-
-  const handleLogin = async () => {
-    try {
-      await login();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error("[Privy] Login error:", msg, err);
-      if (msg.includes("origin") || msg.includes("domain") || msg.includes("cookie")) {
-        toast.error("Login failed: this domain is not configured. Please contact support.");
-      } else if (msg.includes("popup") || msg.includes("blocked")) {
-        toast.error("Login popup was blocked. Please allow popups and try again.");
-      } else {
-        toast.error("Login failed. Please try again or use a different browser.");
-      }
-    }
-  };
 
   // Show logged-in state using EVM wallet from usePrivyWallet
   if (authenticated && isPrivyUser && shortAddress) {
@@ -69,7 +54,7 @@ function PrivyLoginButtonInner() {
 
   return (
     <Button
-      onClick={handleLogin}
+      onClick={login}
       size="sm"
       className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
     >

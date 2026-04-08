@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { usePrivy, useFundWallet } from "@privy-io/react-auth";
-import { useLogin } from "@privy-io/react-auth";
+import { usePrivyLogin } from "@/hooks/usePrivyLogin";
 import { polygon } from "viem/chains";
 import {
   CreditCard,
@@ -207,7 +207,7 @@ function WalletAddressCard({
 const AddFunds = () => {
   const navigate = useNavigate();
   const { authenticated } = usePrivy();
-  const { login } = useLogin();
+  const { login } = usePrivyLogin();
   const { walletAddress, isPrivyUser } = usePrivyWallet();
   const {
     tradingBalance,

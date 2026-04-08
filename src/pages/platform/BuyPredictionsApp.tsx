@@ -2,6 +2,7 @@ import { ArrowRight, Check, ChevronRight, Globe, Shield, Zap, DollarSign, Users,
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { usePrivy } from "@privy-io/react-auth";
+import { usePrivyLogin } from "@/hooks/usePrivyLogin";
 import { useSeoMeta } from "@/components/seo/SeoMeta";
 import JsonLd from "@/components/seo/JsonLd";
 
@@ -63,7 +64,8 @@ const faqJsonLd = {
 
 export default function BuyPredictionsApp() {
   const navigate = useNavigate();
-  const { ready, authenticated, login } = usePrivy();
+  const { ready, authenticated } = usePrivy();
+  const { login } = usePrivyLogin();
 
   const handleCTA = () => {
     if (authenticated) navigate("/purchase");
