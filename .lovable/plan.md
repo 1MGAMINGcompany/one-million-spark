@@ -1,97 +1,48 @@
 
-Goal: make the Privy failure diagnosable, remove false login loops, and get login working reliably on `1mg.live` operator paths.
+Fix plan for the `/demo` crash
 
 Do I know what the issue is? Yes.
 
-What the audit shows
-- The repeated “unexpected error” is most likely coming from Privy rejecting the current origin/app-ID/cookie setup, not from your React UI itself.
-- Privy’s docs confirm:
-  - allowed URLs are exact origins, not paths
-  - `https://1mg.live/demo` only needs the origin `https://1mg.live`
-  - once a production app ID is configured to use HttpOnly cookies on a production domain, that same app ID is not suitable for preview/staging unless you use a separate dev app ID or app client
-- The codebase still has frontend issues that make this harder to see and can create fake “not logged in” states:
-  1. hardcoded Privy app ID fallback exists in multiple files, so the app can silently use the wrong app ID everywhere
-  2. raw login entry points still exist in `src/pages/platform/OperatorOnboarding.tsx` and `src/pages/platform/OperatorDashboard.tsx`
-  3. auth state is still coupled to wallet hydration in key places, so a user can be authenticated but still shown login UI while the embedded wallet is still loading
+This is now a different failure from the earlier “Pending” login setup. The app is crashing before the login flow even starts. Based on the current code, the most likely root cause is: Privy hooks are being mounted without a valid Privy provider/config.
 
-Implementation plan
+Why this is the likely source:
+- `/demo` renders `PlatformApp -> OperatorApp`, not the chess/3D path, so the react-three issue is not the first thing to fix here.
+- `src/components/PrivyProviderWrapper.tsx` currently skips the provider when `VITE_PRIVY_APP_ID` is missing and still renders the app.
+- `OperatorApp`, `PlatformApp`, `usePolymarketSession`, and `usePrivyLogin` call Privy hooks unconditionally.
+- The env excerpt you shared does not include `VITE_PRIVY_APP_ID`, which matches this exact crash pattern.
 
-1. Add real auth diagnostics
-- Upgrade `src/hooks/usePrivyLogin.ts` to write auth events into the existing debug ring buffer, not just `console.log`.
-- Log:
-  - origin
-  - hostname
-  - pathname
-  - Privy error code
-  - `ready`
-  - `authenticated`
-  - linked-account count
-  - wallet count
-- Use the existing `?debug=1` + DebugHUD flow so copied logs finally show where auth is failing.
-
-2. Remove silent app-ID fallback
-- Stop defaulting to the hardcoded Privy app ID in:
-  - `src/components/PrivyProviderWrapper.tsx`
-  - `src/hooks/usePrivyWallet.ts`
-  - `src/hooks/useWallet.ts`
-  - `src/components/PrivyLoginButton.tsx`
-- If the current environment has no valid app ID configured, show a clear local config error instead of attempting login with a likely-wrong production ID.
-
-3. Finish centralizing login
-- Replace raw `usePrivy().login` usage in:
-  - `src/pages/platform/OperatorOnboarding.tsx`
-  - `src/pages/platform/OperatorDashboard.tsx`
-- Remove or reroute the raw `privyLogin` export inside `src/hooks/useWallet.ts` so future code cannot bypass centralized error handling.
-
-4. Separate authentication from wallet readiness
-- Extend `src/hooks/usePrivyWallet.ts` to expose wallet hydration state, e.g.:
-  - `walletReady`
-  - `hydratingWallet`
-- Update these files so `authenticated === true` but wallet not ready shows a loading/setup state instead of a login prompt:
-  - `src/components/PrivyLoginButton.tsx`
-  - `src/pages/AddFunds.tsx`
-  - `src/pages/FightPredictions.tsx`
-  - `src/pages/platform/OperatorApp.tsx`
-- This removes false “sign in again” loops after successful auth.
-
-5. Align domain/config behavior with the routing model
-- Current operator routing is path-based, so this is enough for all operator apps:
-```text
-https://1mg.live -> covers /demo, /abc, /new-operator
-```
-- Confirm or add exact allowed origins only where needed:
-  - `https://1mg.live`
-  - `https://www.1mg.live` if used
-  - `https://1mgaming.com`
-  - `https://www.1mgaming.com` if used
-- If you want Privy to work on preview/published Lovable domains too, do not rely on the same production cookie-enabled app ID there.
-- Use one of these fixes:
-  - disable HttpOnly cookies for this shared multi-origin setup, or
-  - use separate Privy app IDs / app clients for production vs preview/dev
-
-6. Verify with a simple origin matrix
-- Test login on:
-  - `https://1mg.live/`
-  - `https://1mg.live/demo`
-  - your published domain if intentionally supported
-  - your preview domain only if separately configured
-- Expected result after the fix:
-  - either login succeeds
-  - or the app shows a specific mapped error and debug log, not a vague loop
-
-Files to change
-- `src/hooks/usePrivyLogin.ts`
+Files to fix:
 - `src/components/PrivyProviderWrapper.tsx`
-- `src/hooks/usePrivyWallet.ts`
-- `src/hooks/useWallet.ts`
-- `src/components/PrivyLoginButton.tsx`
-- `src/pages/AddFunds.tsx`
-- `src/pages/FightPredictions.tsx`
+- `src/pages/platform/PlatformApp.tsx`
 - `src/pages/platform/OperatorApp.tsx`
-- `src/pages/platform/OperatorOnboarding.tsx`
-- `src/pages/platform/OperatorDashboard.tsx`
+- `src/hooks/usePolymarketSession.ts`
+- `src/hooks/usePrivyLogin.ts`
+- `src/hooks/usePrivyWallet.ts`
+- `src/hooks/usePrivySolBalance.ts`
 
-Technical details
-- `1mg.live/demo` is not a separate domain; it is still the `https://1mg.live` origin.
-- Generic preview wildcards are not a safe Privy strategy; preview support should use exact preview origins or a separate development app/client.
-- Frontend fixes will make the source obvious and stop false re-prompts, but the modal-level “unexpected error” will continue until the Privy origin/cookie configuration matches the domain being tested.
+Implementation plan:
+1. Replace the silent fallback in `PrivyProviderWrapper`.
+   - If `VITE_PRIVY_APP_ID` is missing, render a clear configuration screen instead of `children`.
+   - Add one debug event so the failure is obvious in logs.
+
+2. Make Privy-dependent hooks safe.
+   - Convert `usePolymarketSession` and `usePrivyLogin` to the same outer-wrapper pattern already used in `usePrivyWallet`.
+   - Return no-op/default state when Privy is not configured so hooks never crash the route.
+
+3. Gate platform/operator rendering.
+   - In `PlatformApp` / `OperatorApp`, do not mount auth/trading flows until Privy is configured and ready.
+   - Show a simple loading/config state instead of rendering the full operator app immediately.
+
+4. Remove remaining hidden fallback behavior.
+   - Remove the hardcoded fallback app ID in `src/hooks/usePrivySolBalance.ts`.
+   - Use one shared `isPrivyConfigured` helper everywhere.
+
+5. Verify the real failing paths.
+   - Test `/demo`, `/buy-predictions-app`, `/onboarding`, and `/dashboard`.
+   - Expected result: no global crash on first render.
+   - If config is missing, the app should show a clear auth configuration message.
+   - If config is present, the next error will surface cleanly and we can fix the real auth/login issue from there.
+
+Technical note:
+- I specifically checked the react-three angle from the error hint. The only `Canvas`/`@react-three/fiber` code is in the chess cinematic path, which is not part of `/demo`, so that is not the primary issue here.
+- You do not need to wait a few hours for this crash; DNS “Pending” can block login, but it does not explain this immediate render error.
