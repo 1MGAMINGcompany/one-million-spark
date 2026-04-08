@@ -1,48 +1,36 @@
 /**
  * usePrivyWallet — EVM wallet hook for Privy embedded wallets (Polygon).
- *
- * This replaces usePrivySolBalance for the prediction flow.
- * Skill games continue to use the separate Solana wallet hooks.
  */
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
+import { isPrivyConfigured } from "@/lib/privyConfig";
 
-const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID;
 const POLL_INTERVAL_MS = 15_000;
 
 interface PrivyWalletState {
-  /** Whether user is authenticated via Privy with an EVM wallet */
   isPrivyUser: boolean;
-  /** EVM wallet address (0x...) — Smart Wallet preferred */
   walletAddress: string | null;
-  /** Embedded EOA address (0x...) — may differ from Smart Wallet */
   eoaAddress: string | null;
-  /** Native balance in MATIC (POL) */
   balanceMatic: number | null;
-  /** Whether balance is currently loading */
   loading: boolean;
-  /** Short display address */
   shortAddress: string | null;
-  /** Whether the wallet is fully hydrated and ready */
   walletReady: boolean;
-  /** Whether we're waiting for the wallet to hydrate after auth */
   hydratingWallet: boolean;
 }
 
+const NO_PRIVY: PrivyWalletState = {
+  isPrivyUser: false,
+  walletAddress: null,
+  eoaAddress: null,
+  balanceMatic: null,
+  loading: false,
+  shortAddress: null,
+  walletReady: false,
+  hydratingWallet: false,
+};
+
 export function usePrivyWallet(): PrivyWalletState {
-  const noPrivy: PrivyWalletState = {
-    isPrivyUser: false,
-    walletAddress: null,
-    eoaAddress: null,
-    balanceMatic: null,
-    loading: false,
-    shortAddress: null,
-    walletReady: false,
-    hydratingWallet: false,
-  };
-
-  if (!PRIVY_APP_ID) return noPrivy;
-
+  if (!isPrivyConfigured) return NO_PRIVY;
   return usePrivyWalletInner();
 }
 
@@ -52,7 +40,6 @@ function usePrivyWalletInner(): PrivyWalletState {
   const [balanceMatic, setBalanceMatic] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Find EVM smart wallet address
   const smartWalletAddress = useMemo(() => {
     const smartWallet = user?.linkedAccounts?.find(
       (a: any) => a.type === "smart_wallet"
@@ -60,7 +47,6 @@ function usePrivyWalletInner(): PrivyWalletState {
     return (smartWallet?.address as string) ?? null;
   }, [user]);
 
-  // Find embedded EOA address
   const eoaAddress = useMemo(() => {
     const linked = user?.linkedAccounts?.find(
       (a: any) => a.type === "wallet" && a.chainType === "ethereum"
@@ -70,7 +56,6 @@ function usePrivyWalletInner(): PrivyWalletState {
     return w?.address ?? null;
   }, [user, wallets]);
 
-  // Primary address: prefer smart wallet, fallback to EOA
   const walletAddress = smartWalletAddress ?? eoaAddress ?? null;
 
   const shortAddress = useMemo(() => {
@@ -78,11 +63,9 @@ function usePrivyWalletInner(): PrivyWalletState {
     return `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
   }, [walletAddress]);
 
-  // Wallet hydration state
   const walletReady = ready && authenticated && !!walletAddress;
   const hydratingWallet = ready && authenticated && !walletAddress;
 
-  // Fetch native MATIC balance via public RPC
   const fetchBalance = useCallback(async () => {
     if (!walletAddress) return;
     try {
