@@ -2,35 +2,29 @@ import { useState, useEffect, useCallback } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { solanaRpcRead } from "@/lib/solanaReadProxy";
 import { LAMPORTS_PER_SOL } from "@/lib/solana-config";
+import { isPrivyConfigured } from "@/lib/privyConfig";
 
-const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID || "cmlq6g2dn00760cl2djbh9dfy";
 const POLL_INTERVAL_MS = 10_000;
 const LOW_BALANCE_THRESHOLD = 0.01;
 
 interface PrivySolBalance {
-  /** Whether user is authenticated via Privy with an embedded Solana wallet */
   isPrivyUser: boolean;
-  /** Wallet address (full) */
   walletAddress: string | null;
-  /** Balance in SOL */
   balanceSol: number | null;
-  /** Whether balance is at or below the low threshold */
   isLowBalance: boolean;
-  /** Whether balance is currently loading */
   loading: boolean;
 }
 
+const NO_PRIVY: PrivySolBalance = {
+  isPrivyUser: false,
+  walletAddress: null,
+  balanceSol: null,
+  isLowBalance: false,
+  loading: false,
+};
+
 export function usePrivySolBalance(): PrivySolBalance {
-  const noPrivy: PrivySolBalance = {
-    isPrivyUser: false,
-    walletAddress: null,
-    balanceSol: null,
-    isLowBalance: false,
-    loading: false,
-  };
-
-  if (!PRIVY_APP_ID) return noPrivy;
-
+  if (!isPrivyConfigured) return NO_PRIVY;
   return usePrivySolBalanceInner();
 }
 

@@ -3,8 +3,7 @@ import { useWallet as useSolanaWallet, useConnection } from "@solana/wallet-adap
 import { usePrivy } from "@privy-io/react-auth";
 import { useWallets, useSignTransaction, useSignAndSendTransaction } from "@privy-io/react-auth/solana";
 import { PublicKey, Transaction, VersionedTransaction, Connection, SendOptions } from "@solana/web3.js";
-
-const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID;
+import { isPrivyConfigured } from "@/lib/privyConfig";
 
 export function useWallet() {
   const {
@@ -20,7 +19,7 @@ export function useWallet() {
   const { connection } = useConnection();
 
   // Privy auth state (guarded by app ID availability)
-  const privyState = PRIVY_APP_ID ? usePrivyInner() : {
+  const privyState = isPrivyConfigured ? usePrivyInner() : {
     authenticated: false,
     privyAddress: null,
     privyPublicKey: null,

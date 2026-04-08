@@ -1,8 +1,20 @@
 import { useLogin } from "@privy-io/react-auth";
 import { toast } from "sonner";
 import { dbg } from "@/lib/debugLog";
+import { isPrivyConfigured } from "@/lib/privyConfig";
+
+const noopLogin = () => {
+  console.warn("[usePrivyLogin] Privy not configured — login() is a no-op");
+};
 
 export function usePrivyLogin() {
+  if (!isPrivyConfigured) {
+    return { login: noopLogin };
+  }
+  return usePrivyLoginInner();
+}
+
+function usePrivyLoginInner() {
   const { login } = useLogin({
     onComplete: ({ user, isNewUser }) => {
       dbg("privy:login:complete", {
@@ -27,7 +39,7 @@ export function usePrivyLogin() {
         origin: window.location.origin,
         hostname: window.location.hostname,
         path: window.location.pathname,
-        appId: import.meta.env.VITE_PRIVY_APP_ID ?? "(fallback)",
+        appId: import.meta.env.VITE_PRIVY_APP_ID ?? "(missing)",
       });
       console.error("[Privy] Login error:", {
         code,
@@ -45,7 +57,6 @@ export function usePrivyLogin() {
           toast.error("This login method is not enabled. Try email instead.");
           break;
         case "exited_auth_flow":
-          // User closed modal voluntarily — no toast
           break;
         case "client_request_timeout":
           toast.error("Connection timeout. Please check your internet and try again.");
@@ -67,12 +78,7 @@ export function usePrivyLogin() {
       origin: window.location.origin,
       hostname: window.location.hostname,
       path: window.location.pathname,
-      appId: import.meta.env.VITE_PRIVY_APP_ID ?? "(fallback)",
-    });
-    console.log("[Auth] Login attempt from:", {
-      origin: window.location.origin,
-      path: window.location.pathname,
-      hostname: window.location.hostname,
+      appId: import.meta.env.VITE_PRIVY_APP_ID ?? "(missing)",
     });
     login();
   };

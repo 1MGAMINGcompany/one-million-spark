@@ -1,34 +1,21 @@
 /**
  * usePolymarketSession — Per-user Polymarket trading wallet management.
- *
- * Model A: Each user gets their own Gnosis Safe + CLOB credentials
- * derived from a one-time SIWE signature. All subsequent trades
- * use these per-user credentials server-side.
  */
 import { useState, useEffect, useCallback } from "react";
 import { usePrivy, useSignMessage } from "@privy-io/react-auth";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
+import { isPrivyConfigured } from "@/lib/privyConfig";
 
 interface PolymarketSessionState {
-  /** Whether user has completed trading wallet setup */
   hasSession: boolean;
-  /** Session status: not_setup | active | expired | awaiting_credentials */
   status: string;
-  /** Whether user can place trades right now */
   canTrade: boolean;
-  /** Whether Safe wallet has been deployed */
   safeDeployed: boolean;
-  /** Whether token approvals are set */
   approvalsSet: boolean;
-  /** User's derived Polymarket trading address */
   derivedAddress: string | null;
-  /** Loading state */
   loading: boolean;
-  /** Error message */
   error: string | null;
-  /** Trigger full setup flow (one-time SIWE signature) */
   setupTradingWallet: () => Promise<{ success: boolean; ready?: boolean; error?: string }>;
-  /** Refresh session status */
   refreshSession: () => Promise<{
     hasSession: boolean;
     status: string;
@@ -39,10 +26,28 @@ interface PolymarketSessionState {
   } | null>;
 }
 
+const NOOP_SESSION: PolymarketSessionState = {
+  hasSession: false,
+  status: "not_configured",
+  canTrade: false,
+  safeDeployed: false,
+  approvalsSet: false,
+  derivedAddress: null,
+  loading: false,
+  error: null,
+  setupTradingWallet: async () => ({ success: false, error: "Privy not configured" }),
+  refreshSession: async () => null,
+};
+
 const SIWE_MESSAGE_PREFIX = "Sign to enable trading on 1mg.live";
 const USER_SETUP_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/polymarket-user-setup`;
 
 export function usePolymarketSession(): PolymarketSessionState {
+  if (!isPrivyConfigured) return NOOP_SESSION;
+  return usePolymarketSessionInner();
+}
+
+function usePolymarketSessionInner(): PolymarketSessionState {
   const { walletAddress, eoaAddress, isPrivyUser } = usePrivyWallet();
   const { getAccessToken } = usePrivy();
   const { signMessage } = useSignMessage();
@@ -55,13 +60,12 @@ export function usePolymarketSession(): PolymarketSessionState {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Check session status on mount / wallet change
   const refreshSession = useCallback(async () => {
-    if (!walletAddress) return;
+    if (!walletAddress) return null;
 
     try {
       const token = await getAccessToken();
-      if (!token) return;
+      if (!token) return null;
 
       const response = await fetch(USER_SETUP_URL, {
         method: "POST",
@@ -116,7 +120,6 @@ export function usePolymarketSession(): PolymarketSessionState {
     }
   }, [isPrivyUser, walletAddress, refreshSession]);
 
-  // Full setup flow: SIWE signature → derive key → deploy Safe → approvals → CLOB creds
   const setupTradingWallet = useCallback(async (): Promise<{
     success: boolean;
     ready?: boolean;
@@ -130,7 +133,6 @@ export function usePolymarketSession(): PolymarketSessionState {
     setError(null);
 
     try {
-      // Step 1: Get Privy access token
       const token = await getAccessToken();
       if (!token) {
         throw new Error("Could not get access token");
@@ -138,11 +140,9 @@ export function usePolymarketSession(): PolymarketSessionState {
 
       const signerAddress = eoaAddress ?? walletAddress;
 
-      // Step 2: Create deterministic SIWE message
       const timestamp = Date.now();
       const siweMessage = `${SIWE_MESSAGE_PREFIX}\n\nPrimary Wallet: ${walletAddress}\nSigner Wallet: ${signerAddress}\nTimestamp: ${timestamp}\nChain: Polygon (137)`;
 
-      // Step 3: Sign the message with user's Privy wallet
       const result = await signMessage(
         { message: siweMessage },
         { address: signerAddress as `0x${string}` },
@@ -153,7 +153,6 @@ export function usePolymarketSession(): PolymarketSessionState {
         throw new Error("Signature was empty or user rejected");
       }
 
-      // Step 4: Send to backend for full setup
       const response = await fetch(USER_SETUP_URL, {
         method: "POST",
         headers: {
@@ -182,7 +181,6 @@ export function usePolymarketSession(): PolymarketSessionState {
         throw new Error(data?.error || "Setup returned failure");
       }
 
-      // Update local state
       setHasSession(true);
       setStatus(data.status || "active");
       setCanTrade(data.can_trade ?? false);
