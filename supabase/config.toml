@@ -140,5 +140,8 @@ verify_jwt = false
 [functions.prediction-sell]
 verify_jwt = false
 
+[functions.polymarket-user-setup]
+verify_jwt = false
+
 [functions.get-privy-config]
 verify_jwt = false
