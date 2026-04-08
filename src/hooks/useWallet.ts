@@ -5,7 +5,22 @@ import { useWallets, useSignTransaction, useSignAndSendTransaction } from "@priv
 import { PublicKey, Transaction, VersionedTransaction, Connection, SendOptions } from "@solana/web3.js";
 import { isPrivyConfigured } from "@/lib/privyConfig";
 
+const NO_PRIVY_STATE = {
+  authenticated: false,
+  privyAddress: null as string | null,
+  privyPublicKey: null as PublicKey | null,
+  privyLogin: undefined,
+  privyLogout: undefined,
+  privySendTransaction: undefined,
+  privySignTransaction: undefined,
+};
+
 export function useWallet() {
+  if (!isPrivyConfigured) return useWalletWithoutPrivy();
+  return useWalletWithPrivy();
+}
+
+function useWalletCore() {
   const {
     publicKey: adapterPublicKey,
     connected: adapterConnected,
@@ -17,17 +32,25 @@ export function useWallet() {
     signTransaction: adapterSignTransaction,
   } = useSolanaWallet();
   const { connection } = useConnection();
+  return { adapterPublicKey, adapterConnected, connecting, disconnect, wallet, connect, adapterSendTransaction, adapterSignTransaction, connection };
+}
 
-  // Privy auth state (guarded by app ID availability)
-  const privyState = isPrivyConfigured ? usePrivyInner() : {
-    authenticated: false,
-    privyAddress: null,
-    privyPublicKey: null,
-    privyLogin: undefined,
-    privyLogout: undefined,
-    privySendTransaction: undefined,
-    privySignTransaction: undefined,
-  };
+function useWalletWithoutPrivy() {
+  const core = useWalletCore();
+  return useWalletCombined(core, NO_PRIVY_STATE);
+}
+
+function useWalletWithPrivy() {
+  const core = useWalletCore();
+  const privyState = usePrivyInner();
+  return useWalletCombined(core, privyState);
+}
+
+function useWalletCombined(
+  core: ReturnType<typeof useWalletCore>,
+  privyState: typeof NO_PRIVY_STATE | ReturnType<typeof usePrivyInner>,
+) {
+  const { adapterPublicKey, adapterConnected, connecting, disconnect, wallet, connect, adapterSendTransaction, adapterSignTransaction, connection } = core;
 
   // Determine which wallet path is active
   const isPrivyWallet = !adapterConnected && privyState.authenticated && !!privyState.privyAddress;

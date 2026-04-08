@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { usePrivy } from "@privy-io/react-auth";
+import { usePrivySafe } from "@/hooks/usePrivySafe";
 import { usePrivyLogin } from "@/hooks/usePrivyLogin";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, ArrowLeft, Check, ExternalLink, Rocket } from "lucide-react";
@@ -21,7 +21,7 @@ const SPORTS_OPTIONS = [
 ];
 
 export default function OperatorOnboarding() {
-  const { authenticated, getAccessToken } = usePrivy();
+  const { authenticated, getAccessToken } = usePrivySafe();
   const { login } = usePrivyLogin();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);

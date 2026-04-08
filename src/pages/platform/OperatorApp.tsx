@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useOperatorBySubdomain, useOperatorSettings } from "@/hooks/useOperator";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { usePrivy } from "@privy-io/react-auth";
+import { usePrivySafe } from "@/hooks/usePrivySafe";
 import { usePrivyLogin } from "@/hooks/usePrivyLogin";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
 import { useAllowanceGate } from "@/hooks/useAllowanceGate";
@@ -121,7 +121,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const { data: operator, isLoading } = useOperatorBySubdomain(subdomain);
   const { data: settings } = useOperatorSettings(operator?.id ?? null);
 
-  const { authenticated, getAccessToken } = usePrivy();
+  const { authenticated, getAccessToken } = usePrivySafe();
   const { login } = usePrivyLogin();
   const { walletAddress: address, eoaAddress, isPrivyUser } = usePrivyWallet();
   const { state: allowanceState, ensureAllowance, reset: resetAllowance } = useAllowanceGate();

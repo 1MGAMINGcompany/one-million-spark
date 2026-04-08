@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { usePrivy } from "@privy-io/react-auth";
+import { usePrivySafe } from "@/hooks/usePrivySafe";
 import { usePrivyLogin } from "@/hooks/usePrivyLogin";
 import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
 import { useSeoMeta } from "@/components/seo/SeoMeta";
@@ -220,7 +220,7 @@ function RevenueCalculator() {
 export default function LandingPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { ready, authenticated, logout, user } = usePrivy();
+  const { ready, authenticated, logout, user } = usePrivySafe();
   const { login } = usePrivyLogin();
 
   useSeoMeta({

@@ -1,16 +1,15 @@
-import { usePrivy } from "@privy-io/react-auth";
+import { usePrivySafe } from "@/hooks/usePrivySafe";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
 import { usePrivyLogin } from "@/hooks/usePrivyLogin";
 import { Button } from "@/components/ui/button";
 import { LogOut, Wallet, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-
-const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID;
+import { isPrivyConfigured } from "@/lib/privyConfig";
 
 export function PrivyLoginButton() {
   const { t } = useTranslation();
 
-  if (!PRIVY_APP_ID) {
+  if (!isPrivyConfigured) {
     return (
       <div className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
         {t("wallet.walletLoginNotConfigured")}
@@ -23,7 +22,7 @@ export function PrivyLoginButton() {
 
 function PrivyLoginButtonInner() {
   const { t } = useTranslation();
-  const { ready, authenticated, logout } = usePrivy();
+  const { ready, authenticated, logout } = usePrivySafe();
   const { login } = usePrivyLogin();
   const { isPrivyUser, shortAddress, hydratingWallet } = usePrivyWallet();
 

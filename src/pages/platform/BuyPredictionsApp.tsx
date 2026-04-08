@@ -1,7 +1,7 @@
 import { ArrowRight, Check, ChevronRight, Globe, Shield, Zap, DollarSign, Users, Trophy, Smartphone, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { usePrivy } from "@privy-io/react-auth";
+import { usePrivySafe } from "@/hooks/usePrivySafe";
 import { usePrivyLogin } from "@/hooks/usePrivyLogin";
 import { useSeoMeta } from "@/components/seo/SeoMeta";
 import JsonLd from "@/components/seo/JsonLd";
@@ -64,7 +64,7 @@ const faqJsonLd = {
 
 export default function BuyPredictionsApp() {
   const navigate = useNavigate();
-  const { ready, authenticated } = usePrivy();
+  const { ready, authenticated } = usePrivySafe();
   const { login } = usePrivyLogin();
 
   const handleCTA = () => {

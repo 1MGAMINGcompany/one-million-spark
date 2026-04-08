@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useWallet } from "@/hooks/useWallet";
-import { usePrivy } from "@privy-io/react-auth";
+import { usePrivySafe } from "@/hooks/usePrivySafe";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
 import { usePrivyLogin } from "@/hooks/usePrivyLogin";
 import { Home, Wallet, Menu, X, Coins, Volume2, VolumeX, Bell, BellOff, Trophy, ChevronDown, LogOut, ArrowRightLeft, User, Swords, Sun, Moon } from "lucide-react";
@@ -38,7 +38,7 @@ const Navbar = () => {
   const { t, i18n } = useTranslation();
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const { connected, publicKey } = useWallet();
-  const { authenticated, logout } = usePrivy();
+  const { authenticated, logout } = usePrivySafe();
   const { login } = usePrivyLogin();
   const { isPrivyUser, walletAddress, balanceMatic, loading: balanceLoading, shortAddress: privyShortAddress } = usePrivyWallet();
 
