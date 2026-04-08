@@ -672,7 +672,18 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         />
       )}
 
-      {isConnected && (
+      {/* Geo-block banner */}
+      {geoBlocked && !geoBlockDismissed && (
+        <div className="max-w-4xl mx-auto px-4 pt-3">
+          <GeoBlockScreen
+            wallet={address || undefined}
+            onDismiss={() => setGeoBlockDismissed(true)}
+            onExploreReadOnly={() => setGeoBlockDismissed(true)}
+          />
+        </div>
+      )}
+
+      {isConnected && !geoBlocked && (
         <div className="max-w-4xl mx-auto px-4 pt-3">
           <EnableTradingBanner
             hasSession={hasSession}
