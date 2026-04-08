@@ -4,12 +4,12 @@ import { usePrivyLogin } from "@/hooks/usePrivyLogin";
 import { Button } from "@/components/ui/button";
 import { LogOut, Wallet, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { isPrivyConfigured } from "@/lib/privyConfig";
+import { getPrivyAppId } from "@/lib/privyConfig";
 
 export function PrivyLoginButton() {
   const { t } = useTranslation();
 
-  if (!isPrivyConfigured) {
+  if (!getPrivyAppId()) {
     return (
       <div className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
         {t("wallet.walletLoginNotConfigured")}

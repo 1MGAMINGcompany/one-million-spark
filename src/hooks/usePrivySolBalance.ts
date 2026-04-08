@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { solanaRpcRead } from "@/lib/solanaReadProxy";
 import { LAMPORTS_PER_SOL } from "@/lib/solana-config";
-import { isPrivyConfigured } from "@/lib/privyConfig";
+import { getPrivyAppId } from "@/lib/privyConfig";
 
 const POLL_INTERVAL_MS = 10_000;
 const LOW_BALANCE_THRESHOLD = 0.01;
@@ -24,7 +24,7 @@ const NO_PRIVY: PrivySolBalance = {
 };
 
 export function usePrivySolBalance(): PrivySolBalance {
-  if (!isPrivyConfigured) return NO_PRIVY;
+  if (!getPrivyAppId()) return NO_PRIVY;
   return usePrivySolBalanceInner();
 }
 

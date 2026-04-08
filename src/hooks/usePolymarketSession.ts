@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { usePrivy, useSignMessage } from "@privy-io/react-auth";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
-import { isPrivyConfigured } from "@/lib/privyConfig";
+import { getPrivyAppId } from "@/lib/privyConfig";
 
 interface PolymarketSessionState {
   hasSession: boolean;
@@ -43,7 +43,7 @@ const SIWE_MESSAGE_PREFIX = "Sign to enable trading on 1mg.live";
 const USER_SETUP_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/polymarket-user-setup`;
 
 export function usePolymarketSession(): PolymarketSessionState {
-  if (!isPrivyConfigured) return NOOP_SESSION;
+  if (!getPrivyAppId()) return NOOP_SESSION;
   return usePolymarketSessionInner();
 }
 

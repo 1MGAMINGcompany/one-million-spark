@@ -3,7 +3,7 @@
  */
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
-import { isPrivyConfigured } from "@/lib/privyConfig";
+import { getPrivyAppId } from "@/lib/privyConfig";
 
 const POLL_INTERVAL_MS = 15_000;
 
@@ -30,7 +30,7 @@ const NO_PRIVY: PrivyWalletState = {
 };
 
 export function usePrivyWallet(): PrivyWalletState {
-  if (!isPrivyConfigured) return NO_PRIVY;
+  if (!getPrivyAppId()) return NO_PRIVY;
   return usePrivyWalletInner();
 }
 
