@@ -1,10 +1,12 @@
 import { useLogin } from "@privy-io/react-auth";
+import { useRef } from "react";
 import { toast } from "sonner";
 import { dbg } from "@/lib/debugLog";
 import { isPrivyConfigured } from "@/lib/privyConfig";
 
 const noopLogin = () => {
   console.warn("[usePrivyLogin] Privy not configured — login() is a no-op");
+  toast.error("Authentication is not configured for this build.");
 };
 
 export function usePrivyLogin() {
@@ -15,8 +17,18 @@ export function usePrivyLogin() {
 }
 
 function usePrivyLoginInner() {
+  const loginTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearLoginTimeout = () => {
+    if (loginTimeoutRef.current) {
+      clearTimeout(loginTimeoutRef.current);
+      loginTimeoutRef.current = null;
+    }
+  };
+
   const { login } = useLogin({
     onComplete: ({ user, isNewUser }) => {
+      clearLoginTimeout();
       dbg("privy:login:complete", {
         userId: user.id,
         isNewUser,
@@ -32,6 +44,7 @@ function usePrivyLoginInner() {
       });
     },
     onError: (error) => {
+      clearLoginTimeout();
       const code = typeof error === "string" ? error : (error as any)?.code ?? String(error);
       dbg("privy:login:error", {
         code,
@@ -80,6 +93,17 @@ function usePrivyLoginInner() {
       path: window.location.pathname,
       appId: import.meta.env.VITE_PRIVY_APP_ID ?? "(missing)",
     });
+
+    clearLoginTimeout();
+    loginTimeoutRef.current = setTimeout(() => {
+      loginTimeoutRef.current = null;
+      toast.error("Login dialog didn't appear. Check domain configuration or try again.");
+      dbg("privy:login:timeout", {
+        origin: window.location.origin,
+        hostname: window.location.hostname,
+      });
+    }, 5000);
+
     login();
   };
 

@@ -9,6 +9,8 @@ interface PrivyProviderWrapperProps {
   children: ReactNode;
 }
 
+console.info(`[Privy] configured=${isPrivyConfigured}, appId=${PRIVY_APP_ID ? "set" : "missing"}`);
+
 export function PrivyProviderWrapper({ children }: PrivyProviderWrapperProps) {
   if (!isPrivyConfigured || !PRIVY_APP_ID) {
     dbg("privy:provider:missing_app_id", {
