@@ -158,7 +158,52 @@ function deriveTradingKey(signature: string): `0x${string}` {
   return seed as `0x${string}`;
 }
 
-/** Derive CLOB API credentials for the trading wallet */
+/** Build EIP-712 ClobAuth signature for L1 authentication */
+async function buildClobAuthHeaders(
+  tradingAccount: ReturnType<typeof privateKeyToAccount>,
+  nonce = 0,
+): Promise<Record<string, string>> {
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const address = tradingAccount.address;
+
+  const domain = {
+    name: "ClobAuthDomain" as const,
+    version: "1" as const,
+    chainId: 137,
+  };
+
+  const types = {
+    ClobAuth: [
+      { name: "address", type: "address" },
+      { name: "timestamp", type: "string" },
+      { name: "nonce", type: "uint256" },
+      { name: "message", type: "string" },
+    ],
+  } as const;
+
+  const message = {
+    address,
+    timestamp,
+    nonce: BigInt(nonce),
+    message: "This message attests that I control the given wallet",
+  };
+
+  const signature = await tradingAccount.signTypedData({
+    domain,
+    types,
+    primaryType: "ClobAuth",
+    message,
+  });
+
+  return {
+    POLY_ADDRESS: address,
+    POLY_SIGNATURE: signature,
+    POLY_TIMESTAMP: timestamp,
+    POLY_NONCE: nonce.toString(),
+  };
+}
+
+/** Derive CLOB API credentials for the trading wallet using L1 EIP-712 auth */
 async function deriveClobApiCreds(
   tradingAccount: ReturnType<typeof privateKeyToAccount>,
 ): Promise<{
@@ -168,25 +213,29 @@ async function deriveClobApiCreds(
   error?: string;
 }> {
   try {
-    const nonce = Date.now().toString();
-    const derivedAddress = tradingAccount.address.toLowerCase();
-    const derivationMessage = `Derive Polymarket API key\nNonce: ${nonce}\nAddress: ${derivedAddress}`;
-    const derivationSig = await tradingAccount.signMessage({ message: derivationMessage });
+    // Step 1: Try GET /auth/derive-api-key (retrieves existing creds)
+    const headers = await buildClobAuthHeaders(tradingAccount, 0);
 
-    const res = await fetch(`${CLOB_BASE}/auth/derive-api-key`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        wallet: derivedAddress,
-        nonce,
-        signature: derivationSig,
-      }),
+    let res = await fetch(`${CLOB_BASE}/auth/derive-api-key`, {
+      method: "GET",
+      headers,
     });
+
+    // Step 2: If no creds exist yet (404), create them with POST /auth/api-key
+    if (res.status === 404) {
+      await res.text(); // consume body
+      console.log("[polymarket-user-setup] No existing creds, creating via POST /auth/api-key");
+      const createHeaders = await buildClobAuthHeaders(tradingAccount, 0);
+      res = await fetch(`${CLOB_BASE}/auth/api-key`, {
+        method: "POST",
+        headers: createHeaders,
+      });
+    }
 
     if (!res.ok) {
       const errText = await res.text();
-      console.warn(`[polymarket-user-setup] CLOB derive failed (${res.status}): ${errText}`);
-      return { apiKey: null, apiSecret: null, passphrase: null, error: errText };
+      console.warn(`[polymarket-user-setup] CLOB cred derivation failed (${res.status}): ${errText}`);
+      return { apiKey: null, apiSecret: null, passphrase: null, error: `${res.status}: ${errText}` };
     }
 
     const data = await res.json();
