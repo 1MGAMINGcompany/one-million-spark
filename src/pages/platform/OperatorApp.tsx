@@ -583,6 +583,33 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     setShowFundsModal(true);
   };
 
+  const handleSell = async (fightId: string) => {
+    if (!address) return;
+    setSelling(true);
+    try {
+      const privyToken = await getAccessToken();
+      if (!privyToken) { setSelling(false); return; }
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/prediction-sell`;
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-privy-token": privyToken, apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+        body: JSON.stringify({ fight_id: fightId, wallet: address }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || data?.error) {
+        if (data?.error_code === "clob_geo_blocked") { setGeoBlocked(true); setSelling(false); return; }
+        throw new Error(data?.error || "Sell failed");
+      }
+      toast.success(t("operator.sold"), { description: `$${(data.expected_usdc || 0).toFixed(2)}` });
+      loadUserEntries();
+      setTimeout(() => refetchBalance(), 3000);
+    } catch (err: any) {
+      toast.error(t("operator.sellFailed", "Sell failed"), { description: err.message });
+    } finally {
+      setSelling(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: theme.bg }}>
