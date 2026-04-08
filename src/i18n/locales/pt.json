@@ -1872,5 +1872,40 @@
       "s6Title": "Violações",
       "s6Body": "Violações podem resultar em suspensão imediata da conta e banimento permanente."
     }
+  },
+  "tradingWallet": {
+    "ready": "Carteira de trading pronta",
+    "finalizing": "Finalizando carteira de trading",
+    "needsFinalSetup": "A carteira precisa de configuração final",
+    "deploymentIncomplete": "Implantação da carteira incompleta",
+    "setUp": "Configurar Carteira de Trading",
+    "readyDescSafe": "Sua carteira sem gás está ativa e pronta para previsões.",
+    "readyDesc": "Sua carteira de trading está ativa.",
+    "finalizingDesc": "Estamos criando sua carteira pessoal e permissões de troca.",
+    "incompleteDesc": "Sua carteira existe, mas aprovações ou credenciais estão incompletas. Tente novamente.",
+    "deploymentDesc": "Sua configuração começou, mas a implantação não foi concluída. Tente novamente.",
+    "signOnce": "Assine uma vez para criar sua carteira pessoal antes de fazer previsões.",
+    "working": "Trabalhando…",
+    "retrySetup": "Tentar novamente",
+    "setUpButton": "Configurar",
+    "statusLabel": "Status",
+    "deploymentFailed": "A implantação da carteira falhou. Tente novamente.",
+    "setupFailed": "A configuração da carteira falhou. Tente novamente.",
+    "approvalFailed": "A etapa de aprovação falhou. Tente novamente.",
+    "credentialFailed": "A configuração de credenciais falhou. Tente novamente.",
+    "unknownError": "Ocorreu um erro inesperado. Tente novamente."
+  },
+  "marketTips": {
+    "title": "Dicas",
+    "bigPlayerActivity": "Atividade de Grandes Jogadores",
+    "activity": "Atividade",
+    "momentum": "Momentum",
+    "largeTrades": "Grandes Operações",
+    "quickRead": "Leitura Rápida",
+    "aiAnalysis": "Análise IA",
+    "analyzingMarket": "Analisando mercado...",
+    "bigWalletLeaning": "Para Onde as Grandes Carteiras Estão Inclinando",
+    "aiUnavailable": "A análise IA está temporariamente indisponível. Use os sinais de Atividade de Grandes Jogadores.",
+    "poweredBy": "Alimentado por 1mg.live"
   }
 }

@@ -1874,5 +1874,40 @@
       "s6Title": "違反",
       "s6Body": "違反はアカウントの即時停止と永久追放につながる可能性があります。"
     }
+  },
+  "tradingWallet": {
+    "ready": "トレーディングウォレット準備完了",
+    "finalizing": "トレーディングウォレットを完了中",
+    "needsFinalSetup": "ウォレットの最終設定が必要",
+    "deploymentIncomplete": "ウォレットのデプロイが未完了",
+    "setUp": "トレーディングウォレットを設定",
+    "readyDescSafe": "ガスレストレーディングウォレットがアクティブで予測の準備ができています。",
+    "readyDesc": "トレーディングウォレットがアクティブです。",
+    "finalizingDesc": "個人のトレーディングウォレットと取引所の権限を作成しています。",
+    "incompleteDesc": "ウォレットは存在しますが、承認または認証情報が不完全です。セットアップを再試行してください。",
+    "deploymentDesc": "セットアップが開始されましたが、デプロイが完了しませんでした。再試行してください。",
+    "signOnce": "予測を行う前に、一度署名してウォレットを作成してください。",
+    "working": "処理中…",
+    "retrySetup": "再試行",
+    "setUpButton": "設定",
+    "statusLabel": "ステータス",
+    "deploymentFailed": "ウォレットのデプロイに失敗しました。もう一度お試しください。",
+    "setupFailed": "ウォレットのセットアップに失敗しました。もう一度お試しください。",
+    "approvalFailed": "承認ステップに失敗しました。再試行してください。",
+    "credentialFailed": "認証情報のセットアップに失敗しました。再試行してください。",
+    "unknownError": "予期しないエラーが発生しました。もう一度お試しください。"
+  },
+  "marketTips": {
+    "title": "ヒント",
+    "bigPlayerActivity": "大口プレイヤーの活動",
+    "activity": "活動",
+    "momentum": "勢い",
+    "largeTrades": "大口取引",
+    "quickRead": "クイックリード",
+    "aiAnalysis": "AI分析",
+    "analyzingMarket": "市場を分析中...",
+    "bigWalletLeaning": "大口ウォレットの傾向",
+    "aiUnavailable": "AI分析は一時的に利用できません。上の大口プレイヤーシグナルをご利用ください。",
+    "poweredBy": "1mg.live提供"
   }
 }

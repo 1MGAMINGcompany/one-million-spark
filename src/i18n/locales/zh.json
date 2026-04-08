@@ -1874,5 +1874,40 @@
       "s6Title": "违规",
       "s6Body": "违规可能导致立即暂停账户并永久封禁。"
     }
+  },
+  "tradingWallet": {
+    "ready": "交易钱包已就绪",
+    "finalizing": "正在完成交易钱包",
+    "needsFinalSetup": "钱包需要最终设置",
+    "deploymentIncomplete": "钱包部署未完成",
+    "setUp": "设置交易钱包",
+    "readyDescSafe": "您的免Gas交易钱包已激活，可以进行预测。",
+    "readyDesc": "您的交易钱包已激活。",
+    "finalizingDesc": "我们正在创建您的个人交易钱包和交易所权限。",
+    "incompleteDesc": "您的钱包已存在，但审批或凭证不完整。请重试设置。",
+    "deploymentDesc": "您的设置已开始，但部署未完成。请重试以继续。",
+    "signOnce": "在进行预测之前，签名一次以创建您的个人钱包。",
+    "working": "处理中…",
+    "retrySetup": "重试设置",
+    "setUpButton": "设置",
+    "statusLabel": "状态",
+    "deploymentFailed": "钱包部署失败。请重试。",
+    "setupFailed": "钱包设置失败。请重试。",
+    "approvalFailed": "审批步骤失败。请重试。",
+    "credentialFailed": "凭证设置失败。请重试。",
+    "unknownError": "发生意外错误。请重试。"
+  },
+  "marketTips": {
+    "title": "提示",
+    "bigPlayerActivity": "大户活动",
+    "activity": "活动",
+    "momentum": "动量",
+    "largeTrades": "大额交易",
+    "quickRead": "快速阅读",
+    "aiAnalysis": "AI分析",
+    "analyzingMarket": "正在分析市场...",
+    "bigWalletLeaning": "大户倾向",
+    "aiUnavailable": "AI分析暂时不可用。请使用上方的大户活动信号。",
+    "poweredBy": "由1mg.live提供"
   }
 }

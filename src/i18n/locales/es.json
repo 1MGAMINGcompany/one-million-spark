@@ -1872,5 +1872,40 @@
       "s6Title": "Violaciones",
       "s6Body": "Las violaciones pueden resultar en suspensión inmediata de la cuenta y prohibición permanente."
     }
+  },
+  "tradingWallet": {
+    "ready": "Billetera de trading lista",
+    "finalizing": "Finalizando billetera de trading",
+    "needsFinalSetup": "La billetera necesita configuración final",
+    "deploymentIncomplete": "Despliegue de billetera incompleto",
+    "setUp": "Configurar Billetera de Trading",
+    "readyDescSafe": "Tu billetera sin gas está activa y lista para predicciones.",
+    "readyDesc": "Tu billetera de trading está activa.",
+    "finalizingDesc": "Estamos creando tu billetera personal y permisos de intercambio.",
+    "incompleteDesc": "Tu billetera existe, pero las aprobaciones o credenciales están incompletas. Reintenta la configuración.",
+    "deploymentDesc": "Tu configuración comenzó, pero el despliegue no se completó. Reintenta para continuar.",
+    "signOnce": "Firma una vez para crear tu billetera personal antes de hacer predicciones.",
+    "working": "Trabajando…",
+    "retrySetup": "Reintentar",
+    "setUpButton": "Configurar",
+    "statusLabel": "Estado",
+    "deploymentFailed": "El despliegue de la billetera falló. Inténtalo de nuevo.",
+    "setupFailed": "La configuración de la billetera falló. Inténtalo de nuevo.",
+    "approvalFailed": "El paso de aprobación falló. Reintenta.",
+    "credentialFailed": "La configuración de credenciales falló. Reintenta.",
+    "unknownError": "Ocurrió un error inesperado. Inténtalo de nuevo."
+  },
+  "marketTips": {
+    "title": "Consejos",
+    "bigPlayerActivity": "Actividad de Grandes Jugadores",
+    "activity": "Actividad",
+    "momentum": "Momentum",
+    "largeTrades": "Grandes Operaciones",
+    "quickRead": "Lectura Rápida",
+    "aiAnalysis": "Análisis IA",
+    "analyzingMarket": "Analizando mercado...",
+    "bigWalletLeaning": "Hacia Dónde Se Inclinan las Grandes Billeteras",
+    "aiUnavailable": "El análisis IA no está disponible temporalmente. Usa las señales de Actividad de Grandes Jugadores.",
+    "poweredBy": "Impulsado por 1mg.live"
   }
 }

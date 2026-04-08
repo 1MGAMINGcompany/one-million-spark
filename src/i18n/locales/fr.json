@@ -1872,5 +1872,40 @@
       "s6Title": "Violations",
       "s6Body": "Les violations peuvent entraîner la suspension immédiate du compte et un bannissement permanent."
     }
+  },
+  "tradingWallet": {
+    "ready": "Portefeuille de trading prêt",
+    "finalizing": "Finalisation du portefeuille",
+    "needsFinalSetup": "Le portefeuille nécessite une configuration finale",
+    "deploymentIncomplete": "Déploiement du portefeuille incomplet",
+    "setUp": "Configurer le Portefeuille",
+    "readyDescSafe": "Votre portefeuille sans frais est actif et prêt pour les prédictions.",
+    "readyDesc": "Votre portefeuille de trading est actif.",
+    "finalizingDesc": "Nous créons votre portefeuille personnel et les autorisations d échange.",
+    "incompleteDesc": "Votre portefeuille existe, mais les approbations ou identifiants sont incomplets. Réessayez.",
+    "deploymentDesc": "Votre configuration a commencé, mais le déploiement n a pas été terminé. Réessayez.",
+    "signOnce": "Signez une fois pour créer votre portefeuille personnel avant de faire des prédictions.",
+    "working": "En cours…",
+    "retrySetup": "Réessayer",
+    "setUpButton": "Configurer",
+    "statusLabel": "Statut",
+    "deploymentFailed": "Le déploiement du portefeuille a échoué. Réessayez.",
+    "setupFailed": "La configuration du portefeuille a échoué. Réessayez.",
+    "approvalFailed": "L étape d approbation a échoué. Réessayez.",
+    "credentialFailed": "La configuration des identifiants a échoué. Réessayez.",
+    "unknownError": "Une erreur inattendue s est produite. Réessayez."
+  },
+  "marketTips": {
+    "title": "Conseils",
+    "bigPlayerActivity": "Activité des Gros Joueurs",
+    "activity": "Activité",
+    "momentum": "Momentum",
+    "largeTrades": "Grosses Opérations",
+    "quickRead": "Lecture Rapide",
+    "aiAnalysis": "Analyse IA",
+    "analyzingMarket": "Analyse du marché...",
+    "bigWalletLeaning": "Où Penchent les Gros Portefeuilles",
+    "aiUnavailable": "L analyse IA est temporairement indisponible. Utilisez les signaux d Activité des Gros Joueurs.",
+    "poweredBy": "Propulsé par 1mg.live"
   }
 }
