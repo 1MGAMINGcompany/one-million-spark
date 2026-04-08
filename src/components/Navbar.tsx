@@ -38,7 +38,7 @@ const Navbar = () => {
   const { t, i18n } = useTranslation();
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const { connected, publicKey } = useWallet();
-  const { authenticated, logout } = usePrivy();
+  const { authenticated, logout } = usePrivySafe();
   const { login } = usePrivyLogin();
   const { isPrivyUser, walletAddress, balanceMatic, loading: balanceLoading, shortAddress: privyShortAddress } = usePrivyWallet();
 
