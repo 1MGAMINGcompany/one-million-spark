@@ -964,7 +964,9 @@ Deno.serve(async (req) => {
 
     // ═══════════════════════════════════════════════════
     // 5b) EARLY PM SESSION CHECK — before any fee collection
+    //     Fall back to shared credentials if no per-user session
     // ═══════════════════════════════════════════════════
+    let useSharedPmCreds = false;
     if (isPolymarketBacked) {
       const { data: pmSession } = await supabase
         .from("polymarket_user_sessions")
@@ -974,34 +976,30 @@ Deno.serve(async (req) => {
         .limit(1)
         .maybeSingle();
 
-      if (!pmSession) {
-        await auditLog(supabase, null, normalizedWallet, "pm_early_session_check_failed", { fight_id }, {
-          reason: "no_trading_session_before_fee",
-        });
-        return json({
-          error: "Trading wallet not set up. Please complete setup first.",
-          error_code: "trading_wallet_setup_required",
-        }, 403);
-      }
+      const hasPerUserSession = pmSession && isSessionTradeReady(pmSession);
 
-      // Tighten: reject partial/incomplete sessions before fee collection
-      const isExpired = pmSession.expires_at && new Date(pmSession.expires_at).getTime() < Date.now();
-      const isReady = isSessionTradeReady(pmSession);
-      if (!isReady) {
-        await auditLog(supabase, null, normalizedWallet, "pm_session_not_ready", { fight_id }, {
-          status: pmSession.status,
-          safe_deployed: pmSession.safe_deployed,
-          approvals_set: pmSession.approvals_set,
-          has_api_key: !!pmSession.pm_api_key,
-          has_api_secret: !!pmSession.pm_api_secret,
-          has_passphrase: !!pmSession.pm_passphrase,
-          has_trading_key: !!pmSession.pm_trading_key,
-          expired: !!isExpired,
-        });
-        return json({
-          error: "Trading wallet setup incomplete. Please complete setup first.",
-          error_code: "trading_wallet_not_ready",
-        }, 403);
+      if (!hasPerUserSession) {
+        // Check if shared (platform) CLOB credentials are available as fallback
+        const sharedApiKey = Deno.env.get("PM_API_KEY");
+        const sharedApiSecret = Deno.env.get("PM_API_SECRET");
+        const sharedPassphrase = Deno.env.get("PM_PASSPHRASE");
+        const sharedTradingKey = Deno.env.get("PM_TRADING_KEY");
+
+        if (sharedApiKey && sharedApiSecret && sharedPassphrase && sharedTradingKey) {
+          useSharedPmCreds = true;
+          await auditLog(supabase, null, normalizedWallet, "pm_using_shared_creds", { fight_id }, {
+            reason: pmSession ? "per_user_session_not_ready" : "no_per_user_session",
+          });
+          console.log(`[prediction-submit] No per-user session for ${normalizedWallet} — using shared CLOB credentials`);
+        } else {
+          await auditLog(supabase, null, normalizedWallet, "pm_early_session_check_failed", { fight_id }, {
+            reason: "no_trading_session_and_no_shared_creds",
+          });
+          return json({
+            error: "Trading wallet not set up. Please complete setup first.",
+            error_code: "trading_wallet_setup_required",
+          }, 403);
+        }
       }
     }
 
@@ -1240,44 +1238,65 @@ Deno.serve(async (req) => {
     let pmFeeRateBps = 0;
 
     if (isPolymarketBacked) {
-      // ── Per-user CLOB credentials (Model A) — NO shared fallback ──
-      const { data: userSession } = await supabase
-        .from("polymarket_user_sessions")
-        .select("pm_api_key, pm_api_secret, pm_passphrase, pm_trading_key, status, safe_address, safe_deployed, approvals_set, expires_at")
-        .eq("wallet", normalizedWallet)
-        .maybeSingle();
+      // ── CLOB credentials: per-user first, shared fallback ──
+      let pmApiKey: string;
+      let pmApiSecret: string;
+      let pmPassphrase: string;
+      let pmTradingKey: string;
+      let credSource: string;
+      let userSafeAddress: string | null = null;
 
-      if (!isSessionTradeReady(userSession)) {
-        await updateTradeOrder(supabase, tradeOrderId, {
-          status: "failed",
-          error_code: "trading_wallet_not_ready",
-          error_message: "No usable Polymarket trading session found for this wallet.",
-          finalized_at: new Date().toISOString(),
-        });
+      if (useSharedPmCreds) {
+        // Shared (platform) credentials — used when per-user setup is unavailable
+        pmApiKey = Deno.env.get("PM_API_KEY")!;
+        pmApiSecret = Deno.env.get("PM_API_SECRET")!;
+        pmPassphrase = Deno.env.get("PM_PASSPHRASE")!;
+        pmTradingKey = Deno.env.get("PM_TRADING_KEY")!;
+        credSource = "shared";
+      } else {
+        const { data: userSession } = await supabase
+          .from("polymarket_user_sessions")
+          .select("pm_api_key, pm_api_secret, pm_passphrase, pm_trading_key, status, safe_address, safe_deployed, approvals_set, expires_at")
+          .eq("wallet", normalizedWallet)
+          .maybeSingle();
 
-        await auditLog(supabase, tradeOrderId, normalizedWallet, "pm_trade_rejected_no_session", null, {
-          reason: "no_usable_trading_session",
-          note: "native_pool_fallback_removed",
-        });
-
-        return json({
-          error: "Trading wallet setup incomplete. Please complete wallet setup first.",
-          error_code: "trading_wallet_not_ready",
-          trade_order_id: tradeOrderId,
-        }, 403);
+        if (!isSessionTradeReady(userSession)) {
+          // Double-check shared creds as last resort
+          const sk = Deno.env.get("PM_API_KEY");
+          const ss = Deno.env.get("PM_API_SECRET");
+          const sp = Deno.env.get("PM_PASSPHRASE");
+          const st = Deno.env.get("PM_TRADING_KEY");
+          if (sk && ss && sp && st) {
+            pmApiKey = sk; pmApiSecret = ss; pmPassphrase = sp; pmTradingKey = st;
+            credSource = "shared_fallback";
+          } else {
+            await updateTradeOrder(supabase, tradeOrderId, {
+              status: "failed",
+              error_code: "trading_wallet_not_ready",
+              error_message: "No usable Polymarket trading session found for this wallet.",
+              finalized_at: new Date().toISOString(),
+            });
+            return json({
+              error: "Trading wallet setup incomplete. Please complete wallet setup first.",
+              error_code: "trading_wallet_not_ready",
+              trade_order_id: tradeOrderId,
+            }, 403);
+          }
+        } else {
+          pmApiKey = userSession!.pm_api_key;
+          pmApiSecret = userSession!.pm_api_secret;
+          pmPassphrase = userSession!.pm_passphrase;
+          pmTradingKey = userSession!.pm_trading_key;
+          userSafeAddress = userSession!.safe_address;
+          credSource = "per_user";
+        }
       }
 
-      const pmApiKey = userSession.pm_api_key;
-      const pmApiSecret = userSession.pm_api_secret;
-      const pmPassphrase = userSession.pm_passphrase;
-      const pmTradingKey = userSession.pm_trading_key;
-      const credSource = "per_user";
-
       if (tokenId) {
-        // ── Fund derived trading wallet with USDC.e before order ──
-        if (userSession.pm_trading_key) {
-          const derivedAccount = privateKeyToAccount(userSession.pm_trading_key as `0x${string}`);
-          const derivedAddr = userSession.safe_address || derivedAccount.address.toLowerCase();
+        // ── Fund derived trading wallet with USDC.e before order (per-user only) ──
+        if (credSource === "per_user" && pmTradingKey) {
+          const derivedAccount = privateKeyToAccount(pmTradingKey as `0x${string}`);
+          const derivedAddr = userSafeAddress || derivedAccount.address.toLowerCase();
 
           await auditLog(supabase, tradeOrderId, normalizedWallet, "funding_derived_wallet", {
             derived_address: derivedAddr,

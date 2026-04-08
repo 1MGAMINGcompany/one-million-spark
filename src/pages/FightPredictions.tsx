@@ -585,14 +585,11 @@ export default function FightPredictions() {
         toast.info("Auth check slow — proceeding directly", { duration: 3000 });
       }
 
-      // Step 3: STRICT ALLOWANCE GATE — blocks until on-chain confirmed
+      // Trading wallet setup is optional — backend falls back to shared credentials
       const isPolymarketFight = selectedFight.source === "polymarket" || Boolean((selectedFight as any).polymarket_active);
       if (isPolymarketFight && (!hasSession || !canTrade)) {
-        const ready = await ensureTradingWalletReady();
-        if (!ready) {
-          setSubmitting(false);
-          return;
-        }
+        // Attempt setup but don't block — backend has shared creds fallback
+        setupTradingWallet().catch(() => {});
       }
 
       const feeRate = selectedFight.commission_bps != null
