@@ -310,6 +310,8 @@ export default function FightCard({
   userEntries,
   onClaim,
   claiming,
+  onSell,
+  selling,
   isHot,
   onWalletRequired,
   isSoccerEvent,
@@ -322,6 +324,8 @@ export default function FightCard({
   userEntries: any[];
   onClaim: (fightId: string) => void;
   claiming: boolean;
+  onSell?: (fightId: string) => void;
+  selling?: boolean;
   isHot?: boolean;
   onWalletRequired?: () => void;
   isSoccerEvent?: boolean;
