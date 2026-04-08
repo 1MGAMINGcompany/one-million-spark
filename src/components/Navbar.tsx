@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useWallet } from "@/hooks/useWallet";
 import { usePrivy } from "@privy-io/react-auth";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
+import { usePrivyLogin } from "@/hooks/usePrivyLogin";
 import { Home, Wallet, Menu, X, Coins, Volume2, VolumeX, Bell, BellOff, Trophy, ChevronDown, LogOut, ArrowRightLeft, User, Swords, Sun, Moon } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import { WalletButton } from "./WalletButton";
@@ -37,18 +38,9 @@ const Navbar = () => {
   const { t, i18n } = useTranslation();
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const { connected, publicKey } = useWallet();
-  const { authenticated, login: privyLogin, logout } = usePrivy();
+  const { authenticated, logout } = usePrivy();
+  const { login } = usePrivyLogin();
   const { isPrivyUser, walletAddress, balanceMatic, loading: balanceLoading, shortAddress: privyShortAddress } = usePrivyWallet();
-
-  const login = async () => {
-    try {
-      await privyLogin();
-    } catch (err) {
-      console.error("[Privy] Login error:", err);
-      const { toast } = await import("sonner");
-      toast.error("Login failed. Please try again.");
-    }
-  };
 
   const shortAddress = privyShortAddress;
 

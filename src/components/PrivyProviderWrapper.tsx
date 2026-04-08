@@ -22,7 +22,6 @@ export function PrivyProviderWrapper({ children }: PrivyProviderWrapperProps) {
           showWalletLoginFirst: false,
           logo: `${window.location.origin}/images/privy-logo.png`,
         },
-        loginMethods: ["email", "google", "twitter"],
         defaultChain: polygon,
         supportedChains: [polygon],
         embeddedWallets: {
