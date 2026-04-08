@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { privateKeyToAccount } from "npm:viem@2/accounts";
-import { createWalletClient, http, encodeFunctionData, parseAbi, keccak256, toBytes } from "npm:viem@2";
+import { createWalletClient, http, encodeFunctionData, parseAbi, keccak256, toBytes, hashTypedData } from "npm:viem@2";
 import { polygon } from "npm:viem@2/chains";
 
 /**
