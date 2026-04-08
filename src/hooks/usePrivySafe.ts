@@ -1,10 +1,10 @@
 /**
  * usePrivySafe — Safe wrapper around usePrivy() that returns safe defaults
- * when Privy is not configured (no VITE_PRIVY_APP_ID).
+ * when Privy is not configured (no App ID loaded).
  * Prevents crashes from missing PrivyProvider context.
  */
 import { usePrivy } from "@privy-io/react-auth";
-import { isPrivyConfigured } from "@/lib/privyConfig";
+import { getPrivyAppId } from "@/lib/privyConfig";
 
 interface PrivySafeState {
   ready: boolean;
@@ -23,7 +23,8 @@ const NO_PRIVY: PrivySafeState = {
 };
 
 export function usePrivySafe(): PrivySafeState {
-  if (!isPrivyConfigured) return NO_PRIVY;
+  const appId = getPrivyAppId();
+  if (!appId) return NO_PRIVY;
   return usePrivySafeInner();
 }
 
