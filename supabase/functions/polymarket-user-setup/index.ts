@@ -43,6 +43,125 @@ const json = (data: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+function normalizeWallet(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  return normalized.length >= 10 ? normalized : null;
+}
+
+function isSessionTradeReady(session: {
+  status?: string | null;
+  safe_deployed?: boolean | null;
+  approvals_set?: boolean | null;
+  pm_api_key?: string | null;
+  pm_api_secret?: string | null;
+  pm_passphrase?: string | null;
+  pm_trading_key?: string | null;
+  expires_at?: string | null;
+} | null | undefined): boolean {
+  if (!session) return false;
+  const isExpired = session.expires_at
+    ? new Date(session.expires_at).getTime() < Date.now()
+    : false;
+
+  return session.status === "active" &&
+    !!session.safe_deployed &&
+    !!session.approvals_set &&
+    !!session.pm_api_key &&
+    !!session.pm_api_secret &&
+    !!session.pm_passphrase &&
+    !!session.pm_trading_key &&
+    !isExpired;
+}
+
+async function logSetupEvent(
+  supabase: ReturnType<typeof createClient>,
+  action: string,
+  details: Record<string, unknown>,
+) {
+  try {
+    await supabase.from("automation_logs").insert({
+      action,
+      source: "polymarket-user-setup",
+      details,
+    });
+  } catch (error) {
+    console.warn("[polymarket-user-setup] log insert failed:", error);
+  }
+}
+
+async function resolveCanonicalWallet(
+  supabase: ReturnType<typeof createClient>,
+  privyDid: string,
+  requestedAppWallet: string | null,
+  requestedWallet: string | null,
+  requestedEoaWallet: string | null,
+): Promise<{ wallet: string | null; accountId: string | null }> {
+  const preferredWallet = requestedAppWallet ?? requestedWallet ?? requestedEoaWallet;
+
+  let account: { id: string; wallet_evm: string | null; privy_did: string | null } | null = null;
+  const { data: didAccount } = await supabase
+    .from("prediction_accounts")
+    .select("id, wallet_evm, privy_did")
+    .eq("privy_did", privyDid)
+    .maybeSingle();
+  account = didAccount;
+
+  if (!account && preferredWallet) {
+    const { data: walletAccount } = await supabase
+      .from("prediction_accounts")
+      .select("id, wallet_evm, privy_did")
+      .eq("wallet_evm", preferredWallet)
+      .maybeSingle();
+    account = walletAccount;
+  }
+
+  const canonicalWallet = account?.wallet_evm
+    ? String(account.wallet_evm).trim().toLowerCase()
+    : preferredWallet;
+
+  if (!canonicalWallet) {
+    return { wallet: null, accountId: account?.id ?? null };
+  }
+
+  if (account) {
+    const updatePayload: Record<string, unknown> = {
+      last_active_at: new Date().toISOString(),
+      auth_provider: "privy",
+    };
+
+    if (!account.wallet_evm) updatePayload.wallet_evm = canonicalWallet;
+    if (account.privy_did !== privyDid) updatePayload.privy_did = privyDid;
+
+    const { error } = await supabase
+      .from("prediction_accounts")
+      .update(updatePayload)
+      .eq("id", account.id);
+
+    if (error) {
+      throw new Error(`prediction_account_update_failed: ${error.message}`);
+    }
+
+    return { wallet: canonicalWallet, accountId: account.id };
+  }
+
+  const { data: created, error } = await supabase
+    .from("prediction_accounts")
+    .insert({
+      wallet_evm: canonicalWallet,
+      privy_did: privyDid,
+      auth_provider: "privy",
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    throw new Error(`prediction_account_insert_failed: ${error.message}`);
+  }
+
+  return { wallet: canonicalWallet, accountId: created?.id ?? null };
+}
+
 /** Derive a deterministic private key from the user's SIWE signature */
 function deriveTradingKey(signature: string): `0x${string}` {
   const seed = keccak256(toBytes(signature));
@@ -154,6 +273,8 @@ async function setApprovalsViaRelayer(
     { token: USDC_E, spender: NEG_RISK_ADAPTER, label: "USDC.e → Neg Risk Adapter" },
   ];
 
+  const failures: string[] = [];
+
   for (const { token, spender, label } of approvals) {
     try {
       const callData = encodeFunctionData({
@@ -188,14 +309,19 @@ async function setApprovalsViaRelayer(
       if (!res.ok) {
         const errText = await res.text();
         console.warn(`[polymarket-user-setup] Approval failed for ${label}: ${errText}`);
-        // Continue with other approvals
+        failures.push(`${label}: ${errText.substring(0, 120)}`);
       } else {
         const data = await res.json();
         console.log(`[polymarket-user-setup] Approval set: ${label}`, data);
       }
     } catch (err) {
       console.warn(`[polymarket-user-setup] Approval error for ${label}:`, err);
+      failures.push(`${label}: ${err instanceof Error ? err.message : String(err)}`);
     }
+  }
+
+  if (failures.length > 0) {
+    return { success: false, error: failures.join("; ") };
   }
 
   return { success: true };
@@ -285,13 +411,27 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { action, wallet, signature, message } = body;
+    const { action, wallet, app_wallet, eoa_wallet, signature, message } = body;
 
-    if (!wallet || !action) {
-      return json({ error: "Missing wallet or action" }, 400);
+    if (!action) {
+      return json({ error: "Missing action" }, 400);
     }
 
-    const normalizedWallet = String(wallet).trim().toLowerCase();
+    const requestedWallet = normalizeWallet(wallet);
+    const requestedAppWallet = normalizeWallet(app_wallet);
+    const requestedEoaWallet = normalizeWallet(eoa_wallet);
+
+    const { wallet: normalizedWallet } = await resolveCanonicalWallet(
+      supabase,
+      privyDid,
+      requestedAppWallet,
+      requestedWallet,
+      requestedEoaWallet,
+    );
+
+    if (!normalizedWallet) {
+      return json({ error: "Missing wallet for setup" }, 400);
+    }
 
     const builderApiKey = Deno.env.get("POLYMARKET_BUILDER_API_KEY");
     const builderSecret = Deno.env.get("POLYMARKET_BUILDER_SECRET");
@@ -309,6 +449,13 @@ Deno.serve(async (req) => {
       }
 
       console.log(`[polymarket-user-setup] Starting full setup for ${normalizedWallet}`);
+      await logSetupEvent(supabase, "polymarket_user_setup_started", {
+        wallet: normalizedWallet,
+        privy_did: privyDid,
+        requested_wallet: requestedWallet,
+        requested_app_wallet: requestedAppWallet,
+        requested_eoa_wallet: requestedEoaWallet,
+      });
 
       // Step 1: Derive trading key from user's signature
       const tradingKeyHex = deriveTradingKey(signature);
@@ -322,13 +469,24 @@ Deno.serve(async (req) => {
       let safeDeployed = false;
       
       const deployResult = await deploySafeViaRelayer(tradingAccount, builderApiKey, builderSecret);
-      if (deployResult.success) {
+      if (deployResult.success && deployResult.safeAddress) {
         safeAddress = deployResult.safeAddress;
         safeDeployed = true;
         console.log(`[polymarket-user-setup] Safe deployed: ${safeAddress}`);
       } else {
-        console.warn(`[polymarket-user-setup] Safe deploy failed: ${deployResult.error}`);
-        // Continue without Safe — can use EOA directly for now
+        const error = deployResult.error || "Safe address missing after deployment";
+        await logSetupEvent(supabase, "polymarket_user_setup_failed", {
+          wallet: normalizedWallet,
+          privy_did: privyDid,
+          stage: "safe_deployment",
+          error,
+        });
+        return json({
+          error: "Trading wallet deployment failed",
+          error_code: "safe_deployment_failed",
+          stage: "safe_deployment",
+          detail: error,
+        }, 502);
       }
 
       // Step 3: Set approvals (gasless via Relayer)
@@ -341,15 +499,45 @@ Deno.serve(async (req) => {
           builderSecret,
         );
         approvalsSet = approvalResult.success;
+        if (!approvalResult.success) {
+          await logSetupEvent(supabase, "polymarket_user_setup_failed", {
+            wallet: normalizedWallet,
+            privy_did: privyDid,
+            stage: "approvals",
+            error: approvalResult.error,
+            safe_address: safeAddress,
+          });
+          return json({
+            error: "Trading wallet approvals failed",
+            error_code: "approval_setup_failed",
+            stage: "approvals",
+            detail: approvalResult.error,
+          }, 502);
+        }
       }
 
       // Step 4: Derive CLOB API credentials
       const clobCreds = await deriveClobApiCreds(tradingAccount);
       const hasApiKey = !!clobCreds.apiKey;
+      if (!hasApiKey || !clobCreds.apiSecret || !clobCreds.passphrase) {
+        await logSetupEvent(supabase, "polymarket_user_setup_failed", {
+          wallet: normalizedWallet,
+          privy_did: privyDid,
+          stage: "clob_credentials",
+          error: clobCreds.error,
+          derived_address: derivedAddress,
+        });
+        return json({
+          error: "Trading wallet credential derivation failed",
+          error_code: "clob_credentials_failed",
+          stage: "clob_credentials",
+          detail: clobCreds.error,
+        }, 502);
+      }
 
       // Step 5: Upsert session
       const sessionData = {
-        status: hasApiKey ? "active" : "awaiting_credentials",
+        status: "active",
         pm_api_key: clobCreds.apiKey,
         pm_api_secret: clobCreds.apiSecret,
         pm_passphrase: clobCreds.passphrase,
@@ -358,53 +546,94 @@ Deno.serve(async (req) => {
         safe_address: safeAddress || null,
         safe_deployed: safeDeployed,
         approvals_set: approvalsSet,
-        privy_wallet_id: normalizedWallet,
+        privy_wallet_id: requestedEoaWallet ?? requestedAppWallet ?? normalizedWallet,
         authenticated_at: new Date().toISOString(),
         expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
         updated_at: new Date().toISOString(),
       };
 
-      const { data: existing } = await supabase
+      const { data: existing, error: existingError } = await supabase
         .from("polymarket_user_sessions")
         .select("id")
         .eq("wallet", normalizedWallet)
         .maybeSingle();
 
+      if (existingError) {
+        await logSetupEvent(supabase, "polymarket_user_setup_failed", {
+          wallet: normalizedWallet,
+          privy_did: privyDid,
+          stage: "session_lookup",
+          error: existingError.message,
+        });
+        return json({
+          error: "Trading wallet session lookup failed",
+          error_code: "session_save_failed",
+          stage: "session_lookup",
+          detail: existingError.message,
+        }, 500);
+      }
+
       if (existing) {
-        await supabase
+        const { error } = await supabase
           .from("polymarket_user_sessions")
           .update(sessionData)
           .eq("id", existing.id);
+        if (error) {
+          await logSetupEvent(supabase, "polymarket_user_setup_failed", {
+            wallet: normalizedWallet,
+            privy_did: privyDid,
+            stage: "session_update",
+            error: error.message,
+          });
+          return json({
+            error: "Trading wallet session could not be saved",
+            error_code: "session_save_failed",
+            stage: "session_update",
+            detail: error.message,
+          }, 500);
+        }
       } else {
-        await supabase
+        const { error } = await supabase
           .from("polymarket_user_sessions")
           .insert({ wallet: normalizedWallet, ...sessionData });
+        if (error) {
+          await logSetupEvent(supabase, "polymarket_user_setup_failed", {
+            wallet: normalizedWallet,
+            privy_did: privyDid,
+            stage: "session_insert",
+            error: error.message,
+          });
+          return json({
+            error: "Trading wallet session could not be saved",
+            error_code: "session_save_failed",
+            stage: "session_insert",
+            detail: error.message,
+          }, 500);
+        }
       }
 
       // Audit log
-      await supabase.from("automation_logs").insert({
-        action: "polymarket_user_setup",
-        source: "polymarket-user-setup",
-        details: {
-          wallet: normalizedWallet,
-          privy_did: privyDid,
-          derived_address: derivedAddress,
-          safe_address: safeAddress,
-          safe_deployed: safeDeployed,
-          approvals_set: approvalsSet,
-          has_api_key: hasApiKey,
-        },
-      });
-
-      return json({
-        success: true,
+      await logSetupEvent(supabase, "polymarket_user_setup", {
+        wallet: normalizedWallet,
+        privy_did: privyDid,
         derived_address: derivedAddress,
         safe_address: safeAddress,
         safe_deployed: safeDeployed,
         approvals_set: approvalsSet,
         has_api_key: hasApiKey,
-        can_trade: hasApiKey && safeDeployed,
-        status: hasApiKey ? "active" : "awaiting_credentials",
+      });
+
+      return json({
+        success: true,
+        provisioned: true,
+        resolved_wallet: normalizedWallet,
+        derived_address: derivedAddress,
+        safe_address: safeAddress,
+        safe_deployed: safeDeployed,
+        approvals_set: approvalsSet,
+        has_api_key: hasApiKey,
+        can_trade: true,
+        status: "active",
       });
     }
 
@@ -414,7 +643,7 @@ Deno.serve(async (req) => {
     if (action === "check_status") {
       const { data: session } = await supabase
         .from("polymarket_user_sessions")
-        .select("status, safe_address, safe_deployed, approvals_set, pm_derived_address, authenticated_at, expires_at")
+        .select("status, safe_address, safe_deployed, approvals_set, pm_derived_address, authenticated_at, expires_at, pm_api_key, pm_api_secret, pm_passphrase, pm_trading_key")
         .eq("wallet", normalizedWallet)
         .maybeSingle();
 
@@ -435,7 +664,7 @@ Deno.serve(async (req) => {
         safe_deployed: session.safe_deployed,
         approvals_set: session.approvals_set,
         derived_address: session.pm_derived_address,
-        can_trade: session.status === "active" && !isExpired && session.safe_deployed,
+        can_trade: isSessionTradeReady(session),
         authenticated_at: session.authenticated_at,
         expires_at: session.expires_at,
       });
