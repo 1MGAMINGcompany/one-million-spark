@@ -1,11 +1,10 @@
-import { usePrivy } from "@privy-io/react-auth";
+import { usePrivySafe } from "@/hooks/usePrivySafe";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
 import { usePrivyLogin } from "@/hooks/usePrivyLogin";
 import { Button } from "@/components/ui/button";
 import { LogOut, Wallet, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-
-const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID;
+import { isPrivyConfigured } from "@/lib/privyConfig";
 
 export function PrivyLoginButton() {
   const { t } = useTranslation();

@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { usePrivy } from "@privy-io/react-auth";
+import { usePrivySafe } from "@/hooks/usePrivySafe";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { DomainContext } from "@/lib/domainDetection";
@@ -40,7 +40,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
 /** Requires Privy login AND operator.status === 'active' */
 function RequireActiveOperator({ children }: { children: React.ReactNode }) {
-  const { ready, authenticated, getAccessToken } = usePrivy();
+  const { ready, authenticated, getAccessToken } = usePrivySafe();
 
   const { data: operatorStatus, isLoading } = useQuery({
     queryKey: ["my_operator_status"],
