@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { usePrivy } from "@privy-io/react-auth";
+import { usePrivyLogin } from "@/hooks/usePrivyLogin";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, ArrowLeft, Check, ExternalLink, Rocket } from "lucide-react";
 import { THEME_OPTIONS } from "@/lib/operatorThemes";

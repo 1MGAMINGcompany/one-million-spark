@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { usePrivy } from "@privy-io/react-auth";
+import { usePrivyLogin } from "@/hooks/usePrivyLogin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";

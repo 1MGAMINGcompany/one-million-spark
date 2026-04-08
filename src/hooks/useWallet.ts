@@ -4,7 +4,7 @@ import { usePrivy } from "@privy-io/react-auth";
 import { useWallets, useSignTransaction, useSignAndSendTransaction } from "@privy-io/react-auth/solana";
 import { PublicKey, Transaction, VersionedTransaction, Connection, SendOptions } from "@solana/web3.js";
 
-const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID || "cmlq6g2dn00760cl2djbh9dfy";
+const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID;
 
 export function useWallet() {
   const {
