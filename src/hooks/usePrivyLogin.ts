@@ -3,7 +3,7 @@ import { toast } from "sonner";
 
 export function usePrivyLogin() {
   const { login } = useLogin({
-    onComplete: (user, isNewUser) => {
+    onComplete: ({ user, isNewUser }) => {
       console.log("[Privy] Login complete", {
         userId: user.id,
         isNewUser,
