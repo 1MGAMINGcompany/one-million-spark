@@ -457,13 +457,10 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         setSubmitting(false);
         return;
       }
+      // Trading wallet setup is optional — backend falls back to shared credentials
       const isPolymarketFight = selectedFight.source === "polymarket" || Boolean((selectedFight as any).polymarket_market_id);
       if (isPolymarketFight && (!hasSession || !canTrade)) {
-        const ready = await ensureTradingWalletReady();
-        if (!ready) {
-          setSubmitting(false);
-          return;
-        }
+        setupTradingWallet().catch(() => {});
       }
 
       const feeRate = selectedFight.commission_bps != null
