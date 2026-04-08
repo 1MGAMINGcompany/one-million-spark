@@ -30,7 +30,8 @@ const SPORT_OPTIONS = ["Soccer", "MMA", "Boxing", "NFL", "NBA", "NHL", "MLB", "N
 
 export default function OperatorDashboard() {
   const { t } = useTranslation();
-  const { authenticated, login, getAccessToken, user } = usePrivy();
+  const { authenticated, getAccessToken, user } = usePrivy();
+  const { login } = usePrivyLogin();
   const navigate = useNavigate();
   const [operator, setOperator] = useState<OperatorData | null>(null);
   const [loading, setLoading] = useState(true);

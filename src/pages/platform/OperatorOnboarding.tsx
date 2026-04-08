@@ -21,7 +21,8 @@ const SPORTS_OPTIONS = [
 ];
 
 export default function OperatorOnboarding() {
-  const { authenticated, login, getAccessToken } = usePrivy();
+  const { authenticated, getAccessToken } = usePrivy();
+  const { login } = usePrivyLogin();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
