@@ -13,6 +13,7 @@ import Navbar from "@/components/Navbar";
 import EventSection, { parseSport } from "@/components/predictions/EventSection";
 import predictionsHero from "@/assets/predictions-hero.jpeg";
 import GeoBlockScreen from "@/components/predictions/GeoBlockScreen";
+import EnableTradingBanner from "@/components/predictions/EnableTradingBanner";
 import PredictionModal from "@/components/predictions/PredictionModal";
 import ComingSoonCard from "@/components/predictions/ComingSoonCard";
 import AllowanceDebugPanel from "@/components/predictions/AllowanceDebugPanel";
@@ -189,7 +190,16 @@ export default function FightPredictions() {
   const { authenticated, login, getAccessToken } = usePrivy();
   const { state: allowanceState, ensureAllowance, reset: resetAllowance } = useAllowanceGate();
   const { relayer_allowance } = usePolygonUSDC();
-  const { hasSession, canTrade, loading: pmSessionLoading, setupTradingWallet } = usePolymarketSession();
+  const {
+    hasSession,
+    canTrade,
+    status: pmSessionStatus,
+    safeDeployed,
+    loading: pmSessionLoading,
+    error: pmSessionError,
+    setupTradingWallet,
+    refreshSession,
+  } = usePolymarketSession();
   const referralCode = useMyReferralCode(address ?? null);
   const { t } = useTranslation();
   const [fights, setFights] = useState<Fight[]>([]);
@@ -386,6 +396,33 @@ export default function FightPredictions() {
     return ALL_SPORTS.filter(s => s === "ALL" || sports.has(s) || ["MUAY THAI", "BOXING", "MMA", "BARE KNUCKLE", "FUTBOL"].includes(s));
   }, [groupedEvents]);
 
+  const ensureTradingWalletReady = useCallback(async () => {
+    if (hasSession && canTrade) return true;
+
+    const result = await setupTradingWallet();
+    const refreshed = result.success ? await refreshSession() : null;
+    const ready = result.ready ?? refreshed?.canTrade ?? false;
+
+    if (!result.success) {
+      toast.error("Trading wallet setup failed", {
+        description: result.error || "Please try again.",
+      });
+      return false;
+    }
+
+    if (!ready) {
+      toast.error("Trading wallet not ready", {
+        description: result.error || "Setup is still incomplete. Please retry in a moment.",
+      });
+      return false;
+    }
+
+    toast.success("Trading wallet ready", {
+      description: "You can place your prediction now.",
+    });
+    return true;
+  }, [hasSession, canTrade, refreshSession, setupTradingWallet]);
+
   // Filter by sport
   const filteredEvents = useMemo(() => {
     if (activeSport === "ALL") return groupedEvents;
@@ -549,6 +586,15 @@ export default function FightPredictions() {
       }
 
       // Step 3: STRICT ALLOWANCE GATE — blocks until on-chain confirmed
+      const isPolymarketFight = selectedFight.source === "polymarket" || Boolean((selectedFight as any).polymarket_active);
+      if (isPolymarketFight && (!hasSession || !canTrade)) {
+        const ready = await ensureTradingWalletReady();
+        if (!ready) {
+          setSubmitting(false);
+          return;
+        }
+      }
+
       const feeRate = selectedFight.commission_bps != null
         ? selectedFight.commission_bps / 10_000
         : (selectedFight.source === "polymarket" ? 0.02 : 0.05);
@@ -593,20 +639,16 @@ export default function FightPredictions() {
         const backendMsg = data?.error || "Backend error";
         const errorCode = data?.error_code || "";
         const isRelayerError = errorCode.startsWith("rpc_") || errorCode === "relayer_not_configured" || errorCode === "relayer_tx_failed" || errorCode === "fee_collection_failed";
-        const isSetupRequired = errorCode === "trading_wallet_setup_required" || errorCode === "no_trading_session";
+        const isSetupRequired = errorCode === "trading_wallet_setup_required" || errorCode === "trading_wallet_not_ready" || errorCode === "no_trading_session";
         dbg("predict:backend_error", { backendMsg, errorCode, isRelayerError, isSetupRequired });
-        const isGeoBlocked = errorCode === "geo_blocked" || backendMsg.toLowerCase().includes("region") || backendMsg.toLowerCase().includes("restricted") || backendMsg.toLowerCase().includes("geo");
+        const isGeoBlocked = errorCode === "geo_blocked" || errorCode === "clob_geo_blocked" || backendMsg.toLowerCase().includes("region") || backendMsg.toLowerCase().includes("restricted") || backendMsg.toLowerCase().includes("geo");
         if (isGeoBlocked) {
           setGeoBlocked(true);
           setSubmitting(false);
           return;
         }
         if (isSetupRequired) {
-          toast.error("Trading wallet setup needed", {
-            description: "Setting up your trading wallet. Please try again after setup completes.",
-            duration: 6000,
-          });
-          setupTradingWallet().catch(() => {});
+          await ensureTradingWalletReady();
           setSubmitting(false);
           return;
         }
@@ -819,6 +861,19 @@ export default function FightPredictions() {
             onExploreReadOnly={() => setGeoBlockDismissed(true)}
           />
         )}
+        {isConnected && (
+          <EnableTradingBanner
+            hasSession={hasSession}
+            canTrade={canTrade}
+            loading={pmSessionLoading}
+            error={pmSessionError}
+            safeDeployed={safeDeployed}
+            status={pmSessionStatus}
+            onEnable={() => {
+              void ensureTradingWalletReady();
+            }}
+          />
+        )}
         {activeSport === "MUAY THAI" && (
           <ONEFridayFightsHub hasFights={hasContent} />
         )}
@@ -980,7 +1035,7 @@ export default function FightPredictions() {
           pick={selectedPick}
           onClose={() => { setSelectedFight(null); setSelectedPick(null); setShowPredictionSuccess(false); setLastTradeResult(null); resetAllowance(); }}
           onSubmit={handleSubmit}
-          submitting={submitting}
+          submitting={submitting || pmSessionLoading}
           showSuccess={showPredictionSuccess}
           wallet={address || undefined}
           tradeResult={lastTradeResult}

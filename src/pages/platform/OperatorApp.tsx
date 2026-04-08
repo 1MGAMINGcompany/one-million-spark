@@ -18,6 +18,7 @@ import { dbg } from "@/lib/debugLog";
 import { Button } from "@/components/ui/button";
 import SimplePredictionCard from "@/components/operator/SimplePredictionCard";
 import SimplePredictionModal from "@/components/operator/SimplePredictionModal";
+import EnableTradingBanner from "@/components/predictions/EnableTradingBanner";
 import OperatorBalanceBanner from "@/components/operator/OperatorBalanceBanner";
 import MarketGraphModal from "@/components/operator/MarketGraphModal";
 import MarketTipsModal from "@/components/operator/MarketTipsModal";
@@ -122,7 +123,16 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const { walletAddress: address, eoaAddress, isPrivyUser } = usePrivyWallet();
   const { state: allowanceState, ensureAllowance, reset: resetAllowance } = useAllowanceGate();
   const { usdc_balance, refetch: refetchBalance } = usePolygonUSDC();
-  const { hasSession, canTrade, setupTradingWallet } = usePolymarketSession();
+  const {
+    hasSession,
+    canTrade,
+    status: pmSessionStatus,
+    safeDeployed,
+    loading: pmSessionLoading,
+    error: pmSessionError,
+    setupTradingWallet,
+    refreshSession,
+  } = usePolymarketSession();
   usePolymarketPrices();
 
   const isConnected = authenticated && isPrivyUser;
@@ -168,6 +178,33 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [shareAmount, setShareAmount] = useState<number | undefined>();
 
   const theme = getOperatorTheme(operator?.theme);
+
+  const ensureTradingWalletReady = useCallback(async () => {
+    if (hasSession && canTrade) return true;
+
+    const result = await setupTradingWallet();
+    const refreshed = result.success ? await refreshSession() : null;
+    const ready = result.ready ?? refreshed?.canTrade ?? false;
+
+    if (!result.success) {
+      toast.error("Trading wallet setup failed", {
+        description: result.error || "Please try again.",
+      });
+      return false;
+    }
+
+    if (!ready) {
+      toast.error("Trading wallet not ready", {
+        description: result.error || "Setup is still incomplete. Please retry in a moment.",
+      });
+      return false;
+    }
+
+    toast.success("Trading wallet ready", {
+      description: "You can place your prediction now.",
+    });
+    return true;
+  }, [hasSession, canTrade, refreshSession, setupTradingWallet]);
 
   // ── STRICT event query ──
   const { data: operatorFights, isError: opFightsError } = useQuery({
@@ -420,6 +457,15 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         setSubmitting(false);
         return;
       }
+      const isPolymarketFight = selectedFight.source === "polymarket" || Boolean((selectedFight as any).polymarket_market_id);
+      if (isPolymarketFight && (!hasSession || !canTrade)) {
+        const ready = await ensureTradingWalletReady();
+        if (!ready) {
+          setSubmitting(false);
+          return;
+        }
+      }
+
       const feeRate = selectedFight.commission_bps != null
         ? selectedFight.commission_bps / 10_000
         : (selectedFight.source === "polymarket" ? 0.02 : 0.05);
@@ -451,12 +497,15 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       if (!submitResp.ok || data?.error) {
         const msg = data?.error || "Backend error";
         const errorCode = data?.error_code || "";
-        if (errorCode === "trading_wallet_setup_required" || errorCode === "no_trading_session") {
-          toast.error(t("operator.tradingWalletNeeded"), {
-            description: "Setting up your trading wallet…",
-            duration: 6000,
+        if (errorCode === "geo_blocked" || errorCode === "clob_geo_blocked") {
+          toast.error("Trading restricted in your region", {
+            description: msg,
           });
-          setupTradingWallet().catch(() => {});
+          setSubmitting(false);
+          return;
+        }
+        if (errorCode === "trading_wallet_setup_required" || errorCode === "trading_wallet_not_ready" || errorCode === "no_trading_session") {
+          await ensureTradingWalletReady();
           setSubmitting(false);
           return;
         }
@@ -632,6 +681,22 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           theme={theme}
           onAddFunds={handleAddFunds}
         />
+      )}
+
+      {isConnected && (
+        <div className="max-w-4xl mx-auto px-4 pt-3">
+          <EnableTradingBanner
+            hasSession={hasSession}
+            canTrade={canTrade}
+            loading={pmSessionLoading}
+            error={pmSessionError}
+            safeDeployed={safeDeployed}
+            status={pmSessionStatus}
+            onEnable={() => {
+              void ensureTradingWalletReady();
+            }}
+          />
+        </div>
       )}
 
       {/* Tab bar: Events | My Picks */}
@@ -966,7 +1031,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           pick={selectedPick}
           onClose={() => { setSelectedFight(null); setSelectedPick(null); setShowSuccess(false); setLastTradeResult(null); resetAllowance(); }}
           onSubmit={handleSubmit}
-          submitting={submitting}
+          submitting={submitting || pmSessionLoading}
           showSuccess={showSuccess}
           tradeResult={lastTradeResult}
           approvalStep={allowanceState.step}

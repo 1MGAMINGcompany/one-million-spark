@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ShieldCheck, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
 
@@ -8,6 +7,7 @@ interface EnableTradingBannerProps {
   loading: boolean;
   error?: string | null;
   safeDeployed?: boolean;
+  status?: string;
   onEnable: () => void;
 }
 
@@ -21,67 +21,75 @@ export default function EnableTradingBanner({
   loading,
   error,
   safeDeployed,
+  status,
   onEnable,
 }: EnableTradingBannerProps) {
-  if (canTrade) {
-    return (
-      <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/30 rounded-lg px-4 py-2.5">
-        <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
-        <span className="text-xs text-green-300 font-medium">
-          Trading wallet active {safeDeployed ? "• Gasless enabled" : ""}
-        </span>
-      </div>
-    );
-  }
+  const isIncomplete = hasSession && !canTrade;
 
-  if (hasSession && !canTrade) {
-    return (
-      <div className="flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-4 py-2.5">
-        <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0" />
-        <div className="min-w-0">
-          <p className="text-xs font-semibold text-foreground">
-            Trading wallet needs funding
-          </p>
-          <p className="text-[10px] text-muted-foreground leading-tight">
-            Deposit USDC.e to your trading address to start placing predictions.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const title = canTrade
+    ? "Trading wallet ready"
+    : loading
+      ? "Finalizing trading wallet"
+      : isIncomplete
+        ? safeDeployed
+          ? "Trading wallet needs final setup"
+          : "Trading wallet deployment incomplete"
+        : "Set Up Trading Wallet";
+
+  const description = canTrade
+    ? safeDeployed
+      ? "Your gasless trading wallet is active and ready for predictions."
+      : "Your trading wallet is active."
+    : loading
+      ? "We’re creating your personal trading wallet and exchange permissions now."
+      : isIncomplete
+        ? safeDeployed
+          ? "Your wallet exists, but approvals or exchange credentials are still incomplete. Retry setup to finish."
+          : "Your setup started, but the gasless wallet deployment did not complete. Retry setup to continue."
+        : "Sign once to create your personal trading wallet before placing predictions.";
+
+  const icon = canTrade ? (
+    <CheckCircle2 className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+  ) : loading ? (
+    <Loader2 className="w-4 h-4 text-primary shrink-0 mt-0.5 animate-spin" />
+  ) : isIncomplete ? (
+    <AlertTriangle className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+  ) : (
+    <ShieldCheck className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+  );
 
   return (
-    <div className="flex items-center justify-between gap-3 bg-primary/5 border border-primary/20 rounded-lg px-4 py-3">
-      <div className="flex items-center gap-2 min-w-0">
-        <ShieldCheck className="w-4 h-4 text-primary shrink-0" />
-        <div className="min-w-0">
-          <p className="text-xs font-semibold text-foreground">
-            Set Up Trading Wallet
-          </p>
-          <p className="text-[10px] text-muted-foreground leading-tight">
-            Sign once to create your personal trading wallet. Gasless & secure.
-          </p>
+    <div className="space-y-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-2 min-w-0">
+          {icon}
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-foreground">{title}</p>
+            <p className="text-[10px] leading-tight text-muted-foreground">{description}</p>
+            {isIncomplete && status ? (
+              <p className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                Status: {status.replace(/_/g, " ")}
+              </p>
+            ) : null}
+          </div>
         </div>
+        {!canTrade ? (
+          <Button
+            size="sm"
+            variant={isIncomplete ? "outline" : "default"}
+            onClick={onEnable}
+            disabled={loading}
+            className="shrink-0 h-auto px-3 py-1.5 text-xs"
+          >
+            {loading ? "Working…" : isIncomplete ? "Retry setup" : "Set Up"}
+          </Button>
+        ) : null}
       </div>
-      <Button
-        size="sm"
-        variant="default"
-        onClick={onEnable}
-        disabled={loading}
-        className="shrink-0 text-xs px-3 py-1.5 h-auto"
-      >
-        {loading ? (
-          <>
-            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-            Setting up…
-          </>
-        ) : (
-          "Set Up"
-        )}
-      </Button>
-      {error && (
-        <p className="text-[10px] text-red-400 mt-1">{error}</p>
-      )}
+      {error ? (
+        <div className="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-[10px] text-destructive">
+          {error}
+        </div>
+      ) : null}
     </div>
   );
 }

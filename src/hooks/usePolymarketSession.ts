@@ -7,7 +7,6 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { usePrivy, useSignMessage } from "@privy-io/react-auth";
-import { supabase } from "@/integrations/supabase/client";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
 
 interface PolymarketSessionState {
@@ -28,15 +27,23 @@ interface PolymarketSessionState {
   /** Error message */
   error: string | null;
   /** Trigger full setup flow (one-time SIWE signature) */
-  setupTradingWallet: () => Promise<{ success: boolean; error?: string }>;
+  setupTradingWallet: () => Promise<{ success: boolean; ready?: boolean; error?: string }>;
   /** Refresh session status */
-  refreshSession: () => Promise<void>;
+  refreshSession: () => Promise<{
+    hasSession: boolean;
+    status: string;
+    canTrade: boolean;
+    safeDeployed: boolean;
+    approvalsSet: boolean;
+    derivedAddress: string | null;
+  } | null>;
 }
 
 const SIWE_MESSAGE_PREFIX = "Sign to enable Polymarket trading on 1MGAMING";
+const USER_SETUP_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/polymarket-user-setup`;
 
 export function usePolymarketSession(): PolymarketSessionState {
-  const { walletAddress, isPrivyUser } = usePrivyWallet();
+  const { walletAddress, eoaAddress, isPrivyUser } = usePrivyWallet();
   const { getAccessToken } = usePrivy();
   const { signMessage } = useSignMessage();
   const [hasSession, setHasSession] = useState(false);
@@ -56,29 +63,52 @@ export function usePolymarketSession(): PolymarketSessionState {
       const token = await getAccessToken();
       if (!token) return;
 
-      const { data, error: fnError } = await supabase.functions.invoke(
-        "polymarket-user-setup",
-        {
-          body: { action: "check_status", wallet: walletAddress },
-          headers: { "x-privy-token": token },
+      const response = await fetch(USER_SETUP_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-privy-token": token,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
-      );
+        body: JSON.stringify({
+          action: "check_status",
+          wallet: walletAddress,
+          app_wallet: walletAddress,
+          eoa_wallet: eoaAddress ?? undefined,
+        }),
+      });
 
-      if (fnError) {
-        console.warn("[usePolymarketSession] check_status error:", fnError);
-        return;
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data?.error) {
+        const message = data?.error || "Could not check trading wallet status";
+        setError(message);
+        console.warn("[usePolymarketSession] check_status error:", message);
+        return null;
       }
 
-      setHasSession(data.provisioned ?? false);
-      setStatus(data.status ?? "not_setup");
-      setCanTrade(data.can_trade ?? false);
-      setSafeDeployed(data.safe_deployed ?? false);
-      setApprovalsSet(data.approvals_set ?? false);
-      setDerivedAddress(data.derived_address ?? null);
+      const nextState = {
+        hasSession: data.provisioned ?? false,
+        status: data.status ?? "not_setup",
+        canTrade: data.can_trade ?? false,
+        safeDeployed: data.safe_deployed ?? false,
+        approvalsSet: data.approvals_set ?? false,
+        derivedAddress: data.derived_address ?? null,
+      };
+
+      setHasSession(nextState.hasSession);
+      setStatus(nextState.status);
+      setCanTrade(nextState.canTrade);
+      setSafeDeployed(nextState.safeDeployed);
+      setApprovalsSet(nextState.approvalsSet);
+      setDerivedAddress(nextState.derivedAddress);
+      setError(null);
+
+      return nextState;
     } catch (err) {
       console.warn("[usePolymarketSession] refresh error:", err);
+      return null;
     }
-  }, [walletAddress, getAccessToken]);
+  }, [walletAddress, eoaAddress, getAccessToken]);
 
   useEffect(() => {
     if (isPrivyUser && walletAddress) {
@@ -89,6 +119,7 @@ export function usePolymarketSession(): PolymarketSessionState {
   // Full setup flow: SIWE signature → derive key → deploy Safe → approvals → CLOB creds
   const setupTradingWallet = useCallback(async (): Promise<{
     success: boolean;
+    ready?: boolean;
     error?: string;
   }> => {
     if (!walletAddress) {
@@ -105,14 +136,16 @@ export function usePolymarketSession(): PolymarketSessionState {
         throw new Error("Could not get access token");
       }
 
+      const signerAddress = eoaAddress ?? walletAddress;
+
       // Step 2: Create deterministic SIWE message
       const timestamp = Date.now();
-      const siweMessage = `${SIWE_MESSAGE_PREFIX}\n\nWallet: ${walletAddress}\nTimestamp: ${timestamp}\nChain: Polygon (137)`;
+      const siweMessage = `${SIWE_MESSAGE_PREFIX}\n\nPrimary Wallet: ${walletAddress}\nSigner Wallet: ${signerAddress}\nTimestamp: ${timestamp}\nChain: Polygon (137)`;
 
       // Step 3: Sign the message with user's Privy wallet
       const result = await signMessage(
         { message: siweMessage },
-        { address: walletAddress as `0x${string}` },
+        { address: signerAddress as `0x${string}` },
       );
 
       const signature = typeof result === "string" ? result : result?.signature;
@@ -121,22 +154,28 @@ export function usePolymarketSession(): PolymarketSessionState {
       }
 
       // Step 4: Send to backend for full setup
-      const { data, error: fnError } = await supabase.functions.invoke(
-        "polymarket-user-setup",
-        {
-          body: {
-            action: "derive_and_setup",
-            wallet: walletAddress,
-            signature,
-            message: siweMessage,
-            timestamp,
-          },
-          headers: { "x-privy-token": token },
+      const response = await fetch(USER_SETUP_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-privy-token": token,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
-      );
+        body: JSON.stringify({
+          action: "derive_and_setup",
+          wallet: walletAddress,
+          app_wallet: walletAddress,
+          eoa_wallet: eoaAddress ?? undefined,
+          signer_wallet: signerAddress,
+          signature,
+          message: siweMessage,
+          timestamp,
+        }),
+      });
 
-      if (fnError) {
-        throw new Error(fnError.message || "Setup failed");
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data?.error) {
+        throw new Error(data?.error || "Setup failed");
       }
 
       if (!data?.success) {
@@ -150,8 +189,9 @@ export function usePolymarketSession(): PolymarketSessionState {
       setSafeDeployed(data.safe_deployed ?? false);
       setApprovalsSet(data.approvals_set ?? false);
       setDerivedAddress(data.derived_address ?? null);
+      setError(null);
 
-      return { success: true };
+      return { success: true, ready: Boolean(data.can_trade) };
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       console.error("[usePolymarketSession] setup error:", errMsg);
@@ -160,7 +200,7 @@ export function usePolymarketSession(): PolymarketSessionState {
     } finally {
       setLoading(false);
     }
-  }, [walletAddress, getAccessToken, signMessage]);
+  }, [walletAddress, eoaAddress, getAccessToken, signMessage]);
 
   return {
     hasSession,
