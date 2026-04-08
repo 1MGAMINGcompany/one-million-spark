@@ -214,6 +214,7 @@ export default function FightPredictions() {
   const [selectedPick, setSelectedPick] = useState<"fighter_a" | "fighter_b" | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [claiming, setClaiming] = useState(false);
+  const [selling, setSelling] = useState(false);
   const [activeSport, setActiveSport] = useState("ALL");
   const [showWalletGate, setShowWalletGate] = useState(false);
   const [showPredictionSuccess, setShowPredictionSuccess] = useState(false);
