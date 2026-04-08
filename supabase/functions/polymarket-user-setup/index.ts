@@ -27,7 +27,7 @@ const corsHeaders = {
 };
 
 const CLOB_BASE = "https://clob.polymarket.com";
-const RELAYER_BASE = "https://relayer.polymarket.com";
+const RELAYER_BASE = "https://relayer-v2.polymarket.com";
 const POLYGON_CHAIN_ID = 137;
 
 // Polymarket contract addresses
