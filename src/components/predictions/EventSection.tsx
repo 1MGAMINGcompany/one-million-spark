@@ -189,7 +189,7 @@ function groupSoccerBinaryFights(fights: Fight[]): { grouped: { home: Fight; awa
   return { grouped, ungrouped };
 }
 
-function SoccerAwareGrid({ fights, sport, wallet, onPredict, userEntries, onClaim, claiming, hotFightIds, onWalletRequired, eventHasStarted, readOnly }: {
+function SoccerAwareGrid({ fights, sport, wallet, onPredict, userEntries, onClaim, claiming, onSell, selling, hotFightIds, onWalletRequired, eventHasStarted, readOnly }: {
   fights: Fight[];
   sport: string;
   wallet: string | null;
@@ -197,6 +197,8 @@ function SoccerAwareGrid({ fights, sport, wallet, onPredict, userEntries, onClai
   userEntries: any[];
   onClaim: (fightId: string) => void;
   claiming: boolean;
+  onSell?: (fightId: string) => void;
+  selling?: boolean;
   hotFightIds: Set<string>;
   onWalletRequired?: () => void;
   eventHasStarted?: boolean;
@@ -235,6 +237,8 @@ function SoccerAwareGrid({ fights, sport, wallet, onPredict, userEntries, onClai
                 userEntries={userEntries.filter(e => e.fight_id === fight.id)}
                 onClaim={onClaim}
                 claiming={claiming}
+                onSell={onSell}
+                selling={selling}
                 isHot={hotFightIds.has(fight.id)}
                 onWalletRequired={onWalletRequired}
                 isSoccerEvent
@@ -259,6 +263,8 @@ function SoccerAwareGrid({ fights, sport, wallet, onPredict, userEntries, onClai
           userEntries={userEntries.filter(e => e.fight_id === fight.id)}
           onClaim={onClaim}
           claiming={claiming}
+          onSell={onSell}
+          selling={selling}
           isHot={hotFightIds.has(fight.id)}
           onWalletRequired={onWalletRequired}
           isSoccerEvent={sport === "FUTBOL"}
@@ -278,6 +284,8 @@ export default function EventSection({
   onPredict,
   onClaim,
   claiming,
+  onSell,
+  selling,
   hotFightIds,
   onWalletRequired,
   event,
@@ -291,6 +299,8 @@ export default function EventSection({
   onPredict: (fight: Fight, pick: "fighter_a" | "fighter_b") => void;
   onClaim: (fightId: string) => void;
   claiming: boolean;
+  onSell?: (fightId: string) => void;
+  selling?: boolean;
   hotFightIds: Set<string>;
   onWalletRequired?: () => void;
   event?: PredictionEvent;
@@ -409,6 +419,8 @@ export default function EventSection({
               userEntries={userEntries}
               onClaim={onClaim}
               claiming={claiming}
+              onSell={onSell}
+              selling={selling}
               hotFightIds={hotFightIds}
               onWalletRequired={onWalletRequired}
               eventHasStarted={eventHasStarted}
@@ -431,6 +443,8 @@ export default function EventSection({
                     userEntries={userEntries.filter((e) => e.fight_id === fight.id)}
                     onClaim={onClaim}
                     claiming={claiming}
+                    onSell={onSell}
+                    selling={selling}
                     isHot={hotFightIds.has(fight.id)}
                     onWalletRequired={onWalletRequired}
                     isSoccerEvent={sport === "FUTBOL"}
