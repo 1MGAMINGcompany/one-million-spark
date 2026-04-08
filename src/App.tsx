@@ -14,6 +14,7 @@ import { SoundProvider } from "./contexts/SoundContext";
 import { TxLockProvider } from "./contexts/TxLockContext";
 import { GlobalBackgroundMusic } from "./components/GlobalBackgroundMusic";
 import { GlobalActiveRoomBanner } from "./components/GlobalActiveRoomBanner";
+import PolymarketUpgradeBanner from "./components/PolymarketUpgradeBanner";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
@@ -132,6 +133,7 @@ const AppContent = () => {
   return (
     <div className="flex flex-col min-h-screen">
       <Navbar />
+      <PolymarketUpgradeBanner />
       <GlobalActiveRoomBanner />
       <main className="pt-16 relative flex-1 min-h-[calc(100dvh-4rem)]">
         <Routes>
