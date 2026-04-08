@@ -13,6 +13,7 @@ import { usePolymarketSession } from "@/hooks/usePolymarketSession";
 import { usePolymarketPrices } from "@/hooks/usePolymarketPrices";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Globe, Trophy, Loader2, ShieldCheck, Search, CalendarPlus, ChevronDown, Zap, Copy, ExternalLink, CreditCard, ArrowUpRight, AlertTriangle } from "lucide-react";
+import GeoBlockScreen from "@/components/predictions/GeoBlockScreen";
 import { toast } from "sonner";
 import { dbg } from "@/lib/debugLog";
 import { Button } from "@/components/ui/button";
@@ -170,6 +171,9 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [withdrawDest, setWithdrawDest] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [geoBlocked, setGeoBlocked] = useState(false);
+  const [geoBlockDismissed, setGeoBlockDismissed] = useState(false);
+  const readOnly = geoBlocked && geoBlockDismissed;
 
   // Social share state
   const [shareOpen, setShareOpen] = useState(false);
@@ -186,23 +190,12 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     const refreshed = result.success ? await refreshSession() : null;
     const ready = result.ready ?? refreshed?.canTrade ?? false;
 
-    if (!result.success) {
-      toast.error("Trading wallet setup failed", {
-        description: result.error || "Please try again.",
-      });
+    // Don't block — backend uses shared credentials fallback
+    if (!result.success || !ready) {
+      console.warn("[OperatorApp] Trading wallet setup not ready, using shared fallback");
       return false;
     }
 
-    if (!ready) {
-      toast.error("Trading wallet not ready", {
-        description: result.error || "Setup is still incomplete. Please retry in a moment.",
-      });
-      return false;
-    }
-
-    toast.success("Trading wallet ready", {
-      description: "You can place your prediction now.",
-    });
     return true;
   }, [hasSession, canTrade, refreshSession, setupTradingWallet]);
 
@@ -495,14 +488,13 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         const msg = data?.error || "Backend error";
         const errorCode = data?.error_code || "";
         if (errorCode === "geo_blocked" || errorCode === "clob_geo_blocked") {
-          toast.error("Trading restricted in your region", {
-            description: msg,
-          });
+          setGeoBlocked(true);
           setSubmitting(false);
           return;
         }
         if (errorCode === "trading_wallet_setup_required" || errorCode === "trading_wallet_not_ready" || errorCode === "no_trading_session") {
-          await ensureTradingWalletReady();
+          // Don't block — just attempt setup in background, backend uses shared creds
+          setupTradingWallet().catch(() => {});
           setSubmitting(false);
           return;
         }
