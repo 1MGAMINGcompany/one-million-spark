@@ -1544,7 +1544,13 @@
     "startsInHour": "{{hour}} घंटे में शुरू",
     "poweredByLabel": "द्वारा संचालित",
     "predictReturn": "${{predict}} पूर्वानुमान → ${{return}} रिटर्न",
-    "supportEmailLabel": "सहायता"
+    "supportEmailLabel": "सहायता",
+    "sellPosition": "पोजीशन बेचें",
+    "selling": "बेच रहे हैं...",
+    "sold": "पोजीशन बेची गई!",
+    "sellFailed": "बिक्री विफल",
+    "estimatedPayout": "अनुमानित भुगतान",
+    "currentPrice": "वर्तमान मूल्य"
   },
   "gameMultiplayer": {
     "rooms": "Rooms",
@@ -1911,5 +1917,20 @@
     "bigWalletLeaning": "बड़े वॉलेट किस ओर झुक रहे हैं",
     "aiUnavailable": "AI विश्लेषण अस्थायी रूप से अनुपलब्ध है। ऊपर के बड़े खिलाड़ी संकेतों का उपयोग करें।",
     "poweredBy": "1mg.live द्वारा संचालित"
+  },
+  "geoBlock": {
+    "title": "आपके क्षेत्र में सेवा उपलब्ध नहीं",
+    "subtitle": "स्थानीय नियमों के कारण हम अभी आपके स्थान पर उपलब्ध नहीं हैं।",
+    "availableIn": "वर्तमान में उपलब्ध",
+    "joinWaitlist": "प्रतीक्षा सूची में शामिल हों",
+    "onTheList": "आप सूची में हैं! हम आपको सूचित करेंगे।",
+    "emailPlaceholder": "आपका@email.com",
+    "joining": "शामिल हो रहे हैं...",
+    "join": "शामिल हों",
+    "exploreReadOnly": "भविष्यवाणियां देखें (केवल पढ़ने के लिए)",
+    "vpnNotice": "कई उपयोगकर्ता VPN का उपयोग करते हैं। इसका उपयोग आपकी जिम्मेदारी है।",
+    "invalidEmail": "कृपया एक वैध ईमेल दर्ज करें",
+    "joinedSuccess": "आप प्रतीक्षा सूची में हैं!",
+    "joinFailed": "शामिल होने में विफल। पुनः प्रयास करें।"
   }
 }

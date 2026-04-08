@@ -1450,7 +1450,13 @@
     "startsInHour": "{{hour}}時間後に開始",
     "poweredByLabel": "提供元",
     "predictReturn": "${{predict}}予測 → ${{return}}リターン",
-    "supportEmailLabel": "サポート"
+    "supportEmailLabel": "サポート",
+    "sellPosition": "ポジションを売却",
+    "selling": "売却中...",
+    "sold": "ポジション売却完了！",
+    "sellFailed": "売却失敗",
+    "estimatedPayout": "予想配当",
+    "currentPrice": "現在の価格"
   },
   "platform": {
     "hero": {
@@ -1909,5 +1915,20 @@
     "bigWalletLeaning": "大口ウォレットの傾向",
     "aiUnavailable": "AI分析は一時的に利用できません。上の大口プレイヤーシグナルをご利用ください。",
     "poweredBy": "1mg.live提供"
+  },
+  "geoBlock": {
+    "title": "お住まいの地域ではご利用いただけません",
+    "subtitle": "現地の規制により、まだご利用いただけません。",
+    "availableIn": "現在利用可能な地域",
+    "joinWaitlist": "ウェイトリストに参加",
+    "onTheList": "リストに登録されました！開始時にお知らせします。",
+    "emailPlaceholder": "your@email.com",
+    "joining": "参加中...",
+    "join": "参加",
+    "exploreReadOnly": "予測を閲覧（読み取り専用）",
+    "vpnNotice": "多くのユーザーがVPNを使用しています。使用は自己責任です。",
+    "invalidEmail": "有効なメールアドレスを入力してください",
+    "joinedSuccess": "ウェイトリストに登録されました！",
+    "joinFailed": "参加に失敗しました。再試行してください。"
   }
 }

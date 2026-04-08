@@ -992,6 +992,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                       onShareWin={handleShareWin}
                       onGraph={(f) => setGraphFight(f)}
                       onTips={(f) => setTipsFight(f)}
+                      onSell={handleSell}
+                      selling={selling}
                     />
                   );
                 })}
@@ -1013,6 +1015,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                 onShareWin={handleShareWin}
                 onGraph={(f) => setGraphFight(f)}
                 onTips={(f) => setTipsFight(f)}
+                onSell={handleSell}
+                selling={selling}
               />
             );
           })

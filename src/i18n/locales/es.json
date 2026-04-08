@@ -1647,7 +1647,13 @@
     "startsInHour": "Comienza en {{hour}}h",
     "poweredByLabel": "Desarrollado por",
     "predictReturn": "Predice ${{predict}} → Retorno ${{return}}",
-    "supportEmailLabel": "Soporte"
+    "supportEmailLabel": "Soporte",
+    "sellPosition": "Vender Posición",
+    "selling": "Vendiendo...",
+    "sold": "¡Posición Vendida!",
+    "sellFailed": "Venta fallida",
+    "estimatedPayout": "Pago Est.",
+    "currentPrice": "Precio Actual"
   },
   "shareInvite": {
     "invitePlayers": "Invite Players",
@@ -1907,5 +1913,20 @@
     "bigWalletLeaning": "Hacia Dónde Se Inclinan las Grandes Billeteras",
     "aiUnavailable": "El análisis IA no está disponible temporalmente. Usa las señales de Actividad de Grandes Jugadores.",
     "poweredBy": "Impulsado por 1mg.live"
+  },
+  "geoBlock": {
+    "title": "Servicio No Disponible en Tu Región",
+    "subtitle": "Aún no estamos disponibles en tu ubicación debido a regulaciones locales.",
+    "availableIn": "Disponible Actualmente En",
+    "joinWaitlist": "Únete a la Lista de Espera",
+    "onTheList": "¡Estás en la lista! Te avisaremos cuando lancemos en tu zona.",
+    "emailPlaceholder": "tu@email.com",
+    "joining": "Uniéndose...",
+    "join": "Unirse",
+    "exploreReadOnly": "Explorar Predicciones (Solo Lectura)",
+    "vpnNotice": "Muchos usuarios acceden a servicios globales usando una VPN. Usar una VPN es tu elección y responsabilidad personal.",
+    "invalidEmail": "Por favor ingresa un correo válido",
+    "joinedSuccess": "¡Estás en la lista de espera! Te notificaremos cuando lancemos en tu región.",
+    "joinFailed": "Error al unirse. Inténtalo de nuevo."
   }
 }

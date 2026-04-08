@@ -1743,7 +1743,13 @@
     "startsInMin": "Starts in {{min}}m",
     "startsInHour": "Starts in {{hour}}h",
     "poweredByLabel": "Powered by",
-    "supportEmailLabel": "Support"
+    "supportEmailLabel": "Support",
+    "sellPosition": "Sell Position",
+    "selling": "Selling...",
+    "sold": "Position Sold!",
+    "sellFailed": "Sell failed",
+    "estimatedPayout": "Est. Payout",
+    "currentPrice": "Current Price"
   },
   "legal": {
     "backToHome": "← Back to Home",
@@ -1845,5 +1851,20 @@
     "bigWalletLeaning": "Where Big Wallets Are Leaning",
     "aiUnavailable": "AI analysis is temporarily unavailable. Use the Big Player Activity signals above.",
     "poweredBy": "Powered by 1mg.live"
+  },
+  "geoBlock": {
+    "title": "Service Not Available in Your Region",
+    "subtitle": "We're not yet available in your location due to local regulations.",
+    "availableIn": "Currently Available In",
+    "joinWaitlist": "Join the Waitlist",
+    "onTheList": "You're on the list! We'll let you know when we launch in your area.",
+    "emailPlaceholder": "your@email.com",
+    "joining": "Joining...",
+    "join": "Join",
+    "exploreReadOnly": "Explore Predictions (Read-Only)",
+    "vpnNotice": "Many users access global services using a VPN. Using a VPN to access this service is your personal choice and responsibility. We do not endorse or encourage circumventing local regulations.",
+    "invalidEmail": "Please enter a valid email address",
+    "joinedSuccess": "You're on the waitlist! We'll notify you when we launch in your region.",
+    "joinFailed": "Failed to join waitlist. Please try again."
   }
 }

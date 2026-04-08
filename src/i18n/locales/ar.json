@@ -1450,7 +1450,13 @@
     "startsInHour": "يبدأ خلال {{hour}} س",
     "poweredByLabel": "مدعوم من",
     "predictReturn": "توقع ${{predict}} ← عائد ${{return}}",
-    "supportEmailLabel": "الدعم"
+    "supportEmailLabel": "الدعم",
+    "sellPosition": "بيع المركز",
+    "selling": "جاري البيع...",
+    "sold": "تم بيع المركز!",
+    "sellFailed": "فشل البيع",
+    "estimatedPayout": "العائد المتوقع",
+    "currentPrice": "السعر الحالي"
   },
   "platform": {
     "hero": {
@@ -1909,5 +1915,20 @@
     "bigWalletLeaning": "إلى أين تميل المحافظ الكبيرة",
     "aiUnavailable": "تحليل الذكاء الاصطناعي غير متاح مؤقتاً. استخدم إشارات نشاط اللاعبين الكبار.",
     "poweredBy": "مدعوم من 1mg.live"
+  },
+  "geoBlock": {
+    "title": "الخدمة غير متوفرة في منطقتك",
+    "subtitle": "لم نتوفر بعد في موقعك بسبب اللوائح المحلية.",
+    "availableIn": "متوفر حالياً في",
+    "joinWaitlist": "انضم لقائمة الانتظار",
+    "onTheList": "أنت في القائمة! سنخبرك عند الإطلاق.",
+    "emailPlaceholder": "بريدك@email.com",
+    "joining": "جاري الانضمام...",
+    "join": "انضم",
+    "exploreReadOnly": "استكشاف التوقعات (للقراءة فقط)",
+    "vpnNotice": "يستخدم العديد من المستخدمين VPN. استخدامها مسؤوليتك الشخصية.",
+    "invalidEmail": "أدخل بريداً إلكترونياً صالحاً",
+    "joinedSuccess": "أنت في قائمة الانتظار!",
+    "joinFailed": "فشل الانضمام. حاول مرة أخرى."
   }
 }
