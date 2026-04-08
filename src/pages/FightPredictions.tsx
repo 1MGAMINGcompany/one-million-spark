@@ -773,6 +773,8 @@ export default function FightPredictions() {
         onPredict={handlePredict}
         onClaim={handleClaim}
         claiming={claiming}
+        onSell={handleSell}
+        selling={selling}
         hotFightIds={hotFightIds}
         onWalletRequired={() => {
           if (!authenticated) login();
