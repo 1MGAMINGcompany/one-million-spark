@@ -146,6 +146,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [showWalletGate, setShowWalletGate] = useState(false);
   const [userEntries, setUserEntries] = useState<any[]>([]);
   const [claiming, setClaiming] = useState(false);
+  const [selling, setSelling] = useState(false);
   const [broadSportFilter, setBroadSportFilter] = useState(() => {
     try { return localStorage.getItem("1mg-sport-filter") || "ALL"; } catch { return "ALL"; }
   });
