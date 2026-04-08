@@ -189,10 +189,10 @@ export default function SimplePredictionCard({
                   <button
                     onClick={() => onClaim(fight.id)}
                     disabled={claiming}
-                    className="mt-2 px-6 py-2 rounded-xl font-bold text-sm transition-all"
+                    className="mt-2 px-6 py-2 rounded-xl font-bold text-sm transition-all animate-pulse hover:animate-none"
                     style={{ backgroundColor: theme.primary, color: theme.primaryForeground }}
                   >
-                    {claiming ? t("operator.claiming") : t("operator.collectWinnings")}
+                    {claiming ? t("operator.claiming") : `${t("operator.collectWinnings")}${userEntry?.reward_usd ? ` (+$${userEntry.reward_usd.toFixed(2)})` : ""}`}
                   </button>
                 )}
                 {userEntry?.claimed && (
@@ -265,6 +265,21 @@ export default function SimplePredictionCard({
             <p className="text-xs mt-1" style={{ color: theme.textMuted }}>
               {t("operator.amountPlacedLabel", { amount: userEntry.amount_usd.toFixed(2) })}
             </p>
+          )}
+          {/* Sell button — available when market is still open and user has a position */}
+          {isOpen && onSell && userEntry?.polymarket_order_id && (
+            <button
+              onClick={() => onSell(fight.id)}
+              disabled={selling}
+              className="mt-3 px-5 py-2 rounded-xl font-bold text-sm transition-all hover:opacity-80"
+              style={{
+                backgroundColor: "transparent",
+                border: `1.5px solid ${theme.primary}`,
+                color: theme.primary,
+              }}
+            >
+              {selling ? t("operator.selling") : t("operator.sellPosition")}
+            </button>
           )}
         </div>
       </div>
