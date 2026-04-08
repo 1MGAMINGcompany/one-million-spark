@@ -1,28 +1,34 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { PrivyProvider } from "@privy-io/react-auth";
 import { SmartWalletsProvider } from "@privy-io/react-auth/smart-wallets";
 import { polygon } from "viem/chains";
-import { isPrivyConfigured, PRIVY_APP_ID } from "@/lib/privyConfig";
-import { dbg } from "@/lib/debugLog";
+import { fetchPrivyAppId } from "@/lib/privyConfig";
 
 interface PrivyProviderWrapperProps {
   children: ReactNode;
 }
 
-console.info(`[Privy] configured=${isPrivyConfigured}, appId=${PRIVY_APP_ID ? "set" : "missing"}`);
-
 export function PrivyProviderWrapper({ children }: PrivyProviderWrapperProps) {
-  if (!isPrivyConfigured || !PRIVY_APP_ID) {
-    dbg("privy:provider:missing_app_id", {
-      origin: typeof window !== "undefined" ? window.location.origin : "ssr",
+  const [appId, setAppId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchPrivyAppId().then((id) => {
+      setAppId(id);
+      setLoading(false);
     });
-    console.warn("[PrivyProviderWrapper] VITE_PRIVY_APP_ID is not set — Privy auth disabled.");
+  }, []);
+
+  if (loading || !appId) {
+    if (!loading && !appId) {
+      console.warn("[PrivyProviderWrapper] No Privy App ID available — auth disabled.");
+    }
     return <>{children}</>;
   }
 
   return (
     <PrivyProvider
-      appId={PRIVY_APP_ID}
+      appId={appId}
       config={{
         appearance: {
           showWalletLoginFirst: false,

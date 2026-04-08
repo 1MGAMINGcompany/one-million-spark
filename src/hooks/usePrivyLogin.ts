@@ -2,7 +2,7 @@ import { useLogin } from "@privy-io/react-auth";
 import { useRef } from "react";
 import { toast } from "sonner";
 import { dbg } from "@/lib/debugLog";
-import { isPrivyConfigured } from "@/lib/privyConfig";
+import { getPrivyAppId } from "@/lib/privyConfig";
 
 const noopLogin = () => {
   console.warn("[usePrivyLogin] Privy not configured — login() is a no-op");
@@ -10,7 +10,8 @@ const noopLogin = () => {
 };
 
 export function usePrivyLogin() {
-  if (!isPrivyConfigured) {
+  const appId = getPrivyAppId();
+  if (!appId) {
     return { login: noopLogin };
   }
   return usePrivyLoginInner();
@@ -52,7 +53,6 @@ function usePrivyLoginInner() {
         origin: window.location.origin,
         hostname: window.location.hostname,
         path: window.location.pathname,
-        appId: import.meta.env.VITE_PRIVY_APP_ID ?? "(missing)",
       });
       console.error("[Privy] Login error:", {
         code,
@@ -91,7 +91,6 @@ function usePrivyLoginInner() {
       origin: window.location.origin,
       hostname: window.location.hostname,
       path: window.location.pathname,
-      appId: import.meta.env.VITE_PRIVY_APP_ID ?? "(missing)",
     });
 
     clearLoginTimeout();
