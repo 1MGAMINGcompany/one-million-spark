@@ -43,7 +43,7 @@ const articleFAQs: Record<string, FAQItem[]> = {
     { question: "How long does it take to place a prediction?", answer: "Under a minute. Sign in, browse events, pick an outcome, enter your amount, and confirm." },
     { question: "How are odds displayed on 1MGAMING?", answer: "Odds are shown as percentages reflecting market probability. For example, 43% means the market believes there's a 43% chance of that outcome." },
     { question: "What happens when an event resolves?", answer: "If you picked the correct outcome, your payout is sent automatically to your account. No claim process or withdrawal needed." },
-    { question: "Can I sell my prediction before the event ends?", answer: "Currently, predictions are held until the event resolves. The ability to trade positions before resolution is planned for future updates." },
+    { question: "Can I sell my prediction before the event ends?", answer: "Yes! You can sell your position at any time while the market is still open. Tap the 'Sell' button on your active prediction to cash out at the current market price." },
   ],
   "how-prediction-payouts-work": [
     { question: "How do I get paid when I win a prediction?", answer: "Your payout is sent automatically to your account when the event resolves. No manual claim or withdrawal process is needed." },

@@ -1450,7 +1450,13 @@
     "startsInHour": "{{hour}}小时后开始",
     "poweredByLabel": "技术支持",
     "predictReturn": "预测 ${{predict}} → 回报 ${{return}}",
-    "supportEmailLabel": "客服"
+    "supportEmailLabel": "客服",
+    "sellPosition": "卖出头寸",
+    "selling": "卖出中...",
+    "sold": "头寸已卖出！",
+    "sellFailed": "卖出失败",
+    "estimatedPayout": "预计收益",
+    "currentPrice": "当前价格"
   },
   "platform": {
     "hero": {
@@ -1909,5 +1915,20 @@
     "bigWalletLeaning": "大户倾向",
     "aiUnavailable": "AI分析暂时不可用。请使用上方的大户活动信号。",
     "poweredBy": "由1mg.live提供"
+  },
+  "geoBlock": {
+    "title": "您所在地区暂不提供服务",
+    "subtitle": "由于当地法规，我们尚未在您的位置提供服务。",
+    "availableIn": "当前可用地区",
+    "joinWaitlist": "加入等候名单",
+    "onTheList": "您已在名单中！我们会在您所在地区推出时通知您。",
+    "emailPlaceholder": "your@email.com",
+    "joining": "加入中...",
+    "join": "加入",
+    "exploreReadOnly": "浏览预测（只读）",
+    "vpnNotice": "许多用户使用VPN访问全球服务。使用VPN是您的个人选择和责任。",
+    "invalidEmail": "请输入有效的电子邮件地址",
+    "joinedSuccess": "您已加入等候名单！",
+    "joinFailed": "加入失败，请重试。"
   }
 }

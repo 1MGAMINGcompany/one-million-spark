@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { X, ShieldAlert, Globe, Mail, Eye } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ interface GeoBlockScreenProps {
 }
 
 export default function GeoBlockScreen({ wallet, onDismiss, onExploreReadOnly }: GeoBlockScreenProps) {
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [joined, setJoined] = useState(false);
@@ -32,7 +34,7 @@ export default function GeoBlockScreen({ wallet, onDismiss, onExploreReadOnly }:
 
   const handleJoinWaitlist = async () => {
     if (!email || !email.includes("@")) {
-      toast.error("Please enter a valid email address");
+      toast.error(t("geoBlock.invalidEmail"));
       return;
     }
     setSubmitting(true);
@@ -44,9 +46,9 @@ export default function GeoBlockScreen({ wallet, onDismiss, onExploreReadOnly }:
       });
       if (error) throw error;
       setJoined(true);
-      toast.success("You're on the waitlist! We'll notify you when we launch in your region.");
+      toast.success(t("geoBlock.joinedSuccess"));
     } catch {
-      toast.error("Failed to join waitlist. Please try again.");
+      toast.error(t("geoBlock.joinFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -71,10 +73,10 @@ export default function GeoBlockScreen({ wallet, onDismiss, onExploreReadOnly }:
           </div>
           <div>
             <h2 className="text-lg font-bold text-foreground font-['Cinzel']">
-              Service Not Available in Your Region
+              {t("geoBlock.title")}
             </h2>
             <p className="text-sm text-muted-foreground mt-1">
-              We're not yet available in your location due to local regulations.
+              {t("geoBlock.subtitle")}
             </p>
           </div>
         </div>
@@ -84,7 +86,7 @@ export default function GeoBlockScreen({ wallet, onDismiss, onExploreReadOnly }:
           <div className="flex items-center gap-2 mb-2">
             <Globe className="w-4 h-4 text-primary" />
             <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
-              Currently Available In
+              {t("geoBlock.availableIn")}
             </span>
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -104,17 +106,17 @@ export default function GeoBlockScreen({ wallet, onDismiss, onExploreReadOnly }:
         <div className="bg-secondary/50 rounded-lg p-4 space-y-3">
           <div className="flex items-center gap-2">
             <Mail className="w-4 h-4 text-primary" />
-            <span className="text-sm font-semibold text-foreground">Join the Waitlist</span>
+            <span className="text-sm font-semibold text-foreground">{t("geoBlock.joinWaitlist")}</span>
           </div>
           {joined ? (
             <p className="text-sm text-green-400 font-medium">
-              ✅ You're on the list! We'll let you know when we launch in your area.
+              ✅ {t("geoBlock.onTheList")}
             </p>
           ) : (
             <div className="flex gap-2">
               <Input
                 type="email"
-                placeholder="your@email.com"
+                placeholder={t("geoBlock.emailPlaceholder")}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="flex-1 h-9 text-sm"
@@ -126,7 +128,7 @@ export default function GeoBlockScreen({ wallet, onDismiss, onExploreReadOnly }:
                 disabled={submitting}
                 className="shrink-0"
               >
-                {submitting ? "Joining..." : "Join"}
+                {submitting ? t("geoBlock.joining") : t("geoBlock.join")}
               </Button>
             </div>
           )}
@@ -139,14 +141,12 @@ export default function GeoBlockScreen({ wallet, onDismiss, onExploreReadOnly }:
           onClick={onExploreReadOnly}
         >
           <Eye className="w-4 h-4 mr-2" />
-          Explore Predictions (Read-Only)
+          {t("geoBlock.exploreReadOnly")}
         </Button>
 
         {/* VPN notice — legally framed */}
         <p className="text-[11px] text-muted-foreground/60 leading-relaxed">
-          Many users access global services using a VPN. Using a VPN to access this
-          service is your personal choice and responsibility. We do not endorse or
-          encourage circumventing local regulations.
+          {t("geoBlock.vpnNotice")}
         </p>
       </div>
     </Card>

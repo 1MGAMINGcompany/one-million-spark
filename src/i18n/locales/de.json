@@ -1448,7 +1448,13 @@
     "startsInHour": "Beginnt in {{hour}}h",
     "poweredByLabel": "Betrieben von",
     "predictReturn": "${{predict}} vorhersagen → ${{return}} Rendite",
-    "supportEmailLabel": "Support"
+    "supportEmailLabel": "Support",
+    "sellPosition": "Position Verkaufen",
+    "selling": "Verkaufe...",
+    "sold": "Position Verkauft!",
+    "sellFailed": "Verkauf fehlgeschlagen",
+    "estimatedPayout": "Gesch. Auszahlung",
+    "currentPrice": "Aktueller Preis"
   },
   "platform": {
     "hero": {
@@ -1907,5 +1913,20 @@
     "bigWalletLeaning": "Wohin Große Wallets Tendieren",
     "aiUnavailable": "Die KI-Analyse ist vorübergehend nicht verfügbar. Nutzen Sie die Signale der Großen Spieler.",
     "poweredBy": "Bereitgestellt von 1mg.live"
+  },
+  "geoBlock": {
+    "title": "Service in Ihrer Region Nicht Verfügbar",
+    "subtitle": "Wir sind in Ihrer Region noch nicht verfügbar.",
+    "availableIn": "Derzeit Verfügbar In",
+    "joinWaitlist": "Warteliste Beitreten",
+    "onTheList": "Sie sind auf der Liste! Wir benachrichtigen Sie beim Start.",
+    "emailPlaceholder": "ihre@email.com",
+    "joining": "Beitritt...",
+    "join": "Beitreten",
+    "exploreReadOnly": "Vorhersagen Erkunden (Nur Lesen)",
+    "vpnNotice": "Viele Nutzer verwenden VPN. Die Nutzung liegt in Ihrer Verantwortung.",
+    "invalidEmail": "Bitte geben Sie eine gültige E-Mail ein",
+    "joinedSuccess": "Sie sind auf der Warteliste!",
+    "joinFailed": "Fehler. Bitte erneut versuchen."
   }
 }

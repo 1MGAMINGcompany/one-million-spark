@@ -13,6 +13,7 @@ import { usePolymarketSession } from "@/hooks/usePolymarketSession";
 import { usePolymarketPrices } from "@/hooks/usePolymarketPrices";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Globe, Trophy, Loader2, ShieldCheck, Search, CalendarPlus, ChevronDown, Zap, Copy, ExternalLink, CreditCard, ArrowUpRight, AlertTriangle } from "lucide-react";
+import GeoBlockScreen from "@/components/predictions/GeoBlockScreen";
 import { toast } from "sonner";
 import { dbg } from "@/lib/debugLog";
 import { Button } from "@/components/ui/button";
@@ -145,6 +146,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [showWalletGate, setShowWalletGate] = useState(false);
   const [userEntries, setUserEntries] = useState<any[]>([]);
   const [claiming, setClaiming] = useState(false);
+  const [selling, setSelling] = useState(false);
   const [broadSportFilter, setBroadSportFilter] = useState(() => {
     try { return localStorage.getItem("1mg-sport-filter") || "ALL"; } catch { return "ALL"; }
   });
@@ -170,6 +172,9 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [withdrawDest, setWithdrawDest] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [geoBlocked, setGeoBlocked] = useState(false);
+  const [geoBlockDismissed, setGeoBlockDismissed] = useState(false);
+  const readOnly = geoBlocked && geoBlockDismissed;
 
   // Social share state
   const [shareOpen, setShareOpen] = useState(false);
@@ -186,23 +191,12 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     const refreshed = result.success ? await refreshSession() : null;
     const ready = result.ready ?? refreshed?.canTrade ?? false;
 
-    if (!result.success) {
-      toast.error("Trading wallet setup failed", {
-        description: result.error || "Please try again.",
-      });
+    // Don't block — backend uses shared credentials fallback
+    if (!result.success || !ready) {
+      console.warn("[OperatorApp] Trading wallet setup not ready, using shared fallback");
       return false;
     }
 
-    if (!ready) {
-      toast.error("Trading wallet not ready", {
-        description: result.error || "Setup is still incomplete. Please retry in a moment.",
-      });
-      return false;
-    }
-
-    toast.success("Trading wallet ready", {
-      description: "You can place your prediction now.",
-    });
     return true;
   }, [hasSession, canTrade, refreshSession, setupTradingWallet]);
 
@@ -495,14 +489,13 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         const msg = data?.error || "Backend error";
         const errorCode = data?.error_code || "";
         if (errorCode === "geo_blocked" || errorCode === "clob_geo_blocked") {
-          toast.error("Trading restricted in your region", {
-            description: msg,
-          });
+          setGeoBlocked(true);
           setSubmitting(false);
           return;
         }
         if (errorCode === "trading_wallet_setup_required" || errorCode === "trading_wallet_not_ready" || errorCode === "no_trading_session") {
-          await ensureTradingWalletReady();
+          // Don't block — just attempt setup in background, backend uses shared creds
+          setupTradingWallet().catch(() => {});
           setSubmitting(false);
           return;
         }
@@ -588,6 +581,33 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
   const handleAddFunds = () => {
     setShowFundsModal(true);
+  };
+
+  const handleSell = async (fightId: string) => {
+    if (!address) return;
+    setSelling(true);
+    try {
+      const privyToken = await getAccessToken();
+      if (!privyToken) { setSelling(false); return; }
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/prediction-sell`;
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-privy-token": privyToken, apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+        body: JSON.stringify({ fight_id: fightId, wallet: address }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || data?.error) {
+        if (data?.error_code === "clob_geo_blocked") { setGeoBlocked(true); setSelling(false); return; }
+        throw new Error(data?.error || "Sell failed");
+      }
+      toast.success(t("operator.sold"), { description: `$${(data.expected_usdc || 0).toFixed(2)}` });
+      loadUserEntries();
+      setTimeout(() => refetchBalance(), 3000);
+    } catch (err: any) {
+      toast.error(t("operator.sellFailed", "Sell failed"), { description: err.message });
+    } finally {
+      setSelling(false);
+    }
   };
 
   if (isLoading) {
@@ -680,7 +700,18 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         />
       )}
 
-      {isConnected && (
+      {/* Geo-block banner */}
+      {geoBlocked && !geoBlockDismissed && (
+        <div className="max-w-4xl mx-auto px-4 pt-3">
+          <GeoBlockScreen
+            wallet={address || undefined}
+            onDismiss={() => setGeoBlockDismissed(true)}
+            onExploreReadOnly={() => setGeoBlockDismissed(true)}
+          />
+        </div>
+      )}
+
+      {isConnected && !geoBlocked && (
         <div className="max-w-4xl mx-auto px-4 pt-3">
           <EnableTradingBanner
             hasSession={hasSession}
@@ -961,6 +992,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                       onShareWin={handleShareWin}
                       onGraph={(f) => setGraphFight(f)}
                       onTips={(f) => setTipsFight(f)}
+                      onSell={handleSell}
+                      selling={selling}
                     />
                   );
                 })}
@@ -982,6 +1015,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                 onShareWin={handleShareWin}
                 onGraph={(f) => setGraphFight(f)}
                 onTips={(f) => setTipsFight(f)}
+                onSell={handleSell}
+                selling={selling}
               />
             );
           })

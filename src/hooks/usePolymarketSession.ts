@@ -39,7 +39,7 @@ interface PolymarketSessionState {
   } | null>;
 }
 
-const SIWE_MESSAGE_PREFIX = "Sign to enable Polymarket trading on 1MGAMING";
+const SIWE_MESSAGE_PREFIX = "Sign to enable trading on 1mg.live";
 const USER_SETUP_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/polymarket-user-setup`;
 
 export function usePolymarketSession(): PolymarketSessionState {

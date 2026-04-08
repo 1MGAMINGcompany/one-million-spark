@@ -1450,7 +1450,13 @@
     "startsInHour": "Inizia tra {{hour}}h",
     "poweredByLabel": "Sviluppato da",
     "predictReturn": "Prevedi ${{predict}} → Ritorno ${{return}}",
-    "supportEmailLabel": "Supporto"
+    "supportEmailLabel": "Supporto",
+    "sellPosition": "Vendi Posizione",
+    "selling": "Vendendo...",
+    "sold": "Posizione Venduta!",
+    "sellFailed": "Vendita fallita",
+    "estimatedPayout": "Pagamento Stimato",
+    "currentPrice": "Prezzo Attuale"
   },
   "platform": {
     "hero": {
@@ -1909,5 +1915,20 @@
     "bigWalletLeaning": "Dove Si Orientano i Grandi Wallet",
     "aiUnavailable": "L analisi IA è temporaneamente non disponibile. Usa i segnali di Attività dei Grandi Giocatori.",
     "poweredBy": "Fornito da 1mg.live"
+  },
+  "geoBlock": {
+    "title": "Servizio Non Disponibile nella Tua Regione",
+    "subtitle": "Non siamo ancora disponibili nella tua zona.",
+    "availableIn": "Attualmente Disponibile In",
+    "joinWaitlist": "Unisciti alla Lista d'Attesa",
+    "onTheList": "Sei nella lista! Ti avviseremo al lancio.",
+    "emailPlaceholder": "tua@email.com",
+    "joining": "In corso...",
+    "join": "Unisciti",
+    "exploreReadOnly": "Esplora Previsioni (Solo Lettura)",
+    "vpnNotice": "Molti utenti usano VPN. L'uso è una tua scelta personale.",
+    "invalidEmail": "Inserisci un'email valida",
+    "joinedSuccess": "Sei nella lista d'attesa!",
+    "joinFailed": "Errore. Riprova."
   }
 }

@@ -1540,7 +1540,13 @@
     "startsInHour": "Começa em {{hour}}h",
     "poweredByLabel": "Desenvolvido por",
     "predictReturn": "Prever ${{predict}} → Retorno ${{return}}",
-    "supportEmailLabel": "Suporte"
+    "supportEmailLabel": "Suporte",
+    "sellPosition": "Vender Posição",
+    "selling": "Vendendo...",
+    "sold": "Posição Vendida!",
+    "sellFailed": "Venda falhou",
+    "estimatedPayout": "Pagamento Est.",
+    "currentPrice": "Preço Atual"
   },
   "gameMultiplayer": {
     "rooms": "Rooms",
@@ -1907,5 +1913,20 @@
     "bigWalletLeaning": "Para Onde as Grandes Carteiras Estão Inclinando",
     "aiUnavailable": "A análise IA está temporariamente indisponível. Use os sinais de Atividade de Grandes Jogadores.",
     "poweredBy": "Alimentado por 1mg.live"
+  },
+  "geoBlock": {
+    "title": "Serviço Não Disponível na Sua Região",
+    "subtitle": "Ainda não estamos disponíveis na sua localização.",
+    "availableIn": "Disponível Atualmente Em",
+    "joinWaitlist": "Entre na Lista de Espera",
+    "onTheList": "Você está na lista! Avisaremos quando lançarmos na sua área.",
+    "emailPlaceholder": "seu@email.com",
+    "joining": "Entrando...",
+    "join": "Entrar",
+    "exploreReadOnly": "Explorar Previsões (Somente Leitura)",
+    "vpnNotice": "Muitos usuários acessam serviços globais usando VPN. Usar VPN é sua escolha pessoal.",
+    "invalidEmail": "Insira um email válido",
+    "joinedSuccess": "Você está na lista de espera!",
+    "joinFailed": "Falha ao entrar. Tente novamente."
   }
 }

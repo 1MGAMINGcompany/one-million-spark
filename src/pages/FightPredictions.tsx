@@ -403,23 +403,12 @@ export default function FightPredictions() {
     const refreshed = result.success ? await refreshSession() : null;
     const ready = result.ready ?? refreshed?.canTrade ?? false;
 
-    if (!result.success) {
-      toast.error("Trading wallet setup failed", {
-        description: result.error || "Please try again.",
-      });
+    // Don't block — backend uses shared credentials fallback
+    if (!result.success || !ready) {
+      console.warn("[FightPredictions] Trading wallet setup not ready, using shared fallback");
       return false;
     }
 
-    if (!ready) {
-      toast.error("Trading wallet not ready", {
-        description: result.error || "Setup is still incomplete. Please retry in a moment.",
-      });
-      return false;
-    }
-
-    toast.success("Trading wallet ready", {
-      description: "You can place your prediction now.",
-    });
     return true;
   }, [hasSession, canTrade, refreshSession, setupTradingWallet]);
 
@@ -645,7 +634,8 @@ export default function FightPredictions() {
           return;
         }
         if (isSetupRequired) {
-          await ensureTradingWalletReady();
+          // Don't block — just attempt setup in background, backend uses shared creds
+          setupTradingWallet().catch(() => {});
           setSubmitting(false);
           return;
         }
