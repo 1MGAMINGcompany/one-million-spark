@@ -55,6 +55,9 @@ export function isPrivyReady(): boolean {
   return _fetched && _cachedAppId != null;
 }
 
-// Legacy export for code that still imports this
+// Legacy compat — reactive check based on cached value
 export const PRIVY_APP_ID: string | undefined = undefined;
-export const isPrivyConfigured: boolean = false;
+/** @deprecated Use getPrivyAppId() !== null instead */
+export function isPrivyConfigured(): boolean {
+  return _cachedAppId != null;
+}
