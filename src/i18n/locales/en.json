@@ -1810,5 +1810,40 @@
       "s6Title": "Violations",
       "s6Body": "Violations of this policy may result in immediate account suspension, forfeiture of funds, and permanent ban from the platform. 1MG.live reserves the right to take action at its sole discretion."
     }
+  },
+  "tradingWallet": {
+    "ready": "Trading wallet ready",
+    "finalizing": "Finalizing trading wallet",
+    "needsFinalSetup": "Trading wallet needs final setup",
+    "deploymentIncomplete": "Trading wallet deployment incomplete",
+    "setUp": "Set Up Trading Wallet",
+    "readyDescSafe": "Your gasless trading wallet is active and ready for predictions.",
+    "readyDesc": "Your trading wallet is active.",
+    "finalizingDesc": "We're creating your personal trading wallet and exchange permissions now.",
+    "incompleteDesc": "Your wallet exists, but approvals or exchange credentials are still incomplete. Retry setup to finish.",
+    "deploymentDesc": "Your setup started, but the gasless wallet deployment did not complete. Retry setup to continue.",
+    "signOnce": "Sign once to create your personal trading wallet before placing predictions.",
+    "working": "Working…",
+    "retrySetup": "Retry setup",
+    "setUpButton": "Set Up",
+    "statusLabel": "Status",
+    "deploymentFailed": "Trading wallet deployment failed. Please try again.",
+    "setupFailed": "Trading wallet setup failed. Please try again.",
+    "approvalFailed": "Approval step failed. Please retry.",
+    "credentialFailed": "Credential setup failed. Please retry.",
+    "unknownError": "An unexpected error occurred. Please try again."
+  },
+  "marketTips": {
+    "title": "Tips",
+    "bigPlayerActivity": "Big Player Activity",
+    "activity": "Activity",
+    "momentum": "Momentum",
+    "largeTrades": "Large Trades",
+    "quickRead": "Quick Read",
+    "aiAnalysis": "AI Analysis",
+    "analyzingMarket": "Analyzing market...",
+    "bigWalletLeaning": "Where Big Wallets Are Leaning",
+    "aiUnavailable": "AI analysis is temporarily unavailable. Use the Big Player Activity signals above.",
+    "poweredBy": "Powered by 1mg.live"
   }
 }

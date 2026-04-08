@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { X, Lightbulb, TrendingUp, Activity, Wallet, Brain, Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,6 +16,8 @@ interface MarketTipsModalProps {
 }
 
 export default function MarketTipsModal({ fight, open, onClose, theme }: MarketTipsModalProps) {
+  const { t, i18n } = useTranslation();
+
   const nameA = fight ? resolveOutcomeName(fight.fighter_a_name, "a", fight) : "";
   const nameB = fight ? resolveOutcomeName(fight.fighter_b_name, "b", fight) : "";
 
@@ -33,14 +36,15 @@ export default function MarketTipsModal({ fight, open, onClose, theme }: MarketT
     totalVolume: volume,
   }), [pA, pB, poolAUsd, poolBUsd, volume]);
 
-  // AI insight query
+  // AI insight query – pass user language
   const { data: aiInsight, isLoading: aiLoading } = useQuery({
-    queryKey: ["tips-insight", fight?.id],
+    queryKey: ["tips-insight", fight?.id, i18n.language],
     queryFn: async () => {
       if (!fight) return null;
       const { data, error } = await supabase.functions.invoke("prediction-ai-insight", {
         body: {
           mode: "tips",
+          lang: i18n.language,
           title: fight.event_name,
           sport: (fight as any)._broadSport || "",
           sideA: nameA,
@@ -80,7 +84,7 @@ export default function MarketTipsModal({ fight, open, onClose, theme }: MarketT
         <div className="flex items-center justify-between p-4 pb-2" style={{ borderBottom: `1px solid ${theme.cardBorder}` }}>
           <div className="flex items-center gap-2">
             <Lightbulb className="w-5 h-5" style={{ color: theme.primary }} />
-            <h3 className="text-base font-bold" style={{ color: theme.textPrimary }}>Tips</h3>
+            <h3 className="text-base font-bold" style={{ color: theme.textPrimary }}>{t("marketTips.title")}</h3>
           </div>
           <button onClick={onClose} className="p-1 rounded-full hover:opacity-70 transition-opacity">
             <X className="w-4 h-4" style={{ color: theme.textMuted }} />
@@ -100,13 +104,13 @@ export default function MarketTipsModal({ fight, open, onClose, theme }: MarketT
         {/* Smart Money signals */}
         <div className="px-4 py-3 space-y-2">
           <h4 className="text-xs font-bold uppercase tracking-wider" style={{ color: theme.textMuted }}>
-            Big Player Activity
+            {t("marketTips.bigPlayerActivity")}
           </h4>
           <div className="grid grid-cols-3 gap-2">
             {[
-              { icon: Activity, label: "Activity", value: smartMoney.activity },
-              { icon: TrendingUp, label: "Momentum", value: smartMoney.momentum },
-              { icon: Wallet, label: "Large Trades", value: smartMoney.whaleSignal },
+              { icon: Activity, label: t("marketTips.activity"), value: smartMoney.activity },
+              { icon: TrendingUp, label: t("marketTips.momentum"), value: smartMoney.momentum },
+              { icon: Wallet, label: t("marketTips.largeTrades"), value: smartMoney.whaleSignal },
             ].map(({ icon: Icon, label, value }) => (
               <div
                 key={label}
@@ -132,14 +136,14 @@ export default function MarketTipsModal({ fight, open, onClose, theme }: MarketT
           <div className="flex items-center gap-2">
             <Brain className="w-4 h-4" style={{ color: theme.primary }} />
             <h4 className="text-xs font-bold uppercase tracking-wider" style={{ color: theme.textMuted }}>
-              AI Analysis
+              {t("marketTips.aiAnalysis")}
             </h4>
           </div>
 
           {aiLoading ? (
             <div className="flex items-center justify-center py-6">
               <Loader2 className="w-5 h-5 animate-spin" style={{ color: theme.primary }} />
-              <span className="text-xs ml-2" style={{ color: theme.textMuted }}>Analyzing market...</span>
+              <span className="text-xs ml-2" style={{ color: theme.textMuted }}>{t("marketTips.analyzingMarket")}</span>
             </div>
           ) : aiInsight && !aiInsight.fallback ? (
             <div className="space-y-2">
@@ -169,11 +173,11 @@ export default function MarketTipsModal({ fight, open, onClose, theme }: MarketT
                 </p>
               </div>
 
-              {/* Big wallet chat */}
+              {/* Big wallet insight */}
               {aiInsight.bigWalletInsight && (
                 <div className="rounded-xl p-3" style={{ backgroundColor: theme.primary + "08", border: `1px solid ${theme.primary}22` }}>
                   <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: theme.primary }}>
-                    🐋 Where Big Wallets Are Leaning
+                    🐋 {t("marketTips.bigWalletLeaning")}
                   </p>
                   <p className="text-xs leading-relaxed" style={{ color: theme.textSecondary }}>
                     {aiInsight.bigWalletInsight}
@@ -191,7 +195,7 @@ export default function MarketTipsModal({ fight, open, onClose, theme }: MarketT
           ) : (
             <div className="rounded-xl p-4 text-center" style={{ backgroundColor: theme.surfaceBg }}>
               <p className="text-xs" style={{ color: theme.textMuted }}>
-                AI analysis is temporarily unavailable. Use the Big Player Activity signals above.
+                {t("marketTips.aiUnavailable")}
               </p>
             </div>
           )}
@@ -200,7 +204,7 @@ export default function MarketTipsModal({ fight, open, onClose, theme }: MarketT
         {/* Footer */}
         <div className="px-4 py-3 text-center" style={{ borderTop: `1px solid ${theme.cardBorder}` }}>
           <p className="text-[10px]" style={{ color: theme.textMuted }}>
-            Powered by 1mg.live
+            {t("marketTips.poweredBy")}
           </p>
         </div>
       </div>

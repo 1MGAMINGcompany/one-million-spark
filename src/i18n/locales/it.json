@@ -1874,5 +1874,40 @@
       "s6Title": "Violazioni",
       "s6Body": "Le violazioni possono comportare la sospensione immediata dell'account e il ban permanente."
     }
+  },
+  "tradingWallet": {
+    "ready": "Wallet di trading pronto",
+    "finalizing": "Finalizzazione wallet di trading",
+    "needsFinalSetup": "Il wallet necessita di configurazione finale",
+    "deploymentIncomplete": "Distribuzione wallet incompleta",
+    "setUp": "Configura Wallet di Trading",
+    "readyDescSafe": "Il tuo wallet senza gas è attivo e pronto per le previsioni.",
+    "readyDesc": "Il tuo wallet di trading è attivo.",
+    "finalizingDesc": "Stiamo creando il tuo wallet personale e i permessi di scambio.",
+    "incompleteDesc": "Il tuo wallet esiste, ma approvazioni o credenziali sono incomplete. Riprova.",
+    "deploymentDesc": "La configurazione è iniziata, ma la distribuzione non è stata completata. Riprova.",
+    "signOnce": "Firma una volta per creare il tuo wallet personale prima di fare previsioni.",
+    "working": "In corso…",
+    "retrySetup": "Riprova",
+    "setUpButton": "Configura",
+    "statusLabel": "Stato",
+    "deploymentFailed": "La distribuzione del wallet è fallita. Riprova.",
+    "setupFailed": "La configurazione del wallet è fallita. Riprova.",
+    "approvalFailed": "Il passaggio di approvazione è fallito. Riprova.",
+    "credentialFailed": "La configurazione delle credenziali è fallita. Riprova.",
+    "unknownError": "Si è verificato un errore imprevisto. Riprova."
+  },
+  "marketTips": {
+    "title": "Suggerimenti",
+    "bigPlayerActivity": "Attività Grandi Giocatori",
+    "activity": "Attività",
+    "momentum": "Momentum",
+    "largeTrades": "Grandi Operazioni",
+    "quickRead": "Lettura Veloce",
+    "aiAnalysis": "Analisi IA",
+    "analyzingMarket": "Analisi del mercato...",
+    "bigWalletLeaning": "Dove Si Orientano i Grandi Wallet",
+    "aiUnavailable": "L analisi IA è temporaneamente non disponibile. Usa i segnali di Attività dei Grandi Giocatori.",
+    "poweredBy": "Fornito da 1mg.live"
   }
 }

@@ -1872,5 +1872,40 @@
       "s6Title": "Verstöße",
       "s6Body": "Verstöße können zu sofortiger Kontosperrung und permanentem Ausschluss führen."
     }
+  },
+  "tradingWallet": {
+    "ready": "Trading-Wallet bereit",
+    "finalizing": "Trading-Wallet wird fertiggestellt",
+    "needsFinalSetup": "Wallet benötigt finale Einrichtung",
+    "deploymentIncomplete": "Wallet-Bereitstellung unvollständig",
+    "setUp": "Trading-Wallet Einrichten",
+    "readyDescSafe": "Ihre gaslose Trading-Wallet ist aktiv und bereit für Vorhersagen.",
+    "readyDesc": "Ihre Trading-Wallet ist aktiv.",
+    "finalizingDesc": "Wir erstellen Ihre persönliche Trading-Wallet und Austauschberechtigungen.",
+    "incompleteDesc": "Ihre Wallet existiert, aber Genehmigungen oder Anmeldedaten sind unvollständig. Versuchen Sie es erneut.",
+    "deploymentDesc": "Ihre Einrichtung hat begonnen, aber die Bereitstellung wurde nicht abgeschlossen. Erneut versuchen.",
+    "signOnce": "Einmal unterschreiben, um Ihre persönliche Wallet vor Vorhersagen zu erstellen.",
+    "working": "Wird bearbeitet…",
+    "retrySetup": "Erneut versuchen",
+    "setUpButton": "Einrichten",
+    "statusLabel": "Status",
+    "deploymentFailed": "Die Wallet-Bereitstellung ist fehlgeschlagen. Bitte erneut versuchen.",
+    "setupFailed": "Die Wallet-Einrichtung ist fehlgeschlagen. Bitte erneut versuchen.",
+    "approvalFailed": "Der Genehmigungsschritt ist fehlgeschlagen. Bitte erneut versuchen.",
+    "credentialFailed": "Die Einrichtung der Anmeldedaten ist fehlgeschlagen. Bitte erneut versuchen.",
+    "unknownError": "Ein unerwarteter Fehler ist aufgetreten. Bitte erneut versuchen."
+  },
+  "marketTips": {
+    "title": "Tipps",
+    "bigPlayerActivity": "Große Spieler Aktivität",
+    "activity": "Aktivität",
+    "momentum": "Momentum",
+    "largeTrades": "Große Trades",
+    "quickRead": "Schnellübersicht",
+    "aiAnalysis": "KI-Analyse",
+    "analyzingMarket": "Markt wird analysiert...",
+    "bigWalletLeaning": "Wohin Große Wallets Tendieren",
+    "aiUnavailable": "Die KI-Analyse ist vorübergehend nicht verfügbar. Nutzen Sie die Signale der Großen Spieler.",
+    "poweredBy": "Bereitgestellt von 1mg.live"
   }
 }
