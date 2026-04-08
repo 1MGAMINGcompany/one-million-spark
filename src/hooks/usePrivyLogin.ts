@@ -1,9 +1,17 @@
 import { useLogin } from "@privy-io/react-auth";
 import { toast } from "sonner";
+import { dbg } from "@/lib/debugLog";
 
 export function usePrivyLogin() {
   const { login } = useLogin({
     onComplete: ({ user, isNewUser }) => {
+      dbg("privy:login:complete", {
+        userId: user.id,
+        isNewUser,
+        origin: window.location.origin,
+        path: window.location.pathname,
+        linkedAccounts: user.linkedAccounts?.length ?? 0,
+      });
       console.log("[Privy] Login complete", {
         userId: user.id,
         isNewUser,
@@ -13,6 +21,14 @@ export function usePrivyLogin() {
     },
     onError: (error) => {
       const code = typeof error === "string" ? error : (error as any)?.code ?? String(error);
+      dbg("privy:login:error", {
+        code,
+        errorRaw: String(error),
+        origin: window.location.origin,
+        hostname: window.location.hostname,
+        path: window.location.pathname,
+        appId: import.meta.env.VITE_PRIVY_APP_ID ?? "(fallback)",
+      });
       console.error("[Privy] Login error:", {
         code,
         error,
@@ -47,6 +63,12 @@ export function usePrivyLogin() {
   });
 
   const loginWithDebug = () => {
+    dbg("privy:login:attempt", {
+      origin: window.location.origin,
+      hostname: window.location.hostname,
+      path: window.location.pathname,
+      appId: import.meta.env.VITE_PRIVY_APP_ID ?? "(fallback)",
+    });
     console.log("[Auth] Login attempt from:", {
       origin: window.location.origin,
       path: window.location.pathname,
