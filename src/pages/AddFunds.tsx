@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { usePrivy, useFundWallet } from "@privy-io/react-auth";
+import { useFundWallet } from "@privy-io/react-auth";
+import { usePrivySafe } from "@/hooks/usePrivySafe";
 import { usePrivyLogin } from "@/hooks/usePrivyLogin";
 import { polygon } from "viem/chains";
 import {
@@ -206,7 +207,7 @@ function WalletAddressCard({
 
 const AddFunds = () => {
   const navigate = useNavigate();
-  const { authenticated } = usePrivy();
+  const { authenticated } = usePrivySafe();
   const { login } = usePrivyLogin();
   const { walletAddress, isPrivyUser } = usePrivyWallet();
   const {

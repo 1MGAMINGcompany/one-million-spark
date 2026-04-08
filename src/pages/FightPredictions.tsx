@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Swords, TrendingUp, ChevronDown, ChevronUp, Loader2, Radio, Clock, Trophy, History, ShieldCheck, Info } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { usePrivy } from "@privy-io/react-auth";
+import { usePrivySafe } from "@/hooks/usePrivySafe";
 import { usePrivyLogin } from "@/hooks/usePrivyLogin";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
 import { useAllowanceGate } from "@/hooks/useAllowanceGate";
@@ -188,7 +188,7 @@ function PastEventsSection({
 export default function FightPredictions() {
   // Use Privy EVM wallet for predictions (Polygon)
   const { walletAddress: address, eoaAddress, isPrivyUser } = usePrivyWallet();
-  const { authenticated, getAccessToken } = usePrivy();
+  const { authenticated, getAccessToken } = usePrivySafe();
   const { login } = usePrivyLogin();
   const { state: allowanceState, ensureAllowance, reset: resetAllowance } = useAllowanceGate();
   const { relayer_allowance } = usePolygonUSDC();
