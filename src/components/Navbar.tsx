@@ -37,8 +37,18 @@ const Navbar = () => {
   const { t, i18n } = useTranslation();
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const { connected, publicKey } = useWallet();
-  const { authenticated, login, logout } = usePrivy();
+  const { authenticated, login: privyLogin, logout } = usePrivy();
   const { isPrivyUser, walletAddress, balanceMatic, loading: balanceLoading, shortAddress: privyShortAddress } = usePrivyWallet();
+
+  const login = async () => {
+    try {
+      await privyLogin();
+    } catch (err) {
+      console.error("[Privy] Login error:", err);
+      const { toast } = await import("sonner");
+      toast.error("Login failed. Please try again.");
+    }
+  };
 
   const shortAddress = privyShortAddress;
 

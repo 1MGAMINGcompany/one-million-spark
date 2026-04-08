@@ -23,16 +23,12 @@ export function PrivyProviderWrapper({ children }: PrivyProviderWrapperProps) {
           logo: `${window.location.origin}/images/privy-logo.png`,
         },
         loginMethods: ["email", "google", "twitter"],
-        // Default chain is Polygon for predictions
         defaultChain: polygon,
         supportedChains: [polygon],
         embeddedWallets: {
           ethereum: {
             createOnLogin: "users-without-wallets",
           },
-          // NOTE: Gas sponsorship is configured in the Privy dashboard
-          // and enforced server-side via edge functions. Do NOT add
-          // client-side gas policies here.
         },
       }}
     >
