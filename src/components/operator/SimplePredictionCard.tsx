@@ -19,6 +19,8 @@ interface SimplePredictionCardProps {
   onShareWin?: (fight: Fight) => void;
   onGraph?: (fight: Fight) => void;
   onTips?: (fight: Fight) => void;
+  onSell?: (fightId: string) => void;
+  selling?: boolean;
 }
 
 function getTimeLabel(eventDate: string | null | undefined, t: (key: string, opts?: any) => string): { text: string; isLive: boolean } | null {
@@ -61,6 +63,8 @@ export default function SimplePredictionCard({
   onShareWin,
   onGraph,
   onTips,
+  onSell,
+  selling,
 }: SimplePredictionCardProps) {
   const { t } = useTranslation();
   const nameA = resolveOutcomeName(fight.fighter_a_name, "a", fight);
