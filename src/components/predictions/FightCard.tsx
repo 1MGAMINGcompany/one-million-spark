@@ -649,7 +649,20 @@ export default function FightCard({
           </div>
         )}
 
-        {/* Collapsible Insights (non-soccer) */}
+        {/* Sell button — user has a position and market is still open */}
+        {canPredict && onSell && userEntries.length > 0 && userEntries.some(e => e.polymarket_order_id) && (
+          <div className="mt-2 pt-2 border-t border-border/20">
+            <button
+              onClick={() => onSell(fight.id)}
+              disabled={selling}
+              className="w-full px-4 py-2 rounded-lg font-bold text-sm bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive/20 transition-all disabled:opacity-50"
+            >
+              {selling ? <Loader2 className="w-3 h-3 animate-spin inline mr-1" /> : null}
+              Sell Position
+            </button>
+          </div>
+        )}
+
         <div className="mt-2">
           <Collapsible>
             <CollapsibleTrigger className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors w-full justify-center py-1">
