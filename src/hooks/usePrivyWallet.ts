@@ -7,7 +7,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
 
-const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID || "cmlq6g2dn00760cl2djbh9dfy";
+const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID;
 const POLL_INTERVAL_MS = 15_000;
 
 interface PrivyWalletState {
@@ -23,6 +23,10 @@ interface PrivyWalletState {
   loading: boolean;
   /** Short display address */
   shortAddress: string | null;
+  /** Whether the wallet is fully hydrated and ready */
+  walletReady: boolean;
+  /** Whether we're waiting for the wallet to hydrate after auth */
+  hydratingWallet: boolean;
 }
 
 export function usePrivyWallet(): PrivyWalletState {
@@ -33,6 +37,8 @@ export function usePrivyWallet(): PrivyWalletState {
     balanceMatic: null,
     loading: false,
     shortAddress: null,
+    walletReady: false,
+    hydratingWallet: false,
   };
 
   if (!PRIVY_APP_ID) return noPrivy;
@@ -71,6 +77,10 @@ function usePrivyWalletInner(): PrivyWalletState {
     if (!walletAddress) return null;
     return `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
   }, [walletAddress]);
+
+  // Wallet hydration state
+  const walletReady = ready && authenticated && !!walletAddress;
+  const hydratingWallet = ready && authenticated && !walletAddress;
 
   // Fetch native MATIC balance via public RPC
   const fetchBalance = useCallback(async () => {
@@ -115,5 +125,7 @@ function usePrivyWalletInner(): PrivyWalletState {
     balanceMatic,
     loading,
     shortAddress,
+    walletReady,
+    hydratingWallet,
   };
 }

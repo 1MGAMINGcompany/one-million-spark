@@ -3,7 +3,7 @@ import { PrivyProvider } from "@privy-io/react-auth";
 import { SmartWalletsProvider } from "@privy-io/react-auth/smart-wallets";
 import { polygon } from "viem/chains";
 
-const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID || "cmlq6g2dn00760cl2djbh9dfy";
+const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID;
 
 interface PrivyProviderWrapperProps {
   children: ReactNode;
@@ -11,6 +11,7 @@ interface PrivyProviderWrapperProps {
 
 export function PrivyProviderWrapper({ children }: PrivyProviderWrapperProps) {
   if (!PRIVY_APP_ID) {
+    console.warn("[PrivyProviderWrapper] VITE_PRIVY_APP_ID is not set — Privy auth disabled.");
     return <>{children}</>;
   }
 

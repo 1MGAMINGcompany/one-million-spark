@@ -2,10 +2,10 @@ import { usePrivy } from "@privy-io/react-auth";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
 import { usePrivyLogin } from "@/hooks/usePrivyLogin";
 import { Button } from "@/components/ui/button";
-import { LogOut, Wallet } from "lucide-react";
+import { LogOut, Wallet, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID || "cmlq6g2dn00760cl2djbh9dfy";
+const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID;
 
 export function PrivyLoginButton() {
   const { t } = useTranslation();
@@ -25,10 +25,20 @@ function PrivyLoginButtonInner() {
   const { t } = useTranslation();
   const { ready, authenticated, logout } = usePrivy();
   const { login } = usePrivyLogin();
-  const { isPrivyUser, shortAddress } = usePrivyWallet();
+  const { isPrivyUser, shortAddress, hydratingWallet } = usePrivyWallet();
 
   if (!ready) {
     return null;
+  }
+
+  // Wallet is still hydrating after auth — show loading, not login
+  if (authenticated && hydratingWallet) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground px-3 py-1.5">
+        <Loader2 size={14} className="animate-spin" />
+        <span className="text-xs">Setting up wallet…</span>
+      </div>
+    );
   }
 
   // Show logged-in state using EVM wallet from usePrivyWallet

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { usePrivy } from "@privy-io/react-auth";
+import { usePrivyLogin } from "@/hooks/usePrivyLogin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";
@@ -29,7 +30,8 @@ const SPORT_OPTIONS = ["Soccer", "MMA", "Boxing", "NFL", "NBA", "NHL", "MLB", "N
 
 export default function OperatorDashboard() {
   const { t } = useTranslation();
-  const { authenticated, login, getAccessToken, user } = usePrivy();
+  const { authenticated, getAccessToken, user } = usePrivy();
+  const { login } = usePrivyLogin();
   const navigate = useNavigate();
   const [operator, setOperator] = useState<OperatorData | null>(null);
   const [loading, setLoading] = useState(true);
