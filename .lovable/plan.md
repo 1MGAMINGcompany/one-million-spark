@@ -1,67 +1,34 @@
 
 
-# Fix Privy Branding, Smooth Predictions, Sell Feature, and Geo-Block Visibility
+# Fix Privy Login for All Operator Paths on 1mg.live
 
-## Changes
+## Analysis
 
-### 1. Fix Privy SIWE branding
-**File**: `src/hooks/usePolymarketSession.ts`
-- Change `SIWE_MESSAGE_PREFIX` from `"Sign to enable Polymarket trading on 1MGAMING"` to `"Sign to enable trading on 1mg.live"`
+Your Privy allowed origins configuration looks correct. All operator apps like `https://1mg.live/demo` or `https://1mg.live/newoperator` use **path-based routing**, meaning the browser origin is always `https://1mg.live` -- which is already in your allowlist. New operator subdomains do NOT require any Privy dashboard changes because they all share the same origin.
 
-### 2. Stop showing wallet setup errors as blockers
-**Files**: `src/pages/platform/OperatorApp.tsx`, `src/pages/FightPredictions.tsx`
-- Remove the blocking `EnableTradingBanner` error display when setup fails since the backend falls back to shared credentials
-- Keep background setup attempt but suppress error toasts for `trading_wallet_setup_required`
+The real problem is the **HttpOnly cookies** section in your Privy dashboard:
 
-### 3. Surface geo-blocks clearly in OperatorApp
-**File**: `src/pages/platform/OperatorApp.tsx`
-- Currently only shows a toast. Add `geoBlocked` state + render the `GeoBlockScreen` component (same pattern already working in `FightPredictions.tsx`)
-- On `clob_geo_blocked` or `geo_blocked` error code, set state and show the full geo-block UI with waitlist + read-only mode
+- **App domain** is set to `1mgaming.com` with status **"Pending"**
+- This means Privy is trying to set secure cookies scoped to `1mgaming.com`, but the required DNS CNAME record (`privy.1mgaming.com → cmlq6g2dn00760cl2djbh9dfy.api.privy.systems`) has not been verified yet
+- When accessing from `1mg.live` or `lovable.app` domains, the cookie domain mismatch causes authentication to fail silently with a generic "unexpected error"
 
-### 4. Translate GeoBlockScreen
-**File**: `src/components/predictions/GeoBlockScreen.tsx`
-- All strings are hardcoded English ("Service Not Available in Your Region", "Join the Waitlist", etc.)
-- Add `useTranslation()` and translation keys to all 10 locale files under a `geoBlock` section
+## Required Fix (Privy Dashboard -- you must do this)
 
-### 5. Add "Sell Position" feature
-**New file**: `supabase/functions/prediction-sell/index.ts`
-- Accept `{ fight_id, wallet }` with Privy auth
-- Look up user's filled BUY position from `prediction_trade_orders`
-- Submit a SELL order (`side: 1`) to the Polymarket CLOB
-- Record the sell in `prediction_trade_orders` with `side: "SELL"`
-- Use shared credentials fallback if no per-user session
+**Option A (recommended):** Temporarily **disable HttpOnly cookies** by toggling it off in the Privy dashboard. This will let login work on ALL origins immediately (`1mg.live`, `1mgaming.com`, `lovable.app`). You can re-enable it later once DNS is configured.
 
-**UI**: `src/components/operator/SimplePredictionCard.tsx`
-- Add a "Sell" button when user has a filled position and the market is still open
-- Show current price and estimated payout
+**Option B:** Add the CNAME DNS record that Privy requires:
+- **Type:** CNAME  
+- **Name:** `privy` (i.e., `privy.1mgaming.com`)  
+- **Value:** `cmlq6g2dn00760cl2djbh9dfy.api.privy.systems`  
+- Add this in your domain registrar for `1mgaming.com`
+- Note: this only fixes `1mgaming.com` -- for `1mg.live` to also work with HttpOnly cookies, you would need to add a second app domain entry for `1mg.live` with its own CNAME
 
-**Integration**: `src/pages/platform/OperatorApp.tsx`, `src/pages/FightPredictions.tsx`
-- Add `handleSell` function calling `prediction-sell`
-- Pass `onSell` callback to `SimplePredictionCard`
+## Code Change (improve error visibility)
 
-### 6. Improve claim visibility
-**File**: `src/components/operator/SimplePredictionCard.tsx`
-- Add pulse animation to the Claim button when available
-- Show estimated reward amount
+**File:** `src/components/PrivyProviderWrapper.tsx`
+- Add an `onError` handler to the `PrivyProvider` config that logs the actual Privy error to the console and optionally shows a toast, so future failures surface the real reason instead of "unexpected error"
 
-### 7. Update FAQ
-**File**: `src/components/seo/FAQSection.tsx`
-- Change "planned for future updates" to reflect that selling is now available
+## Why New Operators Work Automatically
 
-### 8. Translations for all new features
-**Files**: All 10 locale files in `src/i18n/locales/`
-- Add keys for: `geoBlock.*` (region title, waitlist, VPN notice, read-only), `operator.sellPosition`, `operator.selling`, `operator.sold`, `operator.estimatedPayout`, `operator.currentPrice`
-
-## Technical details
-- Polymarket SELL orders use `side: 1` with the same EIP-712 signing format as BUY orders
-- Sell price is fetched from the CLOB price endpoint with `side=SELL`
-- Geo-block detection already works in `FightPredictions.tsx` — needs to be mirrored in `OperatorApp.tsx` with the full `GeoBlockScreen` UI, not just a toast
-
-## Expected outcome
-- Privy dialog says "1mg.live" instead of "1MGAMING"
-- Geo-blocked users see a clear, translated geo-restriction screen with waitlist and read-only option
-- No more blocking "deployment failed" errors since shared credentials work
-- Users can sell positions at any time before event resolution
-- Users can claim winnings with a visible, animated button
-- All new UI respects the user's language setting
+Since all operators use path-based routing (`1mg.live/slug`), the browser origin is always `https://1mg.live`. Privy validates origins, not paths. So `https://1mg.live` in the allowlist covers every current and future operator app -- no per-operator configuration needed.
 
