@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, Eye, Clock, Trophy, Share2, AlertTriangle, Loader2 } from "lucide-react";
-import { usePrivy } from "@privy-io/react-auth";
+import { usePrivySafe } from "@/hooks/usePrivySafe";
 import SocialShareModal from "@/components/SocialShareModal";
 import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
 import { useTradeStatusPoll } from "@/hooks/useTradeStatusPoll";
@@ -82,7 +82,7 @@ export default function PredictionSuccessScreen({
   operatorSubdomain,
 }: Props) {
   // Privy access token for authenticated polling
-  const { getAccessToken } = usePrivy();
+  const { getAccessToken } = usePrivySafe();
   const stableGetToken = useCallback(() => getAccessToken(), [getAccessToken]);
 
   // Short-lived polling for non-final statuses

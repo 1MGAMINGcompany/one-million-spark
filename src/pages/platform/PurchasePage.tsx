@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { usePrivy, useSendTransaction } from "@privy-io/react-auth";
+import { useSendTransaction } from "@privy-io/react-auth";
+import { usePrivySafe } from "@/hooks/usePrivySafe";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -46,7 +47,7 @@ interface PromoResult {
 
 export default function PurchasePage() {
   const navigate = useNavigate();
-  const { getAccessToken } = usePrivy();
+  const { getAccessToken } = usePrivySafe();
   const { sendTransaction } = useSendTransaction();
   const { usdc_balance, usdc_balance_formatted, is_loading: balanceLoading, wallet_address } = usePolygonUSDC();
 
