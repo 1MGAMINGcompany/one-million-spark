@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { ShieldCheck, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
 
@@ -11,10 +12,13 @@ interface EnableTradingBannerProps {
   onEnable: () => void;
 }
 
-/**
- * Banner prompting the user to set up their personal Polymarket
- * trading wallet (one-time SIWE signature to derive keys + deploy Safe).
- */
+const ERROR_KEY_MAP: Record<string, string> = {
+  safe_deploy_failed: "tradingWallet.deploymentFailed",
+  setup_failed: "tradingWallet.setupFailed",
+  approval_failed: "tradingWallet.approvalFailed",
+  credential_failed: "tradingWallet.credentialFailed",
+};
+
 export default function EnableTradingBanner({
   hasSession,
   canTrade,
@@ -24,29 +28,30 @@ export default function EnableTradingBanner({
   status,
   onEnable,
 }: EnableTradingBannerProps) {
+  const { t } = useTranslation();
   const isIncomplete = hasSession && !canTrade;
 
   const title = canTrade
-    ? "Trading wallet ready"
+    ? t("tradingWallet.ready")
     : loading
-      ? "Finalizing trading wallet"
+      ? t("tradingWallet.finalizing")
       : isIncomplete
         ? safeDeployed
-          ? "Trading wallet needs final setup"
-          : "Trading wallet deployment incomplete"
-        : "Set Up Trading Wallet";
+          ? t("tradingWallet.needsFinalSetup")
+          : t("tradingWallet.deploymentIncomplete")
+        : t("tradingWallet.setUp");
 
   const description = canTrade
     ? safeDeployed
-      ? "Your gasless trading wallet is active and ready for predictions."
-      : "Your trading wallet is active."
+      ? t("tradingWallet.readyDescSafe")
+      : t("tradingWallet.readyDesc")
     : loading
-      ? "We’re creating your personal trading wallet and exchange permissions now."
+      ? t("tradingWallet.finalizingDesc")
       : isIncomplete
         ? safeDeployed
-          ? "Your wallet exists, but approvals or exchange credentials are still incomplete. Retry setup to finish."
-          : "Your setup started, but the gasless wallet deployment did not complete. Retry setup to continue."
-        : "Sign once to create your personal trading wallet before placing predictions.";
+          ? t("tradingWallet.incompleteDesc")
+          : t("tradingWallet.deploymentDesc")
+        : t("tradingWallet.signOnce");
 
   const icon = canTrade ? (
     <CheckCircle2 className="w-4 h-4 text-primary shrink-0 mt-0.5" />
@@ -58,6 +63,11 @@ export default function EnableTradingBanner({
     <ShieldCheck className="w-4 h-4 text-primary shrink-0 mt-0.5" />
   );
 
+  // Map known error codes to translated strings
+  const translatedError = error
+    ? t(ERROR_KEY_MAP[error] ?? "tradingWallet.unknownError")
+    : null;
+
   return (
     <div className="space-y-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
       <div className="flex items-start justify-between gap-3">
@@ -68,7 +78,7 @@ export default function EnableTradingBanner({
             <p className="text-[10px] leading-tight text-muted-foreground">{description}</p>
             {isIncomplete && status ? (
               <p className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                Status: {status.replace(/_/g, " ")}
+                {t("tradingWallet.statusLabel")}: {status.replace(/_/g, " ")}
               </p>
             ) : null}
           </div>
@@ -81,13 +91,13 @@ export default function EnableTradingBanner({
             disabled={loading}
             className="shrink-0 h-auto px-3 py-1.5 text-xs"
           >
-            {loading ? "Working…" : isIncomplete ? "Retry setup" : "Set Up"}
+            {loading ? t("tradingWallet.working") : isIncomplete ? t("tradingWallet.retrySetup") : t("tradingWallet.setUpButton")}
           </Button>
         ) : null}
       </div>
-      {error ? (
+      {translatedError ? (
         <div className="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-[10px] text-destructive">
-          {error}
+          {translatedError}
         </div>
       ) : null}
     </div>

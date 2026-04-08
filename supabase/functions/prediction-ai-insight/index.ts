@@ -24,7 +24,13 @@ serve(async (req) => {
       trend,
       signals,
       mode,
+      lang,
     } = await req.json();
+
+    const userLang = lang || "en";
+    const langInstruction = userLang !== "en"
+      ? `\n\nIMPORTANT: Respond entirely in the language with code "${userLang}". All text values in the JSON must be in that language.`
+      : "";
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
