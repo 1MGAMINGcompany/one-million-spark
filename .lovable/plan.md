@@ -1,48 +1,65 @@
 
-Fix plan for the `/demo` crash
 
-Do I know what the issue is? Yes.
+# Audit: Changes from Privy Login Fix Sessions
 
-This is now a different failure from the earlier “Pending” login setup. The app is crashing before the login flow even starts. Based on the current code, the most likely root cause is: Privy hooks are being mounted without a valid Privy provider/config.
+## Summary
+The code changes are **mostly safe for production** (where `VITE_PRIVY_APP_ID` is set), but there is one real regression risk and a few minor issues.
 
-Why this is the likely source:
-- `/demo` renders `PlatformApp -> OperatorApp`, not the chess/3D path, so the react-three issue is not the first thing to fix here.
-- `src/components/PrivyProviderWrapper.tsx` currently skips the provider when `VITE_PRIVY_APP_ID` is missing and still renders the app.
-- `OperatorApp`, `PlatformApp`, `usePolymarketSession`, and `usePrivyLogin` call Privy hooks unconditionally.
-- The env excerpt you shared does not include `VITE_PRIVY_APP_ID`, which matches this exact crash pattern.
+---
 
-Files to fix:
-- `src/components/PrivyProviderWrapper.tsx`
-- `src/pages/platform/PlatformApp.tsx`
-- `src/pages/platform/OperatorApp.tsx`
-- `src/hooks/usePolymarketSession.ts`
-- `src/hooks/usePrivyLogin.ts`
-- `src/hooks/usePrivyWallet.ts`
-- `src/hooks/usePrivySolBalance.ts`
+## Finding 1 — CRITICAL: Conditional hook call in `useWallet.ts`
 
-Implementation plan:
-1. Replace the silent fallback in `PrivyProviderWrapper`.
-   - If `VITE_PRIVY_APP_ID` is missing, render a clear configuration screen instead of `children`.
-   - Add one debug event so the failure is obvious in logs.
+Line 22 calls a hook conditionally:
+```typescript
+const privyState = isPrivyConfigured ? usePrivyInner() : { ... };
+```
+This violates React's rules of hooks. While `isPrivyConfigured` is a module-level constant (so the call order never actually changes at runtime), this pattern can confuse React's internal hook slot tracking in edge cases with hot module reload or strict mode double-rendering, and may be the source of the `Cannot read properties of undefined (reading 'current')` crash you saw.
 
-2. Make Privy-dependent hooks safe.
-   - Convert `usePolymarketSession` and `usePrivyLogin` to the same outer-wrapper pattern already used in `usePrivyWallet`.
-   - Return no-op/default state when Privy is not configured so hooks never crash the route.
+**Fix**: Refactor to the same early-return pattern used in `usePrivyWallet`, `usePrivyLogin`, etc.
 
-3. Gate platform/operator rendering.
-   - In `PlatformApp` / `OperatorApp`, do not mount auth/trading flows until Privy is configured and ready.
-   - Show a simple loading/config state instead of rendering the full operator app immediately.
+---
 
-4. Remove remaining hidden fallback behavior.
-   - Remove the hardcoded fallback app ID in `src/hooks/usePrivySolBalance.ts`.
-   - Use one shared `isPrivyConfigured` helper everywhere.
+## Finding 2 — MEDIUM: 6 files still call `usePrivy()` directly
 
-5. Verify the real failing paths.
-   - Test `/demo`, `/buy-predictions-app`, `/onboarding`, and `/dashboard`.
-   - Expected result: no global crash on first render.
-   - If config is missing, the app should show a clear auth configuration message.
-   - If config is present, the next error will surface cleanly and we can fix the real auth/login issue from there.
+These files import and call `usePrivy()` from `@privy-io/react-auth` directly, bypassing the safety guards:
 
-Technical note:
-- I specifically checked the react-three angle from the error hint. The only `Canvas`/`@react-three/fiber` code is in the chess cinematic path, which is not part of `/demo`, so that is not the primary issue here.
-- You do not need to wait a few hours for this crash; DNS “Pending” can block login, but it does not explain this immediate render error.
+- `src/pages/platform/OperatorApp.tsx` (line 124)
+- `src/pages/platform/OperatorOnboarding.tsx` (line 24)
+- `src/pages/platform/OperatorDashboard.tsx` (line 33)
+- `src/pages/platform/PlatformApp.tsx` (lines 35, 43)
+- `src/pages/FightPredictions.tsx` (line 191)
+- `src/pages/AddFunds.tsx` (line 209)
+
+When `VITE_PRIVY_APP_ID` is missing, the `PrivyProviderWrapper` skips mounting the provider, and these `usePrivy()` calls crash because there is no context. On your production site (where the env var IS set), this is fine. But on preview/staging builds it will crash.
+
+**Fix**: Wrap these in a safe helper or gate the components behind `isPrivyConfigured`.
+
+---
+
+## Finding 3 — LOW: `PrivyLoginButton` still reads env var directly
+
+Line 8 reads `import.meta.env.VITE_PRIVY_APP_ID` directly instead of using the shared `isPrivyConfigured` from `privyConfig.ts`. Not a bug, but inconsistent with the centralization goal.
+
+---
+
+## Finding 4 — OK: All other changes are clean
+
+- `usePrivyLogin.ts` — correct early-return pattern, error handling is solid
+- `usePrivyWallet.ts` — clean, exposes `walletReady` and `hydratingWallet` correctly
+- `usePolymarketSession.ts` — correct early-return pattern
+- `usePrivySolBalance.ts` — correct early-return pattern
+- `PrivyProviderWrapper.tsx` — clean, no hardcoded fallback ID
+- `OperatorOnboarding.tsx` and `OperatorDashboard.tsx` — correctly use `usePrivyLogin()` hook
+
+---
+
+## Recommended Fix Plan
+
+1. **Fix `useWallet.ts`** — Refactor the conditional hook into an early-return pattern (split into outer + inner function like the other hooks)
+2. **Wrap direct `usePrivy()` calls** — In `OperatorApp`, `PlatformApp`, `FightPredictions`, and `AddFunds`, either:
+   - Gate the component behind `isPrivyConfigured`, or
+   - Create a safe `usePrivySafe()` wrapper that returns defaults when unconfigured
+3. **Minor cleanup** — Use `isPrivyConfigured` in `PrivyLoginButton` instead of reading env var directly
+
+These fixes ensure nothing breaks on preview builds or if the env var is ever missing, while keeping production behavior identical.
+
