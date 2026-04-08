@@ -419,6 +419,8 @@ export default function EventSection({
               userEntries={userEntries}
               onClaim={onClaim}
               claiming={claiming}
+              onSell={onSell}
+              selling={selling}
               hotFightIds={hotFightIds}
               onWalletRequired={onWalletRequired}
               eventHasStarted={eventHasStarted}
@@ -441,6 +443,8 @@ export default function EventSection({
                     userEntries={userEntries.filter((e) => e.fight_id === fight.id)}
                     onClaim={onClaim}
                     claiming={claiming}
+                    onSell={onSell}
+                    selling={selling}
                     isHot={hotFightIds.has(fight.id)}
                     onWalletRequired={onWalletRequired}
                     isSoccerEvent={sport === "FUTBOL"}
