@@ -1293,10 +1293,10 @@ Deno.serve(async (req) => {
       }
 
       if (tokenId) {
-        // ── Fund derived trading wallet with USDC.e before order ──
-        if (userSession.pm_trading_key) {
-          const derivedAccount = privateKeyToAccount(userSession.pm_trading_key as `0x${string}`);
-          const derivedAddr = userSession.safe_address || derivedAccount.address.toLowerCase();
+        // ── Fund derived trading wallet with USDC.e before order (per-user only) ──
+        if (credSource === "per_user" && pmTradingKey) {
+          const derivedAccount = privateKeyToAccount(pmTradingKey as `0x${string}`);
+          const derivedAddr = userSafeAddress || derivedAccount.address.toLowerCase();
 
           await auditLog(supabase, tradeOrderId, normalizedWallet, "funding_derived_wallet", {
             derived_address: derivedAddr,
