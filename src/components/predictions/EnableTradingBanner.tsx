@@ -63,9 +63,9 @@ export default function EnableTradingBanner({
     <ShieldCheck className="w-4 h-4 text-primary shrink-0 mt-0.5" />
   );
 
-  // Map known error codes to translated strings
+  // Map known error codes to translated strings; show raw message as fallback
   const translatedError = error
-    ? t(ERROR_KEY_MAP[error] ?? "tradingWallet.unknownError")
+    ? (ERROR_KEY_MAP[error] ? t(ERROR_KEY_MAP[error]) : error)
     : null;
 
   return (
