@@ -1,61 +1,80 @@
 
-Fix NHL prediction failures
+Fix plan: the latest prediction failure is no longer a generic submit bug. The submit function is correctly rejecting the trade, but the trading-wallet setup flow is not leaving behind a valid saved session for your wallet.
 
 What I found
+- The latest `prediction-submit` calls are returning `403`.
+- Your submitting wallet `0x3ed6...` has no `polymarket_user_sessions` row.
+- `polymarket-user-setup` is being called, but it is not producing a usable session for that wallet.
+- Frontend error parsing is already fixed now, so the remaining problem is the setup flow itself plus the fact that setup failures are mostly hidden from the UI.
+- Older rows also show exchange geo-block failures, so after setup is fixed the app still needs to show region restrictions clearly if they happen.
 
-- The NHL markets themselves are healthy: they are open, mapped to Polymarket, and recently synced.
-- Your current wallet `0x3ed6...` has no `polymarket_user_sessions` row, so the backend is rejecting the order before it ever reaches the market.
-- The backend is already returning the right reason (`trading_wallet_setup_required` / no trading session), but the frontend is not reading it correctly.
-- In both `src/pages/platform/OperatorApp.tsx` and `src/pages/FightPredictions.tsx`, the app checks `data?.error_code`. For non-2xx edge-function responses, `supabase.functions.invoke()` puts the real JSON body inside `FunctionsHttpError.context`, so the UI falls back to a generic “Prediction failed” and never starts wallet setup.
-- There is also a backend mismatch in `supabase/functions/prediction-submit/index.ts`: the early session check is too loose (`active` or `pending`), while the later execution step requires a fully active credential set. That can still create avoidable failures.
+Implementation plan
 
-Do I know what the issue is?
+1. Make setup save the correct wallet
+- Files: `src/hooks/usePolymarketSession.ts`, `supabase/functions/polymarket-user-setup/index.ts`
+- Send both the main app wallet and embedded EOA during setup.
+- In the backend, resolve the canonical prediction wallet from the authenticated user binding instead of trusting only the raw client wallet field.
+- Save the session under the same wallet identity that `prediction-submit` uses.
 
-Yes:
-1. No active personal trading session exists for this wallet.
-2. The frontend fails to unwrap the backend’s real error payload, so setup is never triggered.
-3. The backend readiness check should be tightened so partial sessions cannot slip through.
+2. Stop silent “success” in wallet setup
+- File: `supabase/functions/polymarket-user-setup/index.ts`
+- Check every session `insert` / `update` result and return a real error if persistence fails.
+- Return stage-specific errors for:
+  - safe deployment failure
+  - approval failure
+  - API credential derivation failure
+  - session save failure
+- Add clear stage logging so setup can be traced end to end.
 
-Plan
-
-1. Fix edge-function error parsing in the UI
-- Files: `src/pages/platform/OperatorApp.tsx`, `src/pages/FightPredictions.tsx`
-- Handle `FunctionsHttpError` explicitly and read `await error.context.json()`.
-- Use the parsed `error_code` to trigger `setupTradingWallet()` and show the exact backend message.
-
-2. Add a pre-submit trading-wallet gate
-- Files: same two pages
-- Before allowance or submission, if the fight is Polymarket-backed and `!hasSession || !canTrade`, stop and run the setup flow first.
-- After setup, refresh session state and only continue if trading is actually ready.
-
-3. Wire visible setup state into the prediction UI
-- Reuse the existing `src/components/predictions/EnableTradingBanner.tsx` (currently not wired up).
-- Show “Set Up Trading Wallet” / “Wallet not ready” instead of letting users repeatedly hit a failing submit button.
-
-4. Tighten backend readiness validation
-- File: `supabase/functions/prediction-submit/index.ts`
-- Replace the early “session exists” check with a true readiness check:
-  - active status
+3. Make readiness rules consistent everywhere
+- Files: `supabase/functions/polymarket-user-setup/index.ts`, `supabase/functions/prediction-submit/index.ts`, `src/hooks/usePolymarketSession.ts`
+- Use one readiness definition everywhere:
+  - active
   - not expired
   - safe deployed
   - approvals set
-  - required Polymarket creds present
-- Return `trading_wallet_setup_required` or `trading_wallet_not_ready` before any fee movement.
+  - API credentials present
+- Update `check_status` and setup responses so `canTrade` matches the stricter submit gate.
 
-5. Prevent the next failure loop
-- Keep the no-session rejection before fee collection.
-- Align the early and late checks so the backend cannot pass a partial session and then fail deeper in the flow.
-- Improve the user-facing message for exchange-side rejection so if Polymarket rejects later, the app shows the exact reason instead of “Prediction failed”.
+4. Stop hiding setup failures in the UI
+- Files: `src/pages/FightPredictions.tsx`, `src/pages/platform/OperatorApp.tsx`, `src/components/predictions/EnableTradingBanner.tsx`
+- Replace fire-and-forget `setupTradingWallet().catch(() => {})` with an awaited flow.
+- After setup, run `refreshSession()` and only continue to allowance/submit if readiness is confirmed.
+- Show the real setup error and a retry action.
+- Disable submit while setup is still running.
+
+5. Wire the setup state into the prediction UI
+- Files: `src/components/predictions/EnableTradingBanner.tsx`, `src/pages/FightPredictions.tsx`, `src/pages/platform/OperatorApp.tsx`
+- Actually render the existing trading-wallet banner in both prediction experiences.
+- Update banner states so they distinguish:
+  - not set up
+  - setup incomplete
+  - ready
+  - funded vs not funded
+- Remove the misleading “needs funding” copy for every non-ready state.
+
+6. Surface geo-blocks clearly if that is the next blocker
+- Files: `supabase/functions/prediction-submit/index.ts`, `src/pages/FightPredictions.tsx`, `src/pages/platform/OperatorApp.tsx`
+- Normalize exchange geo errors to one code, or handle `clob_geo_blocked` explicitly.
+- Show a direct “trading restricted in your region” message instead of generic failure.
+- Keep this separate from setup-required errors so the app does not loop endlessly.
+
+7. Remove remaining fake Polymarket fallback paths
+- File: `supabase/functions/prediction-submit/index.ts`
+- Delete the leftover native/local fallback branch for Polymarket-backed fights.
+- Polymarket trades should only end as:
+  - real exchange submission, or
+  - explicit failure
 
 Technical details
-
-- Frontend bug: `supabase.functions.invoke()` non-2xx responses need `FunctionsHttpError.context.json()` to access `{ error, error_code }`.
-- Backend bug: the early session gate is weaker than the later credential lookup.
-- Evidence: there is no session row for your wallet, and the recent submit attempts hit the function but did not create a new successful trade row.
+- Right now the evidence points to a provisioning bug, not a submit parsing bug:
+  - `prediction-submit` is rejecting correctly
+  - no saved session exists for the submitting wallet
+  - setup is being triggered but not ending in a valid persisted session
+- So the real fix is to harden wallet setup persistence and identity matching, then surface failures properly in the UI.
 
 Expected outcome
-
-- When you tap a $1 NHL prediction, the app will first prompt/setup your trading wallet instead of failing silently.
-- If setup completes, submission proceeds normally.
-- If something still blocks execution, the app will show the real reason clearly.
-- No more generic failed prediction loop.
+- If setup succeeds, the next $1 NHL prediction should go through normally.
+- If setup fails, the app will show the exact reason instead of silently retrying.
+- If the exchange blocks trading by region, the app will say that clearly.
+- No more fake fills or misleading “won” states for Polymarket-backed trades.
