@@ -273,28 +273,22 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     refetchInterval: 15_000,
   });
 
-  // ── STRICT client-side validation pipeline ──
+  // ── STRICT client-side validation pipeline (with live price merge) ──
   const allFights = useMemo(() => {
-    return (operatorFights || []).filter(f => {
+    const filtered = (operatorFights || []).filter(f => {
       if (!isValidOperatorEvent(f as any)) return false;
       const eventDate = (f as any).event_date;
       if (!eventDate) return false;
       const d = new Date(eventDate);
       if (isNaN(d.getTime())) return false;
-      // Keep any event with an active status visible, hide only truly past non-active events
       const isActive = ["live", "open", "locked"].includes(f.status);
       const isFuture = d.getTime() > Date.now();
       if (!isActive && !isFuture) return false;
-      // Hide stale events where game likely ended (safety net for slow settlement)
       const eventAgeMs = Date.now() - d.getTime();
-      // Use polymarket_last_synced_at to detect truly stale/finished games:
-      // If prices haven't been synced in 30+ minutes AND game started 2h+ ago, it's done
       const lastSync = (f as any).polymarket_last_synced_at;
       const syncAgeMs = lastSync ? Date.now() - new Date(lastSync).getTime() : Infinity;
-      const pricesStale = syncAgeMs > 30 * 60_000; // 30 minutes
-      // Games started 2h+ ago with stale prices are finished
+      const pricesStale = syncAgeMs > 30 * 60_000;
       if ((f.status === "locked" || f.status === "live") && eventAgeMs > 2 * 3600_000 && pricesStale) return false;
-      // Hard cutoff: any locked/live event older than 5h regardless
       if ((f.status === "locked" || f.status === "live") && eventAgeMs > 5 * 3600_000) return false;
 
       const sport = normalizeOperatorSport(
@@ -313,7 +307,14 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       }
       return true;
     });
-  }, [operatorFights, allowedSports, disabledSports, operator?.id]);
+    // Merge live WebSocket prices
+    if (Object.keys(livePrices).length === 0) return filtered;
+    return filtered.map(f => {
+      const live = livePrices[f.id];
+      if (!live) return f;
+      return { ...f, price_a: live.priceA, price_b: live.priceB };
+    });
+  }, [operatorFights, allowedSports, disabledSports, operator?.id, livePrices]);
 
   // ── Attach broad sport + league to each fight, sort operator events first ──
   const enrichedFights = useMemo(() => {
