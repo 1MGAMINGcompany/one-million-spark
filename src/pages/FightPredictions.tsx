@@ -38,7 +38,7 @@ const FEE_RATE = 0.05;
 // const PREDICTION_POOL_WALLET = ...
 
 const ALL_SPORTS = ["ALL", "MUAY THAI", "BARE KNUCKLE", "MMA", "BOXING", "FUTBOL"];
-const FEED_REFRESH_MIN_MS = 15_000;
+const FEED_REFRESH_MIN_MS = 30_000;
 const FIGHTS_SELECT = "id, title, fighter_a_name, fighter_b_name, status, visibility, event_date, pool_a_usd, pool_b_usd, price_a, price_b, source, polymarket_active, featured, event_name, winner, draw_allowed, polymarket_outcome_a_token, polymarket_outcome_b_token";
 const EVENTS_SELECT = [
   "id",
@@ -373,10 +373,10 @@ export default function FightPredictions() {
   useEffect(() => {
     const interval = setInterval(() => {
       // Back off polling when backend is unhealthy
-      const backoffMs = Math.min(15_000 * Math.pow(2, consecutiveFailures.current), 120_000);
+      const backoffMs = Math.min(30_000 * Math.pow(2, consecutiveFailures.current), 120_000);
       if (consecutiveFailures.current > 0 && Date.now() - lastFeedLoadAt.current < backoffMs) return;
       void loadFights();
-    }, 15_000);
+    }, 30_000);
     return () => clearInterval(interval);
   }, [loadFights]);
 
