@@ -1,35 +1,99 @@
 
 
-# Fix: Migrate polymarket-user-setup to V2 PROXY Flow
+# Minimal Safe Fix: Polymarket Trading Wallet Setup
 
-## Problem
-The `derive_and_setup` action calls `POST /relayer/deploy` and `POST /relayer/execute` on the V2 relayer. These are V1 endpoints that no longer exist, returning 404. This is the direct cause of the "unexpected error" when pressing Set Up.
+## Summary
 
-## What Changes
+Three changes to fix the "Trading wallet credential derivation failed" error. The shared fallback credentials exist but the shared trading wallet is **unfunded** (0 USDC.e, 0 POL, 0 CTF allowance), so it cannot execute trades even as a fallback.
 
-### File: `supabase/functions/polymarket-user-setup/index.ts`
+---
 
-**Remove** two functions entirely:
-- `deploySafeViaRelayer` (lines 204-256) -- calls deprecated `/relayer/deploy`
-- `setApprovalsViaRelayer` (lines 259-328) -- calls deprecated `/relayer/execute`
+## Change 1: Fix `deriveClobApiCreds()` — create-first pattern
 
-**Rewrite** the `derive_and_setup` action (lines 442-638) to skip Safe deployment and approvals:
+**File:** `supabase/functions/polymarket-user-setup/index.ts` (lines 206-256)
 
-1. Derive trading key from signature (unchanged)
-2. Derive CLOB API credentials (unchanged)
-3. Mark `safe_deployed: true` and `approvals_set: true` optimistically -- V2 PROXY handles both automatically on first transaction
-4. Save session and return success
+Replace the current logic with:
 
-The key insight: with V2 PROXY, there is no separate deploy or approval step. The relayer auto-deploys and auto-approves when the first trade is submitted. We just need the derived key and CLOB credentials.
+```
+1. Try POST /auth/api-key first (create new credentials)
+2. If 200 OK → return credentials
+3. If response indicates "already exists" (400 or 409) → try GET /auth/derive-api-key
+4. If GET succeeds → return credentials  
+5. If both fail → return error with details
+```
 
-### File: `src/components/predictions/EnableTradingBanner.tsx`
+Current broken logic: tries GET first, only falls back on 404, misses the 400 case entirely.
 
-Show the raw backend error message as fallback when no translation key matches, instead of a generic "An unexpected error occurred".
+---
 
-## No Other Files Change
+## Change 2: Deterministic setup message
 
-The `check_status` and `withdraw` actions remain unchanged. Frontend hooks (`usePolymarketSession.ts`) already handle the response shape correctly.
+**File:** `src/hooks/usePolymarketSession.ts` (lines 143-144)
 
-## Result
-Pressing "Set Up Trading Wallet" will derive the key, get CLOB credentials, save the session, and return success -- no relayer calls needed. The wallet auto-deploys on first trade.
+Remove the dynamic timestamp. Change from:
+
+```typescript
+const timestamp = Date.now();
+const siweMessage = `${SIWE_MESSAGE_PREFIX}\n\nPrimary Wallet: ${walletAddress}\nSigner Wallet: ${signerAddress}\nTimestamp: ${timestamp}\nChain: Polygon (137)`;
+```
+
+To:
+
+```typescript
+const siweMessage = `${SIWE_MESSAGE_PREFIX}\n\nPrimary Wallet: ${walletAddress}\nSigner Wallet: ${signerAddress}\nChain: Polygon (137)`;
+```
+
+Also remove the `timestamp` field from the request body (line 171). The `message` field already carries the full signed text.
+
+---
+
+## Change 3: Shared fallback status (report only — no code change)
+
+Results from `prediction-health`:
+- `PM_API_KEY`: present
+- `PM_API_SECRET`: present  
+- `PM_PASSPHRASE`: present
+- `PM_TRADING_KEY`: present → derives `0xFAf5B6FBC1d0D1Cd5844418C152423C460db4557`
+- **USDC.e balance: $0.00** — cannot trade
+- **POL balance: 0** — cannot pay gas
+- **CTF allowance: 0** — not approved for exchange
+- **ready_to_buy: false**
+
+The shared fallback credentials are valid but the wallet is empty. Predictions via shared fallback will fail until funded. This is a funding issue, not a code issue — no code change needed.
+
+---
+
+## Old failed sessions
+
+Previous failed attempts created session records with null/empty credentials. The upsert logic (lines 379-416) already handles this — it updates existing records by wallet match. So once the fix is deployed and a user retries, the old record gets overwritten with valid credentials. No manual cleanup required.
+
+---
+
+## Files changed
+
+| File | Change |
+|------|--------|
+| `supabase/functions/polymarket-user-setup/index.ts` | Rewrite `deriveClobApiCreds()` to POST-first pattern |
+| `src/hooks/usePolymarketSession.ts` | Remove timestamp from setup message, remove timestamp from request body |
+
+## What NOT to change
+
+- Privy config / Cloudflare DNS
+- `prediction-submit` business logic
+- EIP-712 order signing
+- Builder keys
+- `EnableTradingBanner.tsx` (already updated)
+- `supabase/config.toml` (already correct)
+
+## What to test after deployment
+
+1. Go to `/demo`, sign in with Privy
+2. Press "Set Up Trading Wallet"
+3. Sign the message in wallet popup
+4. Should see success instead of "credential derivation failed"
+5. Check edge function logs for `V2 PROXY setup complete`
+
+## Note on shared wallet funding
+
+Even after per-user setup works, the shared fallback wallet (`0xFAf5...`) needs USDC.e + POL to function as a safety net. Consider funding it with a small amount of USDC.e (bridged) and POL for gas.
 
