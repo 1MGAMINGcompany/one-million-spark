@@ -227,7 +227,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       })) as Fight[];
     },
     enabled: !!operator?.id,
-    refetchInterval: 15000,
+    refetchInterval: 30000,
   });
 
   // Real-time WebSocket prices from Polymarket CLOB
