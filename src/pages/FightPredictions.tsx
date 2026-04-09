@@ -386,7 +386,7 @@ export default function FightPredictions() {
     const approvedEventIds = new Set(events.map(e => e.id));
     const groups: Record<string, { event?: PredictionEvent; fights: Fight[] }> = {};
 
-    fights.forEach((f) => {
+    fightsWithLivePrices.forEach((f) => {
       if (f.event_id && !approvedEventIds.has(f.event_id)) return;
 
       let groupKey: string;
@@ -406,7 +406,7 @@ export default function FightPredictions() {
       groups[groupKey].fights.push(f);
     });
     return groups;
-  }, [fights, events]);
+  }, [fightsWithLivePrices, events]);
 
   const activeSports = useMemo(() => {
     const sports = new Set(Object.entries(groupedEvents).map(([key, val]) => parseSport(key, val.event?.source_provider, val.event?.category)));
@@ -492,7 +492,7 @@ export default function FightPredictions() {
   }, [filteredEvents, events]);
 
   const hotFightIds = useMemo(() => {
-    const sorted = [...fights]
+    const sorted = [...fightsWithLivePrices]
       .filter(f => f.status === "open")
       .sort((a, b) => {
         const poolA = ((a as any).pool_a_usd || a.pool_a_lamports / 1e9) + ((a as any).pool_b_usd || a.pool_b_lamports / 1e9);
@@ -503,7 +503,7 @@ export default function FightPredictions() {
       const pool = ((f as any).pool_a_usd || f.pool_a_lamports / 1e9) + ((f as any).pool_b_usd || f.pool_b_lamports / 1e9);
       return pool > 0;
     }).map(f => f.id));
-  }, [fights]);
+  }, [fightsWithLivePrices]);
 
   const comingSoonSports = useMemo(() => {
     const existingSports = new Set(Object.entries(groupedEvents).map(([key, val]) => parseSport(key, val.event?.source_provider, val.event?.category)));
