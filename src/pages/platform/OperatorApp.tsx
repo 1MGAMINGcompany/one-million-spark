@@ -230,6 +230,9 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     refetchInterval: 15000,
   });
 
+  // Real-time WebSocket prices from Polymarket CLOB
+  const { livePrices, wsConnected } = usePolymarketLivePrices(operatorFights || []);
+
   const allowedSports = settings?.allowed_sports || [];
   const disabledSports = (operator as any)?.disabled_sports || [];
   const backendDegraded = opFightsError;
