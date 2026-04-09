@@ -167,7 +167,6 @@ function usePolymarketSessionInner(): PolymarketSessionState {
           signer_wallet: signerAddress,
           signature,
           message: siweMessage,
-          timestamp,
         }),
       });
 
