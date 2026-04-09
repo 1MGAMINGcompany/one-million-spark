@@ -139,8 +139,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   } = usePolymarketSession();
   usePolymarketPrices();
 
-  // Real-time WebSocket prices from Polymarket CLOB
-  const { livePrices, wsConnected } = usePolymarketLivePrices(operatorFights || []);
+  // Live WebSocket prices — moved after operatorFights query declaration
 
   const isConnected = authenticated && isPrivyUser;
 
