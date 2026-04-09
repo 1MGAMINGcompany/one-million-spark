@@ -234,6 +234,19 @@ export default function FightPredictions() {
 
   usePolymarketPrices(!backendDegraded);
 
+  // Real-time WebSocket prices from Polymarket CLOB
+  const { livePrices, wsConnected } = usePolymarketLivePrices(fights);
+
+  // Merge live WebSocket prices into fight objects — downstream consumers get instant updates
+  const fightsWithLivePrices = useMemo(() => {
+    if (Object.keys(livePrices).length === 0) return fights;
+    return fights.map((f) => {
+      const live = livePrices[f.id];
+      if (!live) return f;
+      return { ...f, price_a: live.priceA, price_b: live.priceB };
+    });
+  }, [fights, livePrices]);
+
   const isConnected = authenticated && isPrivyUser;
 
   const loadFights = useCallback(async () => {
