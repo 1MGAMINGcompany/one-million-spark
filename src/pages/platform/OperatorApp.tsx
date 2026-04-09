@@ -657,8 +657,6 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       ))
     : undefined;
 
-  // Real-time WebSocket prices from Polymarket CLOB
-  const { livePrices, wsConnected } = usePolymarketLivePrices(operatorFights || []);
 
   return (
     <SportsWebSocketProvider slugs={liveSlugs}>
