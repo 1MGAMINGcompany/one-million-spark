@@ -1,99 +1,71 @@
 
 
-# Minimal Safe Fix: Polymarket Trading Wallet Setup
+# Improving Price Refresh Consistency
 
-## Summary
+## What's Happening Now
 
-Three changes to fix the "Trading wallet credential derivation failed" error. The shared fallback credentials exist but the shared trading wallet is **unfunded** (0 USDC.e, 0 POL, 0 CTF allowance), so it cannot execute trades even as a fallback.
+Your current price refresh involves **three independent timers** racing each other:
 
----
+1. **Frontend table poll**: re-reads `prediction_fights` every **15 seconds** (FightPredictions.tsx line 365)
+2. **Price worker poll**: calls `polymarket-prices` edge function every **45 seconds** (usePolymarketPrices.ts) which writes new prices to the DB
+3. **Realtime subscription**: when the DB row changes (from the price worker), Supabase Realtime fires an event that triggers another re-fetch
 
-## Change 1: Fix `deriveClobApiCreds()` — create-first pattern
+So when you refresh the page, the price you see depends on *when* the last worker ran. Sometimes you land 2 seconds after a sync (fresh), sometimes 40 seconds after (stale). The inconsistency is structural.
 
-**File:** `supabase/functions/polymarket-user-setup/index.ts` (lines 206-256)
+## What Other Platforms Do
 
-Replace the current logic with:
+Sites like Polymarket, Kalshi, and PredictIt use **WebSocket-pushed prices** — prices stream from the exchange to the client in real-time, no polling. Specifically:
 
-```
-1. Try POST /auth/api-key first (create new credentials)
-2. If 200 OK → return credentials
-3. If response indicates "already exists" (400 or 409) → try GET /auth/derive-api-key
-4. If GET succeeds → return credentials  
-5. If both fail → return error with details
-```
+- **Polymarket**: WebSocket at `wss://ws-subscriptions-clob.polymarket.com/ws/market` — prices push on every trade
+- **Kalshi**: WebSocket feed for orderbook updates
+- **Robinhood/Coinbase**: WebSocket tickers that push every price change
 
-Current broken logic: tries GET first, only falls back on 404, misses the 400 case entirely.
+The key difference: **they never poll for prices**. Prices arrive via push, so every user sees the same price at the same time.
 
----
+## Recommended Fix — Two Phases
 
-## Change 2: Deterministic setup message
+### Phase 1: Client-Side WebSocket for Live Prices (Biggest Impact)
 
-**File:** `src/hooks/usePolymarketSession.ts` (lines 143-144)
+Connect directly to Polymarket's public CLOB WebSocket for real-time price streaming. No edge function needed for price display.
 
-Remove the dynamic timestamp. Change from:
+**How it works:**
+- New hook `usePolymarketLivePrices` subscribes to `wss://ws-subscriptions-clob.polymarket.com/ws/market`
+- Subscribes to token IDs for all visible fights
+- On each price message, update a local price map (React state/context)
+- FightCard components read from the live price map first, falling back to DB prices
+- The existing `polymarket-prices` worker continues running (reduced to every 2-3 minutes) as a **persistence layer** for the DB — used by the slippage gate in `prediction-submit`
 
-```typescript
-const timestamp = Date.now();
-const siweMessage = `${SIWE_MESSAGE_PREFIX}\n\nPrimary Wallet: ${walletAddress}\nSigner Wallet: ${signerAddress}\nTimestamp: ${timestamp}\nChain: Polygon (137)`;
-```
+**Result:** Prices update within ~1 second of any trade on Polymarket. Every user sees the same price simultaneously. No more variable refresh times.
 
-To:
+### Phase 2: Optimistic Price Display on Page Load
 
-```typescript
-const siweMessage = `${SIWE_MESSAGE_PREFIX}\n\nPrimary Wallet: ${walletAddress}\nSigner Wallet: ${signerAddress}\nChain: Polygon (137)`;
-```
+- On initial page load, immediately show DB-cached prices (current behavior)
+- Within 1-2 seconds, WebSocket connects and overwrites with live prices
+- Add a subtle "LIVE" dot indicator next to prices once the WebSocket is connected
+- If WebSocket fails, fall back to current polling gracefully
 
-Also remove the `timestamp` field from the request body (line 171). The `message` field already carries the full signed text.
-
----
-
-## Change 3: Shared fallback status (report only — no code change)
-
-Results from `prediction-health`:
-- `PM_API_KEY`: present
-- `PM_API_SECRET`: present  
-- `PM_PASSPHRASE`: present
-- `PM_TRADING_KEY`: present → derives `0xFAf5B6FBC1d0D1Cd5844418C152423C460db4557`
-- **USDC.e balance: $0.00** — cannot trade
-- **POL balance: 0** — cannot pay gas
-- **CTF allowance: 0** — not approved for exchange
-- **ready_to_buy: false**
-
-The shared fallback credentials are valid but the wallet is empty. Predictions via shared fallback will fail until funded. This is a funding issue, not a code issue — no code change needed.
-
----
-
-## Old failed sessions
-
-Previous failed attempts created session records with null/empty credentials. The upsert logic (lines 379-416) already handles this — it updates existing records by wallet match. So once the fix is deployed and a user retries, the old record gets overwritten with valid credentials. No manual cleanup required.
-
----
-
-## Files changed
+## Files Changed
 
 | File | Change |
 |------|--------|
-| `supabase/functions/polymarket-user-setup/index.ts` | Rewrite `deriveClobApiCreds()` to POST-first pattern |
-| `src/hooks/usePolymarketSession.ts` | Remove timestamp from setup message, remove timestamp from request body |
+| `src/hooks/usePolymarketLivePrices.ts` | **New** — WebSocket connection to Polymarket CLOB, price state management |
+| `src/pages/FightPredictions.tsx` | Use live prices from WebSocket, merge with DB prices |
+| `src/pages/platform/OperatorApp.tsx` | Same live price integration |
+| `src/components/predictions/FightCard.tsx` | Accept optional live price override prop |
+| `src/hooks/usePolymarketPrices.ts` | Reduce poll interval from 45s → 120s (DB persistence only) |
+| `src/pages/FightPredictions.tsx` | Reduce table poll from 15s → 30s (WebSocket handles freshness) |
 
-## What NOT to change
+## What NOT to Change
 
-- Privy config / Cloudflare DNS
-- `prediction-submit` business logic
-- EIP-712 order signing
-- Builder keys
-- `EnableTradingBanner.tsx` (already updated)
-- `supabase/config.toml` (already correct)
+- `prediction-submit` slippage logic — still reads DB prices server-side
+- `polymarket-prices` edge function — still runs for DB persistence, just less frequently
+- Realtime subscription — keep as backup
 
-## What to test after deployment
+## Technical Note
 
-1. Go to `/demo`, sign in with Privy
-2. Press "Set Up Trading Wallet"
-3. Sign the message in wallet popup
-4. Should see success instead of "credential derivation failed"
-5. Check edge function logs for `V2 PROXY setup complete`
-
-## Note on shared wallet funding
-
-Even after per-user setup works, the shared fallback wallet (`0xFAf5...`) needs USDC.e + POL to function as a safety net. Consider funding it with a small amount of USDC.e (bridged) and POL for gas.
+Polymarket's public CLOB WebSocket requires no authentication for market data. The subscription message format is:
+```json
+{"type": "subscribe", "channel": "market", "assets_id": "TOKEN_ID"}
+```
+Price updates arrive as JSON with `best_bid` / `best_ask` fields. This is the same feed Polymarket.com uses.
 
