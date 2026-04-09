@@ -140,8 +140,7 @@ function usePolymarketSessionInner(): PolymarketSessionState {
 
       const signerAddress = eoaAddress ?? walletAddress;
 
-      const timestamp = Date.now();
-      const siweMessage = `${SIWE_MESSAGE_PREFIX}\n\nPrimary Wallet: ${walletAddress}\nSigner Wallet: ${signerAddress}\nTimestamp: ${timestamp}\nChain: Polygon (137)`;
+      const siweMessage = `${SIWE_MESSAGE_PREFIX}\n\nPrimary Wallet: ${walletAddress}\nSigner Wallet: ${signerAddress}\nChain: Polygon (137)`;
 
       const result = await signMessage(
         { message: siweMessage },
@@ -168,7 +167,6 @@ function usePolymarketSessionInner(): PolymarketSessionState {
           signer_wallet: signerAddress,
           signature,
           message: siweMessage,
-          timestamp,
         }),
       });
 

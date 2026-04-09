@@ -203,7 +203,11 @@ async function buildClobAuthHeaders(
   };
 }
 
-/** Derive CLOB API credentials for the trading wallet using L1 EIP-712 auth */
+/** Derive CLOB API credentials for the trading wallet using L1 EIP-712 auth.
+ *  Follows Polymarket's createOrDeriveApiKey pattern:
+ *  1. Try POST /auth/api-key first (create new credentials)
+ *  2. If already exists (400/409), try GET /auth/derive-api-key (retrieve)
+ */
 async function deriveClobApiCreds(
   tradingAccount: ReturnType<typeof privateKeyToAccount>,
 ): Promise<{
@@ -213,37 +217,55 @@ async function deriveClobApiCreds(
   error?: string;
 }> {
   try {
-    // Step 1: Try GET /auth/derive-api-key (retrieves existing creds)
-    const headers = await buildClobAuthHeaders(tradingAccount, 0);
+    // Step 1: Try POST /auth/api-key first (create new credentials)
+    const createHeaders = await buildClobAuthHeaders(tradingAccount, 0);
+    console.log("[polymarket-user-setup] Attempting POST /auth/api-key (create)");
 
-    let res = await fetch(`${CLOB_BASE}/auth/derive-api-key`, {
-      method: "GET",
-      headers,
+    const createRes = await fetch(`${CLOB_BASE}/auth/api-key`, {
+      method: "POST",
+      headers: createHeaders,
     });
 
-    // Step 2: If no creds exist yet (404), create them with POST /auth/api-key
-    if (res.status === 404) {
-      await res.text(); // consume body
-      console.log("[polymarket-user-setup] No existing creds, creating via POST /auth/api-key");
-      const createHeaders = await buildClobAuthHeaders(tradingAccount, 0);
-      res = await fetch(`${CLOB_BASE}/auth/api-key`, {
-        method: "POST",
-        headers: createHeaders,
-      });
+    if (createRes.ok) {
+      const data = await createRes.json();
+      if (data.apiKey || data.key) {
+        console.log("[polymarket-user-setup] Created new CLOB API credentials via POST");
+        return {
+          apiKey: data.apiKey || data.key || null,
+          apiSecret: data.secret || data.apiSecret || null,
+          passphrase: data.passphrase || null,
+        };
+      }
     }
 
-    if (!res.ok) {
-      const errText = await res.text();
-      console.warn(`[polymarket-user-setup] CLOB cred derivation failed (${res.status}): ${errText}`);
-      return { apiKey: null, apiSecret: null, passphrase: null, error: `${res.status}: ${errText}` };
+    // Step 2: If create failed (400/409 = already exists, or empty key), try GET /auth/derive-api-key
+    const createStatus = createRes.status;
+    const createBody = createRes.ok ? "" : await createRes.text();
+    console.log(`[polymarket-user-setup] POST /auth/api-key returned ${createStatus}, trying GET /auth/derive-api-key`);
+
+    const deriveHeaders = await buildClobAuthHeaders(tradingAccount, 0);
+    const deriveRes = await fetch(`${CLOB_BASE}/auth/derive-api-key`, {
+      method: "GET",
+      headers: deriveHeaders,
+    });
+
+    if (deriveRes.ok) {
+      const data = await deriveRes.json();
+      if (data.apiKey || data.key) {
+        console.log("[polymarket-user-setup] Retrieved existing CLOB API credentials via GET");
+        return {
+          apiKey: data.apiKey || data.key || null,
+          apiSecret: data.secret || data.apiSecret || null,
+          passphrase: data.passphrase || null,
+        };
+      }
     }
 
-    const data = await res.json();
-    return {
-      apiKey: data.apiKey || null,
-      apiSecret: data.secret || null,
-      passphrase: data.passphrase || null,
-    };
+    // Both failed
+    const deriveBody = await deriveRes.text();
+    const errorDetail = `POST(${createStatus}): ${createBody.substring(0, 200)} | GET(${deriveRes.status}): ${deriveBody.substring(0, 200)}`;
+    console.warn(`[polymarket-user-setup] CLOB cred derivation failed: ${errorDetail}`);
+    return { apiKey: null, apiSecret: null, passphrase: null, error: errorDetail };
   } catch (err) {
     console.error("[polymarket-user-setup] CLOB cred derivation error:", err);
     return {
