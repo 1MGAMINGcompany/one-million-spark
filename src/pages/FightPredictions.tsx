@@ -27,6 +27,7 @@ import { useMyReferralCode } from "@/hooks/useMyReferralCode";
 import type { Fight } from "@/components/predictions/FightCard";
 import type { TradeResult } from "@/components/predictions/tradeResultTypes";
 import { usePolymarketPrices } from "@/hooks/usePolymarketPrices";
+import { usePolymarketLivePrices } from "@/hooks/usePolymarketLivePrices";
 import { PREDICTION_VISIBILITY_VALUES } from "@/lib/predictionVisibility";
 
 const FEE_RATE = 0.05;
@@ -37,8 +38,8 @@ const FEE_RATE = 0.05;
 // const PREDICTION_POOL_WALLET = ...
 
 const ALL_SPORTS = ["ALL", "MUAY THAI", "BARE KNUCKLE", "MMA", "BOXING", "FUTBOL"];
-const FEED_REFRESH_MIN_MS = 15_000;
-const FIGHTS_SELECT = "id, title, fighter_a_name, fighter_b_name, status, visibility, event_date, pool_a_usd, pool_b_usd, price_a, price_b, source, polymarket_active, featured, event_name, winner, draw_allowed";
+const FEED_REFRESH_MIN_MS = 30_000;
+const FIGHTS_SELECT = "id, title, fighter_a_name, fighter_b_name, status, visibility, event_date, pool_a_usd, pool_b_usd, price_a, price_b, source, polymarket_active, featured, event_name, winner, draw_allowed, polymarket_outcome_a_token, polymarket_outcome_b_token";
 const EVENTS_SELECT = [
   "id",
   "event_name",
@@ -233,6 +234,19 @@ export default function FightPredictions() {
 
   usePolymarketPrices(!backendDegraded);
 
+  // Real-time WebSocket prices from Polymarket CLOB
+  const { livePrices, wsConnected } = usePolymarketLivePrices(fights);
+
+  // Merge live WebSocket prices into fight objects — downstream consumers get instant updates
+  const fightsWithLivePrices = useMemo(() => {
+    if (Object.keys(livePrices).length === 0) return fights;
+    return fights.map((f) => {
+      const live = livePrices[f.id];
+      if (!live) return f;
+      return { ...f, price_a: live.priceA, price_b: live.priceB };
+    });
+  }, [fights, livePrices]);
+
   const isConnected = authenticated && isPrivyUser;
 
   const loadFights = useCallback(async () => {
@@ -359,10 +373,10 @@ export default function FightPredictions() {
   useEffect(() => {
     const interval = setInterval(() => {
       // Back off polling when backend is unhealthy
-      const backoffMs = Math.min(15_000 * Math.pow(2, consecutiveFailures.current), 120_000);
+      const backoffMs = Math.min(30_000 * Math.pow(2, consecutiveFailures.current), 120_000);
       if (consecutiveFailures.current > 0 && Date.now() - lastFeedLoadAt.current < backoffMs) return;
       void loadFights();
-    }, 15_000);
+    }, 30_000);
     return () => clearInterval(interval);
   }, [loadFights]);
 
@@ -372,7 +386,7 @@ export default function FightPredictions() {
     const approvedEventIds = new Set(events.map(e => e.id));
     const groups: Record<string, { event?: PredictionEvent; fights: Fight[] }> = {};
 
-    fights.forEach((f) => {
+    fightsWithLivePrices.forEach((f) => {
       if (f.event_id && !approvedEventIds.has(f.event_id)) return;
 
       let groupKey: string;
@@ -392,7 +406,7 @@ export default function FightPredictions() {
       groups[groupKey].fights.push(f);
     });
     return groups;
-  }, [fights, events]);
+  }, [fightsWithLivePrices, events]);
 
   const activeSports = useMemo(() => {
     const sports = new Set(Object.entries(groupedEvents).map(([key, val]) => parseSport(key, val.event?.source_provider, val.event?.category)));
@@ -478,7 +492,7 @@ export default function FightPredictions() {
   }, [filteredEvents, events]);
 
   const hotFightIds = useMemo(() => {
-    const sorted = [...fights]
+    const sorted = [...fightsWithLivePrices]
       .filter(f => f.status === "open")
       .sort((a, b) => {
         const poolA = ((a as any).pool_a_usd || a.pool_a_lamports / 1e9) + ((a as any).pool_b_usd || a.pool_b_lamports / 1e9);
@@ -489,7 +503,7 @@ export default function FightPredictions() {
       const pool = ((f as any).pool_a_usd || f.pool_a_lamports / 1e9) + ((f as any).pool_b_usd || f.pool_b_lamports / 1e9);
       return pool > 0;
     }).map(f => f.id));
-  }, [fights]);
+  }, [fightsWithLivePrices]);
 
   const comingSoonSports = useMemo(() => {
     const existingSports = new Set(Object.entries(groupedEvents).map(([key, val]) => parseSport(key, val.event?.source_provider, val.event?.category)));

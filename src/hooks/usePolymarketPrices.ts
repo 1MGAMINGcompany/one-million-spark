@@ -7,7 +7,7 @@
 import { useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-const PRICE_POLL_MS = 45_000; // 45s
+const PRICE_POLL_MS = 120_000; // 120s — DB persistence only, live prices come via WebSocket
 
 export function usePolymarketPrices(enabled = true) {
   const lastRefresh = useRef<number>(0);
