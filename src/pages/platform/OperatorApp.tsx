@@ -12,6 +12,7 @@ import { useAllowanceGate } from "@/hooks/useAllowanceGate";
 import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
 import { usePolymarketSession } from "@/hooks/usePolymarketSession";
 import { usePolymarketPrices } from "@/hooks/usePolymarketPrices";
+import { usePolymarketLivePrices } from "@/hooks/usePolymarketLivePrices";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Globe, Trophy, Loader2, ShieldCheck, Search, CalendarPlus, ChevronDown, Zap, Copy, ExternalLink, CreditCard, ArrowUpRight, AlertTriangle } from "lucide-react";
 import GeoBlockScreen from "@/components/predictions/GeoBlockScreen";
@@ -137,6 +138,9 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     refreshSession,
   } = usePolymarketSession();
   usePolymarketPrices();
+
+  // Real-time WebSocket prices from Polymarket CLOB
+  const { livePrices, wsConnected } = usePolymarketLivePrices(operatorFights || []);
 
   const isConnected = authenticated && isPrivyUser;
 
