@@ -27,6 +27,7 @@ import { useMyReferralCode } from "@/hooks/useMyReferralCode";
 import type { Fight } from "@/components/predictions/FightCard";
 import type { TradeResult } from "@/components/predictions/tradeResultTypes";
 import { usePolymarketPrices } from "@/hooks/usePolymarketPrices";
+import { usePolymarketLivePrices } from "@/hooks/usePolymarketLivePrices";
 import { PREDICTION_VISIBILITY_VALUES } from "@/lib/predictionVisibility";
 
 const FEE_RATE = 0.05;
@@ -38,7 +39,7 @@ const FEE_RATE = 0.05;
 
 const ALL_SPORTS = ["ALL", "MUAY THAI", "BARE KNUCKLE", "MMA", "BOXING", "FUTBOL"];
 const FEED_REFRESH_MIN_MS = 15_000;
-const FIGHTS_SELECT = "id, title, fighter_a_name, fighter_b_name, status, visibility, event_date, pool_a_usd, pool_b_usd, price_a, price_b, source, polymarket_active, featured, event_name, winner, draw_allowed";
+const FIGHTS_SELECT = "id, title, fighter_a_name, fighter_b_name, status, visibility, event_date, pool_a_usd, pool_b_usd, price_a, price_b, source, polymarket_active, featured, event_name, winner, draw_allowed, polymarket_outcome_a_token, polymarket_outcome_b_token";
 const EVENTS_SELECT = [
   "id",
   "event_name",
