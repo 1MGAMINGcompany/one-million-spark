@@ -1,0 +1,7 @@
+name = "polymarket-clob-proxy"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# Pin to US to avoid EU/APAC geo-blocking by Polymarket
+[placement]
+mode = "smart"
