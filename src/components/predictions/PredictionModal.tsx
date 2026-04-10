@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle2, Eye, Clock, Trophy, Coins, Share2, Copy, AlertTriangle, Wallet } from "lucide-react";
+import { Loader2, CheckCircle2, Eye, Clock, Trophy, Coins, Share2, Copy, AlertTriangle, Wallet, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { Fight } from "./FightCard";
 import { useMyReferralCode } from "@/hooks/useMyReferralCode";
@@ -8,6 +8,7 @@ import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
 import { usePolygonBalances, type FundingState } from "@/hooks/usePolygonBalances";
 import SocialShareModal from "@/components/SocialShareModal";
 import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
+import type { RequoteData } from "./tradeResultTypes";
 import PredictionSuccessScreen from "./PredictionSuccessScreen";
 import TradeTicket from "./TradeTicket";
 import type { TradeResult } from "./tradeResultTypes";
@@ -60,6 +61,8 @@ export default function PredictionModal({
   operatorBrandName,
   operatorLogoUrl,
   operatorSubdomain,
+  requoteData,
+  onAcceptRequote,
 }: {
   fight: Fight;
   pick: "fighter_a" | "fighter_b";
@@ -74,6 +77,8 @@ export default function PredictionModal({
   operatorBrandName?: string;
   operatorLogoUrl?: string | null;
   operatorSubdomain?: string;
+  requoteData?: RequoteData | null;
+  onAcceptRequote?: () => void;
 }) {
   const referralCode = useMyReferralCode(wallet ?? null);
   const { usdc_balance, usdc_balance_formatted, is_loading: balanceLoading } = usePolygonUSDC();
@@ -128,6 +133,31 @@ export default function PredictionModal({
           </Button>
         </div>
 
+        {/* Requote banner — odds changed */}
+        {requoteData && (
+          <div className="mb-4 rounded-lg bg-amber-500/10 border border-amber-500/30 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+              <p className="text-sm font-bold text-foreground">Odds Changed</p>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Previous odds</span>
+              <span className="text-muted-foreground line-through">{((1 / requoteData.old_price) * 100).toFixed(0)}%</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">New odds</span>
+              <span className="font-bold text-primary">{((1 / requoteData.new_price) * 100).toFixed(0)}% → ${requoteData.updated_payout.toFixed(2)}</span>
+            </div>
+            <Button
+              className="w-full font-bold"
+              onClick={() => { onAcceptRequote?.(); onSubmit(amountNum); }}
+              disabled={submitting}
+            >
+              <RefreshCw className="w-4 h-4 mr-2" /> Accept New Odds & Submit
+            </Button>
+          </div>
+        )}
+
         <TradeTicket
           amount={amount}
           setAmount={setAmount}
@@ -140,7 +170,7 @@ export default function PredictionModal({
           netAmount={netAmount}
           estimatedReward={estimatedReward}
           insufficientFunds={insufficientFunds}
-          canSubmit={canSubmit}
+          canSubmit={canSubmit && !requoteData}
           submitting={submitting}
           onSubmit={onSubmit}
           minUsd={MIN_USD}

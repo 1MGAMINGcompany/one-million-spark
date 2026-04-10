@@ -10,3 +10,11 @@ export interface TradeResult {
   entry_id?: string;
   error?: string;
 }
+
+/** Returned when odds moved beyond tolerance (HTTP 409) */
+export interface RequoteData {
+  old_price: number;
+  new_price: number;
+  updated_payout: number;
+  slippage_bps: number;
+}

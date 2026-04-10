@@ -31,7 +31,7 @@ import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
 import ScrollableSportTabs, { type SportTabGroup } from "@/components/admin/ScrollableSportTabs";
 import SportPickerModal from "@/components/operator/SportPickerModal";
 import type { Fight } from "@/components/predictions/FightCard";
-import type { TradeResult } from "@/components/predictions/tradeResultTypes";
+import type { TradeResult, RequoteData } from "@/components/predictions/tradeResultTypes";
 import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
 import { formatEventDateTime } from "@/lib/formatEventLocalDateTime";
 import {
@@ -179,6 +179,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [geoBlocked, setGeoBlocked] = useState(false);
   const [geoBlockDismissed, setGeoBlockDismissed] = useState(false);
+  const [requoteData, setRequoteData] = useState<RequoteData | null>(null);
   const readOnly = geoBlocked && geoBlockDismissed;
 
   // Social share state
@@ -497,6 +498,19 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       if (!submitResp.ok || data?.error) {
         const msg = data?.error || "Backend error";
         const errorCode = data?.error_code || "";
+
+        // Requote flow: odds changed beyond tolerance
+        if (errorCode === "price_changed_requote_required") {
+          setRequoteData({
+            old_price: data.old_price,
+            new_price: data.new_price,
+            updated_payout: data.updated_payout,
+            slippage_bps: data.slippage_bps,
+          });
+          setSubmitting(false);
+          return;
+        }
+
         if (errorCode === "geo_blocked" || errorCode === "clob_geo_blocked") {
           setGeoBlocked(true);
           setSubmitting(false);
@@ -1070,8 +1084,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         <SimplePredictionModal
           fight={selectedFight}
           pick={selectedPick}
-          onClose={() => { setSelectedFight(null); setSelectedPick(null); setShowSuccess(false); setLastTradeResult(null); resetAllowance(); }}
-          onSubmit={handleSubmit}
+          onClose={() => { setSelectedFight(null); setSelectedPick(null); setShowSuccess(false); setLastTradeResult(null); setRequoteData(null); resetAllowance(); }}
+          onSubmit={(amt) => { setRequoteData(null); handleSubmit(amt); }}
           submitting={submitting || pmSessionLoading}
           showSuccess={showSuccess}
           tradeResult={lastTradeResult}
@@ -1080,6 +1094,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           themeColor={theme.primary}
           operatorBrandName={operator?.brand_name}
           onSharePick={handleSharePick}
+          requoteData={requoteData}
+          onAcceptRequote={() => setRequoteData(null)}
         />
       )}
 

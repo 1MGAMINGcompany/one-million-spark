@@ -25,7 +25,7 @@ import SocialShareModal from "@/components/SocialShareModal";
 import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
 import { useMyReferralCode } from "@/hooks/useMyReferralCode";
 import type { Fight } from "@/components/predictions/FightCard";
-import type { TradeResult } from "@/components/predictions/tradeResultTypes";
+import type { TradeResult, RequoteData } from "@/components/predictions/tradeResultTypes";
 import { usePolymarketPrices } from "@/hooks/usePolymarketPrices";
 import { usePolymarketLivePrices } from "@/hooks/usePolymarketLivePrices";
 import { PREDICTION_VISIBILITY_VALUES } from "@/lib/predictionVisibility";
@@ -225,6 +225,7 @@ export default function FightPredictions() {
   const [claimShareData, setClaimShareData] = useState<{ eventTitle: string; amountWon: number; fighterName?: string; sport?: string } | null>(null);
   const [geoBlocked, setGeoBlocked] = useState(false);
   const [geoBlockDismissed, setGeoBlockDismissed] = useState(false);
+  const [requoteData, setRequoteData] = useState<RequoteData | null>(null);
   const fightsRequestInFlight = useRef(false);
   const queuedFightsReload = useRef(false);
   const feedRequestInFlight = useRef(false);
@@ -641,6 +642,19 @@ export default function FightPredictions() {
       if (!submitResp.ok || data?.error) {
         const backendMsg = data?.error || "Backend error";
         const errorCode = data?.error_code || "";
+
+        // Requote flow: odds changed beyond tolerance
+        if (errorCode === "price_changed_requote_required") {
+          setRequoteData({
+            old_price: data.old_price,
+            new_price: data.new_price,
+            updated_payout: data.updated_payout,
+            slippage_bps: data.slippage_bps,
+          });
+          setSubmitting(false);
+          return;
+        }
+
         const isRelayerError = errorCode.startsWith("rpc_") || errorCode === "relayer_not_configured" || errorCode === "relayer_tx_failed" || errorCode === "fee_collection_failed";
         const isSetupRequired = errorCode === "trading_wallet_setup_required" || errorCode === "trading_wallet_not_ready" || errorCode === "no_trading_session";
         dbg("predict:backend_error", { backendMsg, errorCode, isRelayerError, isSetupRequired });
@@ -1077,14 +1091,16 @@ export default function FightPredictions() {
         <PredictionModal
           fight={selectedFight}
           pick={selectedPick}
-          onClose={() => { setSelectedFight(null); setSelectedPick(null); setShowPredictionSuccess(false); setLastTradeResult(null); resetAllowance(); }}
-          onSubmit={handleSubmit}
+          onClose={() => { setSelectedFight(null); setSelectedPick(null); setShowPredictionSuccess(false); setLastTradeResult(null); setRequoteData(null); resetAllowance(); }}
+          onSubmit={(amt) => { setRequoteData(null); handleSubmit(amt); }}
           submitting={submitting || pmSessionLoading}
           showSuccess={showPredictionSuccess}
           wallet={address || undefined}
           tradeResult={lastTradeResult}
           approvalStep={allowanceState.step}
           approvalError={allowanceState.errorReason}
+          requoteData={requoteData}
+          onAcceptRequote={() => setRequoteData(null)}
         />
       )}
 

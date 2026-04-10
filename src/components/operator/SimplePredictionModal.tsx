@@ -1,9 +1,9 @@
-import { useState } from "react";
-import { X, Loader2, Share2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, Loader2, Share2, AlertTriangle, RefreshCw } from "lucide-react";
 import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
 import { getTeamLogo } from "@/lib/teamLogos";
 import type { Fight } from "@/components/predictions/FightCard";
-import type { TradeResult } from "@/components/predictions/tradeResultTypes";
+import type { TradeResult, RequoteData } from "@/components/predictions/tradeResultTypes";
 import type { ApprovalStep } from "@/hooks/useAllowanceGate";
 import ApprovalStepIndicator from "@/components/predictions/ApprovalStepIndicator";
 
@@ -48,6 +48,8 @@ interface Props {
   themeColor?: string;
   operatorBrandName?: string;
   onSharePick?: () => void;
+  requoteData?: RequoteData | null;
+  onAcceptRequote?: () => void;
 }
 
 export default function SimplePredictionModal({
@@ -63,6 +65,8 @@ export default function SimplePredictionModal({
   themeColor = "#3b82f6",
   operatorBrandName,
   onSharePick,
+  requoteData,
+  onAcceptRequote,
 }: Props) {
   const [amount, setAmount] = useState(10);
   const [customAmount, setCustomAmount] = useState("");
@@ -187,6 +191,32 @@ export default function SimplePredictionModal({
         {approvalStep && approvalStep !== "idle" && (
           <div className="mb-4">
             <ApprovalStepIndicator step={approvalStep} errorReason={approvalError} />
+          </div>
+        )}
+
+        {/* Requote banner — odds changed */}
+        {requoteData && (
+          <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-4 mb-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+              <p className="text-sm font-bold text-white">Odds Changed</p>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-white/50">Previous odds</span>
+              <span className="text-white/60 line-through">{((1 / requoteData.old_price) * 100).toFixed(0)}% → ${(currentAmount / requoteData.old_price).toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-white/50">New odds</span>
+              <span className="font-bold" style={{ color: themeColor }}>{((1 / requoteData.new_price) * 100).toFixed(0)}% → ${requoteData.updated_payout.toFixed(2)}</span>
+            </div>
+            <button
+              onClick={() => { onAcceptRequote?.(); onSubmit(currentAmount); }}
+              disabled={submitting}
+              className="w-full py-3 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2 transition-all"
+              style={{ backgroundColor: themeColor }}
+            >
+              <RefreshCw className="w-4 h-4" /> Accept New Odds & Submit
+            </button>
           </div>
         )}
 
