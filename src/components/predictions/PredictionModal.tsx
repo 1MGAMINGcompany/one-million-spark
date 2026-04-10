@@ -133,6 +133,31 @@ export default function PredictionModal({
           </Button>
         </div>
 
+        {/* Requote banner — odds changed */}
+        {requoteData && (
+          <div className="mb-4 rounded-lg bg-amber-500/10 border border-amber-500/30 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+              <p className="text-sm font-bold text-foreground">Odds Changed</p>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Previous odds</span>
+              <span className="text-muted-foreground line-through">{((1 / requoteData.old_price) * 100).toFixed(0)}%</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">New odds</span>
+              <span className="font-bold text-primary">{((1 / requoteData.new_price) * 100).toFixed(0)}% → ${requoteData.updated_payout.toFixed(2)}</span>
+            </div>
+            <Button
+              className="w-full font-bold"
+              onClick={() => { onAcceptRequote?.(); onSubmit(amountNum); }}
+              disabled={submitting}
+            >
+              <RefreshCw className="w-4 h-4 mr-2" /> Accept New Odds & Submit
+            </Button>
+          </div>
+        )}
+
         <TradeTicket
           amount={amount}
           setAmount={setAmount}
@@ -145,7 +170,7 @@ export default function PredictionModal({
           netAmount={netAmount}
           estimatedReward={estimatedReward}
           insufficientFunds={insufficientFunds}
-          canSubmit={canSubmit}
+          canSubmit={canSubmit && !requoteData}
           submitting={submitting}
           onSubmit={onSubmit}
           minUsd={MIN_USD}
