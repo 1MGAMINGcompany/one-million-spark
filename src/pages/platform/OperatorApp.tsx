@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, Fragment } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 import { SportsWebSocketProvider, useLiveGameState } from "@/hooks/useSportsWebSocket";
 import LiveGameBadge, { LiveScoreDisplay } from "@/components/predictions/LiveGameBadge";
 import { useTranslation } from "react-i18next";
@@ -49,6 +49,11 @@ import {
 
 interface OperatorAppProps {
   subdomain: string;
+}
+
+interface RequoteAcceptanceContext {
+  baselinePrice: number;
+  cycleCount: number;
 }
 
 /** Extracted so we can call useLiveGameState unconditionally */
@@ -180,6 +185,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [geoBlocked, setGeoBlocked] = useState(false);
   const [geoBlockDismissed, setGeoBlockDismissed] = useState(false);
   const [requoteData, setRequoteData] = useState<RequoteData | null>(null);
+  const acceptedRequoteRef = useRef<RequoteAcceptanceContext | null>(null);
   const readOnly = geoBlocked && geoBlockDismissed;
 
   // Social share state
@@ -452,6 +458,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
   const handleSubmit = async (amountUsd: number) => {
     if (!selectedFight || !selectedPick || !isConnected || !address) return;
+    const acceptedRequote = acceptedRequoteRef.current;
     setSubmitting(true);
     resetAllowance();
     try {
@@ -492,6 +499,13 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           amount_usd: amountUsd,
           chain: "polygon",
           source_operator_id: operator?.id,
+          ...(acceptedRequote
+            ? {
+                accepted_requote: true,
+                quote_price: acceptedRequote.baselinePrice,
+                requote_count: acceptedRequote.cycleCount,
+              }
+            : {}),
         }),
       });
       const data = await submitResp.json().catch(() => ({}));
@@ -499,8 +513,29 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         const msg = data?.error || "Backend error";
         const errorCode = data?.error_code || "";
 
+        if (errorCode === "market_moving_too_fast") {
+          acceptedRequoteRef.current = null;
+          setRequoteData(null);
+          toast.error("Market moving too fast", {
+            description: "Please review a fresh quote and try again.",
+          });
+          setSubmitting(false);
+          return;
+        }
+
         // Requote flow: odds changed beyond tolerance
         if (errorCode === "price_changed_requote_required") {
+          if (acceptedRequote) {
+            acceptedRequoteRef.current = null;
+            setRequoteData(null);
+            toast.error("Market moving too fast", {
+              description: "Please review a fresh quote and try again.",
+            });
+            setSubmitting(false);
+            return;
+          }
+
+          acceptedRequoteRef.current = null;
           setRequoteData({
             old_price: data.old_price,
             new_price: data.new_price,
@@ -524,6 +559,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         }
         throw new Error(msg);
       }
+      acceptedRequoteRef.current = null;
+      setRequoteData(null);
       setLastTradeResult({
         trade_order_id: data?.trade_order_id,
         trade_status: data?.trade_status,
@@ -542,6 +579,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       setTimeout(() => refetchBalance(), 3000);
     } catch (err: any) {
       const msg = err.message || "";
+      acceptedRequoteRef.current = null;
       if (msg.includes("expired") || msg.includes("closed")) {
         toast.error(t("operator.marketClosed"));
       } else if (msg.includes("finished")) {
@@ -1084,7 +1122,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         <SimplePredictionModal
           fight={selectedFight}
           pick={selectedPick}
-          onClose={() => { setSelectedFight(null); setSelectedPick(null); setShowSuccess(false); setLastTradeResult(null); setRequoteData(null); resetAllowance(); }}
+          onClose={() => { acceptedRequoteRef.current = null; setSelectedFight(null); setSelectedPick(null); setShowSuccess(false); setLastTradeResult(null); setRequoteData(null); resetAllowance(); }}
           onSubmit={(amt) => { setRequoteData(null); handleSubmit(amt); }}
           submitting={submitting || pmSessionLoading}
           showSuccess={showSuccess}
@@ -1095,7 +1133,14 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           operatorBrandName={operator?.brand_name}
           onSharePick={handleSharePick}
           requoteData={requoteData}
-          onAcceptRequote={() => setRequoteData(null)}
+          onAcceptRequote={() => {
+            if (!requoteData) return;
+            acceptedRequoteRef.current = {
+              baselinePrice: requoteData.new_price,
+              cycleCount: 1,
+            };
+            setRequoteData(null);
+          }}
         />
       )}
 

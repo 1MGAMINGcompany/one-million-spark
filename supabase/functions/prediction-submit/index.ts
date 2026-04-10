@@ -759,7 +759,20 @@ Deno.serve(async (req) => {
       amount_usd,
       slippage_bps: clientSlippage,
       source_operator_id,
+      quote_price: clientQuotePrice,
+      accepted_requote: acceptedRequote = false,
+      requote_count: rawRequoteCount,
     } = body;
+
+    const requoteCount = Number.isFinite(Number(rawRequoteCount))
+      ? Math.max(0, Math.trunc(Number(rawRequoteCount)))
+      : 0;
+    const normalizedQuotePrice = clientQuotePrice != null
+      ? Number(clientQuotePrice)
+      : null;
+    const acceptedQuotePrice = normalizedQuotePrice != null && Number.isFinite(normalizedQuotePrice) && normalizedQuotePrice > 0
+      ? normalizedQuotePrice
+      : null;
 
     normalizedWallet = wallet ? String(wallet).trim().toLowerCase() : null;
 
@@ -827,7 +840,12 @@ Deno.serve(async (req) => {
     }
 
     await auditLog(supabase, null, normalizedWallet, "request_received", {
-      fight_id, fighter_pick, amount_usd: parsedAmount,
+      fight_id,
+      fighter_pick,
+      amount_usd: parsedAmount,
+      accepted_requote: Boolean(acceptedRequote),
+      requote_count: requoteCount,
+      quote_price: acceptedQuotePrice,
     });
 
     // ═══════════════════════════════════════════════════
@@ -1105,46 +1123,111 @@ Deno.serve(async (req) => {
         ? Math.min(Number(clientSlippage), systemMaxSlippage)
         : systemMaxSlippage;
 
-    const expectedPrice = isPolymarketBacked
+    const cachedExpectedPrice = isPolymarketBacked
       ? Number(
           fighter_pick === "fighter_a"
             ? fight.price_a || 0.5
             : fight.price_b || 0.5,
         )
       : null;
+    const usingAcceptedRequoteBaseline = Boolean(
+      acceptedRequote &&
+      requoteCount === 1 &&
+      acceptedQuotePrice != null,
+    );
+    const expectedPrice = usingAcceptedRequoteBaseline
+      ? acceptedQuotePrice
+      : cachedExpectedPrice;
+
+    if (acceptedRequote && requoteCount > 1) {
+      return json({
+        error: "Market is moving too fast right now. Please review a fresh quote and try again.",
+        error_code: "market_moving_too_fast",
+      }, 409);
+    }
 
     // ═══════════════════════════════════════════════════
     // SLIPPAGE CHECK — fetch live price and compare
     // ═══════════════════════════════════════════════════
     if (isPolymarketBacked && tokenId && expectedPrice) {
       const clobUrl = getClobUrl();
+      let livePriceAtValidation: number | null = null;
       try {
         const priceRes = await fetch(`${clobUrl}/price?token_id=${tokenId}&side=buy`);
         if (priceRes.ok) {
           const priceData = await priceRes.json();
           const livePrice = Number(priceData.price ?? 0);
           if (livePrice > 0) {
+            livePriceAtValidation = livePrice;
             const slippageBps = Math.abs(livePrice - expectedPrice) / expectedPrice * 10_000;
+            console.log(
+              `[prediction-submit] price check fight=${fight_id} baseline=${expectedPrice} live=${livePrice} tolerance_bps=${effectiveSlippage} accepted_requote=${Boolean(acceptedRequote)} requote_count=${requoteCount}`,
+            );
+
+            await auditLog(supabase, null, normalizedWallet, "live_price_checked", { fight_id }, {
+              baseline_price: expectedPrice,
+              cached_price: cachedExpectedPrice,
+              live_price: livePrice,
+              slippage_bps: Math.round(slippageBps),
+              tolerance_bps: effectiveSlippage,
+              accepted_requote: Boolean(acceptedRequote),
+              requote_count: requoteCount,
+              quote_source: usingAcceptedRequoteBaseline ? "accepted_requote" : "cached_fight_price",
+            });
+
             if (slippageBps > effectiveSlippage) {
               // Calculate updated payout estimate at the new price
               const updatedShares = net_amount_usdc / livePrice;
               const updatedPayout = updatedShares; // 1 share = $1 at settlement
 
-              await auditLog(supabase, null, normalizedWallet, "requote_required", { fight_id }, {
-                expected: expectedPrice, live: livePrice, slippage_bps: slippageBps, max_bps: effectiveSlippage,
-                updated_payout: updatedPayout,
-              });
-              return json({
-                error: "Odds have changed since you opened this ticket.",
-                error_code: "price_changed_requote_required",
+              const priceChangePayload = {
                 old_price: expectedPrice,
                 new_price: livePrice,
                 updated_payout: Number(updatedPayout.toFixed(4)),
                 slippage_bps: Math.round(slippageBps),
+                tolerance_bps: effectiveSlippage,
+                requote_count: requoteCount,
+              };
+
+              if (acceptedRequote || requoteCount >= 1) {
+                await auditLog(supabase, null, normalizedWallet, "market_moving_too_fast", { fight_id }, priceChangePayload);
+                return json({
+                  error: "Market is moving too fast right now. Please review a fresh quote and try again.",
+                  error_code: "market_moving_too_fast",
+                  ...priceChangePayload,
+                }, 409);
+              }
+
+              await auditLog(supabase, null, normalizedWallet, "requote_required", { fight_id }, {
+                expected: expectedPrice,
+                live: livePrice,
+                slippage_bps: slippageBps,
+                max_bps: effectiveSlippage,
+                updated_payout: updatedPayout,
+                quote_source: usingAcceptedRequoteBaseline ? "accepted_requote" : "cached_fight_price",
+                requote_count: requoteCount,
+              });
+              return json({
+                error: "Odds have changed since you opened this ticket.",
+                error_code: "price_changed_requote_required",
+                ...priceChangePayload,
+                max_requote_cycles: 1,
               }, 409);
             }
           }
         }
+
+        await auditLog(supabase, null, normalizedWallet, "controls_passed", {
+          fight_id,
+          fee_bps: effectiveFeeBps,
+          slippage_bps: effectiveSlippage,
+          is_polymarket: isPolymarketBacked,
+        }, {
+          price_used_for_order: expectedPrice,
+          live_price: livePriceAtValidation,
+          accepted_requote: Boolean(acceptedRequote),
+          requote_count: requoteCount,
+        });
       } catch (slipErr) {
         // Non-fatal: if live price check fails, proceed with cached price
         // Apply fallback restrictions for large orders
@@ -1180,12 +1263,18 @@ Deno.serve(async (req) => {
       }
     }
 
-    await auditLog(supabase, null, normalizedWallet, "controls_passed", {
-      fight_id,
-      fee_bps: effectiveFeeBps,
-      slippage_bps: effectiveSlippage,
-      is_polymarket: isPolymarketBacked,
-    });
+    if (!(isPolymarketBacked && tokenId && expectedPrice)) {
+      await auditLog(supabase, null, normalizedWallet, "controls_passed", {
+        fight_id,
+        fee_bps: effectiveFeeBps,
+        slippage_bps: effectiveSlippage,
+        is_polymarket: isPolymarketBacked,
+      }, {
+        price_used_for_order: expectedPrice,
+        accepted_requote: Boolean(acceptedRequote),
+        requote_count: requoteCount,
+      });
+    }
 
     // ═══════════════════════════════════════════════════
     // 5) CREATE INITIAL TRADE RECORD
@@ -1393,6 +1482,8 @@ Deno.serve(async (req) => {
           fee_collected: feeCollected,
           fee_tx_hash: feeTxHash,
           cred_source: "per_user",
+          accepted_requote: Boolean(acceptedRequote),
+          requote_count: requoteCount,
         });
 
         // ── Fetch dynamic Polymarket fee rate ──

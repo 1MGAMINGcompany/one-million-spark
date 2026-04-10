@@ -86,6 +86,11 @@ interface FeedEntry {
   created_at: string;
 }
 
+interface RequoteAcceptanceContext {
+  baselinePrice: number;
+  cycleCount: number;
+}
+
 type StatusSection = "live" | "today" | "upcoming" | "past";
 
 const STATUS_CONFIG: Record<StatusSection, { icon: React.ReactNode; label: string; className: string; dotClassName: string }> = {
@@ -226,6 +231,7 @@ export default function FightPredictions() {
   const [geoBlocked, setGeoBlocked] = useState(false);
   const [geoBlockDismissed, setGeoBlockDismissed] = useState(false);
   const [requoteData, setRequoteData] = useState<RequoteData | null>(null);
+  const acceptedRequoteRef = useRef<RequoteAcceptanceContext | null>(null);
   const fightsRequestInFlight = useRef(false);
   const queuedFightsReload = useRef(false);
   const feedRequestInFlight = useRef(false);
@@ -519,9 +525,18 @@ export default function FightPredictions() {
   // 3. Verify on Polygon before recording in DB
   const handleSubmit = async (amountUsd: number) => {
     if (!selectedFight || !selectedPick || !isConnected || !address) return;
+    const acceptedRequote = acceptedRequoteRef.current;
     setSubmitting(true);
     resetAllowance();
-    dbg("predict:start", { fightId: selectedFight.id, pick: selectedPick, amountUsd, wallet: address });
+    dbg("predict:start", {
+      fightId: selectedFight.id,
+      pick: selectedPick,
+      amountUsd,
+      wallet: address,
+      accepted_requote: !!acceptedRequote,
+      requote_count: acceptedRequote?.cycleCount ?? 0,
+      quote_price: acceptedRequote?.baselinePrice ?? null,
+    });
 
     try {
       // Step 1: Get Privy access token
@@ -635,6 +650,13 @@ export default function FightPredictions() {
           fighter_pick: selectedPick,
           amount_usd: amountUsd,
           chain: "polygon",
+          ...(acceptedRequote
+            ? {
+                accepted_requote: true,
+                quote_price: acceptedRequote.baselinePrice,
+                requote_count: acceptedRequote.cycleCount,
+              }
+            : {}),
         }),
       });
       const data = await submitResp.json().catch(() => ({}));
@@ -643,8 +665,29 @@ export default function FightPredictions() {
         const backendMsg = data?.error || "Backend error";
         const errorCode = data?.error_code || "";
 
+        if (errorCode === "market_moving_too_fast") {
+          acceptedRequoteRef.current = null;
+          setRequoteData(null);
+          toast.error("Market moving too fast", {
+            description: "Please review a fresh quote and try again.",
+          });
+          setSubmitting(false);
+          return;
+        }
+
         // Requote flow: odds changed beyond tolerance
         if (errorCode === "price_changed_requote_required") {
+          if (acceptedRequote) {
+            acceptedRequoteRef.current = null;
+            setRequoteData(null);
+            toast.error("Market moving too fast", {
+              description: "Please review a fresh quote and try again.",
+            });
+            setSubmitting(false);
+            return;
+          }
+
+          acceptedRequoteRef.current = null;
           setRequoteData({
             old_price: data.old_price,
             new_price: data.new_price,
@@ -678,6 +721,9 @@ export default function FightPredictions() {
 
       dbg("predict:success", { trade_order_id: data?.trade_order_id, status: data?.trade_status });
 
+      acceptedRequoteRef.current = null;
+      setRequoteData(null);
+
       setLastTradeResult({
         trade_order_id: data?.trade_order_id,
         trade_status: data?.trade_status,
@@ -697,6 +743,7 @@ export default function FightPredictions() {
     } catch (err: any) {
       console.error("Prediction failed:", err);
       const msg: string = err.message || "Unknown error";
+      acceptedRequoteRef.current = null;
       dbg("predict:error", { message: msg });
 
       const isAuthError =
@@ -1091,7 +1138,7 @@ export default function FightPredictions() {
         <PredictionModal
           fight={selectedFight}
           pick={selectedPick}
-          onClose={() => { setSelectedFight(null); setSelectedPick(null); setShowPredictionSuccess(false); setLastTradeResult(null); setRequoteData(null); resetAllowance(); }}
+          onClose={() => { acceptedRequoteRef.current = null; setSelectedFight(null); setSelectedPick(null); setShowPredictionSuccess(false); setLastTradeResult(null); setRequoteData(null); resetAllowance(); }}
           onSubmit={(amt) => { setRequoteData(null); handleSubmit(amt); }}
           submitting={submitting || pmSessionLoading}
           showSuccess={showPredictionSuccess}
@@ -1100,7 +1147,14 @@ export default function FightPredictions() {
           approvalStep={allowanceState.step}
           approvalError={allowanceState.errorReason}
           requoteData={requoteData}
-          onAcceptRequote={() => setRequoteData(null)}
+          onAcceptRequote={() => {
+            if (!requoteData) return;
+            acceptedRequoteRef.current = {
+              baselinePrice: requoteData.new_price,
+              cycleCount: 1,
+            };
+            setRequoteData(null);
+          }}
         />
       )}
 
