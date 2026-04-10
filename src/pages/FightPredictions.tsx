@@ -13,7 +13,7 @@ import { dbg } from "@/lib/debugLog";
 import Navbar from "@/components/Navbar";
 import EventSection, { parseSport } from "@/components/predictions/EventSection";
 import predictionsHero from "@/assets/predictions-hero.jpeg";
-import GeoBlockScreen from "@/components/predictions/GeoBlockScreen";
+
 import EnableTradingBanner from "@/components/predictions/EnableTradingBanner";
 import PredictionModal from "@/components/predictions/PredictionModal";
 import ComingSoonCard from "@/components/predictions/ComingSoonCard";
@@ -228,8 +228,6 @@ export default function FightPredictions() {
   const [showPredictionSuccess, setShowPredictionSuccess] = useState(false);
   const [lastTradeResult, setLastTradeResult] = useState<TradeResult | null>(null);
   const [claimShareData, setClaimShareData] = useState<{ eventTitle: string; amountWon: number; fighterName?: string; sport?: string } | null>(null);
-  const [geoBlocked, setGeoBlocked] = useState(false);
-  const [geoBlockDismissed, setGeoBlockDismissed] = useState(false);
   const [requoteData, setRequoteData] = useState<RequoteData | null>(null);
   const acceptedRequoteRef = useRef<RequoteAcceptanceContext | null>(null);
   const fightsRequestInFlight = useRef(false);
@@ -237,7 +235,6 @@ export default function FightPredictions() {
   const feedRequestInFlight = useRef(false);
   const lastFeedLoadAt = useRef(0);
   const consecutiveFailures = useRef(0);
-  const readOnly = geoBlocked && geoBlockDismissed;
 
   usePolymarketPrices(!backendDegraded);
 

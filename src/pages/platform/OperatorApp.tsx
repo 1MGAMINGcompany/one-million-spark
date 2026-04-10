@@ -15,7 +15,7 @@ import { usePolymarketPrices } from "@/hooks/usePolymarketPrices";
 import { usePolymarketLivePrices } from "@/hooks/usePolymarketLivePrices";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Globe, Trophy, Loader2, ShieldCheck, Search, CalendarPlus, ChevronDown, Zap, Copy, ExternalLink, CreditCard, ArrowUpRight, AlertTriangle } from "lucide-react";
-import GeoBlockScreen from "@/components/predictions/GeoBlockScreen";
+
 import { toast } from "sonner";
 import { dbg } from "@/lib/debugLog";
 import { Button } from "@/components/ui/button";
@@ -182,11 +182,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [withdrawDest, setWithdrawDest] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
-  const [geoBlocked, setGeoBlocked] = useState(false);
-  const [geoBlockDismissed, setGeoBlockDismissed] = useState(false);
   const [requoteData, setRequoteData] = useState<RequoteData | null>(null);
   const acceptedRequoteRef = useRef<RequoteAcceptanceContext | null>(null);
-  const readOnly = geoBlocked && geoBlockDismissed;
 
   // Social share state
   const [shareOpen, setShareOpen] = useState(false);
