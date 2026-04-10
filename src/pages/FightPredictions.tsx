@@ -25,7 +25,7 @@ import SocialShareModal from "@/components/SocialShareModal";
 import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
 import { useMyReferralCode } from "@/hooks/useMyReferralCode";
 import type { Fight } from "@/components/predictions/FightCard";
-import type { TradeResult } from "@/components/predictions/tradeResultTypes";
+import type { TradeResult, RequoteData } from "@/components/predictions/tradeResultTypes";
 import { usePolymarketPrices } from "@/hooks/usePolymarketPrices";
 import { usePolymarketLivePrices } from "@/hooks/usePolymarketLivePrices";
 import { PREDICTION_VISIBILITY_VALUES } from "@/lib/predictionVisibility";
