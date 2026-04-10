@@ -27,6 +27,7 @@ const corsHeaders = {
 };
 
 const CLOB_BASE = "https://clob.polymarket.com";
+function getClobUrl(): string { return Deno.env.get("CLOB_PROXY_URL") || CLOB_BASE; }
 const SESSION_TTL_HOURS = 24;
 
 const json = (data: unknown, status = 200) =>
@@ -138,7 +139,7 @@ Deno.serve(async (req) => {
         });
 
         // Register with CLOB to get API credentials
-        const regRes = await fetch(`${CLOB_BASE}/auth/derive-api-key`, {
+        const regRes = await fetch(`${getClobUrl()}/auth/derive-api-key`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

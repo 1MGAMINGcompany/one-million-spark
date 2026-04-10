@@ -16,6 +16,7 @@ const corsHeaders = {
 };
 
 const CLOB_BASE = "https://clob.polymarket.com";
+function getClobUrl(): string { return Deno.env.get("CLOB_PROXY_URL") || CLOB_BASE; }
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -143,7 +144,7 @@ Deno.serve(async (req) => {
           ordersPath,
         );
 
-        const ordersRes = await fetch(`${CLOB_BASE}${ordersPath}`, { headers });
+        const ordersRes = await fetch(`${getClobUrl()}${ordersPath}`, { headers });
 
         if (!ordersRes.ok) {
           console.warn(`[polymarket-positions] CLOB orders fetch failed: ${ordersRes.status}`);
@@ -221,7 +222,7 @@ Deno.serve(async (req) => {
         path,
       );
 
-      const res = await fetch(`${CLOB_BASE}${path}`, { headers });
+      const res = await fetch(`${getClobUrl()}${path}`, { headers });
       if (!res.ok) {
         return json({ error: `CLOB returned ${res.status}` }, 502);
       }

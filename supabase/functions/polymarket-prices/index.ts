@@ -15,6 +15,7 @@ const corsHeaders = {
 };
 
 const CLOB_BASE = "https://clob.polymarket.com";
+function getClobUrl(): string { return Deno.env.get("CLOB_PROXY_URL") || CLOB_BASE; }
 const GAMMA_BASE = "https://gamma-api.polymarket.com";
 
 /** Parse real outcome names from Gamma outcomes JSON string */
@@ -154,9 +155,9 @@ Deno.serve(async (req) => {
           if (priceA === 0 && priceB === 0) {
             try {
               const [resA, resB] = await Promise.all([
-                fetch(`${CLOB_BASE}/price?token_id=${fight.polymarket_outcome_a_token}&side=BUY`),
+                fetch(`${getClobUrl()}/price?token_id=${fight.polymarket_outcome_a_token}&side=BUY`),
                 fight.polymarket_outcome_b_token
-                  ? fetch(`${CLOB_BASE}/price?token_id=${fight.polymarket_outcome_b_token}&side=BUY`)
+                  ? fetch(`${getClobUrl()}/price?token_id=${fight.polymarket_outcome_b_token}&side=BUY`)
                   : Promise.resolve(null),
               ]);
               if (resA.ok) {

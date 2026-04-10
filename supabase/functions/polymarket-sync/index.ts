@@ -1418,9 +1418,10 @@ Deno.serve(async (req) => {
       let updated = 0;
       for (const fight of pmFights) {
         try {
+          const clobUrl = Deno.env.get("CLOB_PROXY_URL") || "https://clob.polymarket.com";
           const [buyA, buyB] = await Promise.all([
-            fetch(`https://clob.polymarket.com/price?token_id=${fight.polymarket_outcome_a_token}&side=BUY`).then(r => r.json()),
-            fetch(`https://clob.polymarket.com/price?token_id=${fight.polymarket_outcome_b_token}&side=BUY`).then(r => r.json()),
+            fetch(`${clobUrl}/price?token_id=${fight.polymarket_outcome_a_token}&side=BUY`).then(r => r.json()),
+            fetch(`${clobUrl}/price?token_id=${fight.polymarket_outcome_b_token}&side=BUY`).then(r => r.json()),
           ]);
           const priceA = parseFloat(buyA?.price || "0");
           const priceB = parseFloat(buyB?.price || "0");

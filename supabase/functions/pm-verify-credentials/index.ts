@@ -7,6 +7,7 @@ const corsHeaders = {
 };
 
 const CLOB_HOST = "https://clob.polymarket.com";
+function getClobUrl(): string { return Deno.env.get("CLOB_PROXY_URL") || CLOB_HOST; }
 const CLOB_CHAIN_ID = 137;
 const CLOB_SIGNATURE_TYPE = 1;
 const CLOB_FUNDER = "0xeb51af6869298f56288671b00f2e04b1a0394e3d";
@@ -106,7 +107,7 @@ Deno.serve(async (req) => {
     console.log("[pm-verify-credentials] ClobClient runtime config", runtimeDebug);
 
     const client = new ClobClient(
-      CLOB_HOST,
+      getClobUrl(),
       CLOB_CHAIN_ID,
       signer,
       apiCreds,
@@ -147,7 +148,7 @@ Deno.serve(async (req) => {
 
   // 3. Test unauthenticated market fetch (sanity)
   try {
-    const resp = await fetch("https://clob.polymarket.com/markets?limit=1");
+    const resp = await fetch(`${getClobUrl()}/markets?limit=1`);
     const body = await resp.text();
     results.clob_markets_public = {
       status: resp.status,
