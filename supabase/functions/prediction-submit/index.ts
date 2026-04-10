@@ -1171,7 +1171,7 @@ Deno.serve(async (req) => {
               tolerance_bps: effectiveSlippage,
               accepted_requote: Boolean(acceptedRequote),
               requote_count: requoteCount,
-              quote_source: usingAcceptedRequoteBaseline ? "accepted_requote" : "cached_fight_price",
+              quote_source: usingClientQuote ? "client_quote" : "cached_fight_price",
             });
 
             if (slippageBps > effectiveSlippage) {
@@ -1203,7 +1203,7 @@ Deno.serve(async (req) => {
                 slippage_bps: slippageBps,
                 max_bps: effectiveSlippage,
                 updated_payout: updatedPayout,
-                quote_source: usingAcceptedRequoteBaseline ? "accepted_requote" : "cached_fight_price",
+                quote_source: usingClientQuote ? "client_quote" : "cached_fight_price",
                 requote_count: requoteCount,
               });
               return json({
