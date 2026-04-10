@@ -1,9 +1,9 @@
-import { useState } from "react";
-import { X, Loader2, Share2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, Loader2, Share2, AlertTriangle, RefreshCw } from "lucide-react";
 import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
 import { getTeamLogo } from "@/lib/teamLogos";
 import type { Fight } from "@/components/predictions/FightCard";
-import type { TradeResult } from "@/components/predictions/tradeResultTypes";
+import type { TradeResult, RequoteData } from "@/components/predictions/tradeResultTypes";
 import type { ApprovalStep } from "@/hooks/useAllowanceGate";
 import ApprovalStepIndicator from "@/components/predictions/ApprovalStepIndicator";
 
@@ -48,6 +48,8 @@ interface Props {
   themeColor?: string;
   operatorBrandName?: string;
   onSharePick?: () => void;
+  requoteData?: RequoteData | null;
+  onAcceptRequote?: () => void;
 }
 
 export default function SimplePredictionModal({
