@@ -61,6 +61,8 @@ export default function PredictionModal({
   operatorBrandName,
   operatorLogoUrl,
   operatorSubdomain,
+  requoteData,
+  onAcceptRequote,
 }: {
   fight: Fight;
   pick: "fighter_a" | "fighter_b";
@@ -69,13 +71,14 @@ export default function PredictionModal({
   submitting: boolean;
   showSuccess?: boolean;
   wallet?: string;
-  wallet?: string;
   tradeResult?: TradeResult | null;
   approvalStep?: ApprovalStep;
   approvalError?: string | null;
   operatorBrandName?: string;
   operatorLogoUrl?: string | null;
   operatorSubdomain?: string;
+  requoteData?: RequoteData | null;
+  onAcceptRequote?: () => void;
 }) {
   const referralCode = useMyReferralCode(wallet ?? null);
   const { usdc_balance, usdc_balance_formatted, is_loading: balanceLoading } = usePolygonUSDC();
