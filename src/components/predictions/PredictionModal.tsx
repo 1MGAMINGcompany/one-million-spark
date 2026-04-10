@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle2, Eye, Clock, Trophy, Coins, Share2, Copy, AlertTriangle, Wallet } from "lucide-react";
+import { Loader2, CheckCircle2, Eye, Clock, Trophy, Coins, Share2, Copy, AlertTriangle, Wallet, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { Fight } from "./FightCard";
 import { useMyReferralCode } from "@/hooks/useMyReferralCode";
@@ -8,6 +8,7 @@ import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
 import { usePolygonBalances, type FundingState } from "@/hooks/usePolygonBalances";
 import SocialShareModal from "@/components/SocialShareModal";
 import { SOCIAL_SHARE_ENABLED } from "@/lib/socialShareConfig";
+import type { RequoteData } from "./tradeResultTypes";
 import PredictionSuccessScreen from "./PredictionSuccessScreen";
 import TradeTicket from "./TradeTicket";
 import type { TradeResult } from "./tradeResultTypes";
@@ -67,6 +68,7 @@ export default function PredictionModal({
   onSubmit: (amount: number) => void;
   submitting: boolean;
   showSuccess?: boolean;
+  wallet?: string;
   wallet?: string;
   tradeResult?: TradeResult | null;
   approvalStep?: ApprovalStep;
