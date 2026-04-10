@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
     console.log("[pm-verify-credentials] ClobClient runtime config", runtimeDebug);
 
     const client = new ClobClient(
-      CLOB_HOST,
+      getClobUrl(),
       CLOB_CHAIN_ID,
       signer,
       apiCreds,
