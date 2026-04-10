@@ -76,7 +76,7 @@ async function generateClobHmac(
  */
 async function getSellPrice(tokenId: string): Promise<number | null> {
   try {
-    const res = await fetch(`${CLOB_BASE}/price?token_id=${tokenId}&side=sell`);
+    const res = await fetch(`${getClobUrl()}/price?token_id=${tokenId}&side=sell`);
     if (!res.ok) return null;
     const data = await res.json();
     return data?.price ? Number(data.price) : null;
@@ -308,7 +308,7 @@ Deno.serve(async (req) => {
     const path = "/order";
     const hmac = await generateClobHmac(session.pm_api_secret, timestamp, "POST", path, orderBody);
 
-    const res = await fetch(`${CLOB_BASE}${path}`, {
+    const res = await fetch(`${getClobUrl()}${path}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

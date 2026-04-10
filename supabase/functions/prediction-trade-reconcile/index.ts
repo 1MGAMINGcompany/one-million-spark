@@ -167,7 +167,7 @@ Deno.serve(async (req) => {
       try {
         const path = `/order/${order.polymarket_order_id}`;
         const headers = await clobHeaders(creds, "GET", path);
-        const res = await fetch(`${CLOB_BASE}${path}`, { headers });
+        const res = await fetch(`${getClobUrl()}${path}`, { headers });
 
         if (!res.ok) {
           // API error — skip this order, don't fail batch
