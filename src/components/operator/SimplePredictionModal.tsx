@@ -65,6 +65,8 @@ export default function SimplePredictionModal({
   themeColor = "#3b82f6",
   operatorBrandName,
   onSharePick,
+  requoteData,
+  onAcceptRequote,
 }: Props) {
   const [amount, setAmount] = useState(10);
   const [customAmount, setCustomAmount] = useState("");
