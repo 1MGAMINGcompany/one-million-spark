@@ -898,7 +898,7 @@ export default function FightPredictions() {
         }}
         event={group.event}
         isStaleLive={staleLiveKeys.has(eventName)}
-        readOnly={readOnly}
+        readOnly={false}
       />
     ));
 
