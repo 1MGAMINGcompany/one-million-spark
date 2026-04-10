@@ -1126,15 +1126,22 @@ Deno.serve(async (req) => {
           if (livePrice > 0) {
             const slippageBps = Math.abs(livePrice - expectedPrice) / expectedPrice * 10_000;
             if (slippageBps > effectiveSlippage) {
-              await auditLog(supabase, null, normalizedWallet, "slippage_rejected", { fight_id }, {
+              // Calculate updated payout estimate at the new price
+              const updatedShares = net_amount_usdc / livePrice;
+              const updatedPayout = updatedShares; // 1 share = $1 at settlement
+
+              await auditLog(supabase, null, normalizedWallet, "requote_required", { fight_id }, {
                 expected: expectedPrice, live: livePrice, slippage_bps: slippageBps, max_bps: effectiveSlippage,
+                updated_payout: updatedPayout,
               });
               return json({
-                error: "Price has moved too much. Please try again.",
-                error_code: "slippage_exceeded",
-                expected_price: expectedPrice,
-                live_price: livePrice,
-              }, 400);
+                error: "Odds have changed since you opened this ticket.",
+                error_code: "price_changed_requote_required",
+                old_price: expectedPrice,
+                new_price: livePrice,
+                updated_payout: Number(updatedPayout.toFixed(4)),
+                slippage_bps: Math.round(slippageBps),
+              }, 409);
             }
           }
         }
