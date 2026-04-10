@@ -318,42 +318,38 @@ Deno.serve(async (req) => {
     }
 
     // ══════════════════════════════════════════════════════════════════
-    // Phase 5: Stale-live diagnostic (log only, no mutations)
-    // Only flag fights that are truly unresolved
+    // Phase 5: Stale-live cleanup — lock fights stuck in "live" > 6h
     // ══════════════════════════════════════════════════════════════════
-    const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60 * 1000).toISOString();
-    const { data: staleLive } = await supabase
-      .from("prediction_events")
-      .select("id, event_name, event_date, source_provider, status")
-      .eq("status", "approved")
+    const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000).toISOString();
+    const { data: staleLiveFights } = await supabase
+      .from("prediction_fights")
+      .select("id, event_id, event_name, event_date, status")
+      .eq("status", "live")
+      .is("winner", null)
       .not("event_date", "is", null)
-      .lte("event_date", threeHoursAgo);
+      .lte("event_date", sixHoursAgo)
+      .limit(200);
 
-    if (staleLive && staleLive.length > 0) {
-      for (const evt of staleLive) {
-        const { data: liveFights } = await supabase
+    if (staleLiveFights && staleLiveFights.length > 0) {
+      for (const fight of staleLiveFights) {
+        console.warn(`[STALE_CLEANUP] Locking stale live fight id=${fight.id} event=${fight.event_name}`);
+        await supabase
           .from("prediction_fights")
-          .select("id")
-          .eq("event_id", evt.id)
-          .eq("status", "live")
-          .is("winner", null)
-          .limit(1);
-
-        if (liveFights && liveFights.length > 0) {
-          console.warn(`[STALE_EVENT] event_id=${evt.id} event_name=${evt.event_name}`);
-          await supabase.from("automation_logs").insert({
-            action: "stale_live_detected",
-            event_id: evt.id,
-            source: "prediction-schedule-worker",
-            details: {
-              event_name: evt.event_name,
-              provider: evt.source_provider,
-              event_date: evt.event_date,
-              server_time: nowISO,
-              reason: "event has unresolved live fights >3h past event_date",
-            },
-          });
-        }
+          .update({ status: "locked" })
+          .eq("id", fight.id)
+          .eq("status", "live");
+        await supabase.from("automation_logs").insert({
+          action: "stale_live_locked",
+          fight_id: fight.id,
+          event_id: fight.event_id,
+          source: "prediction-schedule-worker",
+          details: {
+            event_name: fight.event_name,
+            event_date: fight.event_date,
+            server_time: nowISO,
+            reason: "fight stuck in live status >6h past event_date, auto-locked",
+          },
+        });
       }
     }
 
