@@ -552,7 +552,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         }
 
         if (errorCode === "geo_blocked" || errorCode === "clob_geo_blocked") {
-          setGeoBlocked(true);
+          toast.error("Trading is not available in your region");
           setSubmitting(false);
           return;
         }
@@ -663,7 +663,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok || data?.error) {
-        if (data?.error_code === "clob_geo_blocked") { setGeoBlocked(true); setSelling(false); return; }
+        if (data?.error_code === "clob_geo_blocked") { toast.error("Trading is not available in your region"); setSelling(false); return; }
         throw new Error(data?.error || "Sell failed");
       }
       toast.success(t("operator.sold"), { description: `$${(data.expected_usdc || 0).toFixed(2)}` });
@@ -766,18 +766,9 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         />
       )}
 
-      {/* Geo-block banner */}
-      {geoBlocked && !geoBlockDismissed && (
-        <div className="max-w-4xl mx-auto px-4 pt-3">
-          <GeoBlockScreen
-            wallet={address || undefined}
-            onDismiss={() => setGeoBlockDismissed(true)}
-            onExploreReadOnly={() => setGeoBlockDismissed(true)}
-          />
-        </div>
-      )}
+      {/* Geo-block: compliance enforced by backend only, UI stays interactive */}
 
-      {isConnected && !geoBlocked && (
+      {isConnected && (
         <div className="max-w-4xl mx-auto px-4 pt-3">
           <EnableTradingBanner
             hasSession={hasSession}

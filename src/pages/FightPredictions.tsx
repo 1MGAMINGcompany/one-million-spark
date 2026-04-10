@@ -708,7 +708,7 @@ export default function FightPredictions() {
         dbg("predict:backend_error", { backendMsg, errorCode, isRelayerError, isSetupRequired });
         const isGeoBlocked = errorCode === "geo_blocked" || errorCode === "clob_geo_blocked" || backendMsg.toLowerCase().includes("region") || backendMsg.toLowerCase().includes("restricted") || backendMsg.toLowerCase().includes("geo");
         if (isGeoBlocked) {
-          setGeoBlocked(true);
+          toast.error("Trading is not available in your region");
           setSubmitting(false);
           return;
         }
@@ -835,8 +835,7 @@ export default function FightPredictions() {
       const data = await resp.json();
       if (!resp.ok || data.error) {
         if (data.error_code === "clob_geo_blocked") {
-          setGeoBlocked(true);
-          toast.error(t("geoBlock.title"));
+          toast.error("Trading is not available in your region");
         } else {
           toast.error(t("operator.sellFailed", "Sell failed"), { description: data.error });
         }
@@ -963,14 +962,7 @@ export default function FightPredictions() {
 
       {/* Content — organized by status sections */}
       <div className="max-w-4xl mx-auto px-4 pb-8 space-y-6">
-        {/* Geo-block banner */}
-        {geoBlocked && !geoBlockDismissed && (
-          <GeoBlockScreen
-            wallet={address || undefined}
-            onDismiss={() => setGeoBlockDismissed(true)}
-            onExploreReadOnly={() => setGeoBlockDismissed(true)}
-          />
-        )}
+        {/* Geo-block: compliance enforced by backend only, UI stays interactive */}
         {isConnected && (
           <EnableTradingBanner
             hasSession={hasSession}
