@@ -7,6 +7,7 @@ const corsHeaders = {
 };
 
 const CLOB_HOST = "https://clob.polymarket.com";
+function getClobUrl(): string { return Deno.env.get("CLOB_PROXY_URL") || CLOB_HOST; }
 const CLOB_CHAIN_ID = 137;
 const CLOB_SIGNATURE_TYPE = 1;
 const CLOB_FUNDER = "0xeb51af6869298f56288671b00f2e04b1a0394e3d";
