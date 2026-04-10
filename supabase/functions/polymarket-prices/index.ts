@@ -155,9 +155,9 @@ Deno.serve(async (req) => {
           if (priceA === 0 && priceB === 0) {
             try {
               const [resA, resB] = await Promise.all([
-                fetch(`${CLOB_BASE}/price?token_id=${fight.polymarket_outcome_a_token}&side=BUY`),
+                fetch(`${getClobUrl()}/price?token_id=${fight.polymarket_outcome_a_token}&side=BUY`),
                 fight.polymarket_outcome_b_token
-                  ? fetch(`${CLOB_BASE}/price?token_id=${fight.polymarket_outcome_b_token}&side=BUY`)
+                  ? fetch(`${getClobUrl()}/price?token_id=${fight.polymarket_outcome_b_token}&side=BUY`)
                   : Promise.resolve(null),
               ]);
               if (resA.ok) {

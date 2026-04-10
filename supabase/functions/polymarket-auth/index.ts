@@ -139,7 +139,7 @@ Deno.serve(async (req) => {
         });
 
         // Register with CLOB to get API credentials
-        const regRes = await fetch(`${CLOB_BASE}/auth/derive-api-key`, {
+        const regRes = await fetch(`${getClobUrl()}/auth/derive-api-key`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

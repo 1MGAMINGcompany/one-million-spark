@@ -144,7 +144,7 @@ Deno.serve(async (req) => {
           ordersPath,
         );
 
-        const ordersRes = await fetch(`${CLOB_BASE}${ordersPath}`, { headers });
+        const ordersRes = await fetch(`${getClobUrl()}${ordersPath}`, { headers });
 
         if (!ordersRes.ok) {
           console.warn(`[polymarket-positions] CLOB orders fetch failed: ${ordersRes.status}`);
@@ -222,7 +222,7 @@ Deno.serve(async (req) => {
         path,
       );
 
-      const res = await fetch(`${CLOB_BASE}${path}`, { headers });
+      const res = await fetch(`${getClobUrl()}${path}`, { headers });
       if (!res.ok) {
         return json({ error: `CLOB returned ${res.status}` }, 502);
       }
