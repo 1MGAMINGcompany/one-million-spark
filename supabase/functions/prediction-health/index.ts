@@ -76,9 +76,11 @@ async function getErc20Allowance(owner: string, spender: string, token: string):
   return { allowance: null, error: "all_rpcs_failed" };
 }
 
+function getClobUrl(): string { return Deno.env.get("CLOB_PROXY_URL") || "https://clob.polymarket.com"; }
+
 async function testClobConnectivity(): Promise<{ ok: boolean; error?: string }> {
   try {
-    const res = await fetch("https://clob.polymarket.com/time", { method: "GET" });
+    const res = await fetch(`${getClobUrl()}/time`, { method: "GET" });
     if (res.ok) return { ok: true };
     return { ok: false, error: `status_${res.status}` };
   } catch (e: any) {
