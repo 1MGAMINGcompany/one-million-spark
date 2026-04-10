@@ -179,6 +179,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [geoBlocked, setGeoBlocked] = useState(false);
   const [geoBlockDismissed, setGeoBlockDismissed] = useState(false);
+  const [requoteData, setRequoteData] = useState<RequoteData | null>(null);
   const readOnly = geoBlocked && geoBlockDismissed;
 
   // Social share state

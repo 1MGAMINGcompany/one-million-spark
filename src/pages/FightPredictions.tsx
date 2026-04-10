@@ -225,6 +225,7 @@ export default function FightPredictions() {
   const [claimShareData, setClaimShareData] = useState<{ eventTitle: string; amountWon: number; fighterName?: string; sport?: string } | null>(null);
   const [geoBlocked, setGeoBlocked] = useState(false);
   const [geoBlockDismissed, setGeoBlockDismissed] = useState(false);
+  const [requoteData, setRequoteData] = useState<RequoteData | null>(null);
   const fightsRequestInFlight = useRef(false);
   const queuedFightsReload = useRef(false);
   const feedRequestInFlight = useRef(false);
