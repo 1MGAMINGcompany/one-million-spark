@@ -27,6 +27,11 @@ const corsHeaders = {
 
 const CLOB_BASE = "https://clob.polymarket.com";
 
+/** Use proxy URL if configured to avoid geo-blocking on edge function IPs */
+function getClobUrl(): string {
+  return Deno.env.get("CLOB_PROXY_URL") || CLOB_BASE;
+}
+
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
@@ -221,7 +226,8 @@ async function deriveClobApiCreds(
     const createHeaders = await buildClobAuthHeaders(tradingAccount, 0);
     console.log("[polymarket-user-setup] Attempting POST /auth/api-key (create)");
 
-    const createRes = await fetch(`${CLOB_BASE}/auth/api-key`, {
+    const clobUrl = getClobUrl();
+    const createRes = await fetch(`${clobUrl}/auth/api-key`, {
       method: "POST",
       headers: createHeaders,
     });
@@ -244,7 +250,7 @@ async function deriveClobApiCreds(
     console.log(`[polymarket-user-setup] POST /auth/api-key returned ${createStatus}, trying GET /auth/derive-api-key`);
 
     const deriveHeaders = await buildClobAuthHeaders(tradingAccount, 0);
-    const deriveRes = await fetch(`${CLOB_BASE}/auth/derive-api-key`, {
+    const deriveRes = await fetch(`${clobUrl}/auth/derive-api-key`, {
       method: "GET",
       headers: deriveHeaders,
     });

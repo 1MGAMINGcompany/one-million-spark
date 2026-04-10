@@ -13,6 +13,11 @@ import { polygon } from "npm:viem@2/chains";
  * Lifecycle: requested → submitted → filled/partial_fill/failed
  * Explicit fee model: fee collected via Privy server-side USDC transfer to treasury.
  * Builder wallet is NEVER used as the user's trading identity.
+ *
+ * April 2026 fixes:
+ * - Nonce mutex: sequential relayer txs use incremented nonce within same request
+ * - CLOB proxy: route order submission through CLOB_PROXY_URL to avoid geo-block
+ * - Shared credential fallback: REMOVED — per-user sessions only
  */
 
 const corsHeaders = {
@@ -23,7 +28,6 @@ const corsHeaders = {
 
 const CLOB_BASE = "https://clob.polymarket.com";
 const MIN_PREDICTION_USD = 1.0;
-// Fee defaults removed — source-aware logic below replaces legacy constant
 
 /** Only these statuses allow new trades */
 const TRADABLE_STATUSES = new Set(["open"]);
@@ -101,8 +105,18 @@ async function generateClobHmac(
 }
 
 /**
+ * Resolve the effective CLOB base URL.
+ * If CLOB_PROXY_URL is set, route through the proxy to avoid geo-blocking.
+ * Otherwise use the direct Polymarket endpoint.
+ */
+function getClobUrl(): string {
+  return Deno.env.get("CLOB_PROXY_URL") || CLOB_BASE;
+}
+
+/**
  * Build an EIP-712 signed Polymarket CLOB order and submit it.
  * Uses the user's derived trading key for order signing and L2 HMAC for API auth.
+ * Routes through CLOB_PROXY_URL if configured to avoid geo-blocking.
  */
 async function buildAndSubmitClobOrder(
   session: {
@@ -181,7 +195,10 @@ async function buildAndSubmitClobOrder(
     const path = "/order";
     const hmac = await generateClobHmac(session.pm_api_secret, timestamp, "POST", path, orderBody);
 
-    const res = await fetch(`${CLOB_BASE}${path}`, {
+    const clobUrl = getClobUrl();
+    console.log(`[prediction-submit] Submitting CLOB order via ${clobUrl}`);
+
+    const res = await fetch(`${clobUrl}${path}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -291,10 +308,100 @@ async function polygonRpcCall(
   return { error: "all_rpcs_failed" };
 }
 
+// ── Nonce Manager ──────────────────────────────────────────
+// Tracks the relayer's nonce within a single request to prevent
+// the second tx (fundDerivedWallet) from colliding with the first (fee collection).
+// Uses "pending" mempool nonce as baseline, then increments locally.
+
+class RelayerNonceManager {
+  private currentNonce: number | null = null;
+  private relayerAddress: string;
+
+  constructor(relayerAddress: string) {
+    this.relayerAddress = relayerAddress;
+  }
+
+  async getNextNonce(): Promise<{ nonce: number; error?: string }> {
+    if (this.currentNonce !== null) {
+      // Already used one nonce in this request — increment
+      this.currentNonce++;
+      console.log(`[nonce-manager] Using incremented nonce: ${this.currentNonce}`);
+      return { nonce: this.currentNonce };
+    }
+
+    // First call: fetch from chain using "pending" to include mempool txs
+    const nonceRpc = await polygonRpcCall({
+      jsonrpc: "2.0", id: 2,
+      method: "eth_getTransactionCount",
+      params: [this.relayerAddress, "pending"],
+    });
+
+    if (nonceRpc.error || nonceRpc.result == null) {
+      console.error("[nonce-manager] Nonce RPC failed:", nonceRpc.error);
+      return { nonce: -1, error: "rpc_nonce_unavailable" };
+    }
+
+    this.currentNonce = Number(BigInt(nonceRpc.result));
+    console.log(`[nonce-manager] Initial pending nonce: ${this.currentNonce}`);
+    return { nonce: this.currentNonce };
+  }
+}
+
+/**
+ * Send a relayer transaction with retry logic for nonce errors.
+ * Retries up to 2 times on "nonce too low" or "replacement" errors.
+ */
+async function sendRelayerTxWithRetry(
+  walletClient: ReturnType<typeof createWalletClient>,
+  txParams: {
+    to: `0x${string}`;
+    data: `0x${string}`;
+    gas: bigint;
+    gasPrice: bigint;
+    nonce: number;
+    value: bigint;
+  },
+  nonceManager: RelayerNonceManager,
+  label: string,
+): Promise<{ txHash: string; nonce: number }> {
+  let lastError: Error | null = null;
+  let currentNonce = txParams.nonce;
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      console.log(`[relayer-tx] ${label} attempt=${attempt} nonce=${currentNonce}`);
+      const txHash = await walletClient.sendTransaction({
+        ...txParams,
+        nonce: currentNonce,
+      });
+      console.log(`[relayer-tx] ${label} SUCCESS tx=${txHash} nonce=${currentNonce}`);
+      return { txHash, nonce: currentNonce };
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      const msg = lastError.message.toLowerCase();
+      const isNonceError = msg.includes("nonce") || msg.includes("replacement") || msg.includes("already known");
+
+      if (isNonceError && attempt < 2) {
+        console.warn(`[relayer-tx] ${label} nonce error (attempt ${attempt}), retrying with nonce+1: ${lastError.message.substring(0, 150)}`);
+        // Re-fetch fresh nonce from pending pool
+        const fresh = await nonceManager.getNextNonce();
+        if (fresh.error) throw lastError;
+        currentNonce = fresh.nonce;
+        continue;
+      }
+
+      throw lastError;
+    }
+  }
+
+  throw lastError!;
+}
+
 async function collectFeeViaRelayer(
   userWallet: string,
   feeUsdc: number,
-  walletEoa?: string,
+  walletEoa: string | undefined,
+  nonceManager: RelayerNonceManager,
 ): Promise<{ success: boolean; txHash?: string; error?: string; error_code?: string; from_address?: string }> {
   const relayerKey = Deno.env.get("FEE_RELAYER_PRIVATE_KEY");
   if (!relayerKey) {
@@ -357,18 +464,10 @@ async function collectFeeViaRelayer(
       ],
     });
 
-    const nonceRpc = await polygonRpcCall({
-      jsonrpc: "2.0", id: 2,
-      method: "eth_getTransactionCount",
-      params: [account.address, "latest"],
-    });
-
-    if (nonceRpc.error || nonceRpc.result == null) {
-      console.error("[prediction-submit] Nonce RPC failed:", nonceRpc.error);
-      return { success: false, error: "rpc_nonce_unavailable", error_code: "rpc_nonce_unavailable" };
+    const { nonce, error: nonceError } = await nonceManager.getNextNonce();
+    if (nonceError) {
+      return { success: false, error: nonceError, error_code: "rpc_nonce_unavailable" };
     }
-
-    const nonce = Number(BigInt(nonceRpc.result));
 
     const gasPriceRpc = await polygonRpcCall({
       jsonrpc: "2.0", id: 3,
@@ -390,17 +489,22 @@ async function collectFeeViaRelayer(
       transport: http(workingRpc),
     });
 
-    const txHash = await walletClient.sendTransaction({
-      to: USDC_CONTRACT as `0x${string}`,
-      data: txData,
-      gas: 100_000n,
-      gasPrice: gasPrice * 12n / 10n,
-      nonce,
-      value: 0n,
-    });
+    const result = await sendRelayerTxWithRetry(
+      walletClient,
+      {
+        to: USDC_CONTRACT as `0x${string}`,
+        data: txData as `0x${string}`,
+        gas: 100_000n,
+        gasPrice: gasPrice * 12n / 10n,
+        nonce,
+        value: 0n,
+      },
+      nonceManager,
+      "fee_collection",
+    );
 
-    console.log(`[prediction-submit] Fee collected via relayer: ${txHash}, fee=$${feeUsdc}, from=${fromAddress}, rpc=${workingRpc}`);
-    return { success: true, txHash, from_address: fromAddress };
+    console.log(`[prediction-submit] Fee collected via relayer: ${result.txHash}, fee=$${feeUsdc}, from=${fromAddress}, nonce=${result.nonce}, rpc=${workingRpc}`);
+    return { success: true, txHash: result.txHash, from_address: fromAddress };
   } catch (err) {
     console.error("[prediction-submit] Relayer transferFrom failed:", err);
     return {
@@ -414,12 +518,14 @@ async function collectFeeViaRelayer(
 /**
  * Transfer USDC.e from user's Privy wallet to their derived trading EOA/Safe.
  * Uses the relayer to execute transferFrom (requires prior USDC.e approval from user).
+ * Uses the shared NonceManager to prevent nonce collision with fee collection.
  */
 async function fundDerivedWallet(
   userWallet: string,
   derivedAddress: string,
   amountUsdc: number,
-  walletEoa?: string,
+  walletEoa: string | undefined,
+  nonceManager: RelayerNonceManager,
 ): Promise<{ success: boolean; txHash?: string; error?: string }> {
   const relayerKey = Deno.env.get("FEE_RELAYER_PRIVATE_KEY");
   if (!relayerKey) {
@@ -476,14 +582,9 @@ async function fundDerivedWallet(
       ],
     });
 
-    const nonceRpc = await polygonRpcCall({
-      jsonrpc: "2.0", id: 2,
-      method: "eth_getTransactionCount",
-      params: [account.address, "latest"],
-    });
-
-    if (nonceRpc.error || nonceRpc.result == null) {
-      return { success: false, error: "rpc_nonce_unavailable" };
+    const { nonce, error: nonceError } = await nonceManager.getNextNonce();
+    if (nonceError) {
+      return { success: false, error: nonceError };
     }
 
     const gasPriceRpc = await polygonRpcCall({
@@ -503,17 +604,22 @@ async function fundDerivedWallet(
       transport: http(workingRpc),
     });
 
-    const txHash = await walletClient.sendTransaction({
-      to: USDC_CONTRACT as `0x${string}`,
-      data: txData,
-      gas: 100_000n,
-      gasPrice: BigInt(gasPriceRpc.result) * 12n / 10n,
-      nonce: Number(BigInt(nonceRpc.result)),
-      value: 0n,
-    });
+    const result = await sendRelayerTxWithRetry(
+      walletClient,
+      {
+        to: USDC_CONTRACT as `0x${string}`,
+        data: txData as `0x${string}`,
+        gas: 100_000n,
+        gasPrice: BigInt(gasPriceRpc.result) * 12n / 10n,
+        nonce,
+        value: 0n,
+      },
+      nonceManager,
+      "fund_derived_wallet",
+    );
 
-    console.log(`[prediction-submit] Funded derived wallet: ${txHash}, amount=$${amountUsdc}, from=${fromAddress}, to=${derivedAddress}`);
-    return { success: true, txHash };
+    console.log(`[prediction-submit] Funded derived wallet: ${result.txHash}, amount=$${amountUsdc}, from=${fromAddress}, to=${derivedAddress}, nonce=${result.nonce}`);
+    return { success: true, txHash: result.txHash };
   } catch (err) {
     console.error("[prediction-submit] Fund derived wallet failed:", err);
     return { success: false, error: err instanceof Error ? err.message : String(err) };
@@ -656,9 +762,6 @@ Deno.serve(async (req) => {
     } = body;
 
     normalizedWallet = wallet ? String(wallet).trim().toLowerCase() : null;
-
-    // Wallet verification is now done via prediction_accounts table (DID → wallet binding)
-    // rather than a live Privy API call, since the REST endpoint is unreliable.
 
     // ═══════════════════════════════════════════════════
     // 1) LOAD SYSTEM CONTROLS
@@ -824,8 +927,6 @@ Deno.serve(async (req) => {
 
     // ═══════════════════════════════════════════════════
     // VALIDATE FIGHT STATUS (tradability gate)
-    // Polymarket-backed events allow "live" and "locked" for in-play trading;
-    // the downstream polymarket_end_date + grace window is the authoritative gate.
     // ═══════════════════════════════════════════════════
     const isPolymarketEvent = !!(fight.polymarket_market_id && fight.polymarket_outcome_a_token);
     const polymarketInPlay = isPolymarketEvent && (fight.status === "live" || fight.status === "locked");
@@ -847,9 +948,7 @@ Deno.serve(async (req) => {
     }
 
     // ═══════════════════════════════════════════════════
-    // EVENT DATE GUARD — reject trades on started events
-    // Skipped for Polymarket-backed events: their markets
-    // intentionally stay open during live games (in-play trading).
+    // EVENT DATE GUARD
     // ═══════════════════════════════════════════════════
     const hasPolymarketRouting = !!(fight.polymarket_market_id && fight.polymarket_outcome_a_token);
 
@@ -868,7 +967,6 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Also check if sibling fights are locked/live (event underway even if date not past)
       const { count: lockedSiblings } = await supabase
         .from("prediction_fights")
         .select("id", { count: "exact", head: true })
@@ -923,15 +1021,12 @@ Deno.serve(async (req) => {
       }
 
       if (fight.polymarket_active === false) {
-        // Log as warning but don't reject — polymarket_active flips to false when games start.
-        // The polymarket_end_date + 6h grace window below is the authoritative expiration gate.
         console.warn(`[prediction-submit] polymarket_active=false for fight ${fight_id}, allowing in-play trading`);
       }
 
       if (fight.polymarket_end_date) {
         const pmEnd = new Date(fight.polymarket_end_date);
         const evDate = fight.event_date ? new Date(fight.event_date) : null;
-        // If polymarket_end_date ≈ event_date (start time), extend by 6 hours for in-play trading
         const isSameAsStart = evDate && Math.abs(pmEnd.getTime() - evDate.getTime()) < 60_000;
         const effectiveClose = isSameAsStart
           ? new Date(pmEnd.getTime() + 6 * 3600_000)
@@ -946,11 +1041,9 @@ Deno.serve(async (req) => {
         ? new Date(fight.polymarket_last_synced_at).getTime()
         : 0;
       const priceAge = Date.now() - lastSynced;
-      // For live/locked Polymarket events, use a relaxed 30-minute staleness threshold
-      // since price sync now covers these but may still lag during heavy load.
       const effectiveStaleness = polymarketInPlay
-        ? 30 * 60 * 1000  // 30 minutes for in-play
-        : MAX_PRICE_STALENESS_MS; // 10 minutes for pre-game
+        ? 30 * 60 * 1000
+        : MAX_PRICE_STALENESS_MS;
       if (lastSynced === 0 || priceAge > effectiveStaleness) {
         await auditLog(supabase, null, normalizedWallet, "stale_quote_rejected", { fight_id }, {
           error_code: "stale_quote",
@@ -963,10 +1056,8 @@ Deno.serve(async (req) => {
     }
 
     // ═══════════════════════════════════════════════════
-    // 5b) EARLY PM SESSION CHECK — before any fee collection
-    //     Fall back to shared credentials if no per-user session
+    // 5b) PM SESSION CHECK — per-user ONLY, no shared fallback
     // ═══════════════════════════════════════════════════
-    let useSharedPmCreds = false;
     if (isPolymarketBacked) {
       const { data: pmSession } = await supabase
         .from("polymarket_user_sessions")
@@ -979,48 +1070,33 @@ Deno.serve(async (req) => {
       const hasPerUserSession = pmSession && isSessionTradeReady(pmSession);
 
       if (!hasPerUserSession) {
-        // Check if shared (platform) CLOB credentials are available as fallback
-        const sharedApiKey = Deno.env.get("PM_API_KEY");
-        const sharedApiSecret = Deno.env.get("PM_API_SECRET");
-        const sharedPassphrase = Deno.env.get("PM_PASSPHRASE");
-        const sharedTradingKey = Deno.env.get("PM_TRADING_KEY");
-
-        if (sharedApiKey && sharedApiSecret && sharedPassphrase && sharedTradingKey) {
-          useSharedPmCreds = true;
-          await auditLog(supabase, null, normalizedWallet, "pm_using_shared_creds", { fight_id }, {
-            reason: pmSession ? "per_user_session_not_ready" : "no_per_user_session",
-          });
-          console.log(`[prediction-submit] No per-user session for ${normalizedWallet} — using shared CLOB credentials`);
-        } else {
-          await auditLog(supabase, null, normalizedWallet, "pm_early_session_check_failed", { fight_id }, {
-            reason: "no_trading_session_and_no_shared_creds",
-          });
-          return json({
-            error: "Trading wallet not set up. Please complete setup first.",
-            error_code: "trading_wallet_setup_required",
-          }, 403);
-        }
+        await auditLog(supabase, null, normalizedWallet, "pm_session_check_failed", { fight_id }, {
+          reason: pmSession ? "per_user_session_not_ready" : "no_per_user_session",
+          session_status: pmSession?.status,
+        });
+        return json({
+          error: "Trading wallet not set up. Please complete setup first.",
+          error_code: "trading_wallet_setup_required",
+        }, 403);
       }
     }
 
     // ═══════════════════════════════════════════════════
     // 6) EXPLICIT FEE MODEL
     // ═══════════════════════════════════════════════════
-    // Source-aware fee: match frontend logic exactly
     const isPolymarketSource = fight.source === "polymarket";
     const effectiveFeeBps =
       fight.commission_bps != null
         ? Number(fight.commission_bps)
         : isPolymarketSource
-          ? 225   // 2.25% for Polymarket-routed (1.5% platform + 0.75% exchange)
-          : 500;  // 5% for native 1MGAMING events
+          ? 225
+          : 500;
     const fee_usd = Number(
       ((parsedAmount * effectiveFeeBps) / 10_000).toFixed(6),
     );
     const net_amount_usdc = Number((parsedAmount - fee_usd).toFixed(6));
     const shares = Math.floor(net_amount_usdc * 100);
 
-    // Slippage: use client value capped by system max
     const systemMaxSlippage = controls
       ? Number(controls.max_slippage_bps)
       : 300;
@@ -1029,7 +1105,6 @@ Deno.serve(async (req) => {
         ? Math.min(Number(clientSlippage), systemMaxSlippage)
         : systemMaxSlippage;
 
-    // Expected price from cached data
     const expectedPrice = isPolymarketBacked
       ? Number(
           fighter_pick === "fighter_a"
@@ -1041,62 +1116,36 @@ Deno.serve(async (req) => {
     // ═══════════════════════════════════════════════════
     // SLIPPAGE CHECK — fetch live price and compare
     // ═══════════════════════════════════════════════════
-    if (
-      isPolymarketBacked &&
-      tokenId &&
-      expectedPrice != null &&
-      expectedPrice > 0
-    ) {
+    if (isPolymarketBacked && tokenId && expectedPrice) {
+      const clobUrl = getClobUrl();
       try {
-        const priceRes = await fetch(
-          `${CLOB_BASE}/price?token_id=${tokenId}&side=BUY`,
-        );
+        const priceRes = await fetch(`${clobUrl}/price?token_id=${tokenId}&side=buy`);
         if (priceRes.ok) {
           const priceData = await priceRes.json();
-          const livePrice = parseFloat(priceData?.price || "0");
-
+          const livePrice = Number(priceData.price ?? 0);
           if (livePrice > 0) {
-            const slippageBps =
-              (Math.abs(livePrice - expectedPrice) / expectedPrice) * 10_000;
+            const slippageBps = Math.abs(livePrice - expectedPrice) / expectedPrice * 10_000;
             if (slippageBps > effectiveSlippage) {
-              await auditLog(supabase, null, normalizedWallet, "slippage_rejected", { fight_id, token_id: tokenId }, {
+              await auditLog(supabase, null, normalizedWallet, "slippage_rejected", { fight_id }, {
+                expected: expectedPrice, live: livePrice, slippage_bps: slippageBps, max_bps: effectiveSlippage,
+              });
+              return json({
+                error: "Price has moved too much. Please try again.",
                 error_code: "slippage_exceeded",
                 expected_price: expectedPrice,
                 live_price: livePrice,
-                slippage_bps: Math.round(slippageBps),
-                max_slippage_bps: effectiveSlippage,
-              });
-              return json(
-                {
-                  error: "Price has moved beyond acceptable range. Please retry.",
-                  error_code: "slippage_exceeded",
-                  expected_price: expectedPrice,
-                  live_price: livePrice,
-                },
-                400,
-              );
+              }, 400);
             }
-          } else {
-            throw new Error("live_price_zero");
           }
-        } else {
-          throw new Error(`clob_http_${priceRes.status}`);
         }
       } catch (slipErr) {
-        console.warn("[prediction-submit] Live price check failed:", slipErr);
-        await auditLog(supabase, null, normalizedWallet, "live_price_fetch_failed", { fight_id, token_id: tokenId }, {
-          error: String(slipErr),
-        });
+        // Non-fatal: if live price check fails, proceed with cached price
+        // Apply fallback restrictions for large orders
+        const cachedAge = fight.polymarket_last_synced_at
+          ? Date.now() - new Date(fight.polymarket_last_synced_at).getTime()
+          : Infinity;
 
-        const lastSyncedMs = fight.polymarket_last_synced_at
-          ? new Date(fight.polymarket_last_synced_at).getTime()
-          : 0;
-        const cachedAge = Date.now() - lastSyncedMs;
-
-        const fallbackAllowed =
-          lastSyncedMs > 0 &&
-          cachedAge <= FALLBACK_MAX_PRICE_AGE_MS &&
-          fight.polymarket_active === true &&
+        const fallbackAllowed = cachedAge < FALLBACK_MAX_PRICE_AGE_MS &&
           !!fight.polymarket_market_id &&
           !!tokenId &&
           parsedAmount <= FALLBACK_MAX_ORDER_USDC;
@@ -1107,8 +1156,6 @@ Deno.serve(async (req) => {
             max_age_ms: FALLBACK_MAX_PRICE_AGE_MS,
             amount: parsedAmount,
             max_fallback_usdc: FALLBACK_MAX_ORDER_USDC,
-            polymarket_active: fight.polymarket_active,
-            has_token: !!tokenId,
           });
           return json(
             {
@@ -1168,19 +1215,39 @@ Deno.serve(async (req) => {
     });
 
     // ═══════════════════════════════════════════════════
+    // Initialize shared nonce manager for relayer txs in this request
+    // ═══════════════════════════════════════════════════
+    const relayerKey = Deno.env.get("FEE_RELAYER_PRIVATE_KEY");
+    let nonceManager: RelayerNonceManager | null = null;
+    if (relayerKey) {
+      const relayerAccount = privateKeyToAccount(relayerKey as `0x${string}`);
+      nonceManager = new RelayerNonceManager(relayerAccount.address);
+    }
+
+    // ═══════════════════════════════════════════════════
     // 7) FEE COLLECTION — backend relayer executes transferFrom
     // ═══════════════════════════════════════════════════
     let feeCollected = false;
     let feeTxHash: string | null = null;
 
     if (fee_usd > 0.01) {
+      if (!nonceManager) {
+        await updateTradeOrder(supabase, tradeOrderId, {
+          status: "failed",
+          error_code: "relayer_not_configured",
+          error_message: "Fee relayer not configured",
+          finalized_at: new Date().toISOString(),
+        });
+        return json({ error: "Trading infrastructure not available", error_code: "relayer_not_configured", trade_order_id: tradeOrderId }, 502);
+      }
+
       await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_collection_started", {
         fee_usdc: fee_usd,
         treasury: TREASURY_WALLET,
       });
 
       const normalizedEoa = wallet_eoa ? String(wallet_eoa).trim().toLowerCase() : undefined;
-      const collectResult = await collectFeeViaRelayer(normalizedWallet!, fee_usd, normalizedEoa);
+      const collectResult = await collectFeeViaRelayer(normalizedWallet!, fee_usd, normalizedEoa, nonceManager);
 
       if (collectResult.success && collectResult.txHash) {
         feeCollected = true;
@@ -1199,7 +1266,6 @@ Deno.serve(async (req) => {
           fee_usdc: fee_usd,
         });
 
-        // If allowance is insufficient, tell client to approve
         const isAllowanceError = collectResult.error_code === "insufficient_allowance" || collectResult.error?.includes("insufficient_allowance");
         const isRpcError = collectResult.error_code?.startsWith("rpc_");
         const specificCode = collectResult.error_code || (isAllowanceError ? "insufficient_allowance" : "fee_collection_failed");
@@ -1238,102 +1304,73 @@ Deno.serve(async (req) => {
     let pmFeeRateBps = 0;
 
     if (isPolymarketBacked) {
-      // ── CLOB credentials: per-user first, shared fallback ──
-      let pmApiKey: string;
-      let pmApiSecret: string;
-      let pmPassphrase: string;
-      let pmTradingKey: string;
-      let credSource: string;
-      let userSafeAddress: string | null = null;
+      // ── Per-user credentials ONLY — no shared fallback ──
+      const { data: userSession } = await supabase
+        .from("polymarket_user_sessions")
+        .select("pm_api_key, pm_api_secret, pm_passphrase, pm_trading_key, status, safe_address, safe_deployed, approvals_set, expires_at")
+        .eq("wallet", normalizedWallet)
+        .maybeSingle();
 
-      if (useSharedPmCreds) {
-        // Shared (platform) credentials — used when per-user setup is unavailable
-        pmApiKey = Deno.env.get("PM_API_KEY")!;
-        pmApiSecret = Deno.env.get("PM_API_SECRET")!;
-        pmPassphrase = Deno.env.get("PM_PASSPHRASE")!;
-        pmTradingKey = Deno.env.get("PM_TRADING_KEY")!;
-        credSource = "shared";
-      } else {
-        const { data: userSession } = await supabase
-          .from("polymarket_user_sessions")
-          .select("pm_api_key, pm_api_secret, pm_passphrase, pm_trading_key, status, safe_address, safe_deployed, approvals_set, expires_at")
-          .eq("wallet", normalizedWallet)
-          .maybeSingle();
-
-        if (!isSessionTradeReady(userSession)) {
-          // Double-check shared creds as last resort
-          const sk = Deno.env.get("PM_API_KEY");
-          const ss = Deno.env.get("PM_API_SECRET");
-          const sp = Deno.env.get("PM_PASSPHRASE");
-          const st = Deno.env.get("PM_TRADING_KEY");
-          if (sk && ss && sp && st) {
-            pmApiKey = sk; pmApiSecret = ss; pmPassphrase = sp; pmTradingKey = st;
-            credSource = "shared_fallback";
-          } else {
-            await updateTradeOrder(supabase, tradeOrderId, {
-              status: "failed",
-              error_code: "trading_wallet_not_ready",
-              error_message: "No usable Polymarket trading session found for this wallet.",
-              finalized_at: new Date().toISOString(),
-            });
-            return json({
-              error: "Trading wallet setup incomplete. Please complete wallet setup first.",
-              error_code: "trading_wallet_not_ready",
-              trade_order_id: tradeOrderId,
-            }, 403);
-          }
-        } else {
-          pmApiKey = userSession!.pm_api_key;
-          pmApiSecret = userSession!.pm_api_secret;
-          pmPassphrase = userSession!.pm_passphrase;
-          pmTradingKey = userSession!.pm_trading_key;
-          userSafeAddress = userSession!.safe_address;
-          credSource = "per_user";
-        }
+      if (!isSessionTradeReady(userSession)) {
+        await updateTradeOrder(supabase, tradeOrderId, {
+          status: "failed",
+          error_code: "trading_wallet_not_ready",
+          error_message: "No usable Polymarket trading session found for this wallet.",
+          finalized_at: new Date().toISOString(),
+        });
+        return json({
+          error: "Trading wallet setup incomplete. Please complete wallet setup first.",
+          error_code: "trading_wallet_not_ready",
+          trade_order_id: tradeOrderId,
+        }, 403);
       }
 
+      const pmApiKey = userSession!.pm_api_key;
+      const pmApiSecret = userSession!.pm_api_secret;
+      const pmPassphrase = userSession!.pm_passphrase;
+      const pmTradingKey = userSession!.pm_trading_key;
+      const userSafeAddress = userSession!.safe_address;
+
       if (tokenId) {
-        // ── Fund derived trading wallet with USDC.e before order (per-user only) ──
-        if (credSource === "per_user" && pmTradingKey) {
-          const derivedAccount = privateKeyToAccount(pmTradingKey as `0x${string}`);
-          const derivedAddr = userSafeAddress || derivedAccount.address.toLowerCase();
+        // ── Fund derived trading wallet with USDC.e before order ──
+        const derivedAccount = privateKeyToAccount(pmTradingKey as `0x${string}`);
+        const derivedAddr = userSafeAddress || derivedAccount.address.toLowerCase();
 
-          await auditLog(supabase, tradeOrderId, normalizedWallet, "funding_derived_wallet", {
-            derived_address: derivedAddr,
-            amount_usdc: net_amount_usdc,
+        await auditLog(supabase, tradeOrderId, normalizedWallet, "funding_derived_wallet", {
+          derived_address: derivedAddr,
+          amount_usdc: net_amount_usdc,
+        });
+
+        const normalizedEoaForFund = wallet_eoa ? String(wallet_eoa).trim().toLowerCase() : undefined;
+        const fundResult = await fundDerivedWallet(normalizedWallet!, derivedAddr, net_amount_usdc, normalizedEoaForFund, nonceManager!);
+
+        if (!fundResult.success) {
+          await auditLog(supabase, tradeOrderId, normalizedWallet, "funding_derived_wallet_failed", null, {
+            error: fundResult.error,
           });
 
-          const normalizedEoaForFund = wallet_eoa ? String(wallet_eoa).trim().toLowerCase() : undefined;
-          const fundResult = await fundDerivedWallet(normalizedWallet!, derivedAddr, net_amount_usdc, normalizedEoaForFund);
-
-          if (!fundResult.success) {
-            await auditLog(supabase, tradeOrderId, normalizedWallet, "funding_derived_wallet_failed", null, {
-              error: fundResult.error,
-            });
-
-            await updateTradeOrder(supabase, tradeOrderId, {
-              status: "failed",
-              error_code: "funding_failed",
-              error_message: fundResult.error?.substring(0, 500),
-              finalized_at: new Date().toISOString(),
-            });
-
-            const isAllowanceErr = fundResult.error?.includes("insufficient_allowance");
-            return json({
-              error: isAllowanceErr
-                ? "USDC.e approval needed for trading. Please approve and try again."
-                : "Failed to fund trading wallet. Please try again.",
-              error_code: isAllowanceErr ? "insufficient_allowance" : "funding_failed",
-              trade_order_id: tradeOrderId,
-            }, isAllowanceErr ? 403 : 502);
-          }
-
-          await auditLog(supabase, tradeOrderId, normalizedWallet, "derived_wallet_funded", null, {
-            tx_hash: fundResult.txHash,
-            amount_usdc: net_amount_usdc,
-            derived_address: derivedAddr,
+          await updateTradeOrder(supabase, tradeOrderId, {
+            status: "failed",
+            error_code: "funding_failed",
+            error_message: fundResult.error?.substring(0, 500),
+            finalized_at: new Date().toISOString(),
           });
+
+          const isAllowanceErr = fundResult.error?.includes("insufficient_allowance");
+          return json({
+            error: isAllowanceErr
+              ? "USDC.e approval needed for trading. Please approve and try again."
+              : "Failed to fund trading wallet. Please try again.",
+            error_code: isAllowanceErr ? "insufficient_allowance" : "funding_failed",
+            trade_order_id: tradeOrderId,
+          }, isAllowanceErr ? 403 : 502);
         }
+
+        await auditLog(supabase, tradeOrderId, normalizedWallet, "derived_wallet_funded", null, {
+          tx_hash: fundResult.txHash,
+          amount_usdc: net_amount_usdc,
+          derived_address: derivedAddr,
+        });
 
         // Mark as submitted
         await updateTradeOrder(supabase, tradeOrderId, {
@@ -1348,13 +1385,14 @@ Deno.serve(async (req) => {
           size: net_amount_usdc,
           fee_collected: feeCollected,
           fee_tx_hash: feeTxHash,
-          cred_source: credSource,
+          cred_source: "per_user",
         });
 
         // ── Fetch dynamic Polymarket fee rate ──
         pmFeeRateBps = 0;
+        const clobUrl = getClobUrl();
         try {
-          const feeRes = await fetch(`${CLOB_BASE}/fee-rate?token_id=${tokenId}`);
+          const feeRes = await fetch(`${clobUrl}/fee-rate?token_id=${tokenId}`);
           if (feeRes.ok) {
             const feeData = await feeRes.json();
             pmFeeRateBps = Number(feeData.fee_rate_bps ?? feeData.feeRateBps ?? 0);
@@ -1425,7 +1463,7 @@ Deno.serve(async (req) => {
               2000,
             );
 
-            const reconRes = await fetch(`${CLOB_BASE}${reconPath}`, {
+            const reconRes = await fetch(`${clobUrl}${reconPath}`, {
               headers: {
                 "Content-Type": "application/json",
                 POLY_API_KEY: pmApiKey!,
@@ -1515,8 +1553,6 @@ Deno.serve(async (req) => {
           }
         } else {
           // CLOB rejection — Polymarket order was NOT placed.
-          // Do NOT fall through to native pool — return a clear error so the UI
-          // does not create a fake "filled" entry that looks claimable.
           const isGeoBlock =
             (orderResult.httpStatus === 403 && isGeoBlockedMessage(orderResult.error)) ||
             isGeoBlockedMessage(orderResult.error);
@@ -1591,7 +1627,6 @@ Deno.serve(async (req) => {
     const resolvedOperatorId = source_operator_id || fight.operator_id || null;
     if (resolvedOperatorId && entry) {
       try {
-        // Split: 1.5% platform (150bps), remainder is operator fee
         const platformFeeBps = 150;
         const platformFeeUsd = Number(((parsedAmount * platformFeeBps) / 10_000).toFixed(6));
         const operatorFeeUsd = Math.max(0, Number((fee_usd - platformFeeUsd).toFixed(6)));

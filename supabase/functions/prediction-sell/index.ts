@@ -16,6 +16,7 @@ const corsHeaders = {
 };
 
 const CLOB_BASE = "https://clob.polymarket.com";
+function getClobUrl(): string { return Deno.env.get("CLOB_PROXY_URL") || CLOB_BASE; }
 const CTF_EXCHANGE = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E";
 const POLYGON_CHAIN_ID = 137;
 const USDC_DECIMALS = 6;
@@ -75,7 +76,7 @@ async function generateClobHmac(
  */
 async function getSellPrice(tokenId: string): Promise<number | null> {
   try {
-    const res = await fetch(`${CLOB_BASE}/price?token_id=${tokenId}&side=sell`);
+    const res = await fetch(`${getClobUrl()}/price?token_id=${tokenId}&side=sell`);
     if (!res.ok) return null;
     const data = await res.json();
     return data?.price ? Number(data.price) : null;
@@ -307,7 +308,7 @@ Deno.serve(async (req) => {
     const path = "/order";
     const hmac = await generateClobHmac(session.pm_api_secret, timestamp, "POST", path, orderBody);
 
-    const res = await fetch(`${CLOB_BASE}${path}`, {
+    const res = await fetch(`${getClobUrl()}${path}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
