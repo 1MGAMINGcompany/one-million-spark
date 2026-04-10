@@ -27,6 +27,7 @@ const corsHeaders = {
 };
 
 const CLOB_BASE = "https://clob.polymarket.com";
+function getClobUrl(): string { return Deno.env.get("CLOB_PROXY_URL") || CLOB_BASE; }
 const SESSION_TTL_HOURS = 24;
 
 const json = (data: unknown, status = 200) =>

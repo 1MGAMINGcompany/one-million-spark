@@ -15,6 +15,7 @@ const corsHeaders = {
 };
 
 const CLOB_BASE = "https://clob.polymarket.com";
+function getClobUrl(): string { return Deno.env.get("CLOB_PROXY_URL") || CLOB_BASE; }
 const GAMMA_BASE = "https://gamma-api.polymarket.com";
 
 /** Parse real outcome names from Gamma outcomes JSON string */
