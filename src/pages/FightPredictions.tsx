@@ -642,6 +642,19 @@ export default function FightPredictions() {
       if (!submitResp.ok || data?.error) {
         const backendMsg = data?.error || "Backend error";
         const errorCode = data?.error_code || "";
+
+        // Requote flow: odds changed beyond tolerance
+        if (errorCode === "price_changed_requote_required") {
+          setRequoteData({
+            old_price: data.old_price,
+            new_price: data.new_price,
+            updated_payout: data.updated_payout,
+            slippage_bps: data.slippage_bps,
+          });
+          setSubmitting(false);
+          return;
+        }
+
         const isRelayerError = errorCode.startsWith("rpc_") || errorCode === "relayer_not_configured" || errorCode === "relayer_tx_failed" || errorCode === "fee_collection_failed";
         const isSetupRequired = errorCode === "trading_wallet_setup_required" || errorCode === "trading_wallet_not_ready" || errorCode === "no_trading_session";
         dbg("predict:backend_error", { backendMsg, errorCode, isRelayerError, isSetupRequired });

@@ -498,6 +498,19 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       if (!submitResp.ok || data?.error) {
         const msg = data?.error || "Backend error";
         const errorCode = data?.error_code || "";
+
+        // Requote flow: odds changed beyond tolerance
+        if (errorCode === "price_changed_requote_required") {
+          setRequoteData({
+            old_price: data.old_price,
+            new_price: data.new_price,
+            updated_payout: data.updated_payout,
+            slippage_bps: data.slippage_bps,
+          });
+          setSubmitting(false);
+          return;
+        }
+
         if (errorCode === "geo_blocked" || errorCode === "clob_geo_blocked") {
           setGeoBlocked(true);
           setSubmitting(false);
