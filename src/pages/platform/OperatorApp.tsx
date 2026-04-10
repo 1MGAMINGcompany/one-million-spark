@@ -15,7 +15,7 @@ import { usePolymarketPrices } from "@/hooks/usePolymarketPrices";
 import { usePolymarketLivePrices } from "@/hooks/usePolymarketLivePrices";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Globe, Trophy, Loader2, ShieldCheck, Search, CalendarPlus, ChevronDown, Zap, Copy, ExternalLink, CreditCard, ArrowUpRight, AlertTriangle } from "lucide-react";
-import GeoBlockScreen from "@/components/predictions/GeoBlockScreen";
+
 import { toast } from "sonner";
 import { dbg } from "@/lib/debugLog";
 import { Button } from "@/components/ui/button";
@@ -182,11 +182,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [withdrawDest, setWithdrawDest] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
-  const [geoBlocked, setGeoBlocked] = useState(false);
-  const [geoBlockDismissed, setGeoBlockDismissed] = useState(false);
   const [requoteData, setRequoteData] = useState<RequoteData | null>(null);
   const acceptedRequoteRef = useRef<RequoteAcceptanceContext | null>(null);
-  const readOnly = geoBlocked && geoBlockDismissed;
 
   // Social share state
   const [shareOpen, setShareOpen] = useState(false);
@@ -552,7 +549,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         }
 
         if (errorCode === "geo_blocked" || errorCode === "clob_geo_blocked") {
-          setGeoBlocked(true);
+          toast.error("Trading is not available in your region");
           setSubmitting(false);
           return;
         }
@@ -663,7 +660,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok || data?.error) {
-        if (data?.error_code === "clob_geo_blocked") { setGeoBlocked(true); setSelling(false); return; }
+        if (data?.error_code === "clob_geo_blocked") { toast.error("Trading is not available in your region"); setSelling(false); return; }
         throw new Error(data?.error || "Sell failed");
       }
       toast.success(t("operator.sold"), { description: `$${(data.expected_usdc || 0).toFixed(2)}` });
@@ -766,18 +763,9 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         />
       )}
 
-      {/* Geo-block banner */}
-      {geoBlocked && !geoBlockDismissed && (
-        <div className="max-w-4xl mx-auto px-4 pt-3">
-          <GeoBlockScreen
-            wallet={address || undefined}
-            onDismiss={() => setGeoBlockDismissed(true)}
-            onExploreReadOnly={() => setGeoBlockDismissed(true)}
-          />
-        </div>
-      )}
+      {/* Geo-block: compliance enforced by backend only, UI stays interactive */}
 
-      {isConnected && !geoBlocked && (
+      {isConnected && (
         <div className="max-w-4xl mx-auto px-4 pt-3">
           <EnableTradingBanner
             hasSession={hasSession}
