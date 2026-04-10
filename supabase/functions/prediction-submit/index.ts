@@ -1130,12 +1130,11 @@ Deno.serve(async (req) => {
             : fight.price_b || 0.5,
         )
       : null;
-    const usingAcceptedRequoteBaseline = Boolean(
-      acceptedRequote &&
-      requoteCount === 1 &&
-      acceptedQuotePrice != null,
-    );
-    const expectedPrice = usingAcceptedRequoteBaseline
+
+    // Use client-supplied quote_price as baseline when present (first submit or requote).
+    // Only fall back to stale cached DB price if frontend sent no quote at all.
+    const usingClientQuote = acceptedQuotePrice != null && acceptedQuotePrice > 0;
+    const expectedPrice = usingClientQuote
       ? acceptedQuotePrice
       : cachedExpectedPrice;
 
