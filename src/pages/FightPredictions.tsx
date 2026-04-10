@@ -650,10 +650,15 @@ export default function FightPredictions() {
           fighter_pick: selectedPick,
           amount_usd: amountUsd,
           chain: "polygon",
+          // Always send the currently displayed buy-side price as baseline
+          quote_price: acceptedRequote
+            ? acceptedRequote.baselinePrice
+            : (selectedPick === "fighter_a"
+                ? (selectedFight.price_a ?? null)
+                : (selectedFight.price_b ?? null)),
           ...(acceptedRequote
             ? {
                 accepted_requote: true,
-                quote_price: acceptedRequote.baselinePrice,
                 requote_count: acceptedRequote.cycleCount,
               }
             : {}),

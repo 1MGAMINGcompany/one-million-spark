@@ -65,29 +65,25 @@ export function usePolymarketLivePrices(fights: FightTokenInfo[]) {
           const info = tokenToFight.get(data.asset_id);
           if (!info) return;
 
-          // Extract best bid as the price (what a buyer would pay)
+          // Extract best ask as the executable buy price (what a buyer would pay).
+          // Polymarket "BUY" side in price_changes = the ask book.
           const changes = data.price_changes || data.changes || [];
-          let bestBid = 0;
+          let bestAsk = 0;
           for (const c of changes) {
-            if (c.side === "BUY" && parseFloat(c.price || "0") > bestBid) {
-              bestBid = parseFloat(c.price);
+            if (c.side === "BUY" && parseFloat(c.price || "0") > bestAsk) {
+              bestAsk = parseFloat(c.price);
             }
           }
-          if (bestBid <= 0) return;
+          if (bestAsk <= 0) return;
 
           setPrices((prev) => {
             const existing = prev[info.fightId] || { priceA: 0, priceB: 0, updatedAt: 0 };
-            const complement = Math.round((1 - bestBid) * 10000) / 10000;
-            const updated: LivePrice =
-              info.side === "a"
-                ? { priceA: bestBid, priceB: complement, updatedAt: Date.now() }
-                : { priceA: complement, priceB: bestBid, updatedAt: Date.now() };
-            // Merge: keep the most recent per-side update
+            const complement = Math.round((1 - bestAsk) * 10000) / 10000;
             return {
               ...prev,
               [info.fightId]: {
-                priceA: info.side === "a" ? updated.priceA : existing.priceA || updated.priceA,
-                priceB: info.side === "b" ? updated.priceB : existing.priceB || updated.priceB,
+                priceA: info.side === "a" ? bestAsk : existing.priceA || complement,
+                priceB: info.side === "b" ? bestAsk : existing.priceB || complement,
                 updatedAt: Date.now(),
               },
             };

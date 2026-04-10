@@ -1130,12 +1130,11 @@ Deno.serve(async (req) => {
             : fight.price_b || 0.5,
         )
       : null;
-    const usingAcceptedRequoteBaseline = Boolean(
-      acceptedRequote &&
-      requoteCount === 1 &&
-      acceptedQuotePrice != null,
-    );
-    const expectedPrice = usingAcceptedRequoteBaseline
+
+    // Use client-supplied quote_price as baseline when present (first submit or requote).
+    // Only fall back to stale cached DB price if frontend sent no quote at all.
+    const usingClientQuote = acceptedQuotePrice != null && acceptedQuotePrice > 0;
+    const expectedPrice = usingClientQuote
       ? acceptedQuotePrice
       : cachedExpectedPrice;
 
@@ -1172,7 +1171,7 @@ Deno.serve(async (req) => {
               tolerance_bps: effectiveSlippage,
               accepted_requote: Boolean(acceptedRequote),
               requote_count: requoteCount,
-              quote_source: usingAcceptedRequoteBaseline ? "accepted_requote" : "cached_fight_price",
+              quote_source: usingClientQuote ? "client_quote" : "cached_fight_price",
             });
 
             if (slippageBps > effectiveSlippage) {
@@ -1204,7 +1203,7 @@ Deno.serve(async (req) => {
                 slippage_bps: slippageBps,
                 max_bps: effectiveSlippage,
                 updated_payout: updatedPayout,
-                quote_source: usingAcceptedRequoteBaseline ? "accepted_requote" : "cached_fight_price",
+                quote_source: usingClientQuote ? "client_quote" : "cached_fight_price",
                 requote_count: requoteCount,
               });
               return json({
