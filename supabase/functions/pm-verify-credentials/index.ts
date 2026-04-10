@@ -148,7 +148,7 @@ Deno.serve(async (req) => {
 
   // 3. Test unauthenticated market fetch (sanity)
   try {
-    const resp = await fetch("https://clob.polymarket.com/markets?limit=1");
+    const resp = await fetch(`${getClobUrl()}/markets?limit=1`);
     const body = await resp.text();
     results.clob_markets_public = {
       status: resp.status,
