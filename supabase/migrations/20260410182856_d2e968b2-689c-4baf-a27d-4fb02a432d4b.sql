@@ -1,0 +1,1 @@
+UPDATE prediction_fights SET status = 'locked' WHERE status = 'live' AND (event_date IS NULL OR event_date < NOW() - INTERVAL '6 hours') AND created_at < NOW() - INTERVAL '24 hours';
