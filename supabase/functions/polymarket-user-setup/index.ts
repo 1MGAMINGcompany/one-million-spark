@@ -27,6 +27,11 @@ const corsHeaders = {
 
 const CLOB_BASE = "https://clob.polymarket.com";
 
+/** Use proxy URL if configured to avoid geo-blocking on edge function IPs */
+function getClobUrl(): string {
+  return Deno.env.get("CLOB_PROXY_URL") || CLOB_BASE;
+}
+
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
