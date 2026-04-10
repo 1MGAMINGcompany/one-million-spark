@@ -1091,14 +1091,16 @@ export default function FightPredictions() {
         <PredictionModal
           fight={selectedFight}
           pick={selectedPick}
-          onClose={() => { setSelectedFight(null); setSelectedPick(null); setShowPredictionSuccess(false); setLastTradeResult(null); resetAllowance(); }}
-          onSubmit={handleSubmit}
+          onClose={() => { setSelectedFight(null); setSelectedPick(null); setShowPredictionSuccess(false); setLastTradeResult(null); setRequoteData(null); resetAllowance(); }}
+          onSubmit={(amt) => { setRequoteData(null); handleSubmit(amt); }}
           submitting={submitting || pmSessionLoading}
           showSuccess={showPredictionSuccess}
           wallet={address || undefined}
           tradeResult={lastTradeResult}
           approvalStep={allowanceState.step}
           approvalError={allowanceState.errorReason}
+          requoteData={requoteData}
+          onAcceptRequote={() => setRequoteData(null)}
         />
       )}
 

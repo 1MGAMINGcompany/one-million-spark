@@ -1084,8 +1084,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         <SimplePredictionModal
           fight={selectedFight}
           pick={selectedPick}
-          onClose={() => { setSelectedFight(null); setSelectedPick(null); setShowSuccess(false); setLastTradeResult(null); resetAllowance(); }}
-          onSubmit={handleSubmit}
+          onClose={() => { setSelectedFight(null); setSelectedPick(null); setShowSuccess(false); setLastTradeResult(null); setRequoteData(null); resetAllowance(); }}
+          onSubmit={(amt) => { setRequoteData(null); handleSubmit(amt); }}
           submitting={submitting || pmSessionLoading}
           showSuccess={showSuccess}
           tradeResult={lastTradeResult}
@@ -1094,6 +1094,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           themeColor={theme.primary}
           operatorBrandName={operator?.brand_name}
           onSharePick={handleSharePick}
+          requoteData={requoteData}
+          onAcceptRequote={() => setRequoteData(null)}
         />
       )}
 
