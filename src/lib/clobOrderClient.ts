@@ -16,23 +16,13 @@
 
 import { privateKeyToAccount } from "viem/accounts";
 
-// ── Polymarket CTF Exchange (Polygon mainnet) ──
+// ── Polymarket CTF Exchange addresses (Polygon mainnet) ──
 const CTF_EXCHANGE = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E";
+const NEG_RISK_CTF_EXCHANGE = "0xC5d563A36AE78145C45a50134d48A1215220f80a";
 const POLYGON_CHAIN_ID = 137;
 const USDC_DECIMALS = 6;
 const CLOB_BASE = "https://clob.polymarket.com";
 const TREASURY_WALLET = "0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d";
-
-/** Standard Polymarket proxy funder used for POLY_PROXY signature type */
-const POLY_PROXY_FUNDER = "0xC5d563A36AE78145C45a50134d48A1215220f80a";
-
-/** EIP-712 domain for Polymarket CTF Exchange orders */
-const EIP712_DOMAIN = {
-  name: "Polymarket CTF Exchange",
-  version: "1",
-  chainId: POLYGON_CHAIN_ID,
-  verifyingContract: CTF_EXCHANGE as `0x${string}`,
-} as const;
 
 /** EIP-712 typed data structure for Polymarket orders */
 const ORDER_TYPES = {
@@ -57,6 +47,8 @@ export interface ClobOrderParams {
   price: number;
   net_amount_usdc: number;
   fee_rate_bps: number;
+  /** If true, use the NegRisk CTF Exchange (for sports/multi-outcome markets) */
+  neg_risk?: boolean;
 }
 
 export interface ClobCredentials {
@@ -66,7 +58,7 @@ export interface ClobCredentials {
   trading_key: string;
   /** The proxy/safe address that owns the position (maker). If not provided, uses signer address. */
   proxy_address?: string;
-  /** The funder address for POLY_PROXY mode. Defaults to standard Polymarket proxy funder. */
+  /** The funder address for POLY_PROXY mode. */
   funder_address?: string;
 }
 
@@ -85,6 +77,7 @@ export interface ClobSubmitResult {
     orderType: string;
     polyAddressHeader: string;
     apiKeyPrefix: string;
+    exchange: string;
     httpStatus?: number;
   };
 }
@@ -123,12 +116,6 @@ async function generateClobHmac(
 
 /**
  * Sign an EIP-712 order and POST it to the Polymarket CLOB directly from the browser.
- *
- * Auth model:
- * - If proxy_address is provided, use signatureType=1 (POLY_PROXY) with the standard funder
- * - Otherwise use signatureType=0 (EOA)
- * - Always send POLY_ADDRESS L2 header
- * - Use FOK (Fill-or-Kill) for instant market execution
  */
 export async function submitClobOrder(
   params: ClobOrderParams,
@@ -141,12 +128,23 @@ export async function submitClobOrder(
     const useProxy = !!credentials.proxy_address;
     const signatureType = useProxy ? 1 : 0; // 0=EOA, 1=POLY_PROXY
     const funder = useProxy
-      ? (credentials.funder_address || POLY_PROXY_FUNDER)
+      ? (credentials.funder_address || "0x0000000000000000000000000000000000000000")
       : "0x0000000000000000000000000000000000000000";
     // maker = proxy address (owner) if proxy mode, otherwise signer
     const maker = useProxy
       ? (credentials.proxy_address as `0x${string}`)
       : account.address;
+
+    // Select the correct exchange contract based on neg_risk flag
+    const exchange = params.neg_risk ? NEG_RISK_CTF_EXCHANGE : CTF_EXCHANGE;
+
+    // EIP-712 domain must match the exchange contract
+    const eip712Domain = {
+      name: "Polymarket CTF Exchange",
+      version: "1",
+      chainId: POLYGON_CHAIN_ID,
+      verifyingContract: exchange as `0x${string}`,
+    } as const;
 
     // Calculate raw amounts (6 decimal precision)
     const makerAmountRaw = BigInt(Math.floor(params.net_amount_usdc * 10 ** USDC_DECIMALS));
@@ -177,13 +175,14 @@ export async function submitClobOrder(
 
     // EIP-712 sign the order
     const signature = await account.signTypedData({
-      domain: EIP712_DOMAIN,
+      domain: eip712Domain,
       types: ORDER_TYPES,
       primaryType: "Order",
       message: orderMessage,
     });
 
     // Build POST /order body
+    // CRITICAL: owner = API key (not maker address) per Polymarket SDK
     const orderBody = JSON.stringify({
       order: {
         salt: salt.toString(),
@@ -200,8 +199,8 @@ export async function submitClobOrder(
         signatureType,
         signature,
       },
-      owner: maker, // owner = the address that holds the position
-      orderType: "FOK", // Fill-or-Kill for instant market execution
+      owner: credentials.api_key,
+      orderType: "FOK",
       affiliateAddress: TREASURY_WALLET,
     });
 
@@ -218,6 +217,7 @@ export async function submitClobOrder(
       orderType: "FOK",
       polyAddressHeader: account.address,
       apiKeyPrefix: credentials.api_key.substring(0, 8),
+      exchange,
     };
 
     console.log("[clobOrderClient] Order submission diagnostics:", JSON.stringify(diagnostics));
@@ -232,7 +232,7 @@ export async function submitClobOrder(
         POLY_SIGNATURE: hmac,
         POLY_PASSPHRASE: credentials.passphrase,
         POLY_TIMESTAMP: timestamp,
-        POLY_ADDRESS: account.address, // L2 header: the signer's address
+        POLY_ADDRESS: account.address,
       },
       body: orderBody,
     });
