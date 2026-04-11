@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
+
 export interface LiveGameState {
   slug: string;
   score?: string;
@@ -12,6 +13,8 @@ export interface LiveGameState {
   ended: boolean;
   sport?: string;
   raw?: any;
+  realSlug?: string;
+  eventSlug?: string;
 }
 
 interface SportsWSContextValue {
@@ -26,29 +29,37 @@ const SportsWSContext = createContext<SportsWSContextValue>({
 
 const WS_URL = "wss://sports-api.polymarket.com/ws";
 const MAX_BACKOFF = 30000;
-const PING_INTERVAL_MS = 5_000; // Polymarket docs: server sends ping every 5s
 
 /**
  * Parse a WebSocket message from the Polymarket Sports API.
- * Per docs: no subscription needed. Messages are `sport_result` type JSON objects
- * with fields: gameId, slug, leagueAbbreviation, status, homeScore, awayScore, etc.
+ * Per docs: no subscription needed. Messages are `sport_result` type JSON objects.
  *
  * Match strategy:
  * 1. Direct slug match against tracked slugs
- * 2. Partial prefix match (WS slug may not have outcome suffix)
+ * 2. Reverse slug map: WS slug → internal slug (built from snapshot realSlug data)
+ * 3. Partial prefix match as last resort
  */
-function parseLiveMessage(msg: any, slugSet: Set<string>): LiveGameState | null {
+function parseLiveMessage(
+  msg: any,
+  slugSet: Set<string>,
+  reverseSlugMap: Map<string, string>,
+): LiveGameState | null {
   if (!msg) return null;
 
-  // ── Primary: direct slug match ──
   let slug: string | null = null;
   const wsSlug = msg.slug || msg.market_slug || null;
 
+  // Direct match
   if (wsSlug && slugSet.has(wsSlug)) {
     slug = wsSlug;
   }
 
-  // ── Fallback: partial slug prefix matching ──
+  // Reverse slug map: WS sends realSlug, we map back to internal slug
+  if (!slug && wsSlug && reverseSlugMap.has(wsSlug)) {
+    slug = reverseSlugMap.get(wsSlug)!;
+  }
+
+  // Partial prefix match
   if (!slug && wsSlug) {
     for (const tracked of slugSet) {
       if (tracked.startsWith(wsSlug) || wsSlug.startsWith(tracked)) {
@@ -105,31 +116,41 @@ function parseLiveMessage(msg: any, slugSet: Set<string>): LiveGameState | null 
 interface SportsWebSocketProviderProps {
   children: React.ReactNode;
   slugs?: string[];
+  /** Map of internalSlug → polymarket_market_id for resolving real slugs */
+  slugToMarketId?: Record<string, string>;
 }
 
-export function SportsWebSocketProvider({ children, slugs = [] }: SportsWebSocketProviderProps) {
+export function SportsWebSocketProvider({
+  children,
+  slugs = [],
+  slugToMarketId = {},
+}: SportsWebSocketProviderProps) {
   const [games, setGames] = useState<Map<string, LiveGameState>>(new Map());
   const [connected, setConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const backoffRef = useRef(1000);
   const mountedRef = useRef(true);
   const unmatchedCountRef = useRef(0);
-  const pingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const slugSet = useMemo(() => new Set(slugs), [slugs]);
   const slugSetRef = useRef(slugSet);
   slugSetRef.current = slugSet;
 
-  // Log tracked slugs on change for debugging
+  // Reverse slug map: realSlug → internalSlug (populated from snapshot)
+  const reverseSlugMapRef = useRef<Map<string, string>>(new Map());
+
+  // Log tracked slugs on change
   useEffect(() => {
     if (slugs.length > 0) {
       console.log("[SportsWS] Tracking %d slugs, first 5:", slugs.length, slugs.slice(0, 5));
+      const marketIdCount = Object.keys(slugToMarketId).length;
+      if (marketIdCount > 0) {
+        console.log("[SportsWS] Have %d market_id mappings for real slug resolution", marketIdCount);
+      }
     }
   }, [slugs.join(",")]);
 
   // ── Snapshot seeding from live-game-state edge function ──
-  // Seeds initial market status so UI can show "active" / "Final" badges
-  // before any WS message arrives
   useEffect(() => {
     if (slugs.length === 0) return;
     let cancelled = false;
@@ -137,19 +158,54 @@ export function SportsWebSocketProvider({ children, slugs = [] }: SportsWebSocke
     const fetchSnapshot = async () => {
       try {
         const { data, error } = await supabase.functions.invoke("live-game-state", {
-          body: { slugs },
+          body: { slugs, slug_to_market_id: slugToMarketId },
         });
         if (cancelled || error) return;
         const gamesData = data?.games || {};
         const entries = Object.entries(gamesData);
-        if (entries.length === 0) return;
+        if (entries.length === 0) {
+          console.log("[SportsWS] Snapshot returned 0 results for %d slugs", slugs.length);
+          return;
+        }
 
+        // Build reverse slug map from snapshot data
+        const newReverseMap = new Map<string, string>(reverseSlugMapRef.current);
+        for (const [internalSlug, state] of entries) {
+          if (state && typeof state === "object") {
+            const s = state as any;
+            if (s.realSlug) {
+              newReverseMap.set(s.realSlug, internalSlug);
+            }
+            if (s.eventSlug) {
+              newReverseMap.set(s.eventSlug, internalSlug);
+            }
+          }
+        }
+        reverseSlugMapRef.current = newReverseMap;
+        if (newReverseMap.size > 0) {
+          console.log("[SportsWS] Reverse slug map has %d entries (real→internal)", newReverseMap.size);
+        }
+
+        // Always merge snapshot data — don't skip existing entries
         setGames((prev) => {
           const next = new Map(prev);
           for (const [slug, state] of entries) {
-            // Only seed if we don't already have fresher WS data
-            if (!next.has(slug) && state && typeof state === "object") {
-              next.set(slug, state as LiveGameState);
+            if (state && typeof state === "object") {
+              const existing = next.get(slug);
+              if (existing) {
+                // Merge: keep WS score/period/elapsed if present, fill from snapshot otherwise
+                next.set(slug, {
+                  ...state as LiveGameState,
+                  score: existing.score || (state as any).score,
+                  scoreA: existing.scoreA ?? (state as any).scoreA,
+                  scoreB: existing.scoreB ?? (state as any).scoreB,
+                  period: existing.period || (state as any).period,
+                  elapsed: existing.elapsed || (state as any).elapsed,
+                  slug,
+                });
+              } else {
+                next.set(slug, { ...(state as LiveGameState), slug });
+              }
             }
           }
           return next;
@@ -161,10 +217,9 @@ export function SportsWebSocketProvider({ children, slugs = [] }: SportsWebSocke
     };
 
     fetchSnapshot();
-    // Re-fetch every 30s for market status updates
     const interval = setInterval(fetchSnapshot, 30_000);
     return () => { cancelled = true; clearInterval(interval); };
-  }, [slugs.join(",")]);
+  }, [slugs.join(","), JSON.stringify(slugToMarketId)]);
 
   // ── WebSocket connection ──
   // Per Polymarket docs: "No subscription message required — connect and start
@@ -181,13 +236,9 @@ export function SportsWebSocketProvider({ children, slugs = [] }: SportsWebSocke
         setConnected(true);
         backoffRef.current = 1000;
         unmatchedCountRef.current = 0;
-
-        // Heartbeat: respond to server pings
-        // Also send keepalive pongs proactively
       };
 
       ws.onmessage = (ev) => {
-        // Per docs: server sends "ping" text, respond with "pong"
         if (ev.data === "ping") {
           if (ws.readyState === WebSocket.OPEN) ws.send("pong");
           return;
@@ -200,19 +251,20 @@ export function SportsWebSocketProvider({ children, slugs = [] }: SportsWebSocke
             const next = new Map(prev);
             let changed = false;
             for (const msg of messages) {
-              const state = parseLiveMessage(msg, slugSetRef.current);
+              const state = parseLiveMessage(msg, slugSetRef.current, reverseSlugMapRef.current);
               if (state) {
                 next.set(state.slug, state);
                 changed = true;
-              } else if (unmatchedCountRef.current < 3 && (msg.slug || msg.market_slug)) {
+              } else if (unmatchedCountRef.current < 5 && (msg.slug || msg.market_slug)) {
                 unmatchedCountRef.current++;
-                console.log("[SportsWS] WS message slug not tracked:", msg.slug || msg.market_slug,
-                  "| tracked sample:", Array.from(slugSetRef.current).slice(0, 3));
+                console.log("[SportsWS] Unmatched WS slug:", msg.slug || msg.market_slug,
+                  "| tracked sample:", Array.from(slugSetRef.current).slice(0, 3),
+                  "| reverseMap sample:", Array.from(reverseSlugMapRef.current.keys()).slice(0, 3));
               }
             }
             return changed ? next : prev;
           });
-        } catch (e) {
+        } catch {
           // Ignore malformed messages
         }
       };
@@ -221,7 +273,6 @@ export function SportsWebSocketProvider({ children, slugs = [] }: SportsWebSocke
         if (!mountedRef.current) return;
         console.log("[SportsWS] Disconnected, reconnecting...");
         setConnected(false);
-        if (pingRef.current) { clearInterval(pingRef.current); pingRef.current = null; }
         const delay = Math.min(backoffRef.current, MAX_BACKOFF);
         backoffRef.current = delay * 2;
         setTimeout(connect, delay);
@@ -242,7 +293,6 @@ export function SportsWebSocketProvider({ children, slugs = [] }: SportsWebSocke
     return () => {
       mountedRef.current = false;
       wsRef.current?.close();
-      if (pingRef.current) { clearInterval(pingRef.current); pingRef.current = null; }
     };
   }, [connect]);
 

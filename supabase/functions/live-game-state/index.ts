@@ -5,12 +5,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Gamma API for market metadata (the REST endpoint that actually exists)
 const GAMMA_API = "https://gamma-api.polymarket.com";
 
-// In-memory cache: slug → { data, expiresAt }
+// In-memory cache: key → { data, expiresAt }
 const cache = new Map<string, { data: unknown; expiresAt: number }>();
-const CACHE_TTL_MS = 30_000; // 30s
+const CACHE_TTL_MS = 30_000;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -21,12 +20,9 @@ function json(body: unknown, status = 200) {
 
 /**
  * Fetch market state from Polymarket Gamma API.
- * The sports-api.polymarket.com only has WebSocket — no REST endpoint for games.
- * So we use the Gamma API to get basic market metadata (active, closed, etc.)
- * and rely on the frontend WebSocket for live scores/periods.
- *
- * This endpoint now returns market status info (is it active, resolved, etc.)
- * rather than live scores, since live scores only come via WS.
+ * Accepts both `slugs` (internal shorthand) and `market_ids` (Polymarket numeric IDs).
+ * For market_ids, resolves the REAL Polymarket slug + game metadata.
+ * Returns a map of internalSlug → { status, live, ended, realSlug, score, period, elapsed }
  */
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -34,64 +30,81 @@ serve(async (req) => {
   }
 
   try {
-    const { slugs } = await req.json();
-    if (!Array.isArray(slugs) || slugs.length === 0) {
-      return json({ error: "slugs array required" }, 400);
+    const body = await req.json();
+    const slugs = Array.isArray(body.slugs) ? body.slugs.slice(0, 30) as string[] : [];
+    const marketIds = Array.isArray(body.market_ids) ? body.market_ids.slice(0, 30) as string[] : [];
+    // slug_to_market_id mapping: { internalSlug: marketId }
+    const slugToMarketId: Record<string, string> = body.slug_to_market_id || {};
+
+    if (slugs.length === 0 && marketIds.length === 0) {
+      return json({ error: "slugs or market_ids required" }, 400);
     }
 
-    const requestSlugs = slugs.slice(0, 20) as string[];
     const results: Record<string, unknown> = {};
-    const uncachedSlugs: string[] = [];
-
     const now = Date.now();
-    for (const slug of requestSlugs) {
-      const cached = cache.get(slug);
+
+    // Process market_ids — these give us real Polymarket data
+    const uncachedMarketIds: { internalSlug: string; marketId: string }[] = [];
+
+    for (const internalSlug of slugs) {
+      const cached = cache.get(internalSlug);
       if (cached && now < cached.expiresAt) {
-        results[slug] = cached.data;
-      } else {
-        uncachedSlugs.push(slug);
+        results[internalSlug] = cached.data;
+        continue;
+      }
+      const mid = slugToMarketId[internalSlug];
+      if (mid) {
+        uncachedMarketIds.push({ internalSlug, marketId: mid });
       }
     }
 
-    if (uncachedSlugs.length > 0) {
-      // Fetch from Gamma API — search markets by slug
-      const fetches = uncachedSlugs.map(async (slug) => {
+    // Also process standalone market_ids
+    for (const mid of marketIds) {
+      const cacheKey = `mid_${mid}`;
+      const cached = cache.get(cacheKey);
+      if (cached && now < cached.expiresAt) {
+        results[cacheKey] = cached.data;
+        continue;
+      }
+      // Check if already queued via slug mapping
+      if (!uncachedMarketIds.find(x => x.marketId === mid)) {
+        uncachedMarketIds.push({ internalSlug: cacheKey, marketId: mid });
+      }
+    }
+
+    // Fetch from Gamma API by market ID
+    if (uncachedMarketIds.length > 0) {
+      const fetches = uncachedMarketIds.map(async ({ internalSlug, marketId }) => {
         try {
-          const resp = await fetch(
-            `${GAMMA_API}/markets?slug=${encodeURIComponent(slug)}&limit=1`
-          );
+          const resp = await fetch(`${GAMMA_API}/markets/${marketId}`);
           if (!resp.ok) {
-            // Gamma returns 200 with empty array for no results
-            await resp.text();
-            return { slug, data: null };
+            console.warn(`[live-game-state] Gamma ${marketId} returned ${resp.status}`);
+            return { internalSlug, data: null };
           }
-          const markets = await resp.json();
-          const marketList = Array.isArray(markets) ? markets : [];
-
-          if (marketList.length === 0) {
-            return { slug, data: null };
+          const market = await resp.json();
+          if (!market || !market.condition_id) {
+            return { internalSlug, data: null };
           }
 
-          const market = marketList[0];
-          const gameState = parseGammaMarket(market, slug);
-          return { slug, data: gameState };
+          const gameState = parseGammaMarket(market, internalSlug);
+          return { internalSlug, data: gameState };
         } catch (e) {
-          console.warn(`[live-game-state] Error fetching ${slug}:`, e);
-          return { slug, data: null };
+          console.warn(`[live-game-state] Error fetching market ${marketId}:`, e);
+          return { internalSlug, data: null };
         }
       });
 
       const fetchResults = await Promise.all(fetches);
-      for (const { slug, data } of fetchResults) {
+      for (const { internalSlug, data } of fetchResults) {
         if (data) {
-          cache.set(slug, { data, expiresAt: now + CACHE_TTL_MS });
-          results[slug] = data;
+          cache.set(internalSlug, { data, expiresAt: now + CACHE_TTL_MS });
+          results[internalSlug] = data;
         }
       }
     }
 
     // Cleanup old cache entries
-    if (cache.size > 50) {
+    if (cache.size > 100) {
       for (const [k, v] of cache) {
         if (now > v.expiresAt) cache.delete(k);
       }
@@ -106,19 +119,18 @@ serve(async (req) => {
 });
 
 /**
- * Parse a market object from Polymarket's Gamma API.
- * This gives us market status (active/resolved/closed) but NOT live scores.
- * Live scores come exclusively from the Sports WebSocket.
+ * Parse a market object from Polymarket's Gamma API (fetched by ID).
+ * Returns the real slug for WS matching + market status.
  */
-function parseGammaMarket(market: any, slug: string) {
+function parseGammaMarket(market: any, internalSlug: string) {
   if (!market) return null;
 
   const active = market.active === true;
   const closed = market.closed === true;
-  // `resolved` is an explicit boolean; `resolvedBy` is just the resolver address (always set)
   const resolved = market.resolved === true;
+  const realSlug = market.slug || null;
+  const eventSlug = market.event_slug || market.eventSlug || null;
 
-  // Determine status
   let status = "unknown";
   let live = false;
   let ended = false;
@@ -127,13 +139,11 @@ function parseGammaMarket(market: any, slug: string) {
     status = "Final";
     ended = true;
   } else if (active) {
-    // Market is active — could be pre-game or live
-    // Check if game has started based on gameStartTime
-    const gameStart = market.gameStartTime ? new Date(market.gameStartTime).getTime() : 0;
+    const gameStart = market.gameStartTime
+      ? new Date(market.gameStartTime).getTime()
+      : (market.startDate ? new Date(market.startDate).getTime() : 0);
     const now = Date.now();
     if (gameStart > 0 && now >= gameStart) {
-      // Game has started — mark as potentially live
-      // (Actual live score comes from WS, but this gives the UI the right status)
       status = "InProgress";
       live = true;
     } else {
@@ -143,10 +153,12 @@ function parseGammaMarket(market: any, slug: string) {
   }
 
   return {
-    slug,
+    slug: internalSlug,
+    realSlug,       // The REAL Polymarket slug for WS matching
+    eventSlug,      // Parent event slug (also used in WS)
     status,
     live,
     ended,
-    // No score/period/elapsed from Gamma — WS provides those
+    // Gamma doesn't provide scores — WS or Sports API provides those
   };
 }
