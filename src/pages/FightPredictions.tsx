@@ -604,11 +604,18 @@ export default function FightPredictions() {
         toast.info("Auth check slow — proceeding directly", { duration: 3000 });
       }
 
-      // Trading wallet setup is optional — backend falls back to shared credentials
+      // Per-user trading wallet is REQUIRED for Polymarket events
       const isPolymarketFight = selectedFight.source === "polymarket" || Boolean((selectedFight as any).polymarket_active);
       if (isPolymarketFight && (!hasSession || !canTrade)) {
-        // Attempt setup but don't block — backend has shared creds fallback
-        setupTradingWallet().catch(() => {});
+        const result = await setupTradingWallet();
+        const refreshed = result.success ? await refreshSession() : null;
+        if (!result.success || !(result.ready ?? refreshed?.canTrade)) {
+          toast.error("Trading wallet setup required", {
+            description: "Please set up your trading wallet first.",
+          });
+          setSubmitting(false);
+          return;
+        }
       }
 
       const feeRate = selectedFight.commission_bps != null
@@ -622,15 +629,13 @@ export default function FightPredictions() {
         const approved = await ensureAllowance(feeUsdc);
         if (!approved) {
           dbg("predict:allowance_gate_failed", { step: allowanceState.step, error: allowanceState.errorReason });
-          // Error is already shown via ApprovalStepIndicator in the UI
           setSubmitting(false);
           return;
         }
         dbg("predict:allowance_gate_passed", { step: allowanceState.step });
       }
 
-      // Step 4: Submit prediction — backend handles fee collection via relayer
-      // Use fetch directly so we can read JSON body on non-2xx responses (e.g. 403)
+      // Step 4: Submit prediction — backend handles fee collection + returns order params
       dbg("predict:step4_submit", { fightId: selectedFight.id, amount: amountUsd });
       const submitUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/prediction-submit`;
       const submitResp = await fetch(submitUrl, {
@@ -647,7 +652,6 @@ export default function FightPredictions() {
           fighter_pick: selectedPick,
           amount_usd: amountUsd,
           chain: "polygon",
-          // Always send the currently displayed buy-side price as baseline
           quote_price: acceptedRequote
             ? acceptedRequote.baselinePrice
             : (selectedPick === "fighter_a"
@@ -677,7 +681,6 @@ export default function FightPredictions() {
           return;
         }
 
-        // Requote flow: odds changed beyond tolerance
         if (errorCode === "price_changed_requote_required") {
           if (acceptedRequote) {
             acceptedRequoteRef.current = null;
@@ -703,15 +706,10 @@ export default function FightPredictions() {
         const isRelayerError = errorCode.startsWith("rpc_") || errorCode === "relayer_not_configured" || errorCode === "relayer_tx_failed" || errorCode === "fee_collection_failed";
         const isSetupRequired = errorCode === "trading_wallet_setup_required" || errorCode === "trading_wallet_not_ready" || errorCode === "no_trading_session";
         dbg("predict:backend_error", { backendMsg, errorCode, isRelayerError, isSetupRequired });
-        const isGeoBlocked = errorCode === "geo_blocked" || errorCode === "clob_geo_blocked" || backendMsg.toLowerCase().includes("region") || backendMsg.toLowerCase().includes("restricted") || backendMsg.toLowerCase().includes("geo");
-        if (isGeoBlocked) {
-          toast.error("Trading is not available in your region");
-          setSubmitting(false);
-          return;
-        }
         if (isSetupRequired) {
-          // Don't block — just attempt setup in background, backend uses shared creds
-          setupTradingWallet().catch(() => {});
+          toast.error("Trading wallet setup required", {
+            description: "Please set up your trading wallet first.",
+          });
           setSubmitting(false);
           return;
         }
@@ -721,6 +719,68 @@ export default function FightPredictions() {
         throw new Error(backendMsg);
       }
 
+      // ── Client-side CLOB submission for Polymarket orders ──
+      if (data?.action === "client_submit" && data.order_params && data.clob_credentials) {
+        dbg("predict:client_submit_start", { trade_order_id: data.trade_order_id });
+
+        const { submitClobOrder } = await import("@/lib/clobOrderClient");
+        const clobResult = await submitClobOrder(data.order_params, data.clob_credentials);
+
+        dbg("predict:client_submit_result", { success: clobResult.success, orderId: clobResult.orderId, error: clobResult.error });
+
+        // Report result back to backend
+        const confirmUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/prediction-confirm`;
+        const confirmResp = await fetch(confirmUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-privy-token": privyToken,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({
+            trade_order_id: data.trade_order_id,
+            polymarket_order_id: clobResult.orderId || null,
+            status: clobResult.success ? "submitted" : "failed",
+            error_code: clobResult.errorCode || null,
+            error_message: clobResult.error || null,
+          }),
+        });
+        const confirmData = await confirmResp.json().catch(() => ({}));
+
+        if (!clobResult.success) {
+          const isGeoBlock = clobResult.errorCode === "clob_geo_blocked";
+          if (isGeoBlock) {
+            toast.error("Trading is not available in your region");
+          } else {
+            toast.error("Order rejected", { description: clobResult.error || "Exchange rejected the order" });
+          }
+          setSubmitting(false);
+          return;
+        }
+
+        // Use confirm response data
+        acceptedRequoteRef.current = null;
+        setRequoteData(null);
+        setLastTradeResult({
+          trade_order_id: confirmData?.trade_order_id || data.trade_order_id,
+          trade_status: confirmData?.trade_status || "submitted",
+          requested_amount_usdc: data.requested_amount_usdc,
+          fee_usdc: data.fee_usdc,
+          fee_bps: data.fee_bps,
+          net_amount_usdc: data.net_amount_usdc,
+          entry_id: confirmData?.entry_id,
+        });
+
+        toast.success("Prediction submitted!", {
+          description: `$${amountUsd.toFixed(2)} on ${selectedPick === "fighter_a" ? selectedFight.fighter_a_name : selectedFight.fighter_b_name}`,
+        });
+        setShowPredictionSuccess(true);
+        loadFights();
+        loadUserEntries();
+        return;
+      }
+
+      // Native event path (non-Polymarket) — direct fill
       dbg("predict:success", { trade_order_id: data?.trade_order_id, status: data?.trade_status });
 
       acceptedRequoteRef.current = null;

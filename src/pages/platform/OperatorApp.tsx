@@ -505,7 +505,6 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           amount_usd: amountUsd,
           chain: "polygon",
           source_operator_id: operator?.id,
-          // Always send the currently displayed buy-side price as baseline
           quote_price: acceptedRequote
             ? acceptedRequote.baselinePrice
             : (selectedPick === "fighter_a"
@@ -534,7 +533,6 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           return;
         }
 
-        // Requote flow: odds changed beyond tolerance
         if (errorCode === "price_changed_requote_required") {
           if (acceptedRequote) {
             acceptedRequoteRef.current = null;
@@ -557,19 +555,71 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           return;
         }
 
-        if (errorCode === "geo_blocked" || errorCode === "clob_geo_blocked") {
-          toast.error("Trading is not available in your region");
-          setSubmitting(false);
-          return;
-        }
         if (errorCode === "trading_wallet_setup_required" || errorCode === "trading_wallet_not_ready" || errorCode === "no_trading_session") {
-          // Don't block — just attempt setup in background, backend uses shared creds
-          setupTradingWallet().catch(() => {});
+          toast.error(t("operator.tradingWalletRequired"), {
+            description: "Please set up your trading wallet first.",
+          });
           setSubmitting(false);
           return;
         }
         throw new Error(msg);
       }
+
+      // ── Client-side CLOB submission for Polymarket orders ──
+      if (data?.action === "client_submit" && data.order_params && data.clob_credentials) {
+        const { submitClobOrder } = await import("@/lib/clobOrderClient");
+        const clobResult = await submitClobOrder(data.order_params, data.clob_credentials);
+
+        // Report result back to backend
+        const confirmUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/prediction-confirm`;
+        const confirmResp = await fetch(confirmUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-privy-token": privyToken,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({
+            trade_order_id: data.trade_order_id,
+            polymarket_order_id: clobResult.orderId || null,
+            status: clobResult.success ? "submitted" : "failed",
+            error_code: clobResult.errorCode || null,
+            error_message: clobResult.error || null,
+          }),
+        });
+        const confirmData = await confirmResp.json().catch(() => ({}));
+
+        if (!clobResult.success) {
+          const isGeoBlock = clobResult.errorCode === "clob_geo_blocked";
+          toast.error(isGeoBlock ? "Trading is not available in your region" : t("operator.predictionFailed"), {
+            description: isGeoBlock ? undefined : (clobResult.error || "Exchange rejected the order"),
+          });
+          setSubmitting(false);
+          return;
+        }
+
+        acceptedRequoteRef.current = null;
+        setRequoteData(null);
+        setLastTradeResult({
+          trade_order_id: confirmData?.trade_order_id || data.trade_order_id,
+          trade_status: confirmData?.trade_status || "submitted",
+          requested_amount_usdc: data.requested_amount_usdc,
+          fee_usdc: data.fee_usdc,
+          fee_bps: data.fee_bps,
+          net_amount_usdc: data.net_amount_usdc,
+          entry_id: confirmData?.entry_id,
+        });
+        setShareAmount(amountUsd);
+        toast.success(t("operator.predictionSubmitted"), {
+          description: t("operator.amountPlaced", { amount: amountUsd.toFixed(2) }),
+        });
+        setShowSuccess(true);
+        loadUserEntries();
+        setTimeout(() => refetchBalance(), 3000);
+        return;
+      }
+
+      // Native event path (non-Polymarket) — direct fill
       acceptedRequoteRef.current = null;
       setRequoteData(null);
       setLastTradeResult({

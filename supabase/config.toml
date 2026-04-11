@@ -145,3 +145,6 @@ verify_jwt = false
 
 [functions.get-privy-config]
 verify_jwt = false
+
+[functions.prediction-confirm]
+verify_jwt = false
