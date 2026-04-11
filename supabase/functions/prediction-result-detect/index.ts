@@ -301,19 +301,47 @@ Deno.serve(async (req) => {
 
         const winner = detectWinner(market, fight);
         if (!winner) {
-          results.push({ id: fight.id, winner: null, ok: false, error: "winner_unclear" });
+          // Market is closed but no clear winner — if event_date is >12h ago,
+          // cancel the fight to remove it from browseable state
+          const eventAge = fight.event_date
+            ? Date.now() - new Date(fight.event_date).getTime()
+            : 0;
+          const CANCEL_AFTER_MS = 12 * 60 * 60 * 1000; // 12h
 
-          await supabase.from("automation_logs").insert({
-            action: "result_detect_unclear",
-            fight_id: fight.id,
-            source: "prediction-result-detect",
-            details: {
-              market_id: fight.polymarket_market_id,
-              condition_id: fight.polymarket_condition_id,
-              outcome_prices: market.outcomePrices,
-              outcomes: market.outcomes,
-            },
-          });
+          if (eventAge > CANCEL_AFTER_MS) {
+            await supabase.from("prediction_fights")
+              .update({ status: "cancelled", polymarket_active: false })
+              .eq("id", fight.id)
+              .in("status", ["live", "locked", "open"]);
+            
+            await supabase.from("automation_logs").insert({
+              action: "result_detect_auto_cancel",
+              fight_id: fight.id,
+              source: "prediction-result-detect",
+              details: {
+                market_id: fight.polymarket_market_id,
+                condition_id: fight.polymarket_condition_id,
+                outcome_prices: market.outcomePrices,
+                outcomes: market.outcomes,
+                reason: "market_closed_no_clear_winner_12h",
+              },
+            });
+            results.push({ id: fight.id, winner: null, ok: true, error: "auto_cancelled_unclear" });
+            console.log(`[result-detect] Fight ${fight.id}: market closed, no clear winner >12h, auto-cancelled`);
+          } else {
+            results.push({ id: fight.id, winner: null, ok: false, error: "winner_unclear" });
+            await supabase.from("automation_logs").insert({
+              action: "result_detect_unclear",
+              fight_id: fight.id,
+              source: "prediction-result-detect",
+              details: {
+                market_id: fight.polymarket_market_id,
+                condition_id: fight.polymarket_condition_id,
+                outcome_prices: market.outcomePrices,
+                outcomes: market.outcomes,
+              },
+            });
+          }
           continue;
         }
 

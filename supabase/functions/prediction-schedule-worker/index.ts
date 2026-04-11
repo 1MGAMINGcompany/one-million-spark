@@ -318,28 +318,34 @@ Deno.serve(async (req) => {
     }
 
     // ══════════════════════════════════════════════════════════════════
-    // Phase 5: Stale-live cleanup — lock fights stuck in "live" > 6h
+    // Phase 5: Stale cleanup — cancel fights stuck in "live"/"locked" > 6h
+    // that are inactive on Polymarket. These are finished games that
+    // never got a winner detected, so they should leave browseable state.
     // ══════════════════════════════════════════════════════════════════
     const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000).toISOString();
-    const { data: staleLiveFights } = await supabase
+    const { data: staleFights } = await supabase
       .from("prediction_fights")
-      .select("id, event_id, event_name, event_date, status")
-      .eq("status", "live")
+      .select("id, event_id, event_name, event_date, status, polymarket_active")
+      .in("status", ["live", "locked"])
       .is("winner", null)
       .not("event_date", "is", null)
       .lte("event_date", sixHoursAgo)
       .limit(200);
 
-    if (staleLiveFights && staleLiveFights.length > 0) {
-      for (const fight of staleLiveFights) {
-        console.warn(`[STALE_CLEANUP] Locking stale live fight id=${fight.id} event=${fight.event_name}`);
+    if (staleFights && staleFights.length > 0) {
+      for (const fight of staleFights) {
+        // If polymarket_active is false, the market is done — move to cancelled
+        // If polymarket_active is true/null, just lock it (still potentially tradable)
+        const targetStatus = fight.polymarket_active === false ? "cancelled" : "locked";
+        if (fight.status === targetStatus) continue; // already in target state
+
+        console.warn(`[STALE_CLEANUP] ${fight.status} → ${targetStatus} fight id=${fight.id} event=${fight.event_name} polymarket_active=${fight.polymarket_active}`);
         await supabase
           .from("prediction_fights")
-          .update({ status: "locked" })
-          .eq("id", fight.id)
-          .eq("status", "live");
+          .update({ status: targetStatus })
+          .eq("id", fight.id);
         await supabase.from("automation_logs").insert({
-          action: "stale_live_locked",
+          action: targetStatus === "cancelled" ? "stale_cancelled" : "stale_live_locked",
           fight_id: fight.id,
           event_id: fight.event_id,
           source: "prediction-schedule-worker",
@@ -347,7 +353,11 @@ Deno.serve(async (req) => {
             event_name: fight.event_name,
             event_date: fight.event_date,
             server_time: nowISO,
-            reason: "fight stuck in live status >6h past event_date, auto-locked",
+            from_status: fight.status,
+            polymarket_active: fight.polymarket_active,
+            reason: targetStatus === "cancelled"
+              ? "inactive polymarket market >6h past event_date, auto-cancelled"
+              : "fight stuck in live status >6h past event_date, auto-locked",
           },
         });
       }

@@ -273,6 +273,7 @@ export default function FightPredictions() {
             .select(FIGHTS_SELECT)
             .in("visibility", ["flagship", "platform", "all"])
             .not("status", "in", '("settled","cancelled","confirmed","result_selected","refund_pending","refunds_processing","refunds_complete")')
+            .neq("polymarket_active", false)
             .gt("event_date", new Date(Date.now() - 86400000 * 2).toISOString())
             .order("event_date", { ascending: true })
             .limit(200),
