@@ -1,71 +1,37 @@
 
 
-## Fix: "Invalid api key" — Credential Derivation Must Move Client-Side
+## Fix: Invalidate Stale Credentials + Add Auto-Re-derivation
 
 ### Root Cause
-The CLOB API credentials (`pm_api_key`, `pm_api_secret`, `pm_passphrase`) stored in `polymarket_user_sessions` were derived by the backend edge function (`polymarket-user-setup`) through the Fly.io proxy. Polymarket likely rejected or returned invalid credentials because the `/auth/api-key` and `/auth/derive-api-key` endpoints are also geo-blocked or IP-flagged for proxy traffic — same as `/order`.
+Wallet `0x3ed68845cf4528c80ff62094b52eeabca29db5a4` has `status: active` with `pm_api_key` populated from **April 9** — derived server-side through the Fly proxy. Those credentials are invalid (Polymarket revoked or never recognized them from the proxy IP). The `isSessionTradeReady()` check passes because the columns are non-null, so the bad keys get returned to the browser for order signing, producing "Invalid api key".
 
-The error `{"error":"Unauthorized/Invalid api key"}` confirms the stored `pm_api_key` itself is not recognized by Polymarket. This is not an HMAC issue (wrong signature would give a different error).
+The browser-side credential derivation (`clobCredentialClient.ts`) only runs during **initial setup** — never for sessions that already have (bad) keys.
 
-### Fix: Move credential derivation to the browser
+### Fix (3 changes)
 
-Same pattern as the order submission shift. The browser signs L1 EIP-712 auth headers and calls Polymarket's `/auth/api-key` or `/auth/derive-api-key` directly from the user's residential IP.
+**1. Invalidate existing stale credentials (DB migration)**
+- Set `pm_api_key = NULL`, `pm_api_secret = NULL`, `pm_passphrase = NULL`, `status = 'awaiting_browser_credentials'` for all sessions where `authenticated_at < '2026-04-11'` (pre-browser-derivation era).
+- This forces the browser re-derivation path on next trade attempt.
 
-### Changes
+**2. `src/pages/FightPredictions.tsx` — Auto-trigger browser credential derivation on "Invalid api key" error**
+- When `clobOrderClient` returns `errorCode: "clob_rejected"` with "Invalid api key" in the error message:
+  - Import and call `deriveClobCredentials` from `clobCredentialClient.ts` using the trading key from the returned credentials
+  - Save newly derived credentials via `polymarket-save-credentials`
+  - Retry the order submission once with the fresh credentials
+- Same change in `OperatorApp.tsx`
 
-**1. New client-side module: `src/lib/clobCredentialClient.ts`**
-- Takes the user's trading key (already derived server-side and stored)
-- Builds L1 EIP-712 auth headers (same as `polymarket-user-setup` does)
-- Calls `POST https://clob.polymarket.com/auth/api-key` from the browser
-- Falls back to `GET https://clob.polymarket.com/auth/derive-api-key`
-- Returns `{ apiKey, apiSecret, passphrase }` to the caller
-
-**2. New edge function: `supabase/functions/polymarket-save-credentials/index.ts`**
-- Accepts `{ api_key, api_secret, passphrase }` from the browser after successful derivation
-- Verifies Privy JWT, resolves wallet
-- Updates `polymarket_user_sessions` with the new credentials
-- Sets `status = "active"`, `authenticated_at = now()`
-
-**3. Update `src/hooks/usePolymarketSession.ts`** (or equivalent setup flow)
-- After server-side `polymarket-user-setup` returns the trading key but no valid credentials:
-  - Call `clobCredentialClient.deriveCredentials(tradingKey)` from the browser
-  - POST results to `polymarket-save-credentials`
-  - Session is now trade-ready
-
-**4. Update `src/pages/FightPredictions.tsx`**
-- Before client-side order submission, check if credentials are present
-- If `prediction-submit` returns `trading_wallet_setup_required`, trigger browser-side credential derivation automatically
-- Then retry the submission
-
-**5. Update `supabase/functions/polymarket-user-setup/index.ts`**
-- In `derive_and_setup`: still derive the trading key server-side (deterministic from SIWE)
-- But skip the CLOB API credential derivation calls (remove `deriveClobApiCreds`)
-- Return the trading key to the client and let the browser handle credential creation
-- Set session status to `awaiting_browser_credentials` instead of `active`
-
-### Flow After Fix
-
-```text
-1. User clicks "Set up trading wallet"
-2. Browser → polymarket-user-setup → derives trading key, returns it
-3. Browser → POST clob.polymarket.com/auth/api-key (direct, residential IP)
-4. Browser → polymarket-save-credentials → stores api_key/secret/passphrase
-5. Session is now trade-ready
-6. User places prediction → prediction-submit returns order_params + credentials
-7. Browser → POST clob.polymarket.com/order (direct, residential IP)
-8. Browser → prediction-confirm → finalizes entry
-```
-
-### Security
-- Trading key is already returned to the client for order signing — no new exposure
-- API credentials are per-user, derived from their own trading key
-- Credentials stored in DB same as before, just derived from browser instead of server
+**3. `src/hooks/usePolymarketSession.ts` — Trigger browser derivation when session has trading key but no API keys**
+- In `refreshSession`: if the backend returns `status: "awaiting_browser_credentials"` and the session has a trading key, automatically call `deriveClobCredentials` + save, then re-check status.
+- This ensures credentials get re-derived proactively before the user even tries to trade.
 
 ### Files
-- Create `src/lib/clobCredentialClient.ts`
-- Create `supabase/functions/polymarket-save-credentials/index.ts`
-- Update `supabase/functions/polymarket-user-setup/index.ts`
-- Update `src/pages/FightPredictions.tsx`
-- Update `src/hooks/usePolymarketSession.ts`
-- Update `supabase/config.toml` (add `polymarket-save-credentials`)
+- DB migration: clear stale credentials
+- `src/pages/FightPredictions.tsx`: add retry-with-re-derivation on "Invalid api key"
+- `src/pages/platform/OperatorApp.tsx`: same
+- `src/hooks/usePolymarketSession.ts`: proactive re-derivation on `awaiting_browser_credentials`
+
+### What This Does NOT Change
+- No API keys to configure — these are per-user Polymarket CLOB credentials derived from the user's own trading key
+- No platform secrets involved
+- Fee collection, reconciliation, and pool accounting unchanged
 
