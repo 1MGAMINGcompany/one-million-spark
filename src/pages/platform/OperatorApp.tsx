@@ -568,7 +568,28 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       // ── Client-side CLOB submission for Polymarket orders ──
       if (data?.action === "client_submit" && data.order_params && data.clob_credentials) {
         const { submitClobOrder } = await import("@/lib/clobOrderClient");
-        const clobResult = await submitClobOrder(data.order_params, data.clob_credentials);
+        let clobResult = await submitClobOrder(data.order_params, data.clob_credentials);
+
+        // Auto-re-derive credentials on "Invalid api key" and retry once
+        if (!clobResult.success && clobResult.errorCode === "clob_rejected" && clobResult.error?.toLowerCase().includes("invalid api key") && data.clob_credentials.trading_key) {
+          try {
+            const { deriveClobCredentials } = await import("@/lib/clobCredentialClient");
+            const derivedResult = await deriveClobCredentials(data.clob_credentials.trading_key as `0x${string}`);
+            if (derivedResult.credentials) {
+              const saveCreds = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/polymarket-save-credentials`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "x-privy-token": privyToken, apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+                body: JSON.stringify({ wallet: walletAddress, api_key: derivedResult.credentials.apiKey, api_secret: derivedResult.credentials.apiSecret, passphrase: derivedResult.credentials.passphrase }),
+              });
+              if (saveCreds.ok) {
+                const freshCreds = { ...data.clob_credentials, api_key: derivedResult.credentials.apiKey, api_secret: derivedResult.credentials.apiSecret, passphrase: derivedResult.credentials.passphrase };
+                clobResult = await submitClobOrder(data.order_params, freshCreds);
+              }
+            }
+          } catch (reDerivErr) {
+            console.warn("[OperatorApp] credential re-derivation failed:", reDerivErr);
+          }
+        }
 
         // Report result back to backend
         const confirmUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/prediction-confirm`;
