@@ -148,3 +148,6 @@ verify_jwt = false
 
 [functions.prediction-confirm]
 verify_jwt = false
+
+[functions.polymarket-save-credentials]
+verify_jwt = false

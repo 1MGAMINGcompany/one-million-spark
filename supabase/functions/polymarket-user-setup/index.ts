@@ -354,7 +354,7 @@ Deno.serve(async (req) => {
       await logSetupEvent(supabase, "polymarket_user_setup_started", {
         wallet: normalizedWallet,
         privy_did: privyDid,
-        flow: "v2_proxy",
+        flow: "v2_proxy_browser_creds",
         requested_wallet: requestedWallet,
         requested_app_wallet: requestedAppWallet,
         requested_eoa_wallet: requestedEoaWallet,
@@ -367,37 +367,21 @@ Deno.serve(async (req) => {
 
       console.log(`[polymarket-user-setup] Derived trading address: ${derivedAddress}`);
 
-      // Step 2: Derive CLOB API credentials
-      const clobCreds = await deriveClobApiCreds(tradingAccount);
-      const hasApiKey = !!clobCreds.apiKey;
-      if (!hasApiKey || !clobCreds.apiSecret || !clobCreds.passphrase) {
-        await logSetupEvent(supabase, "polymarket_user_setup_failed", {
-          wallet: normalizedWallet,
-          privy_did: privyDid,
-          stage: "clob_credentials",
-          error: clobCreds.error,
-          derived_address: derivedAddress,
-        });
-        return json({
-          error: "Trading wallet credential derivation failed",
-          error_code: "clob_credentials_failed",
-          stage: "clob_credentials",
-          detail: clobCreds.error,
-        }, 502);
-      }
+      // Step 2: Skip server-side CLOB credential derivation — browser handles this
+      // The browser will call Polymarket's /auth/api-key directly from the user's
+      // residential IP, then POST the credentials to polymarket-save-credentials.
 
-      // Step 3: Upsert session — mark safe_deployed + approvals_set = true
-      // V2 PROXY handles Safe deployment and token approvals automatically on first trade
+      // Step 3: Upsert session — trading key stored, credentials pending browser derivation
       const sessionData = {
-        status: "active",
-        pm_api_key: clobCreds.apiKey,
-        pm_api_secret: clobCreds.apiSecret,
-        pm_passphrase: clobCreds.passphrase,
+        status: "awaiting_browser_credentials",
+        pm_api_key: null,
+        pm_api_secret: null,
+        pm_passphrase: null,
         pm_derived_address: derivedAddress,
         pm_trading_key: tradingKeyHex,
-        safe_address: null, // V2 PROXY creates this on first trade
-        safe_deployed: true, // Optimistic — V2 auto-deploys
-        approvals_set: true, // Optimistic — V2 auto-approves
+        safe_address: null,
+        safe_deployed: true,
+        approvals_set: true,
         privy_wallet_id: requestedEoaWallet ?? requestedAppWallet ?? normalizedWallet,
         authenticated_at: new Date().toISOString(),
         expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
@@ -447,25 +431,28 @@ Deno.serve(async (req) => {
         wallet: normalizedWallet,
         privy_did: privyDid,
         derived_address: derivedAddress,
-        flow: "v2_proxy",
+        flow: "v2_proxy_browser_creds",
         safe_deployed: true,
         approvals_set: true,
-        has_api_key: hasApiKey,
+        has_api_key: false,
+        awaiting_browser_credentials: true,
       });
 
-      console.log(`[polymarket-user-setup] V2 PROXY setup complete for ${normalizedWallet}`);
+      console.log(`[polymarket-user-setup] Setup complete (awaiting browser credentials) for ${normalizedWallet}`);
 
       return json({
         success: true,
         provisioned: true,
         resolved_wallet: normalizedWallet,
         derived_address: derivedAddress,
+        trading_key: tradingKeyHex,
         safe_address: null,
         safe_deployed: true,
         approvals_set: true,
-        has_api_key: hasApiKey,
-        can_trade: true,
-        status: "active",
+        has_api_key: false,
+        can_trade: false,
+        status: "awaiting_browser_credentials",
+        requires_browser_credentials: true,
       });
     }
 
