@@ -200,9 +200,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     const refreshed = result.success ? await refreshSession() : null;
     const ready = result.ready ?? refreshed?.canTrade ?? false;
 
-    // Don't block — backend uses shared credentials fallback
     if (!result.success || !ready) {
-      console.warn("[OperatorApp] Trading wallet setup not ready, using shared fallback");
+      console.warn("[OperatorApp] Trading wallet setup not ready — per-user session required");
       return false;
     }
 
@@ -213,12 +212,13 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const { data: operatorFights, isError: opFightsError } = useQuery({
     queryKey: ["operator_fights", operator?.id],
     queryFn: async () => {
-      const cutoff = new Date(Date.now() - 7 * 86400000).toISOString();
+      const cutoff = new Date(Date.now() - 2 * 86400000).toISOString();
       const { data } = await (supabase as any)
         .from("prediction_fights")
         .select("*, prediction_events!event_id(category)")
         .or(`operator_id.eq.${operator!.id},and(operator_id.is.null,visibility.in.(platform,all))`)
         .in("status", ["open", "live", "locked"])
+        .not("polymarket_active", "is", false)
         .not("event_date", "is", null)
         .gte("event_date", cutoff)
         .not("fighter_a_name", "in", '("Yes","No","Over","Under")')
@@ -465,10 +465,17 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         setSubmitting(false);
         return;
       }
-      // Trading wallet setup is optional — backend falls back to shared credentials
+      // Per-user trading wallet is REQUIRED — no shared credentials fallback
       const isPolymarketFight = selectedFight.source === "polymarket" || Boolean((selectedFight as any).polymarket_market_id);
       if (isPolymarketFight && (!hasSession || !canTrade)) {
-        setupTradingWallet().catch(() => {});
+        const walletReady = await ensureTradingWalletReady();
+        if (!walletReady) {
+          toast.error(t("operator.tradingWalletRequired"), {
+            description: "Please set up your trading wallet first.",
+          });
+          setSubmitting(false);
+          return;
+        }
       }
 
       const feeRate = selectedFight.commission_bps != null

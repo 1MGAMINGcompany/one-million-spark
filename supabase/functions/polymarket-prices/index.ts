@@ -195,7 +195,9 @@ Deno.serve(async (req) => {
 
           if (marketResolved) {
             updatePayload.polymarket_active = false;
-            updatePayload.status = "locked";
+            // Do NOT set status to "locked" — let prediction-result-detect
+            // properly resolve via winner detection → "confirmed" flow.
+            // Setting "locked" here kept dead markets browseable.
           }
 
           if (totalVolume > 0) updatePayload.polymarket_volume_usd = totalVolume;

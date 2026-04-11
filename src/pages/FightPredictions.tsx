@@ -272,8 +272,8 @@ export default function FightPredictions() {
             .from("prediction_fights")
             .select(FIGHTS_SELECT)
             .in("visibility", ["flagship", "platform", "all"])
-            .not("status", "in", '("settled","cancelled")')
-            .gt("event_date", new Date(Date.now() - 86400000 * 7).toISOString())
+            .not("status", "in", '("settled","cancelled","confirmed","result_selected","refund_pending","refunds_processing","refunds_complete")')
+            .gt("event_date", new Date(Date.now() - 86400000 * 2).toISOString())
             .order("event_date", { ascending: true })
             .limit(200),
           supabase
@@ -424,9 +424,8 @@ export default function FightPredictions() {
     const refreshed = result.success ? await refreshSession() : null;
     const ready = result.ready ?? refreshed?.canTrade ?? false;
 
-    // Don't block — backend uses shared credentials fallback
     if (!result.success || !ready) {
-      console.warn("[FightPredictions] Trading wallet setup not ready, using shared fallback");
+      console.warn("[FightPredictions] Trading wallet setup not ready — per-user session required");
       return false;
     }
 
