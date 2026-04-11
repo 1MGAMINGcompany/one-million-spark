@@ -479,6 +479,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         const approved = await ensureAllowance(feeUsdc);
         if (!approved) { setSubmitting(false); return; }
       }
+      // Clear any previous requote data at the start of a fresh submission
+      setRequoteData(null);
       // Use fetch directly so we can read the JSON body on non-2xx responses
       const submitUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/prediction-submit`;
       const submitResp = await fetch(submitUrl, {
@@ -1116,7 +1118,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           fight={selectedFight}
           pick={selectedPick}
           onClose={() => { acceptedRequoteRef.current = null; setSelectedFight(null); setSelectedPick(null); setShowSuccess(false); setLastTradeResult(null); setRequoteData(null); resetAllowance(); }}
-          onSubmit={(amt) => { setRequoteData(null); handleSubmit(amt); }}
+          onSubmit={(amt) => handleSubmit(amt)}
           submitting={submitting || pmSessionLoading}
           showSuccess={showSuccess}
           tradeResult={lastTradeResult}
