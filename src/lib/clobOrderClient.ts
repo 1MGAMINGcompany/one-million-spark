@@ -1,53 +1,26 @@
 /**
- * clobOrderClient — Client-side EIP-712 order signing and submission to Polymarket CLOB.
+ * clobOrderClient — Browser-side order submission using the official Polymarket SDK.
  *
- * This module runs in the user's browser, bypassing server-side geo-blocking by
- * submitting orders directly from the user's residential IP.
+ * This replaces manual EIP-712 signing + HMAC auth with the canonical
+ * @polymarket/clob-client, eliminating serializer drift.
  *
- * Security: Trading key + API credentials are received from the backend per-request
- * and used only in-memory for a single order. Nothing is persisted.
- *
- * Auth model alignment (April 2026):
- * - signatureType = 1 (POLY_PROXY) when a proxy/funder address is provided
- * - signatureType = 0 (EOA) when no proxy is used
- * - POLY_ADDRESS L2 header is always sent
- * - orderType = "FOK" (Fill-or-Kill) for instant market execution
+ * Architecture: browser derives credentials → browser signs locally via SDK →
+ * browser POSTs directly to CLOB (user's residential IP bypasses geo-block).
  */
 
+import { ClobClient, Side, OrderType } from "@polymarket/clob-client";
+import { createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { polygon } from "viem/chains";
 
-// ── Polymarket CTF Exchange addresses (Polygon mainnet) ──
-const CTF_EXCHANGE = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E";
-const NEG_RISK_CTF_EXCHANGE = "0xC5d563A36AE78145C45a50134d48A1215220f80a";
+const CLOB_HOST = "https://clob.polymarket.com";
 const POLYGON_CHAIN_ID = 137;
-const USDC_DECIMALS = 6;
-const CLOB_BASE = "https://clob.polymarket.com";
-const TREASURY_WALLET = "0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d";
-
-/** EIP-712 typed data structure for Polymarket orders */
-const ORDER_TYPES = {
-  Order: [
-    { name: "salt", type: "uint256" },
-    { name: "maker", type: "address" },
-    { name: "signer", type: "address" },
-    { name: "taker", type: "address" },
-    { name: "tokenId", type: "uint256" },
-    { name: "makerAmount", type: "uint256" },
-    { name: "takerAmount", type: "uint256" },
-    { name: "expiration", type: "uint256" },
-    { name: "nonce", type: "uint256" },
-    { name: "feeRateBps", type: "uint256" },
-    { name: "side", type: "uint8" },
-    { name: "signatureType", type: "uint8" },
-  ],
-} as const;
 
 export interface ClobOrderParams {
   token_id: string;
   price: number;
   net_amount_usdc: number;
-  fee_rate_bps: number;
-  /** If true, use the NegRisk CTF Exchange (for sports/multi-outcome markets) */
+  fee_rate_bps?: number;
   neg_risk?: boolean;
 }
 
@@ -56,9 +29,7 @@ export interface ClobCredentials {
   api_secret: string;
   passphrase: string;
   trading_key: string;
-  /** The proxy/safe address that owns the position (maker). If not provided, uses signer address. */
   proxy_address?: string;
-  /** The funder address for POLY_PROXY mode. */
   funder_address?: string;
 }
 
@@ -68,196 +39,92 @@ export interface ClobSubmitResult {
   status?: string;
   error?: string;
   errorCode?: string;
-  /** Diagnostics for debugging auth issues */
   diagnostics?: {
     signatureType: number;
     funder: string;
     maker: string;
     signer: string;
     orderType: string;
-    polyAddressHeader: string;
-    apiKeyPrefix: string;
     exchange: string;
     httpStatus?: number;
+    usedOfficialClient: boolean;
+    negRisk: boolean;
   };
 }
 
-/** Decode a base64 (or URL-safe base64) string to Uint8Array */
-function base64ToUint8Array(b64: string): Uint8Array {
-  const std = b64.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = std + "=".repeat((4 - (std.length % 4)) % 4);
-  const bin = atob(padded);
-  const arr = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-  return arr;
-}
-
-/** HMAC signature for Polymarket L2 API authentication headers */
-async function generateClobHmac(
-  apiSecret: string,
-  timestamp: string,
-  method: string,
-  path: string,
-  body: string = "",
-): Promise<string> {
-  const message = timestamp + method + path + body;
-  const encoder = new TextEncoder();
-  const keyData = base64ToUint8Array(apiSecret);
-  const key = await crypto.subtle.importKey(
-    "raw",
-    keyData.buffer as ArrayBuffer,
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(message));
-  return btoa(String.fromCharCode(...new Uint8Array(sig)));
-}
-
 /**
- * Sign an EIP-712 order and POST it to the Polymarket CLOB directly from the browser.
+ * Submit a market order to Polymarket CLOB using the official SDK.
+ * The SDK handles EIP-712 signing, HMAC auth, fee rate, exchange selection, and payload serialization.
  */
 export async function submitClobOrder(
   params: ClobOrderParams,
   credentials: ClobCredentials,
 ): Promise<ClobSubmitResult> {
   try {
+    // Build viem wallet client from trading key
     const account = privateKeyToAccount(credentials.trading_key as `0x${string}`);
+    const walletClient = createWalletClient({
+      account,
+      chain: polygon,
+      transport: http(),
+    });
 
     // Determine auth model
     const useProxy = !!credentials.proxy_address;
     const signatureType = useProxy ? 1 : 0; // 0=EOA, 1=POLY_PROXY
-    const funder = useProxy
-      ? (credentials.funder_address || "0x0000000000000000000000000000000000000000")
-      : "0x0000000000000000000000000000000000000000";
-    // maker = proxy address (owner) if proxy mode, otherwise signer
-    const maker = useProxy
-      ? (credentials.proxy_address as `0x${string}`)
-      : account.address;
+    const funder = useProxy ? credentials.funder_address : undefined;
 
-    // Select the correct exchange contract based on neg_risk flag
-    const exchange = params.neg_risk ? NEG_RISK_CTF_EXCHANGE : CTF_EXCHANGE;
-
-    // EIP-712 domain must match the exchange contract
-    const eip712Domain = {
-      name: "Polymarket CTF Exchange",
-      version: "1",
-      chainId: POLYGON_CHAIN_ID,
-      verifyingContract: exchange as `0x${string}`,
-    } as const;
-
-    // Calculate raw amounts (6 decimal precision)
-    const makerAmountRaw = BigInt(Math.floor(params.net_amount_usdc * 10 ** USDC_DECIMALS));
-    const shares = params.net_amount_usdc / params.price;
-    const takerAmountRaw = BigInt(Math.floor(shares * 10 ** USDC_DECIMALS));
-
-    // Generate cryptographic salt
-    const saltBytes = new Uint8Array(16);
-    crypto.getRandomValues(saltBytes);
-    const salt = BigInt(
-      "0x" + Array.from(saltBytes).map((b) => b.toString(16).padStart(2, "0")).join(""),
-    );
-
-    const orderMessage = {
-      salt,
-      maker: maker as `0x${string}`,
-      signer: account.address as `0x${string}`,
-      taker: "0x0000000000000000000000000000000000000000" as `0x${string}`,
-      tokenId: BigInt(params.token_id),
-      makerAmount: makerAmountRaw,
-      takerAmount: takerAmountRaw,
-      expiration: 0n,
-      nonce: 0n,
-      feeRateBps: BigInt(params.fee_rate_bps),
-      side: 0, // BUY
-      signatureType,
+    const creds = {
+      key: credentials.api_key,
+      secret: credentials.api_secret,
+      passphrase: credentials.passphrase,
     };
 
-    // EIP-712 sign the order
-    const signature = await account.signTypedData({
-      domain: eip712Domain,
-      types: ORDER_TYPES,
-      primaryType: "Order",
-      message: orderMessage,
-    });
+    // Construct official CLOB client
+    const client = new ClobClient(
+      CLOB_HOST,
+      POLYGON_CHAIN_ID,
+      walletClient,
+      creds,
+      signatureType,
+      funder,
+    );
 
-    // Build POST /order body
-    // CRITICAL: owner = API key (not maker address) per Polymarket SDK
-    const orderBody = JSON.stringify({
-      order: {
-        salt: salt.toString(),
-        maker,
-        signer: account.address,
-        taker: "0x0000000000000000000000000000000000000000",
-        tokenID: params.token_id,
-        makerAmount: makerAmountRaw.toString(),
-        takerAmount: takerAmountRaw.toString(),
-        expiration: "0",
-        nonce: "0",
-        feeRateBps: params.fee_rate_bps.toString(),
-        side: "BUY",
-        signatureType,
-        signature,
-      },
-      owner: credentials.api_key,
-      orderType: "FOK",
-      affiliateAddress: TREASURY_WALLET,
-    });
-
-    // L2 HMAC authentication headers
-    const timestamp = Math.floor(Date.now() / 1000).toString();
-    const path = "/order";
-    const hmac = await generateClobHmac(credentials.api_secret, timestamp, "POST", path, orderBody);
+    const negRisk = params.neg_risk ?? true; // sports markets are neg_risk
 
     const diagnostics = {
       signatureType,
-      funder,
-      maker: maker as string,
+      funder: funder || "0x0000000000000000000000000000000000000000",
+      maker: useProxy ? (credentials.proxy_address as string) : account.address,
       signer: account.address,
       orderType: "FOK",
-      polyAddressHeader: account.address,
-      apiKeyPrefix: credentials.api_key.substring(0, 8),
-      exchange,
+      exchange: negRisk ? "NegRiskCTFExchange" : "CTFExchange",
+      usedOfficialClient: true,
+      negRisk,
     };
 
-    console.log("[clobOrderClient] Order submission diagnostics:", JSON.stringify(diagnostics));
-    console.log("[clobOrderClient] HMAC inputs: timestamp=%s method=POST path=%s bodyLen=%d",
-      timestamp, path, orderBody.length);
+    console.log("[clobOrderClient] SDK order submission:", JSON.stringify({
+      ...diagnostics,
+      tokenID: params.token_id.substring(0, 20) + "...",
+      amount: params.net_amount_usdc,
+      apiKeyPrefix: credentials.api_key.substring(0, 8),
+    }));
 
-    const res = await fetch(`${CLOB_BASE}${path}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        POLY_API_KEY: credentials.api_key,
-        POLY_SIGNATURE: hmac,
-        POLY_PASSPHRASE: credentials.passphrase,
-        POLY_TIMESTAMP: timestamp,
-        POLY_ADDRESS: account.address,
+    // Use the official SDK to create, sign, and post the market order
+    const resp = await client.createAndPostMarketOrder(
+      {
+        tokenID: params.token_id,
+        amount: params.net_amount_usdc,
+        side: Side.BUY,
       },
-      body: orderBody,
-    });
+      { tickSize: "0.01", negRisk },
+      OrderType.FOK,
+    );
 
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error(`[clobOrderClient] CLOB order failed (${res.status}): full response: ${errText}`);
+    console.log("[clobOrderClient] SDK response:", JSON.stringify(resp).substring(0, 500));
 
-      const isGeoBlock =
-        res.status === 403 &&
-        (errText.toLowerCase().includes("restricted") || errText.toLowerCase().includes("region"));
-
-      return {
-        success: false,
-        error: errText,
-        errorCode: isGeoBlock ? "clob_geo_blocked" : "clob_rejected",
-        status: "failed",
-        diagnostics: { ...diagnostics, httpStatus: res.status },
-      };
-    }
-
-    const data = await res.json();
-    const orderId = data.orderID || data.id || null;
-
-    console.log("[clobOrderClient] Order submitted:", orderId, "full response:", JSON.stringify(data).substring(0, 300));
+    // Extract order ID from response
+    const orderId = resp?.orderID || resp?.orderIds?.[0] || resp?.id || null;
 
     return {
       success: !!orderId,
@@ -265,13 +132,34 @@ export async function submitClobOrder(
       status: orderId ? "submitted" : "accepted",
       diagnostics,
     };
-  } catch (err) {
-    console.error("[clobOrderClient] Order signing/submission error:", err);
+  } catch (err: any) {
+    console.error("[clobOrderClient] SDK order error:", err);
+
+    // Try to extract structured error info
+    const errMsg = err?.message || err?.response?.data || String(err);
+    const errStr = typeof errMsg === "string" ? errMsg : JSON.stringify(errMsg);
+
+    const isGeoBlock =
+      errStr.toLowerCase().includes("restricted") ||
+      errStr.toLowerCase().includes("region") ||
+      err?.response?.status === 403;
+
     return {
       success: false,
-      error: err instanceof Error ? err.message : String(err),
-      errorCode: "client_signing_error",
+      error: errStr.substring(0, 1000),
+      errorCode: isGeoBlock ? "clob_geo_blocked" : "clob_rejected",
       status: "failed",
+      diagnostics: {
+        signatureType: 0,
+        funder: "0x0000000000000000000000000000000000000000",
+        maker: "unknown",
+        signer: "unknown",
+        orderType: "FOK",
+        exchange: "unknown",
+        usedOfficialClient: true,
+        negRisk: params.neg_risk ?? true,
+        httpStatus: err?.response?.status,
+      },
     };
   }
 }
