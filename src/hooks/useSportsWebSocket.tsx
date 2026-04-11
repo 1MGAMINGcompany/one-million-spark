@@ -28,88 +28,34 @@ const WS_URL = "wss://sports-api.polymarket.com/ws";
 const MAX_BACKOFF = 30000;
 
 /**
- * Build a normalized match key from a WS message's league + teams.
- * Returns e.g. "nba|cha|min" (sorted team codes, lowercased).
+ * Parse a WebSocket message from the Polymarket Sports API.
+ * Primary matching: use msg.slug directly against tracked slugs set.
+ * Fallback: build match key from league + team codes.
  */
-function buildMatchKey(league: string, teamA: string, teamB: string): string {
-  const l = (league || "").toLowerCase();
-  const codes = [teamA, teamB].map(t => (t || "").toLowerCase().trim()).sort();
-  return `${l}|${codes[0]}|${codes[1]}`;
-}
+function parseLiveMessage(msg: any, slugSet: Set<string>): LiveGameState | null {
+  if (!msg) return null;
 
-/**
- * Extract a match key from a polymarket_slug like "nba-cha-min-2026-04-05".
- * Strategy: take the league prefix and the two team codes that follow.
- * Slug format varies by sport but generally: {league}-{team1}-{team2}-{date}
- * Some slugs have suffixes like "-cam" for specific outcomes — skip those.
- *
- * Returns an array of candidate keys to support multiple slug formats.
- */
-function slugToMatchKeys(slug: string): string[] {
-  if (!slug) return [];
-  const parts = slug.split("-");
-  if (parts.length < 4) return [];
-
-  const league = parts[0].toLowerCase();
-
-  // Find the date portion (YYYY-MM-DD) — typically the last 3 parts
-  let dateStartIdx = -1;
-  for (let i = 1; i < parts.length; i++) {
-    if (/^\d{4}$/.test(parts[i]) && i + 2 < parts.length) {
-      dateStartIdx = i;
-      break;
-    }
+  // ── Primary: direct slug match ──
+  let slug: string | null = null;
+  if (msg.slug && slugSet.has(msg.slug)) {
+    slug = msg.slug;
+  } else if (msg.market_slug && slugSet.has(msg.market_slug)) {
+    slug = msg.market_slug;
   }
 
-  const keys: string[] = [];
-
-  if (dateStartIdx >= 3) {
-    // Team codes are between league and date
-    const teamParts = parts.slice(1, dateStartIdx);
-    if (teamParts.length >= 2) {
-      // Primary: first two team parts
-      const codes2 = teamParts.slice(0, 2).map(t => t.toLowerCase()).sort();
-      keys.push(`${league}|${codes2[0]}|${codes2[1]}`);
-
-      // If there are 3+ team parts, also try combining first two as one team code
-      // e.g. "nba-golden-state-warriors-lal-2026-04-10" → "golden state" vs "lal"
-      if (teamParts.length >= 3) {
-        // Try: parts[1..N-1] joined as teamA, last part as teamB
-        const teamA = teamParts.slice(0, -1).join(" ").toLowerCase();
-        const teamB = teamParts[teamParts.length - 1].toLowerCase();
-        const altCodes = [teamA, teamB].sort();
-        keys.push(`${league}|${altCodes[0]}|${altCodes[1]}`);
+  // ── Fallback: try partial slug matching (WS slug may lack outcome suffix) ──
+  if (!slug && (msg.slug || msg.market_slug)) {
+    const wsSlug = (msg.slug || msg.market_slug) as string;
+    for (const tracked of slugSet) {
+      if (tracked.startsWith(wsSlug) || wsSlug.startsWith(tracked)) {
+        slug = tracked;
+        break;
       }
     }
   }
 
-  // Fallback: if no date found, try positions 1 and 2 directly
-  if (keys.length === 0 && parts.length >= 3) {
-    const codes = [parts[1], parts[2]].map(t => t.toLowerCase()).sort();
-    keys.push(`${league}|${codes[0]}|${codes[1]}`);
-  }
+  if (!slug) return null;
 
-  return keys;
-}
-
-/**
- * Parse a WebSocket message from the Polymarket Sports API.
- * Messages have: gameId, leagueAbbreviation, homeTeam, awayTeam, score, period, elapsed, live, ended, status
- */
-function parseLiveMessage(msg: any, slugLookup: Map<string, string>): LiveGameState | null {
-  if (!msg) return null;
-  
-  // Build match key from WS data
-  const league = msg.leagueAbbreviation || "";
-  const home = msg.homeTeam || "";
-  const away = msg.awayTeam || "";
-  
-  if (!league || (!home && !away)) return null;
-  
-  const key = buildMatchKey(league, home, away);
-  const slug = slugLookup.get(key);
-  if (!slug) return null; // No matching fight in our DB
-  
   const status = (msg.status || "unknown").toString();
   const live = typeof msg.live === "boolean"
     ? msg.live
@@ -135,7 +81,7 @@ function parseLiveMessage(msg: any, slugLookup: Map<string, string>): LiveGameSt
     }
   }
 
-  const sport = league.toLowerCase() || undefined;
+  const league = (msg.leagueAbbreviation || msg.league || "").toLowerCase();
 
   return {
     slug,
@@ -147,7 +93,7 @@ function parseLiveMessage(msg: any, slugLookup: Map<string, string>): LiveGameSt
     status,
     live,
     ended,
-    sport,
+    sport: league || undefined,
     raw: msg,
   };
 }
@@ -164,23 +110,11 @@ export function SportsWebSocketProvider({ children, slugs = [] }: SportsWebSocke
   const wsRef = useRef<WebSocket | null>(null);
   const backoffRef = useRef(1000);
   const mountedRef = useRef(true);
-  const slugsRef = useRef(slugs);
-  slugsRef.current = slugs;
 
-  // Build a lookup map: matchKey → polymarket_slug
-  // This allows us to match WS broadcasts (which use league+teams) to our DB slugs
-  const slugLookup = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const slug of slugs) {
-      const keys = slugToMatchKeys(slug);
-      for (const key of keys) {
-        if (!map.has(key)) map.set(key, slug);
-      }
-    }
-    return map;
-  }, [slugs]);
-  const slugLookupRef = useRef(slugLookup);
-  slugLookupRef.current = slugLookup;
+  // Build a Set of tracked slugs for O(1) lookup
+  const slugSet = useMemo(() => new Set(slugs), [slugs]);
+  const slugSetRef = useRef(slugSet);
+  slugSetRef.current = slugSet;
 
   const connect = useCallback(() => {
     if (!mountedRef.current) return;
@@ -210,7 +144,7 @@ export function SportsWebSocketProvider({ children, slugs = [] }: SportsWebSocke
             const next = new Map(prev);
             let changed = false;
             for (const msg of messages) {
-              const state = parseLiveMessage(msg, slugLookupRef.current);
+              const state = parseLiveMessage(msg, slugSetRef.current);
               if (state) {
                 next.set(state.slug, state);
                 changed = true;

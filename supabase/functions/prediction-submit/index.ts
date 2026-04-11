@@ -1471,6 +1471,7 @@ Deno.serve(async (req) => {
           price: expectedPrice,
           net_amount_usdc,
           fee_rate_bps: pmFeeRateBps,
+          neg_risk: true,
         },
         clob_credentials: {
           api_key: userSession!.pm_api_key,
