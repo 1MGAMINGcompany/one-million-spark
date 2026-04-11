@@ -103,6 +103,7 @@ Deno.serve(async (req) => {
       error_code: clientErrorCode,
       error_message: clientErrorMessage,
       failure_class: clientFailureClass,
+      diagnostics: clientDiagnostics,
     } = body;
 
     if (!trade_order_id) {
@@ -284,6 +285,7 @@ Deno.serve(async (req) => {
             error_code: errorCode,
             error_message: errorMsg.substring(0, 200),
             failure_class: clientFailureClass || null,
+            diagnostics: clientDiagnostics || null,
           },
         });
       } catch {}

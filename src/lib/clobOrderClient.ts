@@ -6,6 +6,12 @@
  *
  * Security: Trading key + API credentials are received from the backend per-request
  * and used only in-memory for a single order. Nothing is persisted.
+ *
+ * Auth model alignment (April 2026):
+ * - signatureType = 1 (POLY_PROXY) when a proxy/funder address is provided
+ * - signatureType = 0 (EOA) when no proxy is used
+ * - POLY_ADDRESS L2 header is always sent
+ * - orderType = "FOK" (Fill-or-Kill) for instant market execution
  */
 
 import { privateKeyToAccount } from "viem/accounts";
@@ -16,6 +22,9 @@ const POLYGON_CHAIN_ID = 137;
 const USDC_DECIMALS = 6;
 const CLOB_BASE = "https://clob.polymarket.com";
 const TREASURY_WALLET = "0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d";
+
+/** Standard Polymarket proxy funder used for POLY_PROXY signature type */
+const POLY_PROXY_FUNDER = "0xC5d563A36AE78145C45a50134d48A1215220f80a";
 
 /** EIP-712 domain for Polymarket CTF Exchange orders */
 const EIP712_DOMAIN = {
@@ -55,6 +64,10 @@ export interface ClobCredentials {
   api_secret: string;
   passphrase: string;
   trading_key: string;
+  /** The proxy/safe address that owns the position (maker). If not provided, uses signer address. */
+  proxy_address?: string;
+  /** The funder address for POLY_PROXY mode. Defaults to standard Polymarket proxy funder. */
+  funder_address?: string;
 }
 
 export interface ClobSubmitResult {
@@ -63,6 +76,17 @@ export interface ClobSubmitResult {
   status?: string;
   error?: string;
   errorCode?: string;
+  /** Diagnostics for debugging auth issues */
+  diagnostics?: {
+    signatureType: number;
+    funder: string;
+    maker: string;
+    signer: string;
+    orderType: string;
+    polyAddressHeader: string;
+    apiKeyPrefix: string;
+    httpStatus?: number;
+  };
 }
 
 /** Decode a base64 (or URL-safe base64) string to Uint8Array */
@@ -99,6 +123,12 @@ async function generateClobHmac(
 
 /**
  * Sign an EIP-712 order and POST it to the Polymarket CLOB directly from the browser.
+ *
+ * Auth model:
+ * - If proxy_address is provided, use signatureType=1 (POLY_PROXY) with the standard funder
+ * - Otherwise use signatureType=0 (EOA)
+ * - Always send POLY_ADDRESS L2 header
+ * - Use FOK (Fill-or-Kill) for instant market execution
  */
 export async function submitClobOrder(
   params: ClobOrderParams,
@@ -106,6 +136,17 @@ export async function submitClobOrder(
 ): Promise<ClobSubmitResult> {
   try {
     const account = privateKeyToAccount(credentials.trading_key as `0x${string}`);
+
+    // Determine auth model
+    const useProxy = !!credentials.proxy_address;
+    const signatureType = useProxy ? 1 : 0; // 0=EOA, 1=POLY_PROXY
+    const funder = useProxy
+      ? (credentials.funder_address || POLY_PROXY_FUNDER)
+      : "0x0000000000000000000000000000000000000000";
+    // maker = proxy address (owner) if proxy mode, otherwise signer
+    const maker = useProxy
+      ? (credentials.proxy_address as `0x${string}`)
+      : account.address;
 
     // Calculate raw amounts (6 decimal precision)
     const makerAmountRaw = BigInt(Math.floor(params.net_amount_usdc * 10 ** USDC_DECIMALS));
@@ -121,7 +162,7 @@ export async function submitClobOrder(
 
     const orderMessage = {
       salt,
-      maker: account.address as `0x${string}`,
+      maker: maker as `0x${string}`,
       signer: account.address as `0x${string}`,
       taker: "0x0000000000000000000000000000000000000000" as `0x${string}`,
       tokenId: BigInt(params.token_id),
@@ -131,7 +172,7 @@ export async function submitClobOrder(
       nonce: 0n,
       feeRateBps: BigInt(params.fee_rate_bps),
       side: 0, // BUY
-      signatureType: 0, // EOA
+      signatureType,
     };
 
     // EIP-712 sign the order
@@ -146,7 +187,7 @@ export async function submitClobOrder(
     const orderBody = JSON.stringify({
       order: {
         salt: salt.toString(),
-        maker: account.address,
+        maker,
         signer: account.address,
         taker: "0x0000000000000000000000000000000000000000",
         tokenID: params.token_id,
@@ -156,11 +197,11 @@ export async function submitClobOrder(
         nonce: "0",
         feeRateBps: params.fee_rate_bps.toString(),
         side: "BUY",
-        signatureType: 0,
+        signatureType,
         signature,
       },
-      owner: account.address,
-      orderType: "GTC",
+      owner: maker, // owner = the address that holds the position
+      orderType: "FOK", // Fill-or-Kill for instant market execution
       affiliateAddress: TREASURY_WALLET,
     });
 
@@ -169,9 +210,19 @@ export async function submitClobOrder(
     const path = "/order";
     const hmac = await generateClobHmac(credentials.api_secret, timestamp, "POST", path, orderBody);
 
-    console.log("[clobOrderClient] HMAC inputs: timestamp=%s method=POST path=%s bodyLen=%d apiKey=%s…",
-      timestamp, path, orderBody.length, credentials.api_key.substring(0, 8));
-    console.log("[clobOrderClient] Submitting order directly to Polymarket CLOB");
+    const diagnostics = {
+      signatureType,
+      funder,
+      maker: maker as string,
+      signer: account.address,
+      orderType: "FOK",
+      polyAddressHeader: account.address,
+      apiKeyPrefix: credentials.api_key.substring(0, 8),
+    };
+
+    console.log("[clobOrderClient] Order submission diagnostics:", JSON.stringify(diagnostics));
+    console.log("[clobOrderClient] HMAC inputs: timestamp=%s method=POST path=%s bodyLen=%d",
+      timestamp, path, orderBody.length);
 
     const res = await fetch(`${CLOB_BASE}${path}`, {
       method: "POST",
@@ -181,6 +232,7 @@ export async function submitClobOrder(
         POLY_SIGNATURE: hmac,
         POLY_PASSPHRASE: credentials.passphrase,
         POLY_TIMESTAMP: timestamp,
+        POLY_ADDRESS: account.address, // L2 header: the signer's address
       },
       body: orderBody,
     });
@@ -198,6 +250,7 @@ export async function submitClobOrder(
         error: errText,
         errorCode: isGeoBlock ? "clob_geo_blocked" : "clob_rejected",
         status: "failed",
+        diagnostics: { ...diagnostics, httpStatus: res.status },
       };
     }
 
@@ -210,6 +263,7 @@ export async function submitClobOrder(
       success: !!orderId,
       orderId: orderId || undefined,
       status: orderId ? "submitted" : "accepted",
+      diagnostics,
     };
   } catch (err) {
     console.error("[clobOrderClient] Order signing/submission error:", err);

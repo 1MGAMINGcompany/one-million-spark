@@ -14,7 +14,7 @@ import { usePolymarketSession } from "@/hooks/usePolymarketSession";
 import { usePolymarketPrices } from "@/hooks/usePolymarketPrices";
 import { usePolymarketLivePrices } from "@/hooks/usePolymarketLivePrices";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Globe, Trophy, Loader2, ShieldCheck, Search, CalendarPlus, ChevronDown, Zap, Copy, ExternalLink, CreditCard, ArrowUpRight, AlertTriangle } from "lucide-react";
+import { Globe, Trophy, Loader2, ShieldCheck, Search, CalendarPlus, ChevronDown, Zap, Copy, ExternalLink, CreditCard, ArrowUpRight, AlertTriangle, LogOut } from "lucide-react";
 
 import { toast } from "sonner";
 import { dbg } from "@/lib/debugLog";
@@ -127,7 +127,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const { data: operator, isLoading } = useOperatorBySubdomain(subdomain);
   const { data: settings } = useOperatorSettings(operator?.id ?? null);
 
-  const { authenticated, getAccessToken } = usePrivySafe();
+  const { authenticated, getAccessToken, logout } = usePrivySafe();
   const { login } = usePrivyLogin();
   const { walletAddress: address, eoaAddress, isPrivyUser } = usePrivyWallet();
   const { state: allowanceState, ensureAllowance, reset: resetAllowance } = useAllowanceGate();
@@ -628,6 +628,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
             error_code: clobResult.errorCode || null,
             error_message: clobResult.error || null,
             failure_class: failureClass,
+            diagnostics: clobResult.diagnostics || null,
           }),
         });
         const confirmData = await confirmResp.json().catch(() => ({}));
@@ -850,9 +851,19 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           <div className="flex items-center gap-3">
             <PlatformLanguageSwitcher />
             {isConnected && address ? (
-              <span className="text-xs font-mono" style={{ color: theme.textMuted }}>
-                {address.slice(0, 6)}…{address.slice(-4)}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-mono" style={{ color: theme.textMuted }}>
+                  {address.slice(0, 6)}…{address.slice(-4)}
+                </span>
+                <button
+                  onClick={() => logout()}
+                  className="p-1.5 rounded-md transition-colors hover:bg-white/10"
+                  title="Sign out"
+                  style={{ color: theme.textMuted }}
+                >
+                  <LogOut size={14} />
+                </button>
+              </div>
             ) : (
               <Button
                 onClick={login}
