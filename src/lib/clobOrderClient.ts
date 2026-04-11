@@ -15,6 +15,7 @@ import { polygon } from "viem/chains";
 
 const CLOB_HOST = "https://clob.polymarket.com";
 const POLYGON_CHAIN_ID = 137;
+const SDK_TIMEOUT_MS = 30_000; // 30 seconds
 
 export interface ClobOrderParams {
   token_id: string;
@@ -71,13 +72,13 @@ export async function submitClobOrder(
     });
 
     // Determine auth model:
-    // signatureType 0 = EOA (no proxy), funder = undefined
-    // signatureType 1 = POLY_PROXY (safe/proxy), funder = proxy owner address
+    // signatureType 0 = EOA — funder = signer address (per Polymarket quickstart)
+    // signatureType 1 = POLY_PROXY (safe/proxy) — funder = proxy owner address
     const useProxy = !!credentials.proxy_address;
     const signatureType = useProxy ? 1 : 0;
-    // For POLY_PROXY, funder should be the proxy/safe address itself (the maker).
-    // For EOA, funder must be undefined per SDK docs.
-    const funder = useProxy ? credentials.proxy_address : undefined;
+    // EOA: funder = signer's own address (required by Polymarket)
+    // POLY_PROXY: funder = the proxy/safe address
+    const funder = useProxy ? credentials.proxy_address : account.address;
 
     const creds = {
       key: credentials.api_key,
@@ -86,19 +87,38 @@ export async function submitClobOrder(
     };
 
     // Construct official CLOB client
-    const client = new ClobClient(
-      CLOB_HOST,
-      POLYGON_CHAIN_ID,
-      walletClient,
-      creds,
-      signatureType,
-      funder,
-    );
+    let client: ClobClient;
+    try {
+      client = new ClobClient(
+        CLOB_HOST,
+        POLYGON_CHAIN_ID,
+        walletClient,
+        creds,
+        signatureType,
+        funder,
+      );
+    } catch (initErr: any) {
+      console.error("[clobOrderClient] SDK construction failed:", initErr);
+      return {
+        success: false,
+        error: `SDK init failed: ${initErr?.message || String(initErr)}`,
+        errorCode: "sdk_init_failed",
+        status: "failed",
+        diagnostics: {
+          signatureType,
+          funder: funder || "none",
+          maker: account.address,
+          signer: account.address,
+          orderType: "FOK",
+          exchange: "unknown",
+          usedOfficialClient: true,
+          negRisk: params.neg_risk ?? true,
+          price: params.price,
+        },
+      };
+    }
 
     const negRisk = params.neg_risk ?? true; // sports markets are neg_risk
-
-    // Price is the worst-price limit (slippage protection) — required for market orders.
-    // The backend sends this as the expected price from the slippage check.
     const price = params.price;
 
     const diagnostics = {
@@ -120,9 +140,8 @@ export async function submitClobOrder(
       apiKeyPrefix: credentials.api_key.substring(0, 8),
     }));
 
-    // Use the official SDK to create, sign, and post the market order.
-    // `price` acts as worst-price limit (slippage protection) per Polymarket docs.
-    const resp = await client.createAndPostMarketOrder(
+    // Use the official SDK with a timeout to prevent hanging forever
+    const orderPromise = client.createAndPostMarketOrder(
       {
         tokenID: params.token_id,
         amount: params.net_amount_usdc,
@@ -132,6 +151,12 @@ export async function submitClobOrder(
       { tickSize: "0.01", negRisk },
       OrderType.FOK,
     );
+
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("SDK_TIMEOUT")), SDK_TIMEOUT_MS)
+    );
+
+    const resp = await Promise.race([orderPromise, timeoutPromise]);
 
     console.log("[clobOrderClient] SDK response:", JSON.stringify(resp).substring(0, 500));
 
@@ -146,6 +171,27 @@ export async function submitClobOrder(
     };
   } catch (err: any) {
     console.error("[clobOrderClient] SDK order error:", err);
+
+    // Detect timeout
+    if (err?.message === "SDK_TIMEOUT") {
+      return {
+        success: false,
+        error: "Order timed out after 30 seconds — the SDK did not respond. Please try again.",
+        errorCode: "sdk_timeout",
+        status: "failed",
+        diagnostics: {
+          signatureType: 0,
+          funder: "unknown",
+          maker: "unknown",
+          signer: "unknown",
+          orderType: "FOK",
+          exchange: "unknown",
+          usedOfficialClient: true,
+          negRisk: params.neg_risk ?? true,
+          price: params.price,
+        },
+      };
+    }
 
     // Try to extract structured error info
     const errMsg = err?.message || err?.response?.data || String(err);

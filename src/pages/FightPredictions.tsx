@@ -723,6 +723,10 @@ export default function FightPredictions() {
       if (data?.action === "client_submit" && data.order_params && data.clob_credentials) {
         dbg("predict:client_submit_start", { trade_order_id: data.trade_order_id });
         const t0 = performance.now();
+        const CLOB_OVERALL_TIMEOUT_MS = 60_000;
+        const clobAbort = new AbortController();
+        const clobTimeoutId = setTimeout(() => clobAbort.abort(), CLOB_OVERALL_TIMEOUT_MS);
+        try {
 
         const { submitClobOrder } = await import("@/lib/clobOrderClient");
         let clobResult = await submitClobOrder(data.order_params, data.clob_credentials);
@@ -833,6 +837,18 @@ export default function FightPredictions() {
         loadFights();
         loadUserEntries();
         return;
+        } catch (clobErr: any) {
+          if (clobAbort.signal.aborted) {
+            console.error("[FightPredictions] CLOB submission timed out after 60s");
+            toast.error("Submission timed out", { description: "The order took too long. Please try again." });
+          } else {
+            throw clobErr;
+          }
+          setSubmitting(false);
+          return;
+        } finally {
+          clearTimeout(clobTimeoutId);
+        }
       }
 
       // Native event path (non-Polymarket) — direct fill

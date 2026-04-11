@@ -446,11 +446,23 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   // ── Date-grouped fights for display ──
   const dateGroups = useMemo(() => groupByDate(filteredFights), [filteredFights]);
 
-  // Collect polymarket slugs for live tracking
+  // Collect polymarket slugs and market ID mappings for live tracking
   const liveSlugs = useMemo(() => {
     return enrichedFights
       .map(f => (f as any).polymarket_slug)
       .filter((s): s is string => !!s);
+  }, [enrichedFights]);
+
+  const slugToMarketId = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const f of enrichedFights) {
+      const slug = (f as any).polymarket_slug;
+      const mid = (f as any).polymarket_market_id;
+      if (slug && mid) {
+        map[slug] = String(mid);
+      }
+    }
+    return map;
   }, [enrichedFights]);
 
   const handleSubmit = async (amountUsd: number) => {
@@ -568,6 +580,10 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       // ── Client-side CLOB submission for Polymarket orders ──
       if (data?.action === "client_submit" && data.order_params && data.clob_credentials) {
         const t0 = performance.now();
+        const CLOB_OVERALL_TIMEOUT_MS = 60_000;
+        const clobAbort = new AbortController();
+        const clobTimeoutId = setTimeout(() => clobAbort.abort(), CLOB_OVERALL_TIMEOUT_MS);
+        try {
         const { submitClobOrder } = await import("@/lib/clobOrderClient");
         let clobResult = await submitClobOrder(data.order_params, data.clob_credentials);
         const t1 = performance.now();
@@ -666,6 +682,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           entry_id: confirmData?.entry_id,
         });
         setShareAmount(amountUsd);
+        clearTimeout(clobTimeoutId);
         toast.success(t("operator.predictionSubmitted"), {
           description: t("operator.amountPlaced", { amount: amountUsd.toFixed(2) }),
         });
@@ -673,6 +690,18 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         loadUserEntries();
         setTimeout(() => refetchBalance(), 3000);
         return;
+        } catch (clobErr: any) {
+          if (clobAbort.signal.aborted) {
+            console.error("[OperatorApp] CLOB submission timed out after 60s");
+            toast.error("Submission timed out", { description: "The order took too long. Please try again." });
+          } else {
+            throw clobErr;
+          }
+          setSubmitting(false);
+          return;
+        } finally {
+          clearTimeout(clobTimeoutId);
+        }
       }
 
       // Native event path (non-Polymarket) — direct fill
@@ -832,7 +861,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
 
   return (
-    <SportsWebSocketProvider slugs={liveSlugs}>
+    <SportsWebSocketProvider slugs={liveSlugs} slugToMarketId={slugToMarketId}>
     <div className="min-h-screen" style={{ backgroundColor: theme.bg, color: theme.textPrimary }}>
       {/* Navbar */}
       <nav
