@@ -1,61 +1,49 @@
 
 
-## Plan: Fix "Invalid order payload" + Inconsistent Live Game Data
+## Plan: Fix "Invalid order payload" + Fix Missing Live Game Data
 
-### Issue 1: "Invalid order payload" — Root Cause Found
+### Two Separate Issues
 
-The error changed from "Invalid api key" to "Invalid order payload" — meaning **credentials now work** but the order body is wrong.
+**Issue 1: "Invalid order payload"** — Three problems in `clobOrderClient.ts`:
 
-The problem is in `prediction-submit/index.ts` line 1480:
-```
-proxy_address: userSession.safe_address || userSession.pm_derived_address || undefined
-```
+1. **Wrong `owner` field**: We send `owner: maker` (an Ethereum address). Polymarket requires `owner` to be the API key string. The Python SDK's `order_to_json(order, self.creds.api_key, ...)` confirms this — `owner = api_key`.
 
-The DB shows `safe_address = NULL` and `pm_derived_address = 0xfc88...`. So `proxy_address` is set to the trading key's own EOA address. In `clobOrderClient.ts`, `!!proxy_address` then triggers `signatureType = 1` (POLY_PROXY mode), which tells Polymarket "this order is signed by a proxy wallet" — but there IS no proxy wallet. The real signer is a plain EOA.
+2. **Wrong exchange contract for sports markets**: Sports markets on Polymarket use the **NegRisk CTF Exchange** (`0xC5d563A36AE78145C45a50134d48A1215220f80a`), not the standard CTF Exchange (`0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E`). The EIP-712 domain `verifyingContract` must match the correct exchange. All sports events are neg_risk (multi-outcome). We need the backend to tell the browser which exchange to use, or default to neg_risk for Polymarket-backed sports events.
 
-**Fix:** Only set `proxy_address` when there's an actual `safe_address` (a deployed Polymarket proxy). The `pm_derived_address` is the trading key's own address, not a proxy.
+3. **`POLY_PROXY_FUNDER` is actually the NegRisk Exchange address**: The constant `POLY_PROXY_FUNDER = "0xC5d563A36AE78145C45a50134d48A1215220f80a"` is the NegRisk CTF Exchange, not a proxy funder. This was never correct. For EOA mode (our current path), funder is `0x000...000` so this doesn't bite us yet, but it's misleading.
 
-### Issue 2: Inconsistent Live Game Data (score/time/period)
+**Issue 2: Live game data not showing** — The WS messages from `wss://sports-api.polymarket.com/ws` include a `slug` field directly (e.g., `"slug": "nhl-wsh-pit-2026-04-11"`). Our code ignores this field and tries to reverse-engineer match keys from `leagueAbbreviation + homeTeam + awayTeam`, which fails when team code formats don't match our DB slugs. Simple fix: match on the `slug` field directly.
 
-The WebSocket provider (`useSportsWebSocket`) maps incoming WS broadcasts to your DB slugs using a `slugToMatchKey` function that extracts league + team codes from slug strings. If the slug format doesn't parse cleanly (e.g. different team code length or unexpected slug structure), the match key lookup fails silently and the live data is dropped.
-
-For games where the slug parses correctly, you get live data. For others, you don't.
+---
 
 ### Changes
 
-**File 1: `supabase/functions/prediction-submit/index.ts`** (lines ~1480-1481)
-- Change `proxy_address` to only use `safe_address` when it exists
-- Don't fall back to `pm_derived_address` — that's the signer, not a proxy
-- Only set `funder_address` when `safe_address` is present (already correct)
+**File 1: `src/lib/clobOrderClient.ts`**
+- Add `neg_risk` flag to `ClobOrderParams` (default true for sports)
+- Use NegRisk CTF Exchange address (`0xC5d563A36AE78145C45a50134d48A1215220f80a`) when `neg_risk = true`, standard exchange otherwise
+- Update EIP-712 domain `verifyingContract` accordingly
+- Change `owner` in POST body from `maker` to `credentials.api_key`
+- Remove incorrect `POLY_PROXY_FUNDER` constant
 
-```typescript
-// Before:
-proxy_address: userSession!.safe_address || userSession!.pm_derived_address || undefined,
-funder_address: userSession!.safe_address ? "0xC5d563A36AE78145C45a50134d48A1215220f80a" : undefined,
+**File 2: `supabase/functions/prediction-submit/index.ts`**
+- Add `neg_risk: true` to the client-side execution payload for Polymarket-backed events (all sports markets are neg_risk)
 
-// After:
-proxy_address: userSession!.safe_address || undefined,
-funder_address: userSession!.safe_address ? "0xC5d563A36AE78145C45a50134d48A1215220f80a" : undefined,
-```
+**File 3: `src/hooks/useSportsWebSocket.tsx`**
+- In `parseLiveMessage`, check `msg.slug` first and do a direct lookup against the set of tracked slugs
+- Keep the team-code matching as a fallback
+- This is a minimal change that fixes the silent data drops
 
-This means when `safe_address` is null (current state), the order will use:
-- `signatureType = 0` (EOA)
-- `maker = signer = trading key address`
-- `funder = 0x0...0`
-- No `POLY_ADDRESS` header issue (still sent, but matches signer)
+**File 4: `src/pages/FightPredictions.tsx` + `src/pages/platform/OperatorApp.tsx`**
+- Pass `neg_risk` through to `submitClobOrder` from the execution params
 
-**File 2: `src/hooks/useSportsWebSocket.tsx`** — improve slug-to-match-key mapping
-- Add fallback: if `slugToMatchKey` fails, try matching on partial slug substrings
-- Log unmatched WS messages so we can see which games are being dropped
-- This addresses why some live games show score/time and others don't
+---
 
 ### Expected Outcome
-- The next $1 test should either succeed or return a different, more specific Polymarket error (not "Invalid order payload")
-- Live game data should appear more consistently across all cards
+- The next $1 test uses the correct exchange contract, correct `owner` field, and should either succeed or return a meaningful Polymarket error (like insufficient balance)
+- Live game badges (score, period, time) should appear for all active games via the WS slug-matching fix
 
 ### What Stays Unchanged
 - Browser-side order submission model
 - Fee collection, reconciliation, operator attribution
 - Credential derivation flow
-- All other UI
 
