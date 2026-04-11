@@ -1,68 +1,115 @@
 
-Goal
 
-Fix the two still-live problems:
-1. old matches are still showing
-2. the same $1 prediction failure is still happening
+## Plan: Client-Side Order Execution (Bypass Geo-Block)
 
-What I found
+### Problem
+Polymarket blocks all server-side egress IPs (Deno Deploy, Fly.io) for authenticated `POST /order` calls. Read endpoints work fine. The only reliable path is to sign and submit orders directly from the user's browser, which has a non-blocked residential IP.
 
-- On the current `/` route, the old matches are still coming from `src/pages/Home.tsx`. That query is still broad: it only excludes `settled/cancelled`, looks back 7 days, and does not exclude `polymarket_active = false`.
-- `src/pages/FightPredictions.tsx` is also still too loose. It excludes several final statuses, but it still does not filter out `polymarket_active = false`.
-- `supabase/functions/prediction-schedule-worker/index.ts` is actively turning stale `live` fights into `locked`, and the worker logs show it doing this for many old events. Because the UI still treats `locked` fights as browseable, those stale matches continue to surface.
-- The earlier requote/banner fix only addressed a UI symptom. The actual trade execution path still has deeper drift:
-  - `supabase/functions/prediction-submit/index.ts` still signs BUY orders with `signatureType: 0`
-  - `supabase/functions/prediction-sell/index.ts` still does the same for SELL
-  - both still send `orderType: "GTC"`
-- That still conflicts with the rest of the session model, where `polymarket-user-setup` stores proxy/safe-style fields (`safe_address`, `safe_deployed`, `approvals_set`) but submission ignores them and submits like a plain EOA flow.
-- `src/pages/FightPredictions.tsx` still contains outdated “shared fallback” assumptions even though backend trading now requires a valid per-user session.
+### Architecture Change
 
-Plan
+```text
+CURRENT (broken):
+  Browser → prediction-submit (edge fn) → Fly proxy → POST /order → 403 blocked
 
-1. Confirm the exact live trade failure before editing
-- Pull the latest `prediction-submit` runtime logs for the failed $1 attempt
-- Inspect the newest `prediction_trade_orders` and matching `polymarket_user_sessions` records
-- Identify whether the repeat failure is actually `clob_geo_blocked`, `clob_rejected`, `trading_wallet_not_ready`, or another backend/exchange error
+NEW:
+  Browser → prediction-submit (edge fn)   → fee collection + trade_order record + return credentials
+  Browser → sign EIP-712 order locally    → POST directly to clob.polymarket.com/order
+  Browser → prediction-confirm (edge fn)  → report order ID back for reconciliation
+```
 
-2. Fix stale-match visibility on every public feed
-- Update `src/pages/Home.tsx` to use strict filters:
-  - exclude `polymarket_active = false`
-  - exclude resolved/refund states, not just `settled/cancelled`
-  - shorten the historical lookback window
-- Update `src/pages/FightPredictions.tsx` to apply the same inactive-market filter
-- Keep `locked` fights visible only inside a short grace window, not as general old inventory
+The backend still handles: auth, fee collection, trade order creation, session lookup, reconciliation, pool updates, entries. The browser takes over only the EIP-712 signing + CLOB POST.
 
-3. Fix the backend lifecycle gap for closed markets
-- Keep `polymarket-prices` from preserving dead market visibility
-- Update `prediction-result-detect` so closed markets that do not produce a clear winner do not remain indefinitely in `open/live/locked`
-- Add a fallback terminal path for unresolved closed markets so they leave browseable states
+### Files to Modify
 
-4. Align trade submission with the actual trading model
-- Refactor `prediction-submit` and `prediction-sell` so order construction matches the real per-user session model
-- Revisit `signatureType`, signer/funder handling, and order semantics instead of keeping the current hardcoded EOA + `GTC` path
-- Keep the Fly proxy in place for now as transport, but do not treat it as the root fix by itself
+**1. `supabase/functions/prediction-submit/index.ts`**
+- Remove `buildAndSubmitClobOrder()` call and its inline reconciliation
+- Remove `fundDerivedWallet()` call (user's browser wallet submits directly — no need to fund a derived EOA)
+- After fee collection succeeds, return the order parameters to the client instead of submitting:
+  ```json
+  {
+    "success": true,
+    "action": "client_submit",
+    "trade_order_id": "...",
+    "order_params": {
+      "token_id": "...",
+      "price": 0.55,
+      "net_amount_usdc": 0.95,
+      "fee_rate_bps": 150
+    },
+    "clob_credentials": {
+      "api_key": "...",
+      "api_secret": "...",
+      "passphrase": "...",
+      "trading_key": "0x..."
+    }
+  }
+  ```
+- Keep all validation, fee collection, trade_order creation, audit logging
+- For native (non-Polymarket) events, keep existing direct-fill path unchanged
 
-5. Remove stale frontend assumptions
-- In `FightPredictions.tsx`, stop proceeding as if shared backend credentials still exist
-- Block submission earlier when the user session is not actually ready, instead of allowing it to fail deeper in the backend
+**2. New edge function: `supabase/functions/prediction-confirm/index.ts`**
+- Accepts `{ trade_order_id, polymarket_order_id, status, error_code }` from client after CLOB submission
+- Validates Privy JWT + trade_order ownership
+- Updates `prediction_trade_orders` with order ID or failure
+- Inserts `prediction_entries` (moved from prediction-submit's post-order block)
+- Updates fight pool totals
+- Logs operator revenue
+- Runs the same post-submit reconciliation check
 
-6. Validate after implementation
-- `/` should stop showing old inactive matches
-- `/predictions` should hide inactive/resolved Polymarket fights except where they intentionally belong in past/history views
-- A fresh $1 trade should either succeed or return one precise actionable failure that matches the backend logs
+**3. New client-side module: `src/lib/clobOrderClient.ts`**
+- Receives order params + credentials from backend
+- Signs EIP-712 order using the trading key (viem `privateKeyToAccount` + `signTypedData`)
+- Generates HMAC auth headers
+- POSTs to `https://clob.polymarket.com/order` directly from user's browser
+- Returns `{ orderId, status, error }` to the calling component
 
-Technical details
+**4. `src/pages/FightPredictions.tsx` and `src/pages/platform/OperatorApp.tsx`**
+- Update `handleSubmit` flow:
+  1. Call `prediction-submit` (unchanged — still does auth + fee + validation)
+  2. If response has `action: "client_submit"`, call `clobOrderClient.submitOrder()`
+  3. Call `prediction-confirm` with the result
+  4. Handle success/failure UI as before
+- Remove all geo-block error handling (no longer possible from user's browser)
+- Remove `setupTradingWallet` calls — credentials come back from backend per-request
 
-Files most clearly involved:
-- `src/pages/Home.tsx`
-- `src/pages/FightPredictions.tsx`
-- `supabase/functions/prediction-schedule-worker/index.ts`
-- `supabase/functions/prediction-result-detect/index.ts`
-- `supabase/functions/prediction-submit/index.ts`
-- `supabase/functions/prediction-sell/index.ts`
+**5. `src/hooks/usePolymarketSession.ts`**
+- Simplify: session setup still needed for credential derivation (so backend has creds to return)
+- But `canTrade` no longer blocks the UI — the browser handles submission
 
-Expected outcome
+### Fee Collection Flow (Preserved)
+No change. The backend still:
+1. Validates allowance on user's Smart Wallet / EOA
+2. Executes `transferFrom` via relayer to treasury
+3. Records `fee_tx_hash` on the trade order
+4. Only then returns order params to client
 
-- Old matches disappear from public browse surfaces
-- Only active or intentionally visible grace-window markets remain
-- The repeated $1 failure gets traced to one confirmed root cause and fixed at the correct layer
+If fee collection fails, the client never gets order params and no CLOB order is placed.
+
+### Reconciliation (Preserved)
+- `prediction-confirm` records the CLOB order ID on the trade order
+- `prediction-trade-reconcile` worker continues polling CLOB for fill status (via proxy — GET requests work fine)
+- `prediction-trade-status` continues working for UI polling
+
+### Security Considerations
+- Trading key is returned to the client temporarily for signing. This is the user's own derived key — not platform funds.
+- Credentials are per-user, derived from their own SIWE signature.
+- The key never persists in localStorage — used only in-memory for the single order.
+- Backend validates the trade_order belongs to the authenticated user before accepting confirmation.
+
+### What Does NOT Change
+- Fee collection mechanism (relayer `transferFrom`)
+- Trade order table structure
+- Reconciliation workers
+- Operator revenue tracking
+- Native (non-Polymarket) event handling
+- Prediction entries schema
+- Pool accounting
+- Requote/slippage flow (still validated server-side before returning params)
+
+### Implementation Order
+1. Create `src/lib/clobOrderClient.ts` (EIP-712 signing + HMAC + POST)
+2. Create `supabase/functions/prediction-confirm/index.ts`
+3. Modify `prediction-submit` to return order params instead of executing
+4. Update `FightPredictions.tsx` and `OperatorApp.tsx` handleSubmit
+5. Deploy and test
+
