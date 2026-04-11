@@ -861,7 +861,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
 
   return (
-    <SportsWebSocketProvider slugs={liveSlugs}>
+    <SportsWebSocketProvider slugs={liveSlugs} slugToMarketId={slugToMarketId}>
     <div className="min-h-screen" style={{ backgroundColor: theme.bg, color: theme.textPrimary }}>
       {/* Navbar */}
       <nav
