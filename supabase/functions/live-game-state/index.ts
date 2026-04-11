@@ -82,7 +82,7 @@ serve(async (req) => {
             return { internalSlug, data: null };
           }
           const market = await resp.json();
-          if (!market || !market.condition_id) {
+          if (!market || (!market.conditionId && !market.condition_id && !market.id)) {
             return { internalSlug, data: null };
           }
 
