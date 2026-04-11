@@ -1477,7 +1477,7 @@ Deno.serve(async (req) => {
           api_secret: userSession!.pm_api_secret,
           passphrase: userSession!.pm_passphrase,
           trading_key: userSession!.pm_trading_key,
-          proxy_address: userSession!.safe_address || userSession!.pm_derived_address || undefined,
+          proxy_address: userSession!.safe_address || undefined,
           funder_address: userSession!.safe_address ? "0xC5d563A36AE78145C45a50134d48A1215220f80a" : undefined,
         },
         source: fight.source || "manual",
