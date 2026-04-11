@@ -80,24 +80,32 @@ export async function deriveClobCredentials(
       headers: createHeaders,
     });
 
+    const createBody = await createRes.text();
+    console.log(`[clobCredentialClient] POST /auth/api-key status=${createRes.status} body=${createBody.substring(0, 500)}`);
+
     if (createRes.ok) {
-      const data = await createRes.json();
-      const apiKey = data.apiKey || data.key;
-      if (apiKey) {
-        console.log("[clobCredentialClient] Created new CLOB credentials via POST");
-        return {
-          credentials: {
-            apiKey,
-            apiSecret: data.secret || data.apiSecret,
-            passphrase: data.passphrase,
-          },
-        };
+      try {
+        const data = JSON.parse(createBody);
+        console.log("[clobCredentialClient] POST response field names:", Object.keys(data));
+        const apiKey = data.apiKey || data.key;
+        if (apiKey) {
+          console.log("[clobCredentialClient] Created new CLOB credentials via POST, apiKey prefix:", apiKey.substring(0, 8));
+          return {
+            credentials: {
+              apiKey,
+              apiSecret: data.secret || data.apiSecret,
+              passphrase: data.passphrase,
+            },
+          };
+        }
+        console.warn("[clobCredentialClient] POST 200 but no apiKey/key field found in:", Object.keys(data));
+      } catch (parseErr) {
+        console.error("[clobCredentialClient] POST response JSON parse failed:", parseErr);
       }
     }
 
     // Step 2: Fallback to GET /auth/derive-api-key
-    const createStatus = createRes.status;
-    console.log(`[clobCredentialClient] POST returned ${createStatus}, trying GET /auth/derive-api-key`);
+    console.log(`[clobCredentialClient] POST returned ${createRes.status}, trying GET /auth/derive-api-key`);
 
     const deriveHeaders = await buildClobAuthHeaders(tradingKey, 0);
     const deriveRes = await fetch(`${CLOB_BASE}/auth/derive-api-key`, {
@@ -105,25 +113,33 @@ export async function deriveClobCredentials(
       headers: deriveHeaders,
     });
 
+    const deriveBody = await deriveRes.text();
+    console.log(`[clobCredentialClient] GET /auth/derive-api-key status=${deriveRes.status} body=${deriveBody.substring(0, 500)}`);
+
     if (deriveRes.ok) {
-      const data = await deriveRes.json();
-      const apiKey = data.apiKey || data.key;
-      if (apiKey) {
-        console.log("[clobCredentialClient] Retrieved existing CLOB credentials via GET");
-        return {
-          credentials: {
-            apiKey,
-            apiSecret: data.secret || data.apiSecret,
-            passphrase: data.passphrase,
-          },
-        };
+      try {
+        const data = JSON.parse(deriveBody);
+        console.log("[clobCredentialClient] GET response field names:", Object.keys(data));
+        const apiKey = data.apiKey || data.key;
+        if (apiKey) {
+          console.log("[clobCredentialClient] Retrieved existing CLOB credentials via GET, apiKey prefix:", apiKey.substring(0, 8));
+          return {
+            credentials: {
+              apiKey,
+              apiSecret: data.secret || data.apiSecret,
+              passphrase: data.passphrase,
+            },
+          };
+        }
+        console.warn("[clobCredentialClient] GET 200 but no apiKey/key field found in:", Object.keys(data));
+      } catch (parseErr) {
+        console.error("[clobCredentialClient] GET response JSON parse failed:", parseErr);
       }
     }
 
-    const deriveBody = await deriveRes.text().catch(() => "");
     return {
       credentials: null,
-      error: `Credential derivation failed: POST(${createStatus}) GET(${deriveRes.status}): ${deriveBody.substring(0, 200)}`,
+      error: `Credential derivation failed: POST(${createRes.status}) GET(${deriveRes.status}): ${deriveBody.substring(0, 200)}`,
     };
   } catch (err) {
     console.error("[clobCredentialClient] derivation error:", err);
