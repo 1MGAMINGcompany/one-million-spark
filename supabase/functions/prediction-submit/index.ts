@@ -1401,16 +1401,9 @@ Deno.serve(async (req) => {
     // ═══════════════════════════════════════════════════
     // 8) EXECUTION PATH
     // ═══════════════════════════════════════════════════
-    let polymarket_order_id: string | null = null;
-    let polymarket_status = "pending";
-    let filledAmountUsdc = 0;
-    let filledShares = 0;
-    let avgFillPrice: number | null = null;
-    let tradeStatus = "requested";
-    let pmFeeRateBps = 0;
 
     if (isPolymarketBacked) {
-      // ── Per-user credentials ONLY — no shared fallback ──
+      // ── Per-user credentials ONLY — return to client for browser-side submission ──
       const { data: userSession } = await supabase
         .from("polymarket_user_sessions")
         .select("pm_api_key, pm_api_secret, pm_passphrase, pm_trading_key, status, safe_address, safe_deployed, approvals_set, expires_at")
@@ -1431,274 +1424,68 @@ Deno.serve(async (req) => {
         }, 403);
       }
 
-      const pmApiKey = userSession!.pm_api_key;
-      const pmApiSecret = userSession!.pm_api_secret;
-      const pmPassphrase = userSession!.pm_passphrase;
-      const pmTradingKey = userSession!.pm_trading_key;
-      const userSafeAddress = userSession!.safe_address;
-
-      if (tokenId) {
-        // ── Fund derived trading wallet with USDC.e before order ──
-        const derivedAccount = privateKeyToAccount(pmTradingKey as `0x${string}`);
-        const derivedAddr = userSafeAddress || derivedAccount.address.toLowerCase();
-
-        await auditLog(supabase, tradeOrderId, normalizedWallet, "funding_derived_wallet", {
-          derived_address: derivedAddr,
-          amount_usdc: net_amount_usdc,
-        });
-
-        const normalizedEoaForFund = wallet_eoa ? String(wallet_eoa).trim().toLowerCase() : undefined;
-        const fundResult = await fundDerivedWallet(normalizedWallet!, derivedAddr, net_amount_usdc, normalizedEoaForFund, nonceManager!);
-
-        if (!fundResult.success) {
-          await auditLog(supabase, tradeOrderId, normalizedWallet, "funding_derived_wallet_failed", null, {
-            error: fundResult.error,
-          });
-
-          await updateTradeOrder(supabase, tradeOrderId, {
-            status: "failed",
-            error_code: "funding_failed",
-            error_message: fundResult.error?.substring(0, 500),
-            finalized_at: new Date().toISOString(),
-          });
-
-          const isAllowanceErr = fundResult.error?.includes("insufficient_allowance");
-          return json({
-            error: isAllowanceErr
-              ? "USDC.e approval needed for trading. Please approve and try again."
-              : "Failed to fund trading wallet. Please try again.",
-            error_code: isAllowanceErr ? "insufficient_allowance" : "funding_failed",
-            trade_order_id: tradeOrderId,
-          }, isAllowanceErr ? 403 : 502);
+      // ── Fetch dynamic Polymarket fee rate ──
+      let pmFeeRateBps = 0;
+      const clobUrl = getClobUrl();
+      try {
+        const feeRes = await fetch(`${clobUrl}/fee-rate?token_id=${tokenId}`);
+        if (feeRes.ok) {
+          const feeData = await feeRes.json();
+          pmFeeRateBps = Number(feeData.fee_rate_bps ?? feeData.feeRateBps ?? 0);
+          console.log(`[prediction-submit] Polymarket fee rate for token ${tokenId}: ${pmFeeRateBps} bps`);
         }
+      } catch (feeErr) {
+        console.warn("[prediction-submit] Fee rate fetch error:", feeErr);
+      }
 
-        await auditLog(supabase, tradeOrderId, normalizedWallet, "derived_wallet_funded", null, {
-          tx_hash: fundResult.txHash,
-          amount_usdc: net_amount_usdc,
-          derived_address: derivedAddr,
-        });
+      // Mark as pending client submission
+      await updateTradeOrder(supabase, tradeOrderId, {
+        status: "pending_client_submit",
+        submitted_at: new Date().toISOString(),
+        pm_fee_rate_bps: pmFeeRateBps,
+        expected_price: expectedPrice,
+        expected_shares: shares,
+      });
 
-        // Mark as submitted
-        await updateTradeOrder(supabase, tradeOrderId, {
-          status: "submitted",
-          submitted_at: new Date().toISOString(),
-        });
-        tradeStatus = "submitted";
+      await auditLog(supabase, tradeOrderId, normalizedWallet, "client_submit_params_returned", {
+        token_id: tokenId,
+        price: expectedPrice,
+        net_amount_usdc,
+        fee_collected: feeCollected,
+        fee_tx_hash: feeTxHash,
+        pm_fee_rate_bps: pmFeeRateBps,
+      });
 
-        await auditLog(supabase, tradeOrderId, normalizedWallet, "order_submit_started", {
+      // Return order params + credentials to client for browser-side CLOB submission
+      return json({
+        success: true,
+        action: "client_submit",
+        trade_order_id: tradeOrderId,
+        trade_status: "pending_client_submit",
+        requested_amount_usdc: parsedAmount,
+        fee_usdc: fee_usd,
+        fee_bps: effectiveFeeBps,
+        net_amount_usdc,
+        order_params: {
           token_id: tokenId,
           price: expectedPrice,
-          size: net_amount_usdc,
-          fee_collected: feeCollected,
-          fee_tx_hash: feeTxHash,
-          cred_source: "per_user",
-          accepted_requote: Boolean(acceptedRequote),
-          requote_count: requoteCount,
-        });
-
-        // ── Fetch dynamic Polymarket fee rate ──
-        pmFeeRateBps = 0;
-        const clobUrl = getClobUrl();
-        try {
-          const feeRes = await fetch(`${clobUrl}/fee-rate?token_id=${tokenId}`);
-          if (feeRes.ok) {
-            const feeData = await feeRes.json();
-            pmFeeRateBps = Number(feeData.fee_rate_bps ?? feeData.feeRateBps ?? 0);
-            console.log(`[prediction-submit] Polymarket fee rate for token ${tokenId}: ${pmFeeRateBps} bps`);
-          } else {
-            console.warn(`[prediction-submit] Fee rate fetch failed (${feeRes.status}), using 0 bps`);
-          }
-        } catch (feeErr) {
-          console.warn("[prediction-submit] Fee rate fetch error:", feeErr);
-        }
-
-        // ── EIP-712 signed CLOB order submission ──
-        const orderResult = await buildAndSubmitClobOrder(
-          {
-            pm_api_key: pmApiKey!,
-            pm_api_secret: pmApiSecret!,
-            pm_passphrase: pmPassphrase!,
-            pm_trading_key: pmTradingKey!,
-          },
-          tokenId!,
-          expectedPrice!,
           net_amount_usdc,
-          pmFeeRateBps,
-        );
-
-        polymarket_order_id = orderResult.orderId;
-
-        await auditLog(supabase, tradeOrderId, normalizedWallet, "order_submit_result", null, {
-          order_id: orderResult.orderId,
-          clob_status: orderResult.status,
-          has_error: !!orderResult.error,
-          error_snippet: orderResult.error
-            ? orderResult.error.substring(0, 200)
-            : null,
-        });
-
-        if (orderResult.orderId) {
-          polymarket_status = "submitted";
-          tradeStatus = "submitted";
-          filledAmountUsdc = 0;
-          filledShares = 0;
-          avgFillPrice = null;
-
-          await updateTradeOrder(supabase, tradeOrderId, {
-            status: "submitted",
-            polymarket_order_id: orderResult.orderId,
-            expected_price: expectedPrice,
-            expected_shares: shares,
-            pm_fee_rate_bps: pmFeeRateBps,
-          });
-
-          // ── Post-submit targeted reconciliation (best-effort, 2s timeout) ──
-          try {
-            await auditLog(supabase, tradeOrderId, normalizedWallet, "post_submit_reconcile_started");
-
-            const reconPath = `/order/${orderResult.orderId}`;
-            const reconTs = Math.floor(Date.now() / 1000).toString();
-            const reconHmac = await generateClobHmac(
-              pmApiSecret!,
-              reconTs,
-              "GET",
-              reconPath,
-            );
-
-            const reconController = new AbortController();
-            const reconTimeout = setTimeout(
-              () => reconController.abort(),
-              2000,
-            );
-
-            const reconRes = await fetch(`${clobUrl}${reconPath}`, {
-              headers: {
-                "Content-Type": "application/json",
-                POLY_API_KEY: pmApiKey!,
-                POLY_SIGNATURE: reconHmac,
-                POLY_PASSPHRASE: pmPassphrase!,
-                POLY_TIMESTAMP: reconTs,
-              },
-              signal: reconController.signal,
-            });
-            clearTimeout(reconTimeout);
-
-            if (reconRes.ok) {
-              const clobOrder = await reconRes.json();
-              const clobStatus = (clobOrder.status || "").toUpperCase();
-
-              const reconUpdates: Record<string, unknown> = {
-                reconciled_at: new Date().toISOString(),
-              };
-              let reconStatusChanged = false;
-
-              if (clobStatus === "MATCHED" || clobStatus === "FILLED") {
-                const matchedSize = Number(
-                  clobOrder.size_matched ?? clobOrder.original_size ?? 0,
-                );
-                const originalSize = Number(clobOrder.original_size ?? 0);
-                const isPartial =
-                  originalSize > 0 && matchedSize < originalSize;
-                const reconPrice = Number(
-                  clobOrder.price ?? clobOrder.average_price ?? 0,
-                );
-
-                const newStatus = isPartial ? "partial_fill" : "filled";
-                if (matchedSize > 0) {
-                  reconUpdates.filled_shares = matchedSize;
-                  reconUpdates.filled_amount_usdc =
-                    reconPrice > 0
-                      ? matchedSize * reconPrice
-                      : filledAmountUsdc;
-                  if (reconPrice > 0) reconUpdates.avg_fill_price = reconPrice;
-                  filledShares = matchedSize;
-                  filledAmountUsdc = Number(reconUpdates.filled_amount_usdc);
-                  if (reconPrice > 0) avgFillPrice = reconPrice;
-                }
-                if (newStatus === "filled") {
-                  reconUpdates.finalized_at = new Date().toISOString();
-                }
-                if (newStatus !== tradeStatus) {
-                  reconUpdates.status = newStatus;
-                  tradeStatus = newStatus;
-                  reconStatusChanged = true;
-                }
-              } else if (
-                clobStatus === "CANCELED" ||
-                clobStatus === "CANCELLED"
-              ) {
-                reconUpdates.status = "cancelled";
-                reconUpdates.error_code = "clob_cancelled";
-                reconUpdates.finalized_at = new Date().toISOString();
-                tradeStatus = "cancelled";
-                reconStatusChanged = true;
-              } else if (clobStatus === "LIVE" || clobStatus === "OPEN") {
-                reconUpdates.status = "submitted";
-                tradeStatus = "submitted";
-                reconStatusChanged = true;
-              }
-
-              await updateTradeOrder(supabase, tradeOrderId!, reconUpdates);
-              await auditLog(supabase, tradeOrderId, normalizedWallet, "post_submit_reconcile_result", null, {
-                clob_status: clobStatus,
-                status_changed: reconStatusChanged,
-                new_status: tradeStatus,
-                filled_shares: filledShares,
-              });
-            } else {
-              await auditLog(supabase, tradeOrderId, normalizedWallet, "post_submit_reconcile_failed", null, {
-                reason: "clob_http_error",
-                http_status: reconRes.status,
-              });
-            }
-          } catch (reconErr: any) {
-            const isTimeout = reconErr?.name === "AbortError";
-            await auditLog(supabase, tradeOrderId, normalizedWallet, "post_submit_reconcile_failed", null, {
-              reason: isTimeout ? "timeout" : "exception",
-              message:
-                reconErr?.message?.substring(0, 200) ?? "unknown",
-            });
-          }
-        } else {
-          // CLOB rejection — Polymarket order was NOT placed.
-          const isGeoBlock =
-            (orderResult.httpStatus === 403 && isGeoBlockedMessage(orderResult.error)) ||
-            isGeoBlockedMessage(orderResult.error);
-
-          const errorCode = isGeoBlock ? "clob_geo_blocked" : "clob_rejected";
-          const errorMsg = isGeoBlock
-            ? "Polymarket is restricted in your region. Order was not placed."
-            : "Order was rejected by the exchange. Please try again.";
-
-          await updateTradeOrder(supabase, tradeOrderId, {
-            status: "failed",
-            error_code: errorCode,
-            error_message: orderResult.error?.substring(0, 500) || errorMsg,
-            finalized_at: new Date().toISOString(),
-          });
-
-          await auditLog(supabase, tradeOrderId, normalizedWallet, "clob_order_failed_no_fallback", null, {
-            clob_error: orderResult.error?.substring(0, 200),
-            clob_status: orderResult.status,
-            error_code: errorCode,
-          });
-
-          return json({
-            error: errorMsg,
-            error_code: errorCode,
-            trade_order_id: tradeOrderId,
-          }, isGeoBlock ? 403 : 502);
-        }
-
-        console.log(
-          `[prediction-submit] Polymarket order: user=${normalizedWallet}, token=${tokenId}, amount=$${net_amount_usdc}, price=${expectedPrice}, status=${polymarket_status}, fee_collected=${feeCollected}`,
-        );
-      }
+          fee_rate_bps: pmFeeRateBps,
+        },
+        clob_credentials: {
+          api_key: userSession!.pm_api_key,
+          api_secret: userSession!.pm_api_secret,
+          passphrase: userSession!.pm_passphrase,
+          trading_key: userSession!.pm_trading_key,
+        },
+        source: fight.source || "manual",
+        polymarket_backed: true,
+      });
     } else {
       // Native 1MGAMING event — mark as filled immediately (local pool)
-      tradeStatus = "filled";
-      filledAmountUsdc = net_amount_usdc;
-      filledShares = shares;
+      const tradeStatus = "filled";
+      const filledAmountUsdc = net_amount_usdc;
+      const filledShares = shares;
 
       await updateTradeOrder(supabase, tradeOrderId, {
         status: "filled",
@@ -1706,115 +1493,94 @@ Deno.serve(async (req) => {
         filled_shares: filledShares,
         finalized_at: new Date().toISOString(),
       });
-    }
 
-    // ═══════════════════════════════════════════════════
-    // 9) COMPATIBILITY: LEGACY prediction_entries INSERT
-    // ═══════════════════════════════════════════════════
-    const { data: entry, error: insertErr } = await supabase
-      .from("prediction_entries")
-      .insert({
-        fight_id,
-        wallet: normalizedWallet,
-        fighter_pick,
-        amount_usd: parsedAmount,
-        fee_usd,
-        pool_usd: net_amount_usdc,
-        shares,
-        polymarket_order_id,
-        polymarket_status: isPolymarketBacked ? polymarket_status : null,
-        amount_lamports: 0,
-        fee_lamports: 0,
-        pool_lamports: 0,
-        source_operator_id: source_operator_id || fight.operator_id || null,
-      })
-      .select()
-      .single();
-
-    // ── OPERATOR REVENUE TRACKING ──
-    const resolvedOperatorId = source_operator_id || fight.operator_id || null;
-    if (resolvedOperatorId && entry) {
-      try {
-        const platformFeeBps = 150;
-        const platformFeeUsd = Number(((parsedAmount * platformFeeBps) / 10_000).toFixed(6));
-        const operatorFeeUsd = Math.max(0, Number((fee_usd - platformFeeUsd).toFixed(6)));
-
-        await supabase.from("operator_revenue").insert({
-          operator_id: resolvedOperatorId,
+      // ── Legacy prediction_entries INSERT (native events only) ──
+      const { data: entry, error: insertErr } = await supabase
+        .from("prediction_entries")
+        .insert({
           fight_id,
-          entry_id: entry.id,
-          trade_order_id: tradeOrderId,
-          platform_fee_usdc: platformFeeUsd,
-          operator_fee_usdc: operatorFeeUsd,
-          total_fee_usdc: fee_usd,
-          entry_amount_usdc: parsedAmount,
-        });
-      } catch (revErr) {
-        console.warn("[prediction-submit] operator_revenue insert failed:", revErr);
+          wallet: normalizedWallet,
+          fighter_pick,
+          amount_usd: parsedAmount,
+          fee_usd,
+          pool_usd: net_amount_usdc,
+          shares,
+          polymarket_order_id: null,
+          polymarket_status: null,
+          amount_lamports: 0,
+          fee_lamports: 0,
+          pool_lamports: 0,
+          source_operator_id: source_operator_id || fight.operator_id || null,
+        })
+        .select()
+        .single();
+
+      // ── OPERATOR REVENUE TRACKING ──
+      const resolvedOperatorId = source_operator_id || fight.operator_id || null;
+      if (resolvedOperatorId && entry) {
+        try {
+          const platformFeeBps = 150;
+          const platformFeeUsd = Number(((parsedAmount * platformFeeBps) / 10_000).toFixed(6));
+          const operatorFeeUsd = Math.max(0, Number((fee_usd - platformFeeUsd).toFixed(6)));
+          await supabase.from("operator_revenue").insert({
+            operator_id: resolvedOperatorId,
+            fight_id,
+            entry_id: entry.id,
+            trade_order_id: tradeOrderId,
+            platform_fee_usdc: platformFeeUsd,
+            operator_fee_usdc: operatorFeeUsd,
+            total_fee_usdc: fee_usd,
+            entry_amount_usdc: parsedAmount,
+          });
+        } catch (revErr) {
+          console.warn("[prediction-submit] operator_revenue insert failed:", revErr);
+        }
       }
-    }
 
-    if (insertErr) throw insertErr;
+      if (insertErr) throw insertErr;
 
-    // ── Update fight pool totals (legacy compat) ──
-    const { error: updateErr } = await supabase.rpc(
-      "prediction_update_pool_usd",
-      {
+      // ── Update fight pool totals ──
+      const { error: updateErr } = await supabase.rpc("prediction_update_pool_usd", {
         p_fight_id: fight_id,
         p_pool_usd: net_amount_usdc,
         p_shares: shares,
         p_side: fighter_pick,
-      },
-    );
+      });
 
-    if (updateErr) {
-      const poolCol =
-        fighter_pick === "fighter_a" ? "pool_a_usd" : "pool_b_usd";
-      const sharesCol =
-        fighter_pick === "fighter_a" ? "shares_a" : "shares_b";
-      const newPoolVal =
-        (fighter_pick === "fighter_a"
-          ? fight.pool_a_usd
-          : fight.pool_b_usd) + net_amount_usdc;
-      const newSharesVal =
-        (fighter_pick === "fighter_a" ? fight.shares_a : fight.shares_b) +
-        shares;
+      if (updateErr) {
+        const poolCol = fighter_pick === "fighter_a" ? "pool_a_usd" : "pool_b_usd";
+        const sharesCol = fighter_pick === "fighter_a" ? "shares_a" : "shares_b";
+        const newPoolVal = (fighter_pick === "fighter_a" ? fight.pool_a_usd : fight.pool_b_usd) + net_amount_usdc;
+        const newSharesVal = (fighter_pick === "fighter_a" ? fight.shares_a : fight.shares_b) + shares;
+        await supabase
+          .from("prediction_fights")
+          .update({ [poolCol]: newPoolVal, [sharesCol]: newSharesVal })
+          .eq("id", fight_id);
+      }
 
-      await supabase
-        .from("prediction_fights")
-        .update({ [poolCol]: newPoolVal, [sharesCol]: newSharesVal })
-        .eq("id", fight_id);
+      await auditLog(supabase, tradeOrderId, normalizedWallet, "trade_finalized", null, {
+        trade_status: tradeStatus,
+        entry_id: entry?.id,
+        fee_collected: feeCollected,
+        fee_tx_hash: feeTxHash,
+      });
+
+      return json({
+        success: true,
+        trade_order_id: tradeOrderId,
+        trade_status: tradeStatus,
+        requested_amount_usdc: parsedAmount,
+        fee_usdc: fee_usd,
+        net_amount_usdc,
+        fee_bps: effectiveFeeBps,
+        entry,
+        pool_contribution_usd: net_amount_usdc,
+        commission_bps: effectiveFeeBps,
+        source: fight.source || "manual",
+        shares,
+        polymarket_backed: false,
+      });
     }
-
-    // ═══════════════════════════════════════════════════
-    // FINAL AUDIT + RESPONSE
-    // ═══════════════════════════════════════════════════
-    await auditLog(supabase, tradeOrderId, normalizedWallet, "trade_finalized", null, {
-      trade_status: tradeStatus,
-      entry_id: entry?.id,
-      fee_collected: feeCollected,
-      fee_tx_hash: feeTxHash,
-    });
-
-    return json({
-      success: true,
-      trade_order_id: tradeOrderId,
-      trade_status: tradeStatus,
-      requested_amount_usdc: parsedAmount,
-      fee_usdc: fee_usd,
-      net_amount_usdc,
-      fee_bps: effectiveFeeBps,
-      pm_fee_rate_bps: isPolymarketBacked ? (typeof pmFeeRateBps !== "undefined" ? pmFeeRateBps : 0) : undefined,
-      // Legacy compat fields
-      entry,
-      pool_contribution_usd: net_amount_usdc,
-      commission_bps: effectiveFeeBps,
-      source: fight.source || "manual",
-      shares,
-      polymarket_backed: isPolymarketBacked,
-      polymarket_status: isPolymarketBacked ? polymarket_status : undefined,
-      polymarket_order_id: polymarket_order_id || undefined,
-    });
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
 
