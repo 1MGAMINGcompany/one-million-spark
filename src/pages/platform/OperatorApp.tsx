@@ -567,26 +567,47 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
       // ── Client-side CLOB submission for Polymarket orders ──
       if (data?.action === "client_submit" && data.order_params && data.clob_credentials) {
+        const t0 = performance.now();
         const { submitClobOrder } = await import("@/lib/clobOrderClient");
         let clobResult = await submitClobOrder(data.order_params, data.clob_credentials);
+        const t1 = performance.now();
+        console.log("[OperatorApp] first CLOB submit: %dms success=%s", Math.round(t1 - t0), clobResult.success);
 
-        // Auto-re-derive credentials on "Invalid api key" and retry once
+        let failureClass = clobResult.success ? null : "first_submit_rejected";
+
+        // Auto-re-derive credentials on "Invalid api key" — exactly ONE retry
         if (!clobResult.success && clobResult.errorCode === "clob_rejected" && clobResult.error?.toLowerCase().includes("invalid api key") && data.clob_credentials.trading_key) {
+          failureClass = "refresh_attempted";
+          const t2 = performance.now();
           try {
             const { deriveClobCredentials } = await import("@/lib/clobCredentialClient");
             const derivedResult = await deriveClobCredentials(data.clob_credentials.trading_key as `0x${string}`);
-            if (derivedResult.credentials) {
+            const t3 = performance.now();
+            console.log("[OperatorApp] credential rederive: %dms success=%s", Math.round(t3 - t2), !!derivedResult.credentials);
+
+            if (!derivedResult.credentials) {
+              failureClass = "refresh_failed";
+            } else {
               const saveCreds = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/polymarket-save-credentials`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "x-privy-token": privyToken, apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
                 body: JSON.stringify({ wallet: address, api_key: derivedResult.credentials.apiKey, api_secret: derivedResult.credentials.apiSecret, passphrase: derivedResult.credentials.passphrase }),
               });
-              if (saveCreds.ok) {
+              const t4 = performance.now();
+              console.log("[OperatorApp] save credentials: %dms ok=%s", Math.round(t4 - t3), saveCreds.ok);
+
+              if (!saveCreds.ok) {
+                failureClass = "refresh_failed";
+              } else {
                 const freshCreds = { ...data.clob_credentials, api_key: derivedResult.credentials.apiKey, api_secret: derivedResult.credentials.apiSecret, passphrase: derivedResult.credentials.passphrase };
                 clobResult = await submitClobOrder(data.order_params, freshCreds);
+                const t5 = performance.now();
+                console.log("[OperatorApp] retry CLOB submit: %dms success=%s", Math.round(t5 - t4), clobResult.success);
+                failureClass = clobResult.success ? null : "retry_rejected";
               }
             }
           } catch (reDerivErr) {
+            failureClass = "refresh_failed";
             console.warn("[OperatorApp] credential re-derivation failed:", reDerivErr);
           }
         }
@@ -606,15 +627,28 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
             status: clobResult.success ? "submitted" : "failed",
             error_code: clobResult.errorCode || null,
             error_message: clobResult.error || null,
+            failure_class: failureClass,
           }),
         });
         const confirmData = await confirmResp.json().catch(() => ({}));
+        const tEnd = performance.now();
+        console.log("[OperatorApp] total CLOB flow: %dms", Math.round(tEnd - t0));
 
         if (!clobResult.success) {
           const isGeoBlock = clobResult.errorCode === "clob_geo_blocked";
-          toast.error(isGeoBlock ? "Trading is not available in your region" : t("operator.predictionFailed"), {
-            description: isGeoBlock ? undefined : (clobResult.error || "Exchange rejected the order"),
-          });
+          const isInvalidKey = clobResult.error?.toLowerCase().includes("invalid api key");
+          if (isGeoBlock) {
+            toast.error("Trading is not available in your region");
+          } else if (isInvalidKey) {
+            toast.error("Trading credentials could not be refreshed", {
+              description: "Please sign out and sign back in to reset your trading session.",
+              duration: 8000,
+            });
+          } else {
+            toast.error(t("operator.predictionFailed"), {
+              description: clobResult.error || "Exchange rejected the order",
+            });
+          }
           setSubmitting(false);
           return;
         }

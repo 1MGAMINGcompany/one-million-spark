@@ -722,31 +722,53 @@ export default function FightPredictions() {
       // ── Client-side CLOB submission for Polymarket orders ──
       if (data?.action === "client_submit" && data.order_params && data.clob_credentials) {
         dbg("predict:client_submit_start", { trade_order_id: data.trade_order_id });
+        const t0 = performance.now();
 
         const { submitClobOrder } = await import("@/lib/clobOrderClient");
         let clobResult = await submitClobOrder(data.order_params, data.clob_credentials);
+        const t1 = performance.now();
 
-        dbg("predict:client_submit_result", { success: clobResult.success, orderId: clobResult.orderId, error: clobResult.error });
+        dbg("predict:client_submit_result", { success: clobResult.success, orderId: clobResult.orderId, error: clobResult.error, ms: Math.round(t1 - t0) });
 
-        // Auto-re-derive credentials on "Invalid api key" and retry once
+        let failureClass = clobResult.success ? null : "first_submit_rejected";
+
+        // Auto-re-derive credentials on "Invalid api key" — exactly ONE retry
         if (!clobResult.success && clobResult.errorCode === "clob_rejected" && clobResult.error?.toLowerCase().includes("invalid api key") && data.clob_credentials.trading_key) {
+          failureClass = "refresh_attempted";
           dbg("predict:re_deriving_credentials");
+          const t2 = performance.now();
           try {
             const { deriveClobCredentials } = await import("@/lib/clobCredentialClient");
             const derivedResult = await deriveClobCredentials(data.clob_credentials.trading_key as `0x${string}`);
-            if (derivedResult.credentials) {
+            const t3 = performance.now();
+            dbg("predict:timing:credential_rederive", { ms: Math.round(t3 - t2), success: !!derivedResult.credentials });
+
+            if (!derivedResult.credentials) {
+              failureClass = "refresh_failed";
+              dbg("predict:rederive_no_credentials", { error: derivedResult.error });
+              // Fail immediately — don't retry
+            } else {
               const saveCreds = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/polymarket-save-credentials`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "x-privy-token": privyToken, apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
                 body: JSON.stringify({ wallet: address, api_key: derivedResult.credentials.apiKey, api_secret: derivedResult.credentials.apiSecret, passphrase: derivedResult.credentials.passphrase }),
               });
-              if (saveCreds.ok) {
+              const t4 = performance.now();
+              dbg("predict:timing:save_credentials", { ms: Math.round(t4 - t3), ok: saveCreds.ok });
+
+              if (!saveCreds.ok) {
+                failureClass = "refresh_failed";
+                dbg("predict:save_credentials_failed", { status: saveCreds.status });
+              } else {
                 const freshCreds = { ...data.clob_credentials, api_key: derivedResult.credentials.apiKey, api_secret: derivedResult.credentials.apiSecret, passphrase: derivedResult.credentials.passphrase };
                 clobResult = await submitClobOrder(data.order_params, freshCreds);
-                dbg("predict:retry_result", { success: clobResult.success, orderId: clobResult.orderId });
+                const t5 = performance.now();
+                dbg("predict:timing:retry_clob_submit", { ms: Math.round(t5 - t4), success: clobResult.success });
+                failureClass = clobResult.success ? null : "retry_rejected";
               }
             }
           } catch (reDerivErr) {
+            failureClass = "refresh_failed";
             console.warn("[FightPredictions] credential re-derivation failed:", reDerivErr);
           }
         }
@@ -766,14 +788,23 @@ export default function FightPredictions() {
             status: clobResult.success ? "submitted" : "failed",
             error_code: clobResult.errorCode || null,
             error_message: clobResult.error || null,
+            failure_class: failureClass,
           }),
         });
         const confirmData = await confirmResp.json().catch(() => ({}));
+        const tEnd = performance.now();
+        dbg("predict:timing:total_clob_flow", { ms: Math.round(tEnd - t0) });
 
         if (!clobResult.success) {
           const isGeoBlock = clobResult.errorCode === "clob_geo_blocked";
+          const isInvalidKey = clobResult.error?.toLowerCase().includes("invalid api key");
           if (isGeoBlock) {
             toast.error("Trading is not available in your region");
+          } else if (isInvalidKey) {
+            toast.error("Trading credentials could not be refreshed", {
+              description: "Please sign out and sign back in to reset your trading session.",
+              duration: 8000,
+            });
           } else {
             toast.error("Order rejected", { description: clobResult.error || "Exchange rejected the order" });
           }
