@@ -1424,8 +1424,9 @@ Deno.serve(async (req) => {
         }, 403);
       }
 
-      // ── Fetch dynamic Polymarket fee rate ──
+      // ── Fetch dynamic Polymarket fee rate + negRisk from market metadata ──
       let pmFeeRateBps = 0;
+      let marketNegRisk = false; // Default false — moneyline markets (NHL, NBA daily) are NOT negRisk
       const clobUrl = getClobUrl();
       try {
         const feeRes = await fetch(`${clobUrl}/fee-rate?token_id=${tokenId}`);
@@ -1436,6 +1437,22 @@ Deno.serve(async (req) => {
         }
       } catch (feeErr) {
         console.warn("[prediction-submit] Fee rate fetch error:", feeErr);
+      }
+
+      // Fetch negRisk from Gamma API for correct exchange contract selection
+      try {
+        const gammaRes = await fetch(
+          `https://gamma-api.polymarket.com/markets?slug=${encodeURIComponent(fight.polymarket_slug || "")}&limit=1`
+        );
+        if (gammaRes.ok) {
+          const gammaMarkets = await gammaRes.json();
+          if (Array.isArray(gammaMarkets) && gammaMarkets.length > 0) {
+            marketNegRisk = gammaMarkets[0].negRisk === true;
+            console.log(`[prediction-submit] Market negRisk=${marketNegRisk} for slug=${fight.polymarket_slug}`);
+          }
+        }
+      } catch (gammaErr) {
+        console.warn("[prediction-submit] Gamma negRisk fetch error:", gammaErr);
       }
 
       // Mark as pending client submission
@@ -1454,6 +1471,7 @@ Deno.serve(async (req) => {
         fee_collected: feeCollected,
         fee_tx_hash: feeTxHash,
         pm_fee_rate_bps: pmFeeRateBps,
+        neg_risk: marketNegRisk,
       });
 
       // Return order params + credentials to client for browser-side CLOB submission
@@ -1471,7 +1489,7 @@ Deno.serve(async (req) => {
           price: expectedPrice,
           net_amount_usdc,
           fee_rate_bps: pmFeeRateBps,
-          neg_risk: true,
+          neg_risk: marketNegRisk,
         },
         clob_credentials: {
           api_key: userSession!.pm_api_key,
