@@ -49,6 +49,7 @@ export interface ClobSubmitResult {
     httpStatus?: number;
     usedOfficialClient: boolean;
     negRisk: boolean;
+    price: number;
   };
 }
 
@@ -69,10 +70,14 @@ export async function submitClobOrder(
       transport: http(),
     });
 
-    // Determine auth model
+    // Determine auth model:
+    // signatureType 0 = EOA (no proxy), funder = undefined
+    // signatureType 1 = POLY_PROXY (safe/proxy), funder = proxy owner address
     const useProxy = !!credentials.proxy_address;
-    const signatureType = useProxy ? 1 : 0; // 0=EOA, 1=POLY_PROXY
-    const funder = useProxy ? credentials.funder_address : undefined;
+    const signatureType = useProxy ? 1 : 0;
+    // For POLY_PROXY, funder should be the proxy/safe address itself (the maker).
+    // For EOA, funder must be undefined per SDK docs.
+    const funder = useProxy ? credentials.proxy_address : undefined;
 
     const creds = {
       key: credentials.api_key,
@@ -92,15 +97,20 @@ export async function submitClobOrder(
 
     const negRisk = params.neg_risk ?? true; // sports markets are neg_risk
 
+    // Price is the worst-price limit (slippage protection) — required for market orders.
+    // The backend sends this as the expected price from the slippage check.
+    const price = params.price;
+
     const diagnostics = {
       signatureType,
-      funder: funder || "0x0000000000000000000000000000000000000000",
+      funder: funder || "none",
       maker: useProxy ? (credentials.proxy_address as string) : account.address,
       signer: account.address,
       orderType: "FOK",
       exchange: negRisk ? "NegRiskCTFExchange" : "CTFExchange",
       usedOfficialClient: true,
       negRisk,
+      price,
     };
 
     console.log("[clobOrderClient] SDK order submission:", JSON.stringify({
@@ -110,11 +120,13 @@ export async function submitClobOrder(
       apiKeyPrefix: credentials.api_key.substring(0, 8),
     }));
 
-    // Use the official SDK to create, sign, and post the market order
+    // Use the official SDK to create, sign, and post the market order.
+    // `price` acts as worst-price limit (slippage protection) per Polymarket docs.
     const resp = await client.createAndPostMarketOrder(
       {
         tokenID: params.token_id,
         amount: params.net_amount_usdc,
+        price,
         side: Side.BUY,
       },
       { tickSize: "0.01", negRisk },
@@ -139,10 +151,20 @@ export async function submitClobOrder(
     const errMsg = err?.message || err?.response?.data || String(err);
     const errStr = typeof errMsg === "string" ? errMsg : JSON.stringify(errMsg);
 
+    // Also capture HTTP response details if available
+    const httpStatus = err?.response?.status || err?.status;
+    const responseBody = err?.response?.data
+      ? (typeof err.response.data === "string" ? err.response.data : JSON.stringify(err.response.data))
+      : undefined;
+
+    if (responseBody) {
+      console.error("[clobOrderClient] Response body:", responseBody.substring(0, 500));
+    }
+
     const isGeoBlock =
       errStr.toLowerCase().includes("restricted") ||
       errStr.toLowerCase().includes("region") ||
-      err?.response?.status === 403;
+      httpStatus === 403;
 
     return {
       success: false,
@@ -151,14 +173,15 @@ export async function submitClobOrder(
       status: "failed",
       diagnostics: {
         signatureType: 0,
-        funder: "0x0000000000000000000000000000000000000000",
+        funder: "none",
         maker: "unknown",
         signer: "unknown",
         orderType: "FOK",
         exchange: "unknown",
         usedOfficialClient: true,
         negRisk: params.neg_risk ?? true,
-        httpStatus: err?.response?.status,
+        httpStatus,
+        price: params.price,
       },
     };
   }

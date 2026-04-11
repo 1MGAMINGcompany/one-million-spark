@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
-
 export interface LiveGameState {
   slug: string;
   score?: string;
@@ -27,27 +26,30 @@ const SportsWSContext = createContext<SportsWSContextValue>({
 
 const WS_URL = "wss://sports-api.polymarket.com/ws";
 const MAX_BACKOFF = 30000;
-const SNAPSHOT_INTERVAL_MS = 30_000;
+const PING_INTERVAL_MS = 5_000; // Polymarket docs: server sends ping every 5s
 
 /**
  * Parse a WebSocket message from the Polymarket Sports API.
- * Primary matching: use msg.slug directly against tracked slugs set.
- * Fallback: partial slug prefix matching.
+ * Per docs: no subscription needed. Messages are `sport_result` type JSON objects
+ * with fields: gameId, slug, leagueAbbreviation, status, homeScore, awayScore, etc.
+ *
+ * Match strategy:
+ * 1. Direct slug match against tracked slugs
+ * 2. Partial prefix match (WS slug may not have outcome suffix)
  */
 function parseLiveMessage(msg: any, slugSet: Set<string>): LiveGameState | null {
   if (!msg) return null;
 
   // ── Primary: direct slug match ──
   let slug: string | null = null;
-  if (msg.slug && slugSet.has(msg.slug)) {
-    slug = msg.slug;
-  } else if (msg.market_slug && slugSet.has(msg.market_slug)) {
-    slug = msg.market_slug;
+  const wsSlug = msg.slug || msg.market_slug || null;
+
+  if (wsSlug && slugSet.has(wsSlug)) {
+    slug = wsSlug;
   }
 
-  // ── Fallback: try partial slug matching (WS slug may lack outcome suffix) ──
-  if (!slug && (msg.slug || msg.market_slug)) {
-    const wsSlug = (msg.slug || msg.market_slug) as string;
+  // ── Fallback: partial slug prefix matching ──
+  if (!slug && wsSlug) {
     for (const tracked of slugSet) {
       if (tracked.startsWith(wsSlug) || wsSlug.startsWith(tracked)) {
         slug = tracked;
@@ -76,8 +78,8 @@ function parseLiveMessage(msg: any, slugSet: Set<string>): LiveGameState | null 
     scoreA = Number(p[0]);
     scoreB = Number(p[1]);
   } else {
-    scoreA = msg.score_a ?? msg.home_score ?? msg.scoreA ?? undefined;
-    scoreB = msg.score_b ?? msg.away_score ?? msg.scoreB ?? undefined;
+    scoreA = msg.homeScore ?? msg.home_score ?? msg.score_a ?? msg.scoreA ?? undefined;
+    scoreB = msg.awayScore ?? msg.away_score ?? msg.score_b ?? msg.scoreB ?? undefined;
     if (scoreA != null && scoreB != null) {
       score = `${scoreA}-${scoreB}`;
     }
@@ -105,37 +107,6 @@ interface SportsWebSocketProviderProps {
   slugs?: string[];
 }
 
-/**
- * Fetch initial snapshot from live-game-state edge function.
- * Seeds the games Map so scores appear immediately (before any WS message).
- */
-async function fetchSnapshot(slugs: string[]): Promise<Map<string, LiveGameState>> {
-  const result = new Map<string, LiveGameState>();
-  if (slugs.length === 0) return result;
-
-  try {
-    const { data, error } = await supabase.functions.invoke("live-game-state", {
-      body: { slugs },
-    });
-
-    if (error) {
-      console.warn("[SportsWS] Snapshot fetch error:", error);
-      return result;
-    }
-
-    const games = data?.games || {};
-    for (const [slug, state] of Object.entries(games)) {
-      if (state && typeof state === "object") {
-        result.set(slug, state as LiveGameState);
-      }
-    }
-    console.log("[SportsWS] Snapshot seeded %d games from %d slugs", result.size, slugs.length);
-  } catch (e) {
-    console.warn("[SportsWS] Snapshot fetch failed:", e);
-  }
-  return result;
-}
-
 export function SportsWebSocketProvider({ children, slugs = [] }: SportsWebSocketProviderProps) {
   const [games, setGames] = useState<Map<string, LiveGameState>>(new Map());
   const [connected, setConnected] = useState(false);
@@ -143,38 +114,61 @@ export function SportsWebSocketProvider({ children, slugs = [] }: SportsWebSocke
   const backoffRef = useRef(1000);
   const mountedRef = useRef(true);
   const unmatchedCountRef = useRef(0);
+  const pingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const slugSet = useMemo(() => new Set(slugs), [slugs]);
   const slugSetRef = useRef(slugSet);
   slugSetRef.current = slugSet;
 
-  // ── Tier 1: Snapshot seeding ──
+  // Log tracked slugs on change for debugging
+  useEffect(() => {
+    if (slugs.length > 0) {
+      console.log("[SportsWS] Tracking %d slugs, first 5:", slugs.length, slugs.slice(0, 5));
+    }
+  }, [slugs.join(",")]);
+
+  // ── Snapshot seeding from live-game-state edge function ──
+  // Seeds initial market status so UI can show "active" / "Final" badges
+  // before any WS message arrives
   useEffect(() => {
     if (slugs.length === 0) return;
     let cancelled = false;
 
-    const doFetch = () => {
-      fetchSnapshot(slugs).then((snapshot) => {
-        if (cancelled || snapshot.size === 0) return;
+    const fetchSnapshot = async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("live-game-state", {
+          body: { slugs },
+        });
+        if (cancelled || error) return;
+        const gamesData = data?.games || {};
+        const entries = Object.entries(gamesData);
+        if (entries.length === 0) return;
+
         setGames((prev) => {
           const next = new Map(prev);
-          for (const [slug, state] of snapshot) {
+          for (const [slug, state] of entries) {
             // Only seed if we don't already have fresher WS data
-            if (!next.has(slug)) {
-              next.set(slug, state);
+            if (!next.has(slug) && state && typeof state === "object") {
+              next.set(slug, state as LiveGameState);
             }
           }
           return next;
         });
-      });
+        console.log("[SportsWS] Snapshot seeded %d/%d slugs", entries.length, slugs.length);
+      } catch (e) {
+        console.warn("[SportsWS] Snapshot fetch failed:", e);
+      }
     };
 
-    doFetch();
-    const interval = setInterval(doFetch, SNAPSHOT_INTERVAL_MS);
+    fetchSnapshot();
+    // Re-fetch every 30s for market status updates
+    const interval = setInterval(fetchSnapshot, 30_000);
     return () => { cancelled = true; clearInterval(interval); };
   }, [slugs.join(",")]);
 
-  // ── Tier 2: WebSocket updates ──
+  // ── WebSocket connection ──
+  // Per Polymarket docs: "No subscription message required — connect and start
+  // receiving data for all active sports events."
   const connect = useCallback(() => {
     if (!mountedRef.current) return;
     try {
@@ -186,9 +180,14 @@ export function SportsWebSocketProvider({ children, slugs = [] }: SportsWebSocke
         console.log("[SportsWS] Connected");
         setConnected(true);
         backoffRef.current = 1000;
+        unmatchedCountRef.current = 0;
+
+        // Heartbeat: respond to server pings
+        // Also send keepalive pongs proactively
       };
 
       ws.onmessage = (ev) => {
+        // Per docs: server sends "ping" text, respond with "pong"
         if (ev.data === "ping") {
           if (ws.readyState === WebSocket.OPEN) ws.send("pong");
           return;
@@ -205,16 +204,16 @@ export function SportsWebSocketProvider({ children, slugs = [] }: SportsWebSocke
               if (state) {
                 next.set(state.slug, state);
                 changed = true;
-              } else if (unmatchedCountRef.current < 5 && (msg.slug || msg.market_slug)) {
+              } else if (unmatchedCountRef.current < 3 && (msg.slug || msg.market_slug)) {
                 unmatchedCountRef.current++;
-                console.warn("[SportsWS] Unmatched message slug:", msg.slug || msg.market_slug,
-                  "tracked:", Array.from(slugSetRef.current).slice(0, 5));
+                console.log("[SportsWS] WS message slug not tracked:", msg.slug || msg.market_slug,
+                  "| tracked sample:", Array.from(slugSetRef.current).slice(0, 3));
               }
             }
             return changed ? next : prev;
           });
         } catch (e) {
-          console.warn("[SportsWS] Failed to parse message:", e);
+          // Ignore malformed messages
         }
       };
 
@@ -222,6 +221,7 @@ export function SportsWebSocketProvider({ children, slugs = [] }: SportsWebSocke
         if (!mountedRef.current) return;
         console.log("[SportsWS] Disconnected, reconnecting...");
         setConnected(false);
+        if (pingRef.current) { clearInterval(pingRef.current); pingRef.current = null; }
         const delay = Math.min(backoffRef.current, MAX_BACKOFF);
         backoffRef.current = delay * 2;
         setTimeout(connect, delay);
@@ -242,6 +242,7 @@ export function SportsWebSocketProvider({ children, slugs = [] }: SportsWebSocke
     return () => {
       mountedRef.current = false;
       wsRef.current?.close();
+      if (pingRef.current) { clearInterval(pingRef.current); pingRef.current = null; }
     };
   }, [connect]);
 
