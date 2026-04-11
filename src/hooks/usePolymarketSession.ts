@@ -1,5 +1,8 @@
 /**
  * usePolymarketSession — Per-user Polymarket trading wallet management.
+ *
+ * V2: After server-side setup returns a trading key, the browser derives
+ * CLOB API credentials directly from Polymarket (bypassing geo-blocking).
  */
 import { useState, useEffect, useCallback } from "react";
 import { usePrivy, useSignMessage } from "@privy-io/react-auth";
@@ -41,6 +44,7 @@ const NOOP_SESSION: PolymarketSessionState = {
 
 const SIWE_MESSAGE_PREFIX = "Sign to enable trading on 1mg.live";
 const USER_SETUP_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/polymarket-user-setup`;
+const SAVE_CREDS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/polymarket-save-credentials`;
 
 export function usePolymarketSession(): PolymarketSessionState {
   if (!getPrivyAppId()) return NOOP_SESSION;
@@ -120,6 +124,60 @@ function usePolymarketSessionInner(): PolymarketSessionState {
     }
   }, [isPrivyUser, walletAddress, refreshSession]);
 
+  /**
+   * Browser-side CLOB credential derivation.
+   * Called after server setup returns a trading key.
+   */
+  const deriveBrowserCredentials = useCallback(async (
+    tradingKey: string,
+    token: string,
+  ): Promise<boolean> => {
+    try {
+      console.log("[usePolymarketSession] Deriving CLOB credentials from browser...");
+      const { deriveClobCredentials } = await import("@/lib/clobCredentialClient");
+      const result = await deriveClobCredentials(tradingKey as `0x${string}`);
+
+      if (!result.credentials) {
+        console.error("[usePolymarketSession] Browser credential derivation failed:", result.error);
+        setError(result.error || "Credential derivation failed");
+        return false;
+      }
+
+      // Save credentials to backend
+      const saveResp = await fetch(SAVE_CREDS_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-privy-token": token,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({
+          wallet: walletAddress,
+          api_key: result.credentials.apiKey,
+          api_secret: result.credentials.apiSecret,
+          passphrase: result.credentials.passphrase,
+        }),
+      });
+
+      const saveData = await saveResp.json().catch(() => ({}));
+      if (!saveResp.ok || saveData?.error) {
+        console.error("[usePolymarketSession] Save credentials failed:", saveData?.error);
+        setError(saveData?.error || "Failed to save credentials");
+        return false;
+      }
+
+      console.log("[usePolymarketSession] Browser credentials saved successfully");
+      setStatus("active");
+      setCanTrade(true);
+      setError(null);
+      return true;
+    } catch (err) {
+      console.error("[usePolymarketSession] Browser credential derivation error:", err);
+      setError(err instanceof Error ? err.message : String(err));
+      return false;
+    }
+  }, [walletAddress]);
+
   const setupTradingWallet = useCallback(async (): Promise<{
     success: boolean;
     ready?: boolean;
@@ -180,11 +238,24 @@ function usePolymarketSessionInner(): PolymarketSessionState {
       }
 
       setHasSession(true);
-      setStatus(data.status || "active");
-      setCanTrade(data.can_trade ?? false);
+      setDerivedAddress(data.derived_address ?? null);
       setSafeDeployed(data.safe_deployed ?? false);
       setApprovalsSet(data.approvals_set ?? false);
-      setDerivedAddress(data.derived_address ?? null);
+
+      // If server returns trading_key and requires browser credentials, derive them now
+      if (data.requires_browser_credentials && data.trading_key) {
+        const credSuccess = await deriveBrowserCredentials(data.trading_key, token);
+        if (!credSuccess) {
+          setStatus("awaiting_browser_credentials");
+          setCanTrade(false);
+          return { success: true, ready: false, error: "Credential derivation failed — retry later" };
+        }
+        return { success: true, ready: true };
+      }
+
+      // Legacy path: server already derived credentials
+      setStatus(data.status || "active");
+      setCanTrade(data.can_trade ?? false);
       setError(null);
 
       return { success: true, ready: Boolean(data.can_trade) };
@@ -196,7 +267,7 @@ function usePolymarketSessionInner(): PolymarketSessionState {
     } finally {
       setLoading(false);
     }
-  }, [walletAddress, eoaAddress, getAccessToken, signMessage]);
+  }, [walletAddress, eoaAddress, getAccessToken, signMessage, deriveBrowserCredentials]);
 
   return {
     hasSession,
