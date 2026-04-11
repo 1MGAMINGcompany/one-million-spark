@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from "react";
-
+import { supabase } from "@/integrations/supabase/client";
 export interface LiveGameState {
   slug: string;
   score?: string;
@@ -125,6 +125,45 @@ export function SportsWebSocketProvider({ children, slugs = [] }: SportsWebSocke
     if (slugs.length > 0) {
       console.log("[SportsWS] Tracking %d slugs, first 5:", slugs.length, slugs.slice(0, 5));
     }
+  }, [slugs.join(",")]);
+
+  // ── Snapshot seeding from live-game-state edge function ──
+  // Seeds initial market status so UI can show "active" / "Final" badges
+  // before any WS message arrives
+  useEffect(() => {
+    if (slugs.length === 0) return;
+    let cancelled = false;
+
+    const fetchSnapshot = async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("live-game-state", {
+          body: { slugs },
+        });
+        if (cancelled || error) return;
+        const gamesData = data?.games || {};
+        const entries = Object.entries(gamesData);
+        if (entries.length === 0) return;
+
+        setGames((prev) => {
+          const next = new Map(prev);
+          for (const [slug, state] of entries) {
+            // Only seed if we don't already have fresher WS data
+            if (!next.has(slug) && state && typeof state === "object") {
+              next.set(slug, state as LiveGameState);
+            }
+          }
+          return next;
+        });
+        console.log("[SportsWS] Snapshot seeded %d/%d slugs", entries.length, slugs.length);
+      } catch (e) {
+        console.warn("[SportsWS] Snapshot fetch failed:", e);
+      }
+    };
+
+    fetchSnapshot();
+    // Re-fetch every 30s for market status updates
+    const interval = setInterval(fetchSnapshot, 30_000);
+    return () => { cancelled = true; clearInterval(interval); };
   }, [slugs.join(",")]);
 
   // ── WebSocket connection ──
