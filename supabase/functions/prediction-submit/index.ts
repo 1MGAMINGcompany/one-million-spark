@@ -1406,7 +1406,7 @@ Deno.serve(async (req) => {
       // ── Per-user credentials ONLY — return to client for browser-side submission ──
       const { data: userSession } = await supabase
         .from("polymarket_user_sessions")
-        .select("pm_api_key, pm_api_secret, pm_passphrase, pm_trading_key, status, safe_address, safe_deployed, approvals_set, expires_at")
+        .select("pm_api_key, pm_api_secret, pm_passphrase, pm_trading_key, pm_derived_address, safe_address, status, safe_deployed, approvals_set, expires_at")
         .eq("wallet", normalizedWallet)
         .maybeSingle();
 
@@ -1477,6 +1477,8 @@ Deno.serve(async (req) => {
           api_secret: userSession!.pm_api_secret,
           passphrase: userSession!.pm_passphrase,
           trading_key: userSession!.pm_trading_key,
+          proxy_address: userSession!.safe_address || userSession!.pm_derived_address || undefined,
+          funder_address: userSession!.safe_address ? "0xC5d563A36AE78145C45a50134d48A1215220f80a" : undefined,
         },
         source: fight.source || "manual",
         polymarket_backed: true,
