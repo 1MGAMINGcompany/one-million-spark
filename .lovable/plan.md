@@ -1,77 +1,121 @@
 
+Audit + remediation plan
 
-## Fix: Fly.io Proxy POST /order Still Getting Geo-Blocked
+Do I know what the issue is?
+Yes. The Fly.io proxy is probably still useful for backend CLOB access, but it is not the main issue by itself. The app currently has multiple deeper Polymarket integration mismatches plus a separate stale-market lifecycle bug.
 
-### Diagnosis
-The logs confirm:
-- `getClobUrl()` correctly returns the Fly.io proxy URL
-- GET requests through the proxy work (health check, price fetch)
-- POST `/order` returns 403 geo-block
+What I found
 
-The proxy is deployed with `auto_stop_machines = "stop"` and Fly.io anycast routing. When the Supabase edge function (running in `eu-central-1`) connects to `polymarket-clob-proxy-weathered-butterfly-6155.fly.dev`, Fly's anycast may route to a European edge, or the stopped machine may restart in a non-iad region.
+1. Core Polymarket integration drift
+- Official Polymarket docs use:
+  - L1 EIP-712 auth to create/derive L2 credentials
+  - L2 HMAC auth for trading
+  - wallet-type-specific `signatureType` and `funder` (`EOA=0`, `POLY_PROXY=1`, `GNOSIS_SAFE=2`)
+- Your code is inconsistent:
+  - `prediction-submit` and `prediction-sell` hardcode `signatureType: 0`
+  - `pm-verify-credentials` uses the SDK `ClobClient` with a configurable signature type/funder model
+  - `polymarket-user-setup` stores `safe_address`, `safe_deployed`, and `approvals_set`, but order submission never uses a Safe/proxy signature model
+- That means the app is mixing an EOA order model with an optimistic Safe/proxy session model.
 
-Additionally, the current proxy code sets `headers["host"] = "clob.polymarket.com"` but does NOT strip the `origin` or `referer` headers, which Polymarket may inspect on authenticated POST endpoints.
+2. Order submission model likely does not match the intended product flow
+- Current code hand-builds a BUY order and posts it as `orderType: "GTC"`.
+- Polymarket docs for instant execution emphasize market-order semantics with FOK/FAK and a worst-price limit.
+- So even if the proxy works, the app may still reject or mis-handle orders because the signed payload model is drifting from the documented path.
 
-### Fix (External Proxy Changes)
+3. Two Polymarket auth/setup implementations exist
+- `polymarket-user-setup` is the active app path
+- `polymarket-auth` is still present with a different derivation flow
+- This is a maintenance and correctness problem.
 
-**1. Update `fly-clob-proxy/server.js`** — Strip additional headers and add diagnostic logging:
+4. Frontend still assumes an old fallback that backend removed
+- UI comments/logic still say “shared fallback” exists
+- backend comments/logic in `prediction-submit` show per-user sessions only
+- So the UI is guiding the flow with outdated assumptions
 
-```js
-// Add to STRIP set:
-"origin", "referer", "x-deno-execution-id", "x-deno-subhost"
-```
+5. Old matches are not disappearing because backend and frontend disagree on lifecycle
+- `OperatorApp` loads `open/live/locked` fights for the last 7 days and does not exclude `polymarket_active = false`
+- `FightPredictions` only excludes `settled/cancelled`, so resolved/confirmed/refund states can linger
+- `polymarket-prices` can mark a resolved market as:
+  - `polymarket_active = false`
+  - `status = "locked"`
+  This keeps dead markets browseable
+- `prediction-result-detect` is the function that should move closed Polymarket markets to `confirmed`, but browse filters are too loose to depend on that safely
 
-**2. Update `fly-clob-proxy/fly.toml`** — Force single-region deployment:
+6. Public live pricing and server execution use different channels
+- Browser prices come from direct Polymarket WebSocket
+- Server execution uses backend fetches via `getClobUrl()`
+- So quote display and actual execution path can diverge
 
-```toml
-app = "polymarket-clob-proxy-weathered-butterfly-6155"
-primary_region = "iad"
+7. Financial safety needs review
+- `prediction-submit` collects the fee before final exchange placement
+- If funding/order placement fails afterward, I do not see a guaranteed automatic fee rollback path in the current flow
 
-[build]
+What this means
+- Fly.io may still be needed, but it is not the root explanation for everything.
+- The strongest evidence is the wallet/signature mismatch:
+  - verifier path uses SDK + signatureType/funder
+  - live trade path hardcodes EOA signing
+- The stale matches problem is definitely separate and caused by query/filter/lifecycle logic.
 
-[http_service]
-  internal_port = 8080
-  force_https = true
-  auto_stop_machines = "off"     # prevent cold-start in wrong region
-  auto_start_machines = true
-  min_machines_running = 1
+Implementation plan
 
-[[vm]]
-  size = "shared-cpu-1x"
-  memory = "256mb"
-```
+Phase 1 — Canonicalize the Polymarket path
+- Keep one setup flow: `polymarket-user-setup`
+- Merge/remove `polymarket-auth`
+- Make session data represent the real wallet model actually used for order placement
+- Update `pm-verify-credentials` to validate the same runtime model the app submits with
 
-Key change: `auto_stop_machines = "off"` ensures the machine stays alive in `iad` and doesn't get recreated in a different region.
+Phase 2 — Fix trade submission to match docs
+- Refactor `prediction-submit` and `prediction-sell` to use one coherent Polymarket model:
+  - correct `signatureType`
+  - correct `funder`
+  - official create/derive credential flow
+  - market-order/FOK-or-FAK behavior for instant fills
+- If markets need `negRisk`, carry that metadata through too
 
-**3. Add a POST test endpoint to the proxy** for debugging:
+Phase 3 — Remove stale frontend assumptions
+- Update `FightPredictions.tsx` and `OperatorApp.tsx`
+- Remove “shared fallback” behavior/comments
+- Gate trade flow on the real per-user readiness model
+- Keep requote handling, but tighten exchange error mapping
 
-Add a `/debug` path that returns the machine's region and outbound IP so we can confirm the egress is from a US IP.
+Phase 4 — Fix old matches not erasing
+- In `polymarket-prices`, stop setting resolved markets to `locked`
+- Let resolved markets move to `confirmed/cancelled` through the proper result path
+- Tighten browse queries to exclude:
+  - `polymarket_active = false`
+  - stale past events beyond a short grace window
+  - inactive resolved fights from browse surfaces
+- Keep past/resolved fights only in My Picks / Past sections
 
-**4. Redeploy the proxy:**
-```bash
-cd fly-clob-proxy
-fly deploy
-fly status  # confirm machine is in iad
-```
+Phase 5 — Audit the automation chain
+- Verify these do not fight each other:
+  - `polymarket-prices`
+  - `prediction-result-detect`
+  - `prediction-result-worker`
+  - `prediction-schedule-worker`
+  - `prediction-auto-settle`
+- Add recovery for “closed on Gamma but still browseable locally”
 
-**5. Verify with a direct POST test:**
-```bash
-curl -X POST https://polymarket-clob-proxy-weathered-butterfly-6155.fly.dev/order \
-  -H "Content-Type: application/json" \
-  -d '{"test": true}'
-```
+Phase 6 — Financial safety pass
+- Review fee capture ordering
+- Either move fee capture later or add a guaranteed rollback/refund path after downstream failures
+- Ensure failed/no-order trades never look like real executed positions
 
-This should return a Polymarket error about invalid order format (not 403 geo-block). If it still returns 403, the issue is Fly's outbound IP being flagged, and we'd need to use a dedicated IPv4 (`fly ips allocate-v4`).
+Files to change
+- `supabase/functions/polymarket-user-setup/index.ts`
+- `supabase/functions/polymarket-auth/index.ts`
+- `supabase/functions/prediction-submit/index.ts`
+- `supabase/functions/prediction-sell/index.ts`
+- `supabase/functions/pm-verify-credentials/index.ts`
+- `supabase/functions/polymarket-prices/index.ts`
+- `supabase/functions/prediction-result-detect/index.ts`
+- `src/pages/FightPredictions.tsx`
+- `src/pages/platform/OperatorApp.tsx`
 
-### Files to Create/Update (External)
-- `fly-clob-proxy/server.js` — strip origin/referer/deno headers
-- `fly-clob-proxy/fly.toml` — disable auto_stop, force iad
-
-### No Project Code Changes Needed
-The edge functions are already correctly using `getClobUrl()`.
-
-### Test After Fix
-1. `fly status` — confirm single machine in `iad`
-2. `curl -X POST .../order` — confirm NOT 403
-3. Place a $1 prediction on 1mg.live/demo — should succeed or fail with a non-geo error
-
+Expected result
+- Trade auth/order construction matches Polymarket’s documented model
+- Proxy is just transport, not a band-aid for deeper integration drift
+- Dead markets disappear from browse views quickly
+- Past results remain visible only where they belong
+- Failures become accurate: geo issue, credentials issue, wallet-model issue, slippage issue, or exchange rejection
