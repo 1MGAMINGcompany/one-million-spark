@@ -115,7 +115,8 @@ function parseGammaMarket(market: any, slug: string) {
 
   const active = market.active === true;
   const closed = market.closed === true;
-  const resolved = market.resolved === true || !!market.resolvedBy;
+  // `resolved` is an explicit boolean; `resolvedBy` is just the resolver address (always set)
+  const resolved = market.resolved === true;
 
   // Determine status
   let status = "unknown";
@@ -127,10 +128,18 @@ function parseGammaMarket(market: any, slug: string) {
     ended = true;
   } else if (active) {
     // Market is active — could be pre-game or live
-    // We can't know if the game is actually live from Gamma alone
-    // The WS will provide that. Mark as "active" so UI knows it exists.
-    status = "active";
-    live = false; // WS will upgrade to live when the game actually starts
+    // Check if game has started based on gameStartTime
+    const gameStart = market.gameStartTime ? new Date(market.gameStartTime).getTime() : 0;
+    const now = Date.now();
+    if (gameStart > 0 && now >= gameStart) {
+      // Game has started — mark as potentially live
+      // (Actual live score comes from WS, but this gives the UI the right status)
+      status = "InProgress";
+      live = true;
+    } else {
+      status = "active";
+      live = false;
+    }
   }
 
   return {
