@@ -1478,8 +1478,11 @@ Deno.serve(async (req) => {
           api_secret: userSession!.pm_api_secret,
           passphrase: userSession!.pm_passphrase,
           trading_key: userSession!.pm_trading_key,
+          // proxy_address = safe_address for POLY_PROXY mode (signatureType=1)
+          // funder = proxy/safe address itself (the maker), NOT the exchange contract
+          // For EOA users (no safe), both are undefined → signatureType=0
           proxy_address: userSession!.safe_address || undefined,
-          funder_address: userSession!.safe_address ? "0xC5d563A36AE78145C45a50134d48A1215220f80a" : undefined,
+          funder_address: userSession!.safe_address || undefined,
         },
         source: fight.source || "manual",
         polymarket_backed: true,
