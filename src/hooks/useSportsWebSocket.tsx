@@ -172,8 +172,10 @@ export function SportsWebSocketProvider({ children, slugs = [] }: SportsWebSocke
   const slugLookup = useMemo(() => {
     const map = new Map<string, string>();
     for (const slug of slugs) {
-      const key = slugToMatchKey(slug);
-      if (key) map.set(key, slug);
+      const keys = slugToMatchKeys(slug);
+      for (const key of keys) {
+        if (!map.has(key)) map.set(key, slug);
+      }
     }
     return map;
   }, [slugs]);
