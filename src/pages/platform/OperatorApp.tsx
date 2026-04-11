@@ -678,6 +678,18 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         loadUserEntries();
         setTimeout(() => refetchBalance(), 3000);
         return;
+        } catch (clobErr: any) {
+          if (clobAbort.signal.aborted) {
+            console.error("[OperatorApp] CLOB submission timed out after 60s");
+            toast.error("Submission timed out", { description: "The order took too long. Please try again." });
+          } else {
+            throw clobErr;
+          }
+          setSubmitting(false);
+          return;
+        } finally {
+          clearTimeout(clobTimeoutId);
+        }
       }
 
       // Native event path (non-Polymarket) — direct fill
