@@ -1,119 +1,76 @@
 
+Goal: make the operator apps usable today without redesigning the trading system.
 
-## Plan: Fix Long-Fail Path + Validate Browser Credential Flow
+What I confirmed
+- The operator apps really do not have a logout/sign-out control right now. `src/pages/platform/OperatorApp.tsx` only shows the truncated wallet address in the navbar. The logout pattern already exists elsewhere (`src/pages/platform/LandingPage.tsx`, `src/components/PrivyLoginButton.tsx`) but is not used in the operator app.
+- I did inspect the 2 failed tests. Both latest trades from wallet `0x3ed68845cf4528c80ff62094b52eeabca29db5a4` failed the same way:
+  - `6eacc059-b4dd-4ccd-afee-de6c3d047be9` — created `20:07:18`, failed `20:07:26` (~8s)
+  - `91b5e04b-1858-484f-8496-8a8c4fb100ce` — created `20:09:19`, failed `20:09:27` (~8s)
+- Both failures were `clob_rejected` with `{"error":"Unauthorized/Invalid api key"}`.
+- Audit records show `failure_class = retry_rejected` on both tests.
+- Backend automation logs show browser-derived credentials were successfully saved during those attempts, and the current session is already `active` with fresh credentials saved at `20:09:25`.
 
-### What's Actually Happening
+What that means
+- The long hidden wait is mostly fixed now.
+- The current blocker is no longer stale pre-April credentials.
+- The current blocker is: fresh browser-derived credentials are still being rejected when the browser POSTs `/order`.
+- So the toast telling you to sign out and sign back in is actionable only after we add the button, but logout alone is unlikely to solve the real issue.
 
-The DB shows credentials **are** being browser-derived and saved successfully (two saves on April 11). The API key `8b628afc-...` is stored and used. But every order submission gets `{"error":"Unauthorized/Invalid api key"}` from Polymarket's `/order` endpoint.
+Most likely remaining blocker
+- `src/lib/clobOrderClient.ts` is still submitting orders in a way that does not fully match Polymarket’s documented auth model:
+  - it uses `signatureType: 0`
+  - it uses `owner: account.address`
+  - it does not send `POLY_ADDRESS`
+  - it submits with `orderType: "GTC"`
+- Polymarket’s docs require the full L2 header set and correct `signatureType`/`funder` handling for proxy/safe-style users.
+- The project’s own verifier (`supabase/functions/pm-verify-credentials/index.ts`) already uses a different auth model than the browser submitter, which is the biggest red flag.
 
-Timeline of the latest test:
-- 18:35:49 — trade order created
-- 18:35:50 — status set to `pending_client_submit`  
-- 18:36:31 — credential re-derivation + save (retry path)
-- 18:36:35 — finalized as failed (46 seconds total)
+Plan
+1. Add the missing sign-out control
+- Update `src/pages/platform/OperatorApp.tsx` to include a visible logout button next to the connected wallet, reusing the existing logout flow already used on the landing page.
+- Keep it available on mobile and desktop so the current recovery message is no longer a dead end.
 
-The ~46s wait is the credential re-derivation + retry cycle with no fast bailout.
+2. Align browser order submission with Polymarket’s documented auth model
+- Update `src/lib/clobOrderClient.ts` so the browser submit path sends the full documented L2 auth headers, including `POLY_ADDRESS`.
+- Stop assuming plain EOA mode if the session is actually using proxy/safe-style execution.
+- Align `signatureType`, `funder`/owner handling, and order-post format with the documented model already mirrored by `pm-verify-credentials`.
 
-### Root Cause Analysis
+3. Return the right execution metadata to the browser
+- Update `supabase/functions/prediction-submit/index.ts` so the browser gets every field it needs for the correct auth mode instead of inferring from `trading_key` alone.
+- Keep fee collection, records, reconciliation, and operator attribution exactly as they are.
 
-The "Invalid api key" error is from the L2 HMAC-authenticated `/order` endpoint — meaning the API key itself is not recognized by Polymarket, OR the HMAC signature doesn't match. Two suspects:
+4. Make the next $1 test conclusive
+- Extend diagnostics in `src/lib/clobOrderClient.ts` and the confirm/audit path so the next real test records:
+  - exact `/order` status/body
+  - whether `POLY_ADDRESS` was sent
+  - `signatureType`
+  - funder/owner used
+  - order type used
+- That way one fresh test will tell us whether the blocker is:
+  - auth header mismatch
+  - wrong signature type/funder
+  - bad order payload
+  - or a true exchange-side rejection
 
-1. **Response field mapping mismatch**: `clobCredentialClient.ts` checks `data.apiKey || data.key` and `data.secret || data.apiSecret`. If Polymarket returns a different field name, we store the wrong value.
+5. Do only targeted cleanup if needed
+- I would not do another broad credential reset first.
+- If the auth-model patch changes required session metadata, then clear only the affected session and let it re-derive once.
 
-2. **Credential derivation returns success but credentials are non-functional**: The browser POST/GET to `/auth/api-key` may return 200 with credentials that are scoped to a different context (e.g., read-only) or the trading EOA was never properly registered with Polymarket's system.
+Exact files to change
+- `src/pages/platform/OperatorApp.tsx`
+- `src/lib/clobOrderClient.ts`
+- `supabase/functions/prediction-submit/index.ts`
+- `supabase/functions/prediction-confirm/index.ts`
+- Possibly `src/components/predictions/EnableTradingBanner.tsx` if we also want to soften the current “sign out/sign back in” wording
 
-### Implementation (4 Parts)
+What stays unchanged
+- Browser derives credentials
+- Browser signs and submits orders locally
+- Backend keeps fee collection, trade records, reconciliation, and operator attribution
+- No switch back to shared platform execution
 
----
-
-**PART 1: Fast failure + telemetry** (2 files)
-
-`src/pages/FightPredictions.tsx` and `src/pages/platform/OperatorApp.tsx`:
-
-- Wrap each step in a timing block (`performance.now()` deltas) and log via `dbg()`:
-  - `predict:timing:session_check`
-  - `predict:timing:submit`  
-  - `predict:timing:first_clob_submit`
-  - `predict:timing:credential_rederive`
-  - `predict:timing:save_credentials`
-  - `predict:timing:retry_clob_submit`
-  - `predict:timing:confirm`
-
-- On "Invalid api key" retry path:
-  - If `deriveClobCredentials` fails → fail immediately with specific toast
-  - If `polymarket-save-credentials` fails → fail immediately
-  - If retry submit also gets "Invalid api key" → fail immediately, no further retries
-  - Show: "Trading credentials could not be refreshed. Please sign out and sign back in to reset your trading session."
-
-- Log the **full Polymarket response** (status code + body) in the credential derivation step so we can see exactly what `/auth/api-key` returned.
-
-- Log the exact headers sent to `/order` (redacted api_secret) so we can compare against Polymarket's documented format.
-
----
-
-**PART 2: Session healing** (1 file + 1 DB migration)
-
-`src/hooks/usePolymarketSession.ts`:
-- When status is `awaiting_browser_credentials` and derivation fails, explicitly set `canTrade = false` (already partially done, but tighten: don't set `canTrade = true` unless the save-credentials response confirms `status: active`)
-- After successful credential save, re-check session via `check_status` before marking ready
-
-DB migration:
-- Reset the single active session that has stale credentials:
-  ```sql
-  UPDATE polymarket_user_sessions 
-  SET pm_api_key = NULL, pm_api_secret = NULL, pm_passphrase = NULL, 
-      status = 'awaiting_browser_credentials'
-  WHERE authenticated_at < '2026-04-11T19:00:00Z' 
-    AND pm_api_key IS NOT NULL;
-  ```
-
----
-
-**PART 3: Honest UX + audit trail** (2 files)
-
-`src/components/predictions/PredictionSuccessScreen.tsx`:
-- Change the `failed` status display from "No funds were taken" to:
-  - "Your platform fee was collected but the exchange order was not executed. Reconciliation is in progress."
-
-`supabase/functions/prediction-confirm/index.ts`:
-- Add `failure_class` field to audit log entries:
-  - `first_submit_rejected` — initial CLOB rejection
-  - `refresh_attempted` — credential re-derivation was triggered
-  - `refresh_failed` — re-derivation or save failed
-  - `retry_rejected` — second CLOB submission also rejected
-- Pass `failure_class` from the client in the confirm payload
-
----
-
-**PART 4: Diagnostic logging for the real blocker** (2 files)
-
-`src/lib/clobCredentialClient.ts`:
-- Log the **full response body** from both `/auth/api-key` (POST) and `/auth/derive-api-key` (GET) — not just whether they succeeded
-- Log the exact field names returned so we can verify mapping
-
-`src/lib/clobOrderClient.ts`:
-- Log a summary of the HMAC inputs (timestamp, method, path, body length) and the api_key being used (first 8 chars)
-- Log the full Polymarket error response body on failure
-
-### Files Changed
-1. `src/pages/FightPredictions.tsx` — step timing, fast failure, specific error message
-2. `src/pages/platform/OperatorApp.tsx` — same changes
-3. `src/hooks/usePolymarketSession.ts` — tighten session healing
-4. `src/components/predictions/PredictionSuccessScreen.tsx` — honest failure UX
-5. `supabase/functions/prediction-confirm/index.ts` — failure classification audit
-6. `src/lib/clobCredentialClient.ts` — diagnostic response logging
-7. `src/lib/clobOrderClient.ts` — diagnostic header/error logging
-8. DB migration — reset stale credentials
-
-### Expected Outcome
-- Failure in <5 seconds instead of 46 seconds
-- Clear user-facing error message
-- Full diagnostic trail showing exactly what Polymarket returned for credential derivation and why the order was rejected
-- After one test with diagnostics, we'll know whether the blocker is: wrong field mapping, invalid credentials from derivation, HMAC format mismatch, or missing proxy wallet registration
-
-### What Stays Unchanged
-- Backend fee collection model
-- Client-side order submission architecture  
-- Reconciliation and pool accounting
-- Operator attribution
-
+Bottom line
+- Yes, I saw what went wrong in the 2 failed tests.
+- They failed after fresh browser credentials were saved, so the remaining blocker is not “missing API key config” and not just “you need a logout button.”
+- The operator app is missing the logout button, and I would add that immediately.
+- As of right now, I would not say a fresh user session can reliably place a real $1 prediction today until the browser `/order` auth model is patched.
