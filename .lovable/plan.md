@@ -1,49 +1,87 @@
 
 
-## Plan: Fix "Invalid order payload" + Fix Missing Live Game Data
+## Plan: Use Official Polymarket SDK + Restore Live Game Data
 
-### Two Separate Issues
+### Summary
 
-**Issue 1: "Invalid order payload"** — Three problems in `clobOrderClient.ts`:
-
-1. **Wrong `owner` field**: We send `owner: maker` (an Ethereum address). Polymarket requires `owner` to be the API key string. The Python SDK's `order_to_json(order, self.creds.api_key, ...)` confirms this — `owner = api_key`.
-
-2. **Wrong exchange contract for sports markets**: Sports markets on Polymarket use the **NegRisk CTF Exchange** (`0xC5d563A36AE78145C45a50134d48A1215220f80a`), not the standard CTF Exchange (`0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E`). The EIP-712 domain `verifyingContract` must match the correct exchange. All sports events are neg_risk (multi-outcome). We need the backend to tell the browser which exchange to use, or default to neg_risk for Polymarket-backed sports events.
-
-3. **`POLY_PROXY_FUNDER` is actually the NegRisk Exchange address**: The constant `POLY_PROXY_FUNDER = "0xC5d563A36AE78145C45a50134d48A1215220f80a"` is the NegRisk CTF Exchange, not a proxy funder. This was never correct. For EOA mode (our current path), funder is `0x000...000` so this doesn't bite us yet, but it's misleading.
-
-**Issue 2: Live game data not showing** — The WS messages from `wss://sports-api.polymarket.com/ws` include a `slug` field directly (e.g., `"slug": "nhl-wsh-pit-2026-04-11"`). Our code ignores this field and tries to reverse-engineer match keys from `leagueAbbreviation + homeTeam + awayTeam`, which fails when team code formats don't match our DB slugs. Simple fix: match on the `slug` field directly.
+Replace the hand-built order serializer in `clobOrderClient.ts` with Polymarket's official `@polymarket/clob-client` SDK, and add a snapshot-first live data layer so scores/periods always appear.
 
 ---
 
-### Changes
+### PART 1 — Replace manual order builder with official SDK
 
-**File 1: `src/lib/clobOrderClient.ts`**
-- Add `neg_risk` flag to `ClobOrderParams` (default true for sports)
-- Use NegRisk CTF Exchange address (`0xC5d563A36AE78145C45a50134d48A1215220f80a`) when `neg_risk = true`, standard exchange otherwise
-- Update EIP-712 domain `verifyingContract` accordingly
-- Change `owner` in POST body from `maker` to `credentials.api_key`
-- Remove incorrect `POLY_PROXY_FUNDER` constant
+**File: `package.json`**
+- Add `@polymarket/clob-client` as a dependency
 
-**File 2: `supabase/functions/prediction-submit/index.ts`**
-- Add `neg_risk: true` to the client-side execution payload for Polymarket-backed events (all sports markets are neg_risk)
+**File: `src/lib/clobOrderClient.ts`** — near-complete rewrite
+- Import `ClobClient`, `Side`, `OrderType` from `@polymarket/clob-client`
+- Import `privateKeyToAccount` + `createWalletClient` + `http` from `viem`
+- In `submitClobOrder()`:
+  1. Create a viem `WalletClient` from the trading key (using `privateKeyToAccount` + polygon chain)
+  2. Construct `ClobClient` with the wallet client, API creds (`{key, secret, passphrase}`), correct `signatureType` (0 for EOA when no `proxy_address`, 1 for POLY_PROXY when `safe_address` exists), and `funder` 
+  3. Call `client.createAndPostMarketOrder({ tokenID, side: Side.BUY, amount: net_amount_usdc }, { tickSize: "0.01", negRisk: params.neg_risk })` — this handles EIP-712 signing, fee rate fetching, exchange selection, order serialization, HMAC auth headers, and POST internally
+  4. Return the order ID from the response
+  5. Keep the existing `ClobSubmitResult` interface and diagnostics logging for debugging
+- Remove: all manual EIP-712 domain/types, manual HMAC generation, manual `/order` body JSON construction, manual exchange contract selection
+- Keep: `ClobOrderParams`, `ClobCredentials`, `ClobSubmitResult` interfaces (adjusted), geo-block detection on error responses
 
-**File 3: `src/hooks/useSportsWebSocket.tsx`**
-- In `parseLiveMessage`, check `msg.slug` first and do a direct lookup against the set of tracked slugs
-- Keep the team-code matching as a fallback
-- This is a minimal change that fixes the silent data drops
+This eliminates every source of serializer drift: `owner`, `signatureType`, `funder`, `feeRateBps`, `negRisk`, `orderType`, exchange contract, and HMAC format are all handled by the official client.
 
-**File 4: `src/pages/FightPredictions.tsx` + `src/pages/platform/OperatorApp.tsx`**
-- Pass `neg_risk` through to `submitClobOrder` from the execution params
+### PART 2 — Clean up backend drift
+
+**File: `supabase/functions/prediction-submit/index.ts`**
+- The backend currently returns `order_params` with `fee_rate_bps`, `neg_risk`, `price`, `net_amount_usdc` — keep returning `token_id`, `price`, `net_amount_usdc` (the SDK still needs these)
+- Remove `fee_rate_bps` and `neg_risk` from `order_params` since the SDK fetches/determines these automatically — or keep them as optional hints
+- Keep `clob_credentials` block unchanged (api_key, api_secret, passphrase, trading_key, proxy_address, funder_address)
+- Keep fee collection, records, reconciliation, and attribution unchanged
+
+### PART 3 — Restore live game data with snapshot + WS merge
+
+**File: `src/hooks/useSportsWebSocket.tsx`**
+- On mount (and when `slugs` changes), call the `live-game-state` edge function with the current slug list to get an initial snapshot
+- Seed the `games` Map with snapshot results before any WS messages arrive
+- WS messages then overlay/update the snapshot data as they arrive
+- Keep the existing `parseLiveMessage` slug-matching logic (direct match + partial match fallback)
+- Add a console.warn for unmatched WS messages (first 5 only, to avoid log spam) for debugging
+
+This ensures that even if the WebSocket never sends a matching message, the UI still shows the last-known score/period/status from the REST snapshot.
+
+### PART 4 — Diagnostics for next test
+
+**File: `src/lib/clobOrderClient.ts`**
+- Log before submission: `signatureType`, `funder`, `negRisk`, SDK version, `tokenID`, `amount`
+- Log after submission: order ID, HTTP status, response snippet
+- On error: capture whether it came from SDK internals or network, include full error message
+- Include a `usedOfficialClient: true` flag in diagnostics so the audit trail confirms which path was used
 
 ---
 
-### Expected Outcome
-- The next $1 test uses the correct exchange contract, correct `owner` field, and should either succeed or return a meaningful Polymarket error (like insufficient balance)
-- Live game badges (score, period, time) should appear for all active games via the WS slug-matching fix
+### Technical Details
+
+The `@polymarket/clob-client` SDK:
+- Accepts a viem `WalletClient` directly (documented in their README)
+- `createAndPostMarketOrder` is a single call that creates, signs, and submits a market order (FOK)
+- Automatically fetches the correct fee rate for the token
+- Automatically selects the correct exchange contract (NegRisk vs standard) based on the `negRisk` option
+- Handles all HMAC L2 auth headers internally
+- Sets `owner` to the API key correctly
+
+### Files Changed
+1. `package.json` — add `@polymarket/clob-client`
+2. `src/lib/clobOrderClient.ts` — replace manual serializer with SDK calls
+3. `src/hooks/useSportsWebSocket.tsx` — add snapshot seeding from `live-game-state` edge function
+4. `supabase/functions/prediction-submit/index.ts` — minor cleanup of `order_params` (optional)
 
 ### What Stays Unchanged
-- Browser-side order submission model
-- Fee collection, reconciliation, operator attribution
+- Browser derives credentials, browser signs orders, browser POSTs directly
+- Backend fee collection, reconciliation, operator attribution
 - Credential derivation flow
+- All other UI components
+- `prediction-confirm` edge function
+- `live-game-state` edge function (already works, just unused by frontend)
+
+### Expected Outcome
+- Order payload errors should stop entirely — the SDK constructs the canonical payload
+- Live game badges (LIVE, score, period, time) should appear immediately from snapshot, then update via WS
+- One fresh $1 test will confirm whether the order succeeds or reveals a new class of error (e.g., insufficient balance, market closed)
 
