@@ -1,115 +1,71 @@
 
 
-## Plan: Client-Side Order Execution (Bypass Geo-Block)
+## Fix: "Invalid api key" — Credential Derivation Must Move Client-Side
 
-### Problem
-Polymarket blocks all server-side egress IPs (Deno Deploy, Fly.io) for authenticated `POST /order` calls. Read endpoints work fine. The only reliable path is to sign and submit orders directly from the user's browser, which has a non-blocked residential IP.
+### Root Cause
+The CLOB API credentials (`pm_api_key`, `pm_api_secret`, `pm_passphrase`) stored in `polymarket_user_sessions` were derived by the backend edge function (`polymarket-user-setup`) through the Fly.io proxy. Polymarket likely rejected or returned invalid credentials because the `/auth/api-key` and `/auth/derive-api-key` endpoints are also geo-blocked or IP-flagged for proxy traffic — same as `/order`.
 
-### Architecture Change
+The error `{"error":"Unauthorized/Invalid api key"}` confirms the stored `pm_api_key` itself is not recognized by Polymarket. This is not an HMAC issue (wrong signature would give a different error).
+
+### Fix: Move credential derivation to the browser
+
+Same pattern as the order submission shift. The browser signs L1 EIP-712 auth headers and calls Polymarket's `/auth/api-key` or `/auth/derive-api-key` directly from the user's residential IP.
+
+### Changes
+
+**1. New client-side module: `src/lib/clobCredentialClient.ts`**
+- Takes the user's trading key (already derived server-side and stored)
+- Builds L1 EIP-712 auth headers (same as `polymarket-user-setup` does)
+- Calls `POST https://clob.polymarket.com/auth/api-key` from the browser
+- Falls back to `GET https://clob.polymarket.com/auth/derive-api-key`
+- Returns `{ apiKey, apiSecret, passphrase }` to the caller
+
+**2. New edge function: `supabase/functions/polymarket-save-credentials/index.ts`**
+- Accepts `{ api_key, api_secret, passphrase }` from the browser after successful derivation
+- Verifies Privy JWT, resolves wallet
+- Updates `polymarket_user_sessions` with the new credentials
+- Sets `status = "active"`, `authenticated_at = now()`
+
+**3. Update `src/hooks/usePolymarketSession.ts`** (or equivalent setup flow)
+- After server-side `polymarket-user-setup` returns the trading key but no valid credentials:
+  - Call `clobCredentialClient.deriveCredentials(tradingKey)` from the browser
+  - POST results to `polymarket-save-credentials`
+  - Session is now trade-ready
+
+**4. Update `src/pages/FightPredictions.tsx`**
+- Before client-side order submission, check if credentials are present
+- If `prediction-submit` returns `trading_wallet_setup_required`, trigger browser-side credential derivation automatically
+- Then retry the submission
+
+**5. Update `supabase/functions/polymarket-user-setup/index.ts`**
+- In `derive_and_setup`: still derive the trading key server-side (deterministic from SIWE)
+- But skip the CLOB API credential derivation calls (remove `deriveClobApiCreds`)
+- Return the trading key to the client and let the browser handle credential creation
+- Set session status to `awaiting_browser_credentials` instead of `active`
+
+### Flow After Fix
 
 ```text
-CURRENT (broken):
-  Browser → prediction-submit (edge fn) → Fly proxy → POST /order → 403 blocked
-
-NEW:
-  Browser → prediction-submit (edge fn)   → fee collection + trade_order record + return credentials
-  Browser → sign EIP-712 order locally    → POST directly to clob.polymarket.com/order
-  Browser → prediction-confirm (edge fn)  → report order ID back for reconciliation
+1. User clicks "Set up trading wallet"
+2. Browser → polymarket-user-setup → derives trading key, returns it
+3. Browser → POST clob.polymarket.com/auth/api-key (direct, residential IP)
+4. Browser → polymarket-save-credentials → stores api_key/secret/passphrase
+5. Session is now trade-ready
+6. User places prediction → prediction-submit returns order_params + credentials
+7. Browser → POST clob.polymarket.com/order (direct, residential IP)
+8. Browser → prediction-confirm → finalizes entry
 ```
 
-The backend still handles: auth, fee collection, trade order creation, session lookup, reconciliation, pool updates, entries. The browser takes over only the EIP-712 signing + CLOB POST.
+### Security
+- Trading key is already returned to the client for order signing — no new exposure
+- API credentials are per-user, derived from their own trading key
+- Credentials stored in DB same as before, just derived from browser instead of server
 
-### Files to Modify
-
-**1. `supabase/functions/prediction-submit/index.ts`**
-- Remove `buildAndSubmitClobOrder()` call and its inline reconciliation
-- Remove `fundDerivedWallet()` call (user's browser wallet submits directly — no need to fund a derived EOA)
-- After fee collection succeeds, return the order parameters to the client instead of submitting:
-  ```json
-  {
-    "success": true,
-    "action": "client_submit",
-    "trade_order_id": "...",
-    "order_params": {
-      "token_id": "...",
-      "price": 0.55,
-      "net_amount_usdc": 0.95,
-      "fee_rate_bps": 150
-    },
-    "clob_credentials": {
-      "api_key": "...",
-      "api_secret": "...",
-      "passphrase": "...",
-      "trading_key": "0x..."
-    }
-  }
-  ```
-- Keep all validation, fee collection, trade_order creation, audit logging
-- For native (non-Polymarket) events, keep existing direct-fill path unchanged
-
-**2. New edge function: `supabase/functions/prediction-confirm/index.ts`**
-- Accepts `{ trade_order_id, polymarket_order_id, status, error_code }` from client after CLOB submission
-- Validates Privy JWT + trade_order ownership
-- Updates `prediction_trade_orders` with order ID or failure
-- Inserts `prediction_entries` (moved from prediction-submit's post-order block)
-- Updates fight pool totals
-- Logs operator revenue
-- Runs the same post-submit reconciliation check
-
-**3. New client-side module: `src/lib/clobOrderClient.ts`**
-- Receives order params + credentials from backend
-- Signs EIP-712 order using the trading key (viem `privateKeyToAccount` + `signTypedData`)
-- Generates HMAC auth headers
-- POSTs to `https://clob.polymarket.com/order` directly from user's browser
-- Returns `{ orderId, status, error }` to the calling component
-
-**4. `src/pages/FightPredictions.tsx` and `src/pages/platform/OperatorApp.tsx`**
-- Update `handleSubmit` flow:
-  1. Call `prediction-submit` (unchanged — still does auth + fee + validation)
-  2. If response has `action: "client_submit"`, call `clobOrderClient.submitOrder()`
-  3. Call `prediction-confirm` with the result
-  4. Handle success/failure UI as before
-- Remove all geo-block error handling (no longer possible from user's browser)
-- Remove `setupTradingWallet` calls — credentials come back from backend per-request
-
-**5. `src/hooks/usePolymarketSession.ts`**
-- Simplify: session setup still needed for credential derivation (so backend has creds to return)
-- But `canTrade` no longer blocks the UI — the browser handles submission
-
-### Fee Collection Flow (Preserved)
-No change. The backend still:
-1. Validates allowance on user's Smart Wallet / EOA
-2. Executes `transferFrom` via relayer to treasury
-3. Records `fee_tx_hash` on the trade order
-4. Only then returns order params to client
-
-If fee collection fails, the client never gets order params and no CLOB order is placed.
-
-### Reconciliation (Preserved)
-- `prediction-confirm` records the CLOB order ID on the trade order
-- `prediction-trade-reconcile` worker continues polling CLOB for fill status (via proxy — GET requests work fine)
-- `prediction-trade-status` continues working for UI polling
-
-### Security Considerations
-- Trading key is returned to the client temporarily for signing. This is the user's own derived key — not platform funds.
-- Credentials are per-user, derived from their own SIWE signature.
-- The key never persists in localStorage — used only in-memory for the single order.
-- Backend validates the trade_order belongs to the authenticated user before accepting confirmation.
-
-### What Does NOT Change
-- Fee collection mechanism (relayer `transferFrom`)
-- Trade order table structure
-- Reconciliation workers
-- Operator revenue tracking
-- Native (non-Polymarket) event handling
-- Prediction entries schema
-- Pool accounting
-- Requote/slippage flow (still validated server-side before returning params)
-
-### Implementation Order
-1. Create `src/lib/clobOrderClient.ts` (EIP-712 signing + HMAC + POST)
-2. Create `supabase/functions/prediction-confirm/index.ts`
-3. Modify `prediction-submit` to return order params instead of executing
-4. Update `FightPredictions.tsx` and `OperatorApp.tsx` handleSubmit
-5. Deploy and test
+### Files
+- Create `src/lib/clobCredentialClient.ts`
+- Create `supabase/functions/polymarket-save-credentials/index.ts`
+- Update `supabase/functions/polymarket-user-setup/index.ts`
+- Update `src/pages/FightPredictions.tsx`
+- Update `src/hooks/usePolymarketSession.ts`
+- Update `supabase/config.toml` (add `polymarket-save-credentials`)
 
