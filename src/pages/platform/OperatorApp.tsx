@@ -446,11 +446,23 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   // ── Date-grouped fights for display ──
   const dateGroups = useMemo(() => groupByDate(filteredFights), [filteredFights]);
 
-  // Collect polymarket slugs for live tracking
+  // Collect polymarket slugs and market ID mappings for live tracking
   const liveSlugs = useMemo(() => {
     return enrichedFights
       .map(f => (f as any).polymarket_slug)
       .filter((s): s is string => !!s);
+  }, [enrichedFights]);
+
+  const slugToMarketId = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const f of enrichedFights) {
+      const slug = (f as any).polymarket_slug;
+      const mid = (f as any).polymarket_market_id;
+      if (slug && mid) {
+        map[slug] = String(mid);
+      }
+    }
+    return map;
   }, [enrichedFights]);
 
   const handleSubmit = async (amountUsd: number) => {
