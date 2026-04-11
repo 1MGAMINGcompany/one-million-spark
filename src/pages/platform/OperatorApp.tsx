@@ -579,7 +579,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
               const saveCreds = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/polymarket-save-credentials`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "x-privy-token": privyToken, apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
-                body: JSON.stringify({ wallet: walletAddress, api_key: derivedResult.credentials.apiKey, api_secret: derivedResult.credentials.apiSecret, passphrase: derivedResult.credentials.passphrase }),
+                body: JSON.stringify({ wallet: address, api_key: derivedResult.credentials.apiKey, api_secret: derivedResult.credentials.apiSecret, passphrase: derivedResult.credentials.passphrase }),
               });
               if (saveCreds.ok) {
                 const freshCreds = { ...data.clob_credentials, api_key: derivedResult.credentials.apiKey, api_secret: derivedResult.credentials.apiSecret, passphrase: derivedResult.credentials.passphrase };
