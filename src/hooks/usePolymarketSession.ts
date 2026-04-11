@@ -103,6 +103,27 @@ function usePolymarketSessionInner(): PolymarketSessionState {
         derivedAddress: data.derived_address ?? null,
       };
 
+      // Proactive browser credential derivation when session has trading key but no API keys
+      if (nextState.status === "awaiting_browser_credentials" && data.trading_key) {
+        console.log("[usePolymarketSession] Proactively deriving credentials from browser...");
+        try {
+          const { deriveClobCredentials } = await import("@/lib/clobCredentialClient");
+          const derivedResult = await deriveClobCredentials(data.trading_key as `0x${string}`);
+          if (derivedResult.credentials) {
+            await fetch(SAVE_CREDS_URL, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "x-privy-token": token, apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+              body: JSON.stringify({ wallet: walletAddress, api_key: derivedResult.credentials.apiKey, api_secret: derivedResult.credentials.apiSecret, passphrase: derivedResult.credentials.passphrase }),
+            });
+            nextState.status = "active";
+            nextState.canTrade = true;
+            console.log("[usePolymarketSession] Proactive credential derivation succeeded");
+          }
+        } catch (err) {
+          console.warn("[usePolymarketSession] Proactive credential derivation failed:", err);
+        }
+      }
+
       setHasSession(nextState.hasSession);
       setStatus(nextState.status);
       setCanTrade(nextState.canTrade);

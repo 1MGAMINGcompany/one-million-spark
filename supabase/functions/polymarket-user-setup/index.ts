@@ -486,6 +486,10 @@ Deno.serve(async (req) => {
         can_trade: isSessionTradeReady(session),
         authenticated_at: session.authenticated_at,
         expires_at: session.expires_at,
+        // Return trading key when credentials need browser derivation
+        ...(session.status === "awaiting_browser_credentials" && session.pm_trading_key
+          ? { trading_key: session.pm_trading_key }
+          : {}),
       });
     }
 
