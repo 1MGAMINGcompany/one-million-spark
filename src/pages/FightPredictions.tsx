@@ -789,6 +789,7 @@ export default function FightPredictions() {
             error_code: clobResult.errorCode || null,
             error_message: clobResult.error || null,
             failure_class: failureClass,
+            diagnostics: clobResult.diagnostics || null,
           }),
         });
         const confirmData = await confirmResp.json().catch(() => ({}));
