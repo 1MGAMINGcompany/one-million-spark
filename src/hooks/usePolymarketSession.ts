@@ -110,17 +110,39 @@ function usePolymarketSessionInner(): PolymarketSessionState {
           const { deriveClobCredentials } = await import("@/lib/clobCredentialClient");
           const derivedResult = await deriveClobCredentials(data.trading_key as `0x${string}`);
           if (derivedResult.credentials) {
-            await fetch(SAVE_CREDS_URL, {
+            const saveResp = await fetch(SAVE_CREDS_URL, {
               method: "POST",
               headers: { "Content-Type": "application/json", "x-privy-token": token, apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
               body: JSON.stringify({ wallet: walletAddress, api_key: derivedResult.credentials.apiKey, api_secret: derivedResult.credentials.apiSecret, passphrase: derivedResult.credentials.passphrase }),
             });
-            nextState.status = "active";
-            nextState.canTrade = true;
-            console.log("[usePolymarketSession] Proactive credential derivation succeeded");
+            const saveData = await saveResp.json().catch(() => ({}));
+            if (saveResp.ok && saveData?.success) {
+              // Re-check session to confirm backend now reports active
+              const verifyResp = await fetch(USER_SETUP_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "x-privy-token": token, apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+                body: JSON.stringify({ action: "check_status", wallet: walletAddress, app_wallet: walletAddress, eoa_wallet: eoaAddress ?? undefined }),
+              });
+              const verifyData = await verifyResp.json().catch(() => ({}));
+              if (verifyData?.can_trade) {
+                nextState.status = "active";
+                nextState.canTrade = true;
+                console.log("[usePolymarketSession] Proactive credential derivation succeeded and verified");
+              } else {
+                console.warn("[usePolymarketSession] Credentials saved but backend still not trade-ready:", verifyData?.status);
+                nextState.canTrade = false;
+              }
+            } else {
+              console.warn("[usePolymarketSession] Save credentials failed:", saveData?.error);
+              nextState.canTrade = false;
+            }
+          } else {
+            console.warn("[usePolymarketSession] Browser credential derivation returned no credentials:", derivedResult.error);
+            nextState.canTrade = false;
           }
         } catch (err) {
           console.warn("[usePolymarketSession] Proactive credential derivation failed:", err);
+          nextState.canTrade = false;
         }
       }
 

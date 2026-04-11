@@ -169,6 +169,8 @@ export async function submitClobOrder(
     const path = "/order";
     const hmac = await generateClobHmac(credentials.api_secret, timestamp, "POST", path, orderBody);
 
+    console.log("[clobOrderClient] HMAC inputs: timestamp=%s method=POST path=%s bodyLen=%d apiKey=%s…",
+      timestamp, path, orderBody.length, credentials.api_key.substring(0, 8));
     console.log("[clobOrderClient] Submitting order directly to Polymarket CLOB");
 
     const res = await fetch(`${CLOB_BASE}${path}`, {
@@ -185,7 +187,7 @@ export async function submitClobOrder(
 
     if (!res.ok) {
       const errText = await res.text();
-      console.error(`[clobOrderClient] CLOB order failed (${res.status}):`, errText);
+      console.error(`[clobOrderClient] CLOB order failed (${res.status}): full response: ${errText}`);
 
       const isGeoBlock =
         res.status === 403 &&
@@ -202,7 +204,7 @@ export async function submitClobOrder(
     const data = await res.json();
     const orderId = data.orderID || data.id || null;
 
-    console.log("[clobOrderClient] Order submitted:", orderId);
+    console.log("[clobOrderClient] Order submitted:", orderId, "full response:", JSON.stringify(data).substring(0, 300));
 
     return {
       success: !!orderId,

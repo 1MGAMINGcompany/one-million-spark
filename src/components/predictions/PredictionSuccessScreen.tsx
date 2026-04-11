@@ -54,7 +54,7 @@ function getStatusDisplay(status: string | undefined): StatusDisplay {
       return {
         icon: <AlertTriangle className="w-8 h-8 text-destructive" />,
         title: "Trade Failed",
-        subtitle: "Something went wrong. No funds were taken.",
+        subtitle: "Your platform fee was collected but the exchange order was not executed. Reconciliation is in progress.",
       };
     default:
       return {
