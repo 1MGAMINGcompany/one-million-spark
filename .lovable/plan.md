@@ -1,42 +1,77 @@
 
 
-## Fix: Requote Banner Not Appearing on Price Slippage
+## Fix: Fly.io Proxy POST /order Still Getting Geo-Blocked
 
-### Problem
-When the backend returns `price_changed_requote_required` (409), the frontend shows a generic toast ("Prediction failed / Odds have changed") instead of the interactive amber requote banner inside the modal.
+### Diagnosis
+The logs confirm:
+- `getClobUrl()` correctly returns the Fly.io proxy URL
+- GET requests through the proxy work (health check, price fetch)
+- POST `/order` returns 403 geo-block
 
-### Root Cause
-In `src/pages/platform/OperatorApp.tsx` line 1119, the `onSubmit` callback is:
+The proxy is deployed with `auto_stop_machines = "stop"` and Fly.io anycast routing. When the Supabase edge function (running in `eu-central-1`) connects to `polymarket-clob-proxy-weathered-butterfly-6155.fly.dev`, Fly's anycast may route to a European edge, or the stopped machine may restart in a non-iad region.
+
+Additionally, the current proxy code sets `headers["host"] = "clob.polymarket.com"` but does NOT strip the `origin` or `referer` headers, which Polymarket may inspect on authenticated POST endpoints.
+
+### Fix (External Proxy Changes)
+
+**1. Update `fly-clob-proxy/server.js`** — Strip additional headers and add diagnostic logging:
+
 ```js
-onSubmit={(amt) => { setRequoteData(null); handleSubmit(amt); }}
+// Add to STRIP set:
+"origin", "referer", "x-deno-execution-id", "x-deno-subhost"
 ```
-This clears `requoteData` before every submission — fine for the first call. But there's a subtle issue: `handleSubmit` is async and sets `requoteData` via `setRequoteData(...)` at line 541. Because React batches state updates, the `setRequoteData(null)` from the `onSubmit` wrapper and the `setRequoteData({...})` from the error handler may conflict if they run in the same render cycle.
 
-Additionally, the `throw new Error(msg)` at line 562 acts as a fallback for any unrecognized `errorCode`. If `data.error_code` is somehow not parsed (empty string), the code falls through to the throw, which lands in the catch block at line 582 and shows the generic toast.
+**2. Update `fly-clob-proxy/fly.toml`** — Force single-region deployment:
 
-### Fix (2 changes, 1 file)
+```toml
+app = "polymarket-clob-proxy-weathered-butterfly-6155"
+primary_region = "iad"
 
-**File: `src/pages/platform/OperatorApp.tsx`**
+[build]
 
-1. **Remove premature `setRequoteData(null)` from onSubmit wrapper** (line 1119) — move it inside `handleSubmit` only after confirming it's not a requote response:
-   ```js
-   onSubmit={(amt) => handleSubmit(amt)}
-   ```
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"     # prevent cold-start in wrong region
+  auto_start_machines = true
+  min_machines_running = 1
 
-2. **Add defensive logging** in the error handler to trace exactly what `data` contains when `errorCode` is empty — this will confirm whether the JSON body is being parsed correctly on 409 responses.
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
+```
 
-3. **Move the requote-data clear** into `handleSubmit` itself, right before the fetch call, so it only clears when a fresh submission starts (not when the modal's onSubmit fires).
+Key change: `auto_stop_machines = "off"` ensures the machine stays alive in `iad` and doesn't get recreated in a different region.
 
-### Secondary: Hide Finished Games
-The MLB Pirates game you mentioned was already over. As a separate fix, the frontend should filter out events where `status = 'settled'` or `status = 'cancelled'` or `polymarket_active = false` to prevent users from opening tickets on dead markets.
+**3. Add a POST test endpoint to the proxy** for debugging:
 
-### Files Changed
-- `src/pages/platform/OperatorApp.tsx` — fix onSubmit requote-data clearing, ensure requote banner displays
+Add a `/debug` path that returns the machine's region and outbound IP so we can confirm the egress is from a US IP.
+
+**4. Redeploy the proxy:**
+```bash
+cd fly-clob-proxy
+fly deploy
+fly status  # confirm machine is in iad
+```
+
+**5. Verify with a direct POST test:**
+```bash
+curl -X POST https://polymarket-clob-proxy-weathered-butterfly-6155.fly.dev/order \
+  -H "Content-Type: application/json" \
+  -d '{"test": true}'
+```
+
+This should return a Polymarket error about invalid order format (not 403 geo-block). If it still returns 403, the issue is Fly's outbound IP being flagged, and we'd need to use a dedicated IPv4 (`fly ips allocate-v4`).
+
+### Files to Create/Update (External)
+- `fly-clob-proxy/server.js` — strip origin/referer/deno headers
+- `fly-clob-proxy/fly.toml` — disable auto_stop, force iad
+
+### No Project Code Changes Needed
+The edge functions are already correctly using `getClobUrl()`.
 
 ### Test After Fix
-1. Open a live MLB game on 1mg.live/demo
-2. Wait a few seconds for price to potentially move
-3. Place a $1 prediction
-4. If price moved >3%, the amber "Odds Changed" banner should appear inside the modal (not a toast)
-5. Click "Accept New Odds & Submit" — trade should go through
+1. `fly status` — confirm single machine in `iad`
+2. `curl -X POST .../order` — confirm NOT 403
+3. Place a $1 prediction on 1mg.live/demo — should succeed or fail with a non-geo error
 
