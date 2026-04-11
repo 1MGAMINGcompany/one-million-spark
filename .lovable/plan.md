@@ -1,45 +1,42 @@
 
 
-## Update CLOB_PROXY_URL to Fly.io Proxy
+## Fix: Requote Banner Not Appearing on Price Slippage
 
-### Current State
-- `CLOB_PROXY_URL` secret exists and currently points to the old Cloudflare Worker
-- **9 edge functions** use `getClobUrl()` which reads this secret at runtime:
-  1. `prediction-submit`
-  2. `prediction-sell`
-  3. `prediction-trade-reconcile`
-  4. `prediction-health`
-  5. `polymarket-auth`
-  6. `polymarket-positions`
-  7. `polymarket-user-setup`
-  8. `polymarket-prices`
-  9. `pm-verify-credentials`
+### Problem
+When the backend returns `price_changed_requote_required` (409), the frontend shows a generic toast ("Prediction failed / Odds have changed") instead of the interactive amber requote banner inside the modal.
 
-### What Needs to Happen
-
-**Step 1 — Update the secret**
-
-Update `CLOB_PROXY_URL` to:
+### Root Cause
+In `src/pages/platform/OperatorApp.tsx` line 1119, the `onSubmit` callback is:
+```js
+onSubmit={(amt) => { setRequoteData(null); handleSubmit(amt); }}
 ```
-https://polymarket-clob-proxy-weathered-butterfly-6155.fly.dev
-```
+This clears `requoteData` before every submission — fine for the first call. But there's a subtle issue: `handleSubmit` is async and sets `requoteData` via `setRequoteData(...)` at line 541. Because React batches state updates, the `setRequoteData(null)` from the `onSubmit` wrapper and the `setRequoteData({...})` from the error handler may conflict if they run in the same render cycle.
 
-No code changes needed. All 9 functions read the secret at runtime via `Deno.env.get("CLOB_PROXY_URL")`, so they will immediately use the new URL on the next invocation.
+Additionally, the `throw new Error(msg)` at line 562 acts as a fallback for any unrecognized `errorCode`. If `data.error_code` is somehow not parsed (empty string), the code falls through to the throw, which lands in the catch block at line 582 and shows the generic toast.
 
-**Step 2 — Verify connectivity**
+### Fix (2 changes, 1 file)
 
-Call the `prediction-health` edge function, which includes a CLOB connectivity test (`/time` endpoint). A successful response confirms the Fly.io proxy is working end-to-end.
+**File: `src/pages/platform/OperatorApp.tsx`**
 
-**Step 3 — Test a real price fetch**
+1. **Remove premature `setRequoteData(null)` from onSubmit wrapper** (line 1119) — move it inside `handleSubmit` only after confirming it's not a requote response:
+   ```js
+   onSubmit={(amt) => handleSubmit(amt)}
+   ```
 
-Call `polymarket-prices` to confirm live market prices update through the new proxy without a 403.
+2. **Add defensive logging** in the error handler to trace exactly what `data` contains when `errorCode` is empty — this will confirm whether the JSON body is being parsed correctly on 409 responses.
 
-### No Code Changes Required
-Every function already has the same pattern:
-```typescript
-function getClobUrl(): string {
-  return Deno.env.get("CLOB_PROXY_URL") || "https://clob.polymarket.com";
-}
-```
-Updating the secret is the only change needed.
+3. **Move the requote-data clear** into `handleSubmit` itself, right before the fetch call, so it only clears when a fresh submission starts (not when the modal's onSubmit fires).
+
+### Secondary: Hide Finished Games
+The MLB Pirates game you mentioned was already over. As a separate fix, the frontend should filter out events where `status = 'settled'` or `status = 'cancelled'` or `polymarket_active = false` to prevent users from opening tickets on dead markets.
+
+### Files Changed
+- `src/pages/platform/OperatorApp.tsx` — fix onSubmit requote-data clearing, ensure requote banner displays
+
+### Test After Fix
+1. Open a live MLB game on 1mg.live/demo
+2. Wait a few seconds for price to potentially move
+3. Place a $1 prediction
+4. If price moved >3%, the amber "Odds Changed" banner should appear inside the modal (not a toast)
+5. Click "Accept New Odds & Submit" — trade should go through
 
