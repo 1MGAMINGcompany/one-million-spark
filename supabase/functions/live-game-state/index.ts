@@ -5,11 +5,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const SPORTS_API = "https://sports-api.polymarket.com";
+// Gamma API for market metadata (the REST endpoint that actually exists)
+const GAMMA_API = "https://gamma-api.polymarket.com";
 
 // In-memory cache: slug → { data, expiresAt }
 const cache = new Map<string, { data: unknown; expiresAt: number }>();
-const CACHE_TTL_MS = 20_000; // 20s for live data freshness
+const CACHE_TTL_MS = 30_000; // 30s
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -19,8 +20,13 @@ function json(body: unknown, status = 200) {
 }
 
 /**
- * Fetch live game state from Polymarket Sports REST API.
- * Returns real scores, periods, clocks, and accurate live/ended status.
+ * Fetch market state from Polymarket Gamma API.
+ * The sports-api.polymarket.com only has WebSocket — no REST endpoint for games.
+ * So we use the Gamma API to get basic market metadata (active, closed, etc.)
+ * and rely on the frontend WebSocket for live scores/periods.
+ *
+ * This endpoint now returns market status info (is it active, resolved, etc.)
+ * rather than live scores, since live scores only come via WS.
  */
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -48,44 +54,26 @@ serve(async (req) => {
     }
 
     if (uncachedSlugs.length > 0) {
-      // Fetch all games in one batch call if possible, otherwise individually
+      // Fetch from Gamma API — search markets by slug
       const fetches = uncachedSlugs.map(async (slug) => {
         try {
-          // Try the sports API games endpoint with the slug
           const resp = await fetch(
-            `${SPORTS_API}/games?slug=${encodeURIComponent(slug)}`
+            `${GAMMA_API}/markets?slug=${encodeURIComponent(slug)}&limit=1`
           );
           if (!resp.ok) {
-            const body = await resp.text();
-            console.warn(`[live-game-state] Sports API error for ${slug}: ${resp.status} ${body}`);
+            // Gamma returns 200 with empty array for no results
+            await resp.text();
             return { slug, data: null };
           }
-          const games = await resp.json();
+          const markets = await resp.json();
+          const marketList = Array.isArray(markets) ? markets : [];
 
-          // The response could be an array of games or a single game object
-          const gameList = Array.isArray(games) ? games : games?.games || [];
-
-          if (gameList.length === 0) {
-            // Try alternate: search by market slug via /markets endpoint
-            const altResp = await fetch(
-              `${SPORTS_API}/markets?slug=${encodeURIComponent(slug)}`
-            );
-            if (altResp.ok) {
-              const altData = await altResp.json();
-              const altGames = Array.isArray(altData) ? altData : altData?.games || [];
-              if (altGames.length > 0) {
-                const gameState = parseSportsGame(altGames[0], slug);
-                return { slug, data: gameState };
-              }
-            } else {
-              await altResp.text(); // consume body
-            }
+          if (marketList.length === 0) {
             return { slug, data: null };
           }
 
-          // Pick the most relevant game (first one, or the one that's live)
-          const liveGame = gameList.find((g: any) => g.live === true) || gameList[0];
-          const gameState = parseSportsGame(liveGame, slug);
+          const market = marketList[0];
+          const gameState = parseGammaMarket(market, slug);
           return { slug, data: gameState };
         } catch (e) {
           console.warn(`[live-game-state] Error fetching ${slug}:`, e);
@@ -118,63 +106,38 @@ serve(async (req) => {
 });
 
 /**
- * Parse a game object from Polymarket's Sports REST API.
- * The API returns fields like: live, ended, score, period, clock,
- * homeScore, awayScore, quarter, half, status, sport, etc.
+ * Parse a market object from Polymarket's Gamma API.
+ * This gives us market status (active/resolved/closed) but NOT live scores.
+ * Live scores come exclusively from the Sports WebSocket.
  */
-function parseSportsGame(game: any, slug: string) {
-  if (!game) return null;
+function parseGammaMarket(market: any, slug: string) {
+  if (!market) return null;
 
-  // The Sports API provides explicit live/ended booleans
-  const live = game.live === true;
-  const ended = game.ended === true || game.status === "Final" || game.status === "final";
+  const active = market.active === true;
+  const closed = market.closed === true;
+  const resolved = market.resolved === true || !!market.resolvedBy;
 
-  // Score extraction — try multiple field patterns
-  let score: string | undefined;
-  let scoreA: number | undefined;
-  let scoreB: number | undefined;
+  // Determine status
+  let status = "unknown";
+  let live = false;
+  let ended = false;
 
-  if (game.score && typeof game.score === "string") {
-    score = game.score;
-    const parts = score.split("-").map((s: string) => parseInt(s.trim(), 10));
-    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-      scoreA = parts[0];
-      scoreB = parts[1];
-    }
-  } else if (game.homeScore != null && game.awayScore != null) {
-    scoreA = Number(game.homeScore);
-    scoreB = Number(game.awayScore);
-    score = `${scoreA}-${scoreB}`;
-  } else if (game.home_score != null && game.away_score != null) {
-    scoreA = Number(game.home_score);
-    scoreB = Number(game.away_score);
-    score = `${scoreA}-${scoreB}`;
+  if (resolved || closed) {
+    status = "Final";
+    ended = true;
+  } else if (active) {
+    // Market is active — could be pre-game or live
+    // We can't know if the game is actually live from Gamma alone
+    // The WS will provide that. Mark as "active" so UI knows it exists.
+    status = "active";
+    live = false; // WS will upgrade to live when the game actually starts
   }
-
-  // Period / quarter / half
-  const period = game.period || game.quarter || game.half || game.inning || undefined;
-
-  // Elapsed / clock time
-  const elapsed = game.clock || game.elapsed || game.time || game.gameClock || undefined;
-
-  // Status
-  let status = game.status || "unknown";
-  if (ended) status = "Final";
-  else if (live) status = "InProgress";
-
-  // Sport detection
-  const sport = game.sport || game.league || game.leagueAbbreviation || undefined;
 
   return {
     slug,
-    score,
-    scoreA,
-    scoreB,
-    period: period ? String(period) : undefined,
-    elapsed: elapsed ? String(elapsed) : undefined,
     status,
     live,
     ended,
-    sport: sport ? String(sport).toLowerCase() : undefined,
+    // No score/period/elapsed from Gamma — WS provides those
   };
 }
