@@ -83,7 +83,18 @@ const json = (data: unknown, status = 200) =>
 
 // ── Helpers ──────────────────────────────────────────────
 
-/** HMAC signature for Polymarket L2 API authentication headers */
+/** Decode a base64 (or URL-safe base64) string to Uint8Array */
+function base64ToUint8Array(b64: string): Uint8Array {
+  const std = b64.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = std + '='.repeat((4 - std.length % 4) % 4);
+  const bin = atob(padded);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
+
+/** HMAC signature for Polymarket L2 API authentication headers.
+ *  The apiSecret is base64-encoded — must be decoded before use as HMAC key. */
 async function generateClobHmac(
   apiSecret: string,
   timestamp: string,
@@ -95,7 +106,7 @@ async function generateClobHmac(
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",
-    encoder.encode(apiSecret),
+    base64ToUint8Array(apiSecret),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],

@@ -51,6 +51,18 @@ const json = (data: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+/** Decode a base64 (or URL-safe base64) string to Uint8Array */
+function base64ToUint8Array(b64: string): Uint8Array {
+  const std = b64.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = std + '='.repeat((4 - std.length % 4) % 4);
+  const bin = atob(padded);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
+
+/** HMAC signature for Polymarket L2 API authentication headers.
+ *  The apiSecret is base64-encoded — must be decoded before use as HMAC key. */
 async function generateClobHmac(
   apiSecret: string,
   timestamp: string,
@@ -62,7 +74,7 @@ async function generateClobHmac(
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",
-    encoder.encode(apiSecret),
+    base64ToUint8Array(apiSecret),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],
@@ -211,7 +223,7 @@ Deno.serve(async (req) => {
       return json({ error: "Could not fetch current sell price", error_code: "price_unavailable" }, 503);
     }
 
-    // Resolve credentials (per-user session or shared fallback)
+    // Resolve credentials — per-user session ONLY (no shared fallback)
     let session: { pm_api_key: string; pm_api_secret: string; pm_passphrase: string; pm_trading_key: string } | null = null;
 
     const { data: userSession } = await supabase
@@ -228,17 +240,6 @@ Deno.serve(async (req) => {
         pm_passphrase: userSession.pm_passphrase,
         pm_trading_key: userSession.pm_trading_key,
       };
-    }
-
-    // Shared credentials fallback
-    if (!session) {
-      const key = Deno.env.get("PM_API_KEY");
-      const secret = Deno.env.get("PM_API_SECRET");
-      const pass = Deno.env.get("PM_PASSPHRASE");
-      const tradingKey = Deno.env.get("PM_TRADING_KEY");
-      if (key && secret && pass && tradingKey) {
-        session = { pm_api_key: key, pm_api_secret: secret, pm_passphrase: pass, pm_trading_key: tradingKey };
-      }
     }
 
     if (!session) {
