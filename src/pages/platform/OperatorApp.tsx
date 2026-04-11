@@ -568,6 +568,10 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       // ── Client-side CLOB submission for Polymarket orders ──
       if (data?.action === "client_submit" && data.order_params && data.clob_credentials) {
         const t0 = performance.now();
+        const CLOB_OVERALL_TIMEOUT_MS = 60_000;
+        const clobAbort = new AbortController();
+        const clobTimeoutId = setTimeout(() => clobAbort.abort(), CLOB_OVERALL_TIMEOUT_MS);
+        try {
         const { submitClobOrder } = await import("@/lib/clobOrderClient");
         let clobResult = await submitClobOrder(data.order_params, data.clob_credentials);
         const t1 = performance.now();
@@ -666,6 +670,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           entry_id: confirmData?.entry_id,
         });
         setShareAmount(amountUsd);
+        clearTimeout(clobTimeoutId);
         toast.success(t("operator.predictionSubmitted"), {
           description: t("operator.amountPlaced", { amount: amountUsd.toFixed(2) }),
         });
