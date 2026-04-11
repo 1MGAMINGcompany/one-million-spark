@@ -1,81 +1,103 @@
 
-Goal: stop the churn, identify exactly what works vs. what is broken, compare against last night’s stable behavior, and fix only the smallest set of files needed so a fresh user session can place a real $1 prediction and live games show LIVE/score/time/period again.
 
-What I confirmed
-- This is not a React crash/runtime-error problem.
-- The operator sign-out control is already present now in `src/pages/platform/OperatorApp.tsx`.
-- The browser is already on the official Polymarket SDK path in `src/lib/clobOrderClient.ts`.
-- The current SDK call is still likely malformed: `createAndPostMarketOrder(...)` is being called without the documented `price` field, even though Polymarket docs show market orders still need a worst-price limit.
-- For EOA mode, the client is also initialized with `funder = undefined`, while Polymarket quickstart shows signature type `0` with `funder = signer.address`.
-- Live data is currently unreliable for two concrete reasons:
-  1. `src/hooks/useSportsWebSocket.tsx` opens `wss://sports-api.polymarket.com/ws` but sends no subscribe payload.
-  2. The snapshot fallback exists, but it has not been proven to return data for the exact slugs currently rendered.
+## Plan: Fix Processing Forever + Fix SDK Order Call + Restore Live Scores
 
-Do I know what the issue is?
-- Order path: mostly yes. The strongest concrete bug is the current SDK call shape in `clobOrderClient.ts` (missing `price`, likely wrong EOA `funder`, weak error diagnostics).
-- Live-game path: partially yes. The architecture is wrong today (non-subscribing WS + unverified snapshot), but I would still compare against last night’s file versions before changing it again.
+### Root Cause Analysis
 
-Plan
-1. Freeze scope and compare against last night
-- Use History to inspect only:
-  - `src/lib/clobOrderClient.ts`
-  - `src/hooks/useSportsWebSocket.tsx`
-  - `supabase/functions/live-game-state/index.ts`
-  - `supabase/functions/prediction-submit/index.ts`
-  - `src/pages/platform/OperatorApp.tsx`
-- Keep the clearly good changes already made: logout button, per-user trading session flow, SDK direction.
+**Issue 1: Processing forever**
+`submitClobOrder` in `clobOrderClient.ts` has no timeout. The `@polymarket/clob-client` SDK may hang indefinitely in the browser (it's a Node.js library). No safety timeout exists in OperatorApp or FightPredictions either.
 
-2. Build a hard “works / doesn’t / unknown” matrix before editing
-- Works: login/logout UI, prediction modal, backend preflight reaching `client_submit`, credential save path.
-- Broken: actual exchange acceptance, LIVE badge + score + period + clock.
-- Unknown: whether sports snapshot returns current slug data, whether sports WS needs an explicit subscription handshake.
+**Issue 2: SDK order call shape**
+The current `createAndPostMarketOrder` call looks correct on the surface — it passes `price`, `tokenID`, `amount`, `side`, `tickSize`, `negRisk`, and `OrderType.FOK`. However, two things need verification:
+- **EOA funder**: Currently `funder = undefined` for EOA (signatureType 0). Polymarket quickstart shows `funder = signer.address` for EOA mode. This is a concrete suspect.
+- The SDK call shape itself matches documented examples (price is included as worst-price limit).
 
-3. Stabilize the order path without reverting to manual JSON
-- Keep the official SDK as the single source of truth.
-- In `src/lib/clobOrderClient.ts`:
-  - pass the documented `price` into `createAndPostMarketOrder`
-  - use correct EOA funder semantics for signature type `0`
-  - keep `negRisk` and FOK/FAK handling aligned to docs
-  - enable richer SDK/API errors so the next test returns exact HTTP status and response snippet
-- In `supabase/functions/prediction-submit/index.ts`, keep only the order params the browser truly needs so there is no stale duplicate order-builder logic.
+**Issue 3: Live scores/periods/time — the real root cause is slug mismatch**
 
-4. Restore live-game data in a controlled way
-- Treat snapshot as source 1 and websocket as source 2.
-- First verify `live-game-state` against current slugs; if it is wrong, fix that before touching UI.
-- Then repair `useSportsWebSocket.tsx`:
-  - compare with last night’s version
-  - add/restore the correct subscription behavior if required
-  - keep slug-first matching
-  - log requested slugs, returned snapshot slugs, and first unmatched WS messages
-- Leave `OperatorApp.tsx` and `SimplePredictionCard.tsx` reading one merged live-state source only.
+I verified this with actual database queries:
+- Most `polymarket_slug` values in `prediction_fights` are **internal shorthand slugs** like `mlb-cin-min-2026-04-17`, `mls-ner-hou-2026-03-07-hou`
+- These are NOT Polymarket's actual market slugs — they were generated during sync
+- The Gamma API returns empty results for these shorthand slugs (I tested: `{"games":{}}`)
+- The real Polymarket slugs like `will-atlanta-braves-win-the-2026-nl-east-title` DO work with Gamma, but Gamma returns no scores anyway (only `active/closed/resolved` status)
+- The Sports WebSocket sends messages with Polymarket's own slug format — which doesn't match the internal shorthand slugs in the DB
+- Therefore neither the snapshot NOR the WebSocket can match against the shorthand slugs
 
-5. Validate with one conclusive test, not many retries
-- One fresh sign-out/sign-in
-- One fresh $1 prediction
-- One known live game check
-- Record:
-  - signatureType
-  - funder
-  - price
-  - negRisk
-  - orderType
-  - `/order` HTTP status
-  - response body snippet
-  - snapshot requested slug count vs. returned slug count
-  - whether LIVE data came from snapshot, websocket, or both
+This means **live data has been silently broken for all shorthand-slug events** — the WS receives messages but can never match them to tracked slugs.
 
-6. Rollback rule
-- If last night’s version of a specific file was clearly better, revert only that file and then reapply the smallest safe fix.
-- Do not do a full-project rollback, because that could reintroduce earlier auth/session regressions.
+**Correction per Polymarket docs**: No subscription message is required for the Sports WebSocket. The missing live data is NOT caused by a missing subscribe payload — it's caused by slug mismatch.
 
-Technical details
-- Shared trading helper used by both operator and flagship flows: `src/lib/clobOrderClient.ts`
-- Likely order-fix files: `src/lib/clobOrderClient.ts`, `supabase/functions/prediction-submit/index.ts`
-- Likely live-data files: `src/hooks/useSportsWebSocket.tsx`, `supabase/functions/live-game-state/index.ts`, `src/pages/platform/OperatorApp.tsx`, `src/components/operator/SimplePredictionCard.tsx`
-- Good reference already in repo: `src/hooks/usePolymarketLivePrices.ts` does send an explicit websocket subscribe payload on open; the sports live hook currently does not.
+---
 
-Expected outcome
-- We stop stacking speculative changes.
-- We produce an exact “what works / what doesn’t” list.
-- We either restore last night’s known-good live behavior or replace it with a verified snapshot+WS flow.
-- We make the next order test conclusive instead of another vague `Invalid order payload`.
+### Implementation
+
+**PART 1 — Stop processing forever**
+
+File: `src/lib/clobOrderClient.ts`
+- Wrap `client.createAndPostMarketOrder()` in a 30-second `Promise.race` timeout
+- On timeout, return `errorCode: "sdk_timeout"` with clear diagnostics
+- Wrap `new ClobClient()` construction in try/catch to detect SDK init failures separately
+
+File: `src/pages/platform/OperatorApp.tsx`
+- Add 60-second overall timeout around the entire CLOB submission block (lines 569-655)
+- If timeout fires, force `setSubmitting(false)` and show a clear error toast
+
+File: `src/pages/FightPredictions.tsx`
+- Same 60-second overall timeout pattern around CLOB submission block
+
+**PART 2 — Fix SDK order call**
+
+File: `src/lib/clobOrderClient.ts`
+- Change EOA funder from `undefined` to `account.address` (the signer's address)
+- This matches Polymarket quickstart which shows `signatureType: 0` with `funder: signer.address`
+- Keep everything else (price is already passed, negRisk is already passed, FOK is already used)
+
+**PART 3 — Fix live score/period/time via slug mapping**
+
+The core fix: the `live-game-state` edge function and the WS hook need to look up events by `polymarket_market_id` (not slug), and the WS matching needs the **real** Polymarket slug as a secondary matching key.
+
+File: `supabase/functions/live-game-state/index.ts`
+- Accept both `slugs` and `market_ids` arrays
+- For market IDs, fetch from `https://gamma-api.polymarket.com/markets/{id}` to get the **real** market slug, `gameStartTime`, and market status
+- Also look up the market's parent **event slug** via the Gamma response, which is what the Sports WS uses
+- Return `{ slug, status, live, ended, realSlug }` — the `realSlug` tells the frontend what slug to listen for on the WS
+
+File: `src/hooks/useSportsWebSocket.tsx`
+- In the snapshot seeding effect, also pass `market_ids` (from the fights' `polymarket_market_id`) to the edge function
+- When snapshot returns, build a **reverse slug map**: `realSlug → internalSlug` for each tracked fight
+- In `parseLiveMessage`, after direct slug match fails, also check the reverse map: if WS message slug matches a `realSlug`, map it back to the internal slug
+- Always merge snapshot data over existing state (remove the `if (!next.has(slug))` guard on line 151)
+- Log: requested slugs, returned snapshot slugs, first 5 unmatched WS slugs
+
+File: `src/pages/platform/OperatorApp.tsx`
+- Pass both `liveSlugs` and `liveMarketIds` to the SportsWebSocketProvider
+- Extract `polymarket_market_id` from enriched fights alongside `polymarket_slug`
+
+**PART 4 — Diagnostics for conclusive test**
+
+File: `src/lib/clobOrderClient.ts`
+- Log exact `signatureType`, `funder`, `price`, `negRisk`, `orderType` before submission
+- On error, capture and log HTTP status and response body snippet
+- Include `usedOfficialClient: true` flag
+
+---
+
+### Files Changed
+1. `src/lib/clobOrderClient.ts` — timeout + EOA funder fix
+2. `src/pages/platform/OperatorApp.tsx` — 60s timeout + pass market IDs
+3. `src/pages/FightPredictions.tsx` — 60s timeout
+4. `supabase/functions/live-game-state/index.ts` — accept market_ids, resolve real slugs
+5. `src/hooks/useSportsWebSocket.tsx` — reverse slug map for WS matching, always merge snapshots
+
+### What Stays Unchanged
+- Browser-side order submission architecture
+- SDK as the order builder
+- Fee collection, reconciliation, operator attribution
+- Credential derivation flow
+- WebSocket connection logic (no fake subscribe)
+- All other UI components
+
+### Expected Outcome
+- Processing forever becomes impossible (30s SDK timeout + 60s UI timeout)
+- EOA funder fix may resolve "Invalid order payload" if that was the cause
+- Live scores/periods should appear once the slug mapping resolves the mismatch between internal shorthand slugs and Polymarket's real slugs
+
