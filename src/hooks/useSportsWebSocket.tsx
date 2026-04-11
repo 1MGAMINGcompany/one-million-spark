@@ -42,17 +42,17 @@ function buildMatchKey(league: string, teamA: string, teamB: string): string {
  * Strategy: take the league prefix and the two team codes that follow.
  * Slug format varies by sport but generally: {league}-{team1}-{team2}-{date}
  * Some slugs have suffixes like "-cam" for specific outcomes — skip those.
+ *
+ * Returns an array of candidate keys to support multiple slug formats.
  */
-function slugToMatchKey(slug: string): string | null {
-  if (!slug) return null;
-  // Split on "-" and try to identify: league, team codes, date
+function slugToMatchKeys(slug: string): string[] {
+  if (!slug) return [];
   const parts = slug.split("-");
-  if (parts.length < 4) return null;
-  
+  if (parts.length < 4) return [];
+
   const league = parts[0].toLowerCase();
-  
+
   // Find the date portion (YYYY-MM-DD) — typically the last 3 parts
-  // Look for a 4-digit year
   let dateStartIdx = -1;
   for (let i = 1; i < parts.length; i++) {
     if (/^\d{4}$/.test(parts[i]) && i + 2 < parts.length) {
@@ -60,17 +60,36 @@ function slugToMatchKey(slug: string): string | null {
       break;
     }
   }
-  
-  if (dateStartIdx < 2) return null; // Need at least 2 parts between league and date
-  
-  // Team codes are between league and date
-  const teamParts = parts.slice(1, dateStartIdx);
-  if (teamParts.length < 2) return null;
-  
-  // Take first two as team codes (handles 3-letter codes like "phi", "bos")
-  // Some slugs have combined codes or longer names — take first two parts
-  const codes = teamParts.slice(0, 2).map(t => t.toLowerCase()).sort();
-  return `${league}|${codes[0]}|${codes[1]}`;
+
+  const keys: string[] = [];
+
+  if (dateStartIdx >= 3) {
+    // Team codes are between league and date
+    const teamParts = parts.slice(1, dateStartIdx);
+    if (teamParts.length >= 2) {
+      // Primary: first two team parts
+      const codes2 = teamParts.slice(0, 2).map(t => t.toLowerCase()).sort();
+      keys.push(`${league}|${codes2[0]}|${codes2[1]}`);
+
+      // If there are 3+ team parts, also try combining first two as one team code
+      // e.g. "nba-golden-state-warriors-lal-2026-04-10" → "golden state" vs "lal"
+      if (teamParts.length >= 3) {
+        // Try: parts[1..N-1] joined as teamA, last part as teamB
+        const teamA = teamParts.slice(0, -1).join(" ").toLowerCase();
+        const teamB = teamParts[teamParts.length - 1].toLowerCase();
+        const altCodes = [teamA, teamB].sort();
+        keys.push(`${league}|${altCodes[0]}|${altCodes[1]}`);
+      }
+    }
+  }
+
+  // Fallback: if no date found, try positions 1 and 2 directly
+  if (keys.length === 0 && parts.length >= 3) {
+    const codes = [parts[1], parts[2]].map(t => t.toLowerCase()).sort();
+    keys.push(`${league}|${codes[0]}|${codes[1]}`);
+  }
+
+  return keys;
 }
 
 /**
@@ -153,8 +172,10 @@ export function SportsWebSocketProvider({ children, slugs = [] }: SportsWebSocke
   const slugLookup = useMemo(() => {
     const map = new Map<string, string>();
     for (const slug of slugs) {
-      const key = slugToMatchKey(slug);
-      if (key) map.set(key, slug);
+      const keys = slugToMatchKeys(slug);
+      for (const key of keys) {
+        if (!map.has(key)) map.set(key, slug);
+      }
     }
     return map;
   }, [slugs]);
