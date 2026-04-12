@@ -1573,6 +1573,17 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         theme={theme}
       />
     </div>
+
+      {/* Cash Out Modal */}
+      <CashOutModal
+        open={showCashOut}
+        onClose={() => setShowCashOut(false)}
+        balance={usdc_balance}
+        onSuccess={() => {
+          setTimeout(refetchBalance, 5000);
+          setTimeout(refetchBalance, 15000);
+        }}
+      />
     </SportsWebSocketProvider>
   );
 }
