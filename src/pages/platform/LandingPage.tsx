@@ -186,7 +186,7 @@ function RevenueCalculator() {
             <div>
               <label className="text-sm text-white/50 block mb-2">{t("platform.calculator.yourFee")}</label>
               <input
-                type="range" min={1} max={10} step={0.5} value={feePct}
+                type="range" min={0} max={20} step={0.5} value={feePct}
                 onChange={e => setFeePct(Number(e.target.value))}
                 className="w-full accent-blue-500"
               />

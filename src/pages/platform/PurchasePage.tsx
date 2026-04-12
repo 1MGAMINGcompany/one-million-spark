@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useSendTransaction } from "@privy-io/react-auth";
 import { usePrivySafe } from "@/hooks/usePrivySafe";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,8 @@ import {
   DollarSign,
   Wallet,
   Tag,
+  Info,
+  CreditCard,
 } from "lucide-react";
 
 const TREASURY_ADDRESS = "0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d";
@@ -47,6 +50,7 @@ interface PromoResult {
 
 export default function PurchasePage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { getAccessToken } = usePrivySafe();
   const { sendTransaction } = useSendTransaction();
   const { usdc_balance, usdc_balance_formatted, is_loading: balanceLoading, wallet_address } = usePolygonUSDC();
@@ -296,6 +300,31 @@ export default function PurchasePage() {
                   Insufficient balance. You need ${effectivePrice} USDC on Polygon.
                 </p>
               )}
+            </div>
+          )}
+
+          {/* Funding guidance when balance is insufficient */}
+          {effectivePrice > 0 && !balanceLoading && !hasEnoughBalance && (
+            <div className="bg-blue-500/5 border border-blue-500/10 rounded-xl p-4 mb-6">
+              <div className="flex items-center gap-2 mb-3">
+                <Info size={16} className="text-blue-400 shrink-0" />
+                <h4 className="text-sm font-semibold text-blue-300">{t("operator.dashboard.purchaseFundingTitle")}</h4>
+              </div>
+              <ol className="space-y-2 text-xs text-white/50 list-decimal list-inside">
+                <li>{t("operator.dashboard.purchaseFundingStep1")}</li>
+                <li>{t("operator.dashboard.purchaseFundingStep2")}</li>
+                <li>{t("operator.dashboard.purchaseFundingStep3")}</li>
+              </ol>
+              <p className="text-[10px] text-yellow-400/70 mt-3 flex items-center gap-1">
+                <AlertCircle size={10} /> {t("operator.dashboard.purchaseFundingNote")}
+              </p>
+              <Button
+                onClick={() => navigate("/add-funds")}
+                size="sm"
+                className="mt-3 bg-blue-600 hover:bg-blue-500 border-0 text-xs gap-1.5"
+              >
+                <CreditCard size={14} /> {t("operator.dashboard.addFundsNow")}
+              </Button>
             </div>
           )}
 
