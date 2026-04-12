@@ -113,16 +113,16 @@ export default function OperatorAnalyticsTab({ operatorId, feePercent }: Props) 
     <div className="space-y-6">
       {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard icon={<TrendingUp size={14} />} label="Total Predictions" value={stats.totalPredictions} />
-        <StatCard icon={<DollarSign size={14} />} label="USDC Volume" value={`$${stats.totalVolume.toFixed(0)}`} />
-        <StatCard icon={<DollarSign size={14} />} label="Commission" value={`$${stats.commission.toFixed(2)}`} accent />
-        <StatCard icon={<Users size={14} />} label="Unique Users" value={stats.uniqueUsers} />
+        <StatCard icon={<TrendingUp size={14} />} label={t("operator.analytics.totalPredictions")} value={stats.totalPredictions} />
+        <StatCard icon={<DollarSign size={14} />} label={t("operator.analytics.usdcVolume")} value={`$${stats.totalVolume.toFixed(0)}`} />
+        <StatCard icon={<DollarSign size={14} />} label={t("operator.analytics.commission")} value={`$${stats.commission.toFixed(2)}`} accent />
+        <StatCard icon={<Users size={14} />} label={t("operator.analytics.uniqueUsers")} value={stats.uniqueUsers} />
       </div>
 
       {stats.topFight && (
         <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
           <div className="flex items-center gap-2 text-white/40 mb-1 text-xs">
-            <Trophy size={14} /> Most Popular Event
+            <Trophy size={14} /> {t("operator.analytics.mostPopularEvent")}
           </div>
           <div className="text-sm font-bold text-white">{stats.topFight.title || stats.topFight.event_name}</div>
           <div className="text-xs text-white/40 mt-0.5">
@@ -134,7 +134,7 @@ export default function OperatorAnalyticsTab({ operatorId, feePercent }: Props) 
 
       {/* Daily predictions chart */}
       <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
-        <h3 className="text-sm font-bold text-white mb-3">Daily Predictions (30 days)</h3>
+        <h3 className="text-sm font-bold text-white mb-3">{t("operator.analytics.dailyPredictions")}</h3>
         <div className="h-48">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={dailyChart}>
@@ -150,7 +150,7 @@ export default function OperatorAnalyticsTab({ operatorId, feePercent }: Props) 
 
       {/* Revenue chart */}
       <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
-        <h3 className="text-sm font-bold text-white mb-3">Daily Commission (30 days)</h3>
+        <h3 className="text-sm font-bold text-white mb-3">{t("operator.analytics.dailyCommission")}</h3>
         <div className="h-48">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={revenueChart}>
@@ -167,7 +167,7 @@ export default function OperatorAnalyticsTab({ operatorId, feePercent }: Props) 
       {/* Sport breakdown */}
       {sportChart.length > 0 && (
         <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
-          <h3 className="text-sm font-bold text-white mb-3">Predictions by Sport</h3>
+          <h3 className="text-sm font-bold text-white mb-3">{t("operator.analytics.predictionsBySport")}</h3>
           <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={sportChart}>
@@ -184,7 +184,7 @@ export default function OperatorAnalyticsTab({ operatorId, feePercent }: Props) 
 
       {/* Recent activity */}
       <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
-        <h3 className="text-sm font-bold text-white mb-3">Recent Predictions</h3>
+        <h3 className="text-sm font-bold text-white mb-3">{t("operator.analytics.recentPredictions")}</h3>
         <div className="space-y-2 max-h-80 overflow-y-auto">
           {entries.slice(0, 20).map((e: any) => {
             const fight = fights.find((f: any) => f.id === e.fight_id);
@@ -203,7 +203,7 @@ export default function OperatorAnalyticsTab({ operatorId, feePercent }: Props) 
               </div>
             );
           })}
-          {entries.length === 0 && <p className="text-xs text-white/30">No predictions yet</p>}
+          {entries.length === 0 && <p className="text-xs text-white/30">{t("operator.analytics.noPredictionsYet")}</p>}
         </div>
       </div>
     </div>

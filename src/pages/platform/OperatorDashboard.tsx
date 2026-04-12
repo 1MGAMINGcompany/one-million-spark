@@ -169,7 +169,7 @@ export default function OperatorDashboard() {
   const updateFeePercent = async () => {
     const val = Number(feeInput);
     if (isNaN(val) || val < 0 || val > 20) {
-      toast.error("Fee must be between 0% and 20%");
+      toast.error(t("operator.dashboard.feeValidation"));
       return;
     }
     setSavingFee(true);
@@ -185,11 +185,11 @@ export default function OperatorDashboard() {
       );
       const json = await res.json();
       if (json.success) {
-        toast.success("Fee updated");
+        toast.success(t("operator.dashboard.feeUpdated"));
         setOperator(prev => prev ? { ...prev, fee_percent: val } : prev);
         setEditingFee(false);
       } else {
-        toast.error(json.error || "Failed to update fee");
+        toast.error(json.error || t("operator.dashboard.failedToUpdateFee"));
       }
     } catch {
     } finally {
@@ -290,13 +290,13 @@ export default function OperatorDashboard() {
       );
       const json = await res.json();
       if (json.success) {
-        toast.success("Settings saved");
+        toast.success(t("operator.dashboard.settingsSaved"));
         setOperator(prev => prev ? { ...prev, brand_color: brandColor, welcome_message: welcomeMsg, support_email: supportEmail, logo_url: logoUrl || null, disabled_sports: disabledSports } : prev);
       } else {
-        toast.error(json.error || "Failed to save");
+        toast.error(json.error || t("operator.dashboard.failedToSave"));
       }
     } catch {
-      toast.error("Failed to save settings");
+      toast.error(t("operator.dashboard.failedToSave"));
     } finally {
       setSavingSettings(false);
     }
@@ -319,12 +319,12 @@ export default function OperatorDashboard() {
       if (json.success) {
         setAppPaused(!appPaused);
         setOperator(prev => prev ? { ...prev, status: newStatus } : prev);
-        toast.success(newStatus === "paused" ? "App paused — predictions blocked" : "App resumed");
+        toast.success(newStatus === "paused" ? t("operator.dashboard.appPausedToast") : t("operator.dashboard.appResumedToast"));
       } else {
-        toast.error(json.error || "Failed to toggle pause");
+        toast.error(json.error || t("operator.dashboard.failedToTogglePause"));
       }
     } catch {
-      toast.error("Failed to toggle pause");
+      toast.error(t("operator.dashboard.failedToTogglePause"));
     } finally {
       setTogglingPause(false);
     }
@@ -350,14 +350,14 @@ export default function OperatorDashboard() {
       );
       const json = await res.json();
       if (json.success) {
-        toast.success("Event updated");
+        toast.success(t("operator.dashboard.eventUpdated"));
         setEditingEventId(null);
         if (operator) { fetchEvents(operator.id); fetchFights(operator.id); }
       } else {
-        toast.error(json.error || "Failed to update event");
+        toast.error(json.error || t("operator.dashboard.failedToUpdateEvent"));
       }
     } catch {
-      toast.error("Failed to update event");
+      toast.error(t("operator.dashboard.failedToUpdateEvent"));
     } finally {
       setSavingEvent(false);
     }
@@ -528,7 +528,7 @@ export default function OperatorDashboard() {
                   />
                   <span className="text-white/60 text-sm">%</span>
                   <Button size="sm" onClick={updateFeePercent} disabled={savingFee} className="bg-emerald-600 hover:bg-emerald-500 border-0 text-xs gap-1">
-                    <Save size={14} /> {savingFee ? t("operator.dashboard.saving") : "Save"}
+                    <Save size={14} /> {savingFee ? t("operator.dashboard.saving") : t("operator.dashboard.save")}
                   </Button>
                   <button onClick={() => setEditingFee(false)} className="text-white/30 hover:text-white/60 text-xs">{t("operator.dashboard.cancel")}</button>
                 </div>
@@ -672,25 +672,25 @@ export default function OperatorDashboard() {
                             <div className="bg-white/[0.02] border border-white/5 rounded-lg p-3 space-y-3">
                               <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                  <label className="text-[10px] text-white/40">Sport</label>
+                                  <label className="text-[10px] text-white/40">{t("operator.dashboard.sport")}</label>
                                   <select value={editSport} onChange={e => setEditSport(e.target.value)} className="w-full bg-white/5 border border-white/10 text-white rounded-md h-8 px-2 text-xs">
                                     {SPORT_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                                   </select>
                                 </div>
                                 <div>
-                                  <label className="text-[10px] text-white/40">Date/Time</label>
+                                  <label className="text-[10px] text-white/40">{t("operator.dashboard.dateTime")}</label>
                                   <Input type="datetime-local" value={editDate} onChange={e => setEditDate(e.target.value)} className="bg-white/5 border-white/10 text-white h-8 text-xs" />
                                 </div>
                               </div>
                               <label className="flex items-center gap-2 text-xs text-white/40 cursor-pointer">
                                 <input type="checkbox" checked={editFeatured} onChange={e => setEditFeatured(e.target.checked)} className="rounded" />
-                                Featured
+                                {t("operator.dashboard.featured")}
                               </label>
                               <div className="flex gap-2">
                                 <Button size="sm" onClick={() => saveEventEdit(ev.id)} disabled={savingEvent} className="bg-blue-600 hover:bg-blue-500 border-0 text-xs h-7">
-                                  {savingEvent ? "Saving..." : "Save"}
+                                  {savingEvent ? t("operator.dashboard.saving") : t("operator.dashboard.save")}
                                 </Button>
-                                <Button size="sm" variant="outline" onClick={() => setEditingEventId(null)} className="border-white/10 text-white hover:bg-white/5 text-xs h-7">Cancel</Button>
+                                <Button size="sm" variant="outline" onClick={() => setEditingEventId(null)} className="border-white/10 text-white hover:bg-white/5 text-xs h-7">{t("operator.dashboard.cancel")}</Button>
                               </div>
                             </div>
                           ) : (
@@ -703,7 +703,7 @@ export default function OperatorDashboard() {
                               }}
                               className="text-[10px] text-white/20 hover:text-white/50 mt-1 flex items-center gap-1"
                             >
-                              <Edit3 size={10} /> Edit event
+                              <Edit3 size={10} /> {t("operator.dashboard.editEvent")}
                             </button>
                           )}
                         </div>
@@ -792,10 +792,10 @@ export default function OperatorDashboard() {
                 <div className="text-xl font-bold text-green-400">${revenue.total.toFixed(2)}</div>
               </div>
               <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
-                <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><Wallet size={14} /> {t("operator.dashboard.wallet")}</div>
+                <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><Wallet size={14} /> {t("operator.dashboard.walletLabel")}</div>
                 <div className="text-xl font-bold text-emerald-400">${walletBalance != null ? walletBalance.toFixed(2) : "—"}</div>
+                <div className="text-[10px] text-white/20 mt-0.5">{t("operator.dashboard.connectedWallet")}</div>
               </div>
-            </div>
 
             {/* Most Popular Event */}
             {fights.length > 0 && (() => {
