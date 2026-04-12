@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { BarChart3, Lightbulb } from "lucide-react";
+import { BarChart3, Lightbulb, Flame, Clock } from "lucide-react";
 import { getTeamLogo } from "@/lib/teamLogos";
 import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
 import { formatEventDateTime } from "@/lib/formatEventLocalDateTime";
@@ -23,21 +23,17 @@ interface SimplePredictionCardProps {
   selling?: boolean;
 }
 
-function getTimeLabel(eventDate: string | null | undefined, t: (key: string, opts?: any) => string): { text: string; isLive: boolean } | null {
+function getTimeLabel(eventDate: string | null | undefined, t: (key: string, opts?: any) => string): { text: string; isLive: boolean; isUrgent: boolean } | null {
   if (!eventDate) return null;
   const d = new Date(eventDate);
   const now = Date.now();
   const diff = d.getTime() - now;
-  // Never show LIVE from time heuristic — only LiveGameBadge should do that
   if (diff < 0) return null;
-  if (diff < 3600000) return { text: t("operator.startsInMin", { min: Math.max(1, Math.round(diff / 60000)) }), isLive: false };
-  if (diff < 86400000) return { text: t("operator.startsInHour", { hour: Math.round(diff / 3600000) }), isLive: false };
+  const mins = Math.round(diff / 60000);
+  if (mins < 15) return { text: `⏳ ${t("operator.startsInMin", { min: Math.max(1, mins) })}`, isLive: false, isUrgent: true };
+  if (diff < 3600000) return { text: t("operator.startsInMin", { min: mins }), isLive: false, isUrgent: false };
+  if (diff < 86400000) return { text: t("operator.startsInHour", { hour: Math.round(diff / 3600000) }), isLive: false, isUrgent: false };
   return null;
-}
-
-function calcPayout(price: number | null, amount: number): number {
-  if (!price || price <= 0) return amount;
-  return amount / price;
 }
 
 function getOddsFromFight(fight: Fight): { priceA: number; priceB: number } {
@@ -70,12 +66,13 @@ export default function SimplePredictionCard({
   const nameA = resolveOutcomeName(fight.fighter_a_name, "a", fight);
   const nameB = resolveOutcomeName(fight.fighter_b_name, "b", fight);
   const { priceA, priceB } = getOddsFromFight(fight);
-  const payoutA = calcPayout(priceA, 10);
-  const payoutB = calcPayout(priceB, 10);
-  const multiplierA = priceA > 0 ? (1 / priceA).toFixed(2) : "—";
-  const multiplierB = priceB > 0 ? (1 / priceB).toFixed(2) : "—";
+  const multiplierA = priceA > 0 ? (1 / priceA) : 0;
+  const multiplierB = priceB > 0 ? (1 / priceB) : 0;
+  const pctReturnA = multiplierA > 0 ? Math.round((multiplierA - 1) * 100) : 0;
+  const pctReturnB = multiplierB > 0 ? Math.round((multiplierB - 1) * 100) : 0;
+  // Market split for social proof bar
+  const splitA = Math.round((priceA / (priceA + priceB || 1)) * 100);
 
-  // Live game data from Polymarket Sports WebSocket
   const liveState = useLiveGameState((fight as any).polymarket_slug);
 
   const logoDataA = getTeamLogo(nameA, fight.event_name);
@@ -112,17 +109,12 @@ export default function SimplePredictionCard({
     border: `1px solid ${theme.cardBorder}`,
   };
 
-  // Graph button component
   const GraphButton = () => (
     onGraph ? (
       <button
         onClick={(e) => { e.stopPropagation(); onGraph(fight); }}
         className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-all hover:opacity-80"
-        style={{
-          backgroundColor: theme.surfaceBg,
-          border: `1px solid ${theme.cardBorder}`,
-          color: theme.textSecondary,
-        }}
+        style={{ backgroundColor: theme.surfaceBg, border: `1px solid ${theme.cardBorder}`, color: theme.textSecondary }}
       >
         <BarChart3 className="w-3 h-3" />
         Graph
@@ -135,11 +127,7 @@ export default function SimplePredictionCard({
       <button
         onClick={(e) => { e.stopPropagation(); onTips(fight); }}
         className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-all hover:opacity-80"
-        style={{
-          backgroundColor: theme.surfaceBg,
-          border: `1px solid ${theme.cardBorder}`,
-          color: theme.textSecondary,
-        }}
+        style={{ backgroundColor: theme.surfaceBg, border: `1px solid ${theme.cardBorder}`, color: theme.textSecondary }}
       >
         <Lightbulb className="w-3 h-3" />
         Tips
@@ -147,11 +135,9 @@ export default function SimplePredictionCard({
     ) : null
   );
 
-  // Settled state
+  // ---------- SETTLED STATE ----------
   if (isSettled && fight.winner) {
     const winnerName = fight.winner === "fighter_a" ? nameA : nameB;
-
-    // Detect if this was a Polymarket fight where the user's trade was never executed
     const isPolymarketFight = !!(fight as any).polymarket_market_id;
     const hasNoRealOrder = isPolymarketFight && userPicked && !userEntry?.polymarket_order_id;
     const isNotExecuted = userEntry?.polymarket_status === "not_executed";
@@ -219,7 +205,7 @@ export default function SimplePredictionCard({
     );
   }
 
-  // User already placed a prediction
+  // ---------- USER ALREADY PICKED ----------
   if (userPicked) {
     const pickedName = userPicked === "fighter_a" ? nameA : nameB;
     return (
@@ -240,13 +226,22 @@ export default function SimplePredictionCard({
             <GraphButton />
           </div>
         </div>
+
+        {/* Live score between teams */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             {logoA && <img src={logoA} className="w-6 h-6 object-contain" alt="" />}
             <span className="text-base font-bold" style={{ color: theme.textPrimary }}>{nameA}</span>
           </div>
           {liveState && liveState.live && liveState.score ? (
-            <LiveScoreDisplay state={liveState} theme={theme} />
+            <div className="text-center">
+              <LiveScoreDisplay state={liveState} theme={theme} />
+              {(liveState.period || liveState.elapsed) && (
+                <div className="text-[9px] font-mono" style={{ color: theme.textMuted }}>
+                  {[liveState.period, liveState.elapsed].filter(Boolean).join(" • ")}
+                </div>
+              )}
+            </div>
           ) : (
             <span className="text-xs font-bold" style={{ color: theme.textMuted }}>{t("operator.vs")}</span>
           )}
@@ -266,7 +261,6 @@ export default function SimplePredictionCard({
               {t("operator.amountPlacedLabel", { amount: userEntry.amount_usd.toFixed(2) })}
             </p>
           )}
-          {/* Sell button — available when market is still open and user has a position */}
           {isOpen && onSell && userEntry?.polymarket_order_id && (
             <button
               onClick={() => onSell(fight.id)}
@@ -286,12 +280,13 @@ export default function SimplePredictionCard({
     );
   }
 
-  // Open for predictions
+  // ---------- OPEN FOR PREDICTIONS ----------
   const gridCols = hasDrawOption ? "grid-cols-3" : "grid-cols-2";
+  const isLive = !!(liveState && liveState.live);
 
   return (
     <div className="rounded-2xl p-5 space-y-3" style={cardStyle}>
-      {/* Sport + League badge + time + Graph */}
+      {/* Header: Sport + League + Live/Time + Actions */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           {sportLeagueLabel && (
@@ -305,19 +300,39 @@ export default function SimplePredictionCard({
             <span
               className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
               style={{
-                backgroundColor: theme.primary + "18",
-                color: theme.primary,
+                backgroundColor: timeLabel.isUrgent ? "#ef444422" : theme.primary + "18",
+                color: timeLabel.isUrgent ? "#ef4444" : theme.primary,
               }}
             >
               {timeLabel.text}
             </span>
           ) : null}
+          {isLive && (
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1"
+              style={{ backgroundColor: "#f9731622", color: "#f97316" }}>
+              <Flame className="w-2.5 h-2.5" /> Hot
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <TipsButton />
           <GraphButton />
         </div>
       </div>
+
+      {/* Live score block — prominent when live */}
+      {isLive && liveState?.score && (
+        <div className="text-center py-2 rounded-xl" style={{ backgroundColor: "#ef444410" }}>
+          <div className="text-2xl font-bold font-mono tabular-nums" style={{ color: theme.textPrimary }}>
+            {liveState.score}
+          </div>
+          {(liveState.period || liveState.elapsed) && (
+            <div className="text-[10px] font-mono mt-0.5" style={{ color: theme.textMuted }}>
+              {[liveState.period, liveState.elapsed].filter(Boolean).join(" • ")}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Team names */}
       <div className="flex items-center justify-between">
@@ -326,10 +341,11 @@ export default function SimplePredictionCard({
           <span className="text-lg font-bold leading-tight" style={{ color: theme.textPrimary }}>{nameA}</span>
         </div>
         <span className="text-sm font-bold mx-3" style={{ color: theme.textMuted }}>
-          {liveState && liveState.live && liveState.score ? (
-            <LiveScoreDisplay state={liveState} theme={theme} />
-          ) : (
-            t("operator.vs")
+          {/* If live but no score block above, show inline */}
+          {isLive && liveState?.score ? null : (
+            liveState && liveState.live ? (
+              <LiveScoreDisplay state={liveState} theme={theme} />
+            ) : t("operator.vs")
           )}
         </span>
         <div className="flex items-center gap-3 flex-1 justify-end text-right">
@@ -338,37 +354,36 @@ export default function SimplePredictionCard({
         </div>
       </div>
 
-      {/* Event date */}
-      {eventDateStr && (
+      {/* Event date (only when not live) */}
+      {!isLive && eventDateStr && (
         <p className="text-xs text-center" style={{ color: theme.textMuted }}>{eventDateStr}</p>
       )}
 
-      {/* Pick buttons */}
+      {/* Pick buttons — multiplier-first */}
       <div className={`grid ${gridCols} gap-3`}>
         <button
           onClick={() => isOpen && onPredict(fight, "fighter_a")}
           disabled={!isOpen}
-          className="rounded-xl py-3 px-2 text-center transition-all hover:shadow-md disabled:opacity-40 disabled:cursor-not-allowed"
+          className="rounded-xl py-3 px-2 text-center transition-all hover:shadow-md hover:scale-[1.02] disabled:opacity-40 disabled:cursor-not-allowed"
           style={{
             backgroundColor: theme.surfaceBg,
             border: `1px solid ${theme.cardBorder}`,
           }}
         >
           <span className="block text-sm font-bold" style={{ color: theme.textPrimary }}>{nameA}</span>
-          <span className="block text-xs mt-1" style={{ color: theme.primary }}>
-            {t("operator.predictReturn", { predict: 10, return: payoutA.toFixed(2) })}
+          <span className="block text-xl font-black mt-1" style={{ color: theme.primary }}>
+            {multiplierA > 0 ? `${multiplierA.toFixed(2)}x` : "—"}
           </span>
-          <span className="block text-[10px] mt-0.5" style={{ color: theme.textMuted }}>({multiplierA}x)</span>
+          {pctReturnA > 0 && (
+            <span className="block text-[10px] font-bold mt-0.5 text-green-500">+{pctReturnA}%</span>
+          )}
         </button>
         {hasDrawOption && (
           <button
             onClick={() => isOpen && onPredict(fight, "draw")}
             disabled={!isOpen}
             className="rounded-xl py-3 px-2 text-center transition-all hover:shadow-md disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{
-              backgroundColor: theme.surfaceBg,
-              border: `1px solid ${theme.cardBorder}`,
-            }}
+            style={{ backgroundColor: theme.surfaceBg, border: `1px solid ${theme.cardBorder}` }}
           >
             <span className="block text-sm font-bold" style={{ color: theme.textPrimary }}>{t("operator.draw")}</span>
             <span className="block text-xs mt-1" style={{ color: theme.textMuted }}>{t("operator.available")}</span>
@@ -377,18 +392,34 @@ export default function SimplePredictionCard({
         <button
           onClick={() => isOpen && onPredict(fight, "fighter_b")}
           disabled={!isOpen}
-          className="rounded-xl py-3 px-2 text-center transition-all hover:shadow-md disabled:opacity-40 disabled:cursor-not-allowed"
+          className="rounded-xl py-3 px-2 text-center transition-all hover:shadow-md hover:scale-[1.02] disabled:opacity-40 disabled:cursor-not-allowed"
           style={{
             backgroundColor: theme.surfaceBg,
             border: `1px solid ${theme.cardBorder}`,
           }}
         >
           <span className="block text-sm font-bold" style={{ color: theme.textPrimary }}>{nameB}</span>
-          <span className="block text-xs mt-1" style={{ color: theme.primary }}>
-            {t("operator.predictReturn", { predict: 10, return: payoutB.toFixed(2) })}
+          <span className="block text-xl font-black mt-1" style={{ color: theme.primary }}>
+            {multiplierB > 0 ? `${multiplierB.toFixed(2)}x` : "—"}
           </span>
-          <span className="block text-[10px] mt-0.5" style={{ color: theme.textMuted }}>({multiplierB}x)</span>
+          {pctReturnB > 0 && (
+            <span className="block text-[10px] font-bold mt-0.5 text-green-500">+{pctReturnB}%</span>
+          )}
         </button>
+      </div>
+
+      {/* Market split bar — social proof */}
+      <div className="space-y-1">
+        <div className="flex justify-between text-[10px] font-medium" style={{ color: theme.textMuted }}>
+          <span>{nameA} {splitA}%</span>
+          <span>{nameB} {100 - splitA}%</span>
+        </div>
+        <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: theme.surfaceBg }}>
+          <div
+            className="h-full rounded-full transition-all duration-500"
+            style={{ width: `${splitA}%`, backgroundColor: theme.primary }}
+          />
+        </div>
       </div>
 
       {/* Total pool */}

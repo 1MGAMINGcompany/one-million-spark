@@ -18,12 +18,6 @@ function json(body: unknown, status = 200) {
   });
 }
 
-/**
- * Fetch market state from Polymarket Gamma API.
- * Accepts both `slugs` (internal shorthand) and `market_ids` (Polymarket numeric IDs).
- * For market_ids, resolves the REAL Polymarket slug + game metadata.
- * Returns a map of internalSlug → { status, live, ended, realSlug, score, period, elapsed }
- */
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -33,7 +27,6 @@ serve(async (req) => {
     const body = await req.json();
     const slugs = Array.isArray(body.slugs) ? body.slugs.slice(0, 30) as string[] : [];
     const marketIds = Array.isArray(body.market_ids) ? body.market_ids.slice(0, 30) as string[] : [];
-    // slug_to_market_id mapping: { internalSlug: marketId }
     const slugToMarketId: Record<string, string> = body.slug_to_market_id || {};
 
     if (slugs.length === 0 && marketIds.length === 0) {
@@ -43,7 +36,6 @@ serve(async (req) => {
     const results: Record<string, unknown> = {};
     const now = Date.now();
 
-    // Process market_ids — these give us real Polymarket data
     const uncachedMarketIds: { internalSlug: string; marketId: string }[] = [];
 
     for (const internalSlug of slugs) {
@@ -58,7 +50,6 @@ serve(async (req) => {
       }
     }
 
-    // Also process standalone market_ids
     for (const mid of marketIds) {
       const cacheKey = `mid_${mid}`;
       const cached = cache.get(cacheKey);
@@ -66,13 +57,11 @@ serve(async (req) => {
         results[cacheKey] = cached.data;
         continue;
       }
-      // Check if already queued via slug mapping
       if (!uncachedMarketIds.find(x => x.marketId === mid)) {
         uncachedMarketIds.push({ internalSlug: cacheKey, marketId: mid });
       }
     }
 
-    // Fetch from Gamma API by market ID
     if (uncachedMarketIds.length > 0) {
       const fetches = uncachedMarketIds.map(async ({ internalSlug, marketId }) => {
         try {
@@ -85,7 +74,6 @@ serve(async (req) => {
           if (!market || (!market.conditionId && !market.condition_id && !market.id)) {
             return { internalSlug, data: null };
           }
-
           const gameState = parseGammaMarket(market, internalSlug);
           return { internalSlug, data: gameState };
         } catch (e) {
@@ -118,10 +106,6 @@ serve(async (req) => {
   }
 });
 
-/**
- * Parse a market object from Polymarket's Gamma API (fetched by ID).
- * Returns the real slug for WS matching + market status.
- */
 function parseGammaMarket(market: any, internalSlug: string) {
   if (!market) return null;
 
@@ -152,13 +136,40 @@ function parseGammaMarket(market: any, internalSlug: string) {
     }
   }
 
+  // Extract score, period, elapsed from events[0] (Gamma nests game data here)
+  let score: string | undefined;
+  let scoreA: number | undefined;
+  let scoreB: number | undefined;
+  let period: string | undefined;
+  let elapsed: string | undefined;
+
+  const event = Array.isArray(market.events) ? market.events[0] : null;
+  if (event) {
+    if (event.score) {
+      score = event.score;
+      const parts = score.split("-").map((s: string) => parseInt(s.trim(), 10));
+      if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+        scoreA = parts[0];
+        scoreB = parts[1];
+      }
+    }
+    if (event.period) period = event.period;
+    if (event.elapsed) elapsed = event.elapsed;
+    if (event.live === true) live = true;
+    if (event.ended === true) { ended = true; status = "Final"; }
+  }
+
   return {
     slug: internalSlug,
-    realSlug,       // The REAL Polymarket slug for WS matching
-    eventSlug,      // Parent event slug (also used in WS)
+    realSlug,
+    eventSlug,
     status,
     live,
     ended,
-    // Gamma doesn't provide scores — WS or Sports API provides those
+    score,
+    scoreA,
+    scoreB,
+    period,
+    elapsed,
   };
 }

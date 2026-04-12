@@ -13,10 +13,11 @@ import PredictionSuccessScreen from "./PredictionSuccessScreen";
 import TradeTicket from "./TradeTicket";
 import type { TradeResult } from "./tradeResultTypes";
 import type { ApprovalStep } from "@/hooks/useAllowanceGate";
+import { useLiveGameState } from "@/hooks/useSportsWebSocket";
 
-const MIN_USD = 1.0;
+const MIN_USD = 5.0;
 
-/** Source-aware fee rate: 2.25% for Polymarket (1.5% platform + 0.75% exchange), 5% for native */
+/** Source-aware fee rate */
 function getFeeRate(fight: Fight): number {
   if (fight.commission_bps != null) return fight.commission_bps / 10_000;
   return fight.source === "polymarket" ? 0.0225 : 0.05;
@@ -83,7 +84,7 @@ export default function PredictionModal({
   const referralCode = useMyReferralCode(wallet ?? null);
   const { usdc_balance, usdc_balance_formatted, is_loading: balanceLoading } = usePolygonUSDC();
   const { fundingState, nativeUsdcBalance, nativeUsdcFormatted } = usePolygonBalances();
-  const [amount, setAmount] = useState("");
+  const [amount, setAmount] = useState("5");
   const amountNum = parseFloat(amount) || 0;
   const feeRate = getFeeRate(fight);
   const fee = amountNum * feeRate;
@@ -93,6 +94,17 @@ export default function PredictionModal({
 
   const { poolA, poolB } = getPoolUsd(fight);
   const estimatedReward = estimateReward(poolA, poolB, pick, netAmount);
+
+  // Odds / multiplier for picked fighter
+  const pickedPrice = pick === "fighter_a" ? (fight.price_a ?? 0) : (fight.price_b ?? 0);
+  const multiplier = pickedPrice > 0 ? (1 / pickedPrice) : 0;
+  const winChance = pickedPrice > 0 ? (pickedPrice * 100) : 0;
+
+  // Payout calculation
+  const potentialPayout = multiplier > 0 ? netAmount * multiplier : estimatedReward;
+
+  // Live game state
+  const liveState = useLiveGameState((fight as any).polymarket_slug);
 
   const [showShare, setShowShare] = useState(false);
 
@@ -124,16 +136,59 @@ export default function PredictionModal({
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-md bg-card border border-border rounded-t-2xl sm:rounded-2xl p-6 animate-in slide-in-from-bottom">
-        <div className="flex items-center justify-between mb-4">
+        {/* Header — game context */}
+        <div className="flex items-center justify-between mb-1">
           <h3 className="text-lg font-bold text-foreground font-['Cinzel']">
-            Predict: {fighterName}
+            {fight.fighter_a_name} vs {fight.fighter_b_name}
           </h3>
           <Button variant="ghost" size="sm" onClick={onClose}>
             ✕
           </Button>
         </div>
 
-        {/* Requote banner — odds changed */}
+        {/* Live badge with score/period */}
+        {liveState && liveState.live && (
+          <div className="flex items-center gap-2 mb-3 text-xs">
+            <span className="flex items-center gap-1 text-red-500 font-bold">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+              LIVE
+            </span>
+            {(liveState.period || liveState.elapsed) && (
+              <span className="text-muted-foreground font-mono">
+                {[liveState.period, liveState.elapsed].filter(Boolean).join(" • ")}
+              </span>
+            )}
+            {liveState.score && (
+              <span className="font-bold font-mono text-foreground">
+                Score: {liveState.score}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* User pick summary */}
+        <div className="rounded-xl p-3 mb-4 bg-secondary/50 border border-border/50">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground">Your Pick</p>
+              <p className="text-base font-bold text-foreground">{fighterName}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-muted-foreground">Odds</p>
+              <p className="text-lg font-black text-primary">
+                {multiplier > 0 ? `${multiplier.toFixed(2)}x` : "—"}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-muted-foreground">Win Chance</p>
+              <p className="text-sm font-bold text-foreground">
+                {winChance > 0 ? `${winChance.toFixed(1)}%` : "—"}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Requote banner */}
         {requoteData && (
           <div className="mb-4 rounded-lg bg-amber-500/10 border border-amber-500/30 p-4 space-y-3">
             <div className="flex items-center gap-2">
@@ -155,6 +210,19 @@ export default function PredictionModal({
             >
               <RefreshCw className="w-4 h-4 mr-2" /> Accept New Odds & Submit
             </Button>
+          </div>
+        )}
+
+        {/* Big payout box — always visible when amount > 0 */}
+        {amountNum >= MIN_USD && potentialPayout > 0 && (
+          <div className="rounded-xl p-4 mb-4 text-center bg-gradient-to-b from-primary/10 to-primary/5 border border-primary/20">
+            <p className="text-xs text-muted-foreground mb-1">💰 You Win</p>
+            <p className="text-3xl font-black text-primary">
+              ${potentialPayout.toFixed(2)}
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              ${netAmount.toFixed(2)} × {multiplier > 0 ? multiplier.toFixed(2) : "odds"}
+            </p>
           </div>
         )}
 

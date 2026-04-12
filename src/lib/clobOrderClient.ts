@@ -158,15 +158,29 @@ export async function submitClobOrder(
 
     const resp = await Promise.race([orderPromise, timeoutPromise]);
 
-    console.log("[clobOrderClient] SDK response:", JSON.stringify(resp).substring(0, 500));
+    console.log("[clobOrderClient] SDK full response:", JSON.stringify(resp).substring(0, 1000));
 
     // Extract order ID from response
     const orderId = resp?.orderID || resp?.orderIds?.[0] || resp?.id || null;
 
+    // If no order ID, capture rejection reason from SDK response
+    if (!orderId) {
+      const reason = resp?.errorMsg || resp?.error || resp?.message || resp?.status || "Unknown rejection";
+      const reasonStr = typeof reason === "string" ? reason : JSON.stringify(reason);
+      console.error("[clobOrderClient] Order rejected by exchange:", reasonStr);
+      return {
+        success: false,
+        error: `Exchange rejected: ${reasonStr.substring(0, 500)}`,
+        errorCode: "clob_rejected",
+        status: "failed",
+        diagnostics: { ...diagnostics, httpStatus: resp?.statusCode || resp?.code },
+      };
+    }
+
     return {
-      success: !!orderId,
-      orderId: orderId || undefined,
-      status: orderId ? "submitted" : "accepted",
+      success: true,
+      orderId: orderId,
+      status: "submitted",
       diagnostics,
     };
   } catch (err: any) {
