@@ -15,7 +15,160 @@ import { polygon } from "npm:viem@2/chains";
  * - Insert prediction_entries
  * - Update fight pool totals
  * - Log operator revenue
+ * - Sweep operator fee share from treasury to operator wallet (if payout_wallet set)
  */
+
+// ── Polygon constants ──
+const USDC_CONTRACT = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
+const USDC_DECIMALS = 6;
+const POLYGON_RPCS = [
+  "https://polygon-bor-rpc.publicnode.com",
+  "https://polygon.drpc.org",
+  "https://rpc.ankr.com/polygon",
+  "https://polygon.llamarpc.com",
+];
+
+const erc20TransferAbi = parseAbi([
+  "function transfer(address to, uint256 amount) returns (bool)",
+]);
+
+/** Try a JSON-RPC call across multiple endpoints */
+async function polygonRpcCall(
+  body: Record<string, unknown>,
+): Promise<{ result?: string; error?: string; rpc?: string }> {
+  for (const rpc of POLYGON_RPCS) {
+    try {
+      const res = await fetch(rpc, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) { await res.text().catch(() => {}); continue; }
+      const json = await res.json();
+      if (json.error) continue;
+      if (json.result != null) return { result: json.result, rpc };
+    } catch { continue; }
+  }
+  return { error: "all_rpcs_failed" };
+}
+
+/**
+ * Sweep operator fee from treasury to operator's payout wallet.
+ * Idempotent: only processes revenue rows with sweep_status = 'accrued'.
+ * On failure, marks as 'failed' with error — funds remain in treasury.
+ */
+async function sweepOperatorFee(
+  supabase: ReturnType<typeof createClient>,
+  revenueId: string,
+  operatorFeeUsdc: number,
+  payoutWallet: string,
+): Promise<{ success: boolean; txHash?: string; error?: string }> {
+  const MIN_SWEEP_USD = 0.01;
+  if (operatorFeeUsdc < MIN_SWEEP_USD) {
+    console.log(`[prediction-confirm] Sweep skipped: fee $${operatorFeeUsdc} below minimum`);
+    return { success: false, error: "below_minimum" };
+  }
+
+  // CAS: only sweep if still 'accrued' (prevents double-send)
+  const { data: claimed, error: casErr } = await supabase
+    .from("operator_revenue")
+    .update({
+      sweep_status: "sending",
+      sweep_attempted_at: new Date().toISOString(),
+      sweep_destination_wallet: payoutWallet,
+    })
+    .eq("id", revenueId)
+    .eq("sweep_status", "accrued")
+    .select("id")
+    .single();
+
+  if (casErr || !claimed) {
+    console.log(`[prediction-confirm] Sweep CAS failed for revenue ${revenueId} — already processing`);
+    return { success: false, error: "cas_failed_already_processing" };
+  }
+
+  const relayerKey = Deno.env.get("FEE_RELAYER_PRIVATE_KEY");
+  if (!relayerKey) {
+    await supabase.from("operator_revenue").update({
+      sweep_status: "failed",
+      sweep_error: "relayer_not_configured",
+    }).eq("id", revenueId);
+    return { success: false, error: "relayer_not_configured" };
+  }
+
+  try {
+    const account = privateKeyToAccount(
+      (relayerKey.startsWith("0x") ? relayerKey : `0x${relayerKey}`) as `0x${string}`,
+    );
+    const amountRaw = BigInt(Math.floor(operatorFeeUsdc * 10 ** USDC_DECIMALS));
+
+    const txData = encodeFunctionData({
+      abi: erc20TransferAbi,
+      functionName: "transfer",
+      args: [payoutWallet as `0x${string}`, amountRaw],
+    });
+
+    // Get nonce and gas price
+    const [nonceRpc, gasPriceRpc] = await Promise.all([
+      polygonRpcCall({
+        jsonrpc: "2.0", id: 1,
+        method: "eth_getTransactionCount",
+        params: [account.address, "pending"],
+      }),
+      polygonRpcCall({
+        jsonrpc: "2.0", id: 2,
+        method: "eth_gasPrice",
+        params: [],
+      }),
+    ]);
+
+    if (nonceRpc.error || !nonceRpc.result || gasPriceRpc.error || !gasPriceRpc.result) {
+      const err = "rpc_unavailable";
+      await supabase.from("operator_revenue").update({
+        sweep_status: "failed",
+        sweep_error: err,
+      }).eq("id", revenueId);
+      return { success: false, error: err };
+    }
+
+    const workingRpc = gasPriceRpc.rpc || POLYGON_RPCS[0];
+    const walletClient = createWalletClient({
+      account,
+      chain: polygon,
+      transport: http(workingRpc),
+    });
+
+    const txHash = await walletClient.sendTransaction({
+      to: USDC_CONTRACT as `0x${string}`,
+      data: txData as `0x${string}`,
+      gas: 100_000n,
+      gasPrice: BigInt(gasPriceRpc.result) * 12n / 10n,
+      nonce: Number(BigInt(nonceRpc.result)),
+      value: 0n,
+    });
+
+    // Success: mark as sent
+    await supabase.from("operator_revenue").update({
+      sweep_status: "sent",
+      sweep_tx_hash: txHash,
+      sweep_completed_at: new Date().toISOString(),
+      sweep_error: null,
+    }).eq("id", revenueId);
+
+    console.log(`[prediction-confirm] Operator sweep SUCCESS: $${operatorFeeUsdc} → ${payoutWallet}, tx=${txHash}`);
+    return { success: true, txHash };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.error(`[prediction-confirm] Operator sweep FAILED: $${operatorFeeUsdc} → ${payoutWallet}:`, errorMsg);
+
+    await supabase.from("operator_revenue").update({
+      sweep_status: "failed",
+      sweep_error: errorMsg.substring(0, 500),
+    }).eq("id", revenueId);
+
+    return { success: false, error: errorMsg };
+  }
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
