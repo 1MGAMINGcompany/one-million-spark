@@ -26,6 +26,10 @@ interface OperatorData {
   theme: string;
   fee_percent: number;
   status: string;
+  brand_color: string | null;
+  welcome_message: string | null;
+  support_email: string | null;
+  disabled_sports: string[];
 }
 
 const SPORT_OPTIONS = ["Soccer", "MMA", "Boxing", "NFL", "NBA", "NHL", "MLB", "NCAA", "Tennis"];
