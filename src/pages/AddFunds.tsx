@@ -26,7 +26,7 @@ import { usePolygonBalances } from "@/hooks/usePolygonBalances";
 import { useSwapToUsdce } from "@/hooks/useSwapToUsdce";
 import { toast } from "sonner";
 import { CashOutModal } from "@/components/CashOutModal";
-import { USDC_NATIVE_CONTRACT } from "@/lib/polygon-tokens";
+
 
 /* ── Sub-components ── */
 
