@@ -3,6 +3,7 @@ import { useSendTransaction } from "@privy-io/react-auth";
 import { encodeFunctionData, parseAbi } from "viem";
 import { USDC_DECIMALS } from "@/lib/polygon-tokens";
 import { useSwapUsdceToNative } from "@/hooks/useSwapUsdceToNative";
+import { useRampOfframp } from "@/hooks/useRampOfframp";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -14,6 +15,8 @@ import {
   RefreshCw,
   CheckCircle2,
   ExternalLink,
+  Banknote,
+  Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +38,8 @@ interface TxResult {
   txHash: string;
 }
 
+type Step = "pick" | "form" | "confirm" | "success" | "ramp-amount";
+
 export function CashOutModal({
   open,
   onClose,
@@ -43,23 +48,29 @@ export function CashOutModal({
 }: CashOutModalProps) {
   const { sendTransaction } = useSendTransaction();
   const { executeSwap, swapping } = useSwapUsdceToNative();
+  const { startOfframp, launching: rampLaunching, isAvailable: rampAvailable } = useRampOfframp();
   const [dest, setDest] = useState("");
   const [amount, setAmount] = useState("");
   const [sending, setSending] = useState(false);
-  const [step, setStep] = useState<"form" | "confirm" | "success">("form");
+  const [step, setStep] = useState<Step>("pick");
   const [copied, setCopied] = useState(false);
   const [copiedTx, setCopiedTx] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [txResult, setTxResult] = useState<TxResult | null>(null);
+  const [rampAmount, setRampAmount] = useState("");
 
   if (!open) return null;
 
-  const isBusy = sending || swapping;
+  const isBusy = sending || swapping || rampLaunching;
   const parsedAmount = parseFloat(amount);
   const isValidAddress = /^0x[a-fA-F0-9]{40}$/.test(dest);
   const isValidAmount =
     !isNaN(parsedAmount) && parsedAmount >= 1 && (balance == null || parsedAmount <= balance);
+
+  const parsedRampAmount = parseFloat(rampAmount);
+  const isValidRampAmount =
+    !isNaN(parsedRampAmount) && parsedRampAmount >= 5 && (balance == null || parsedRampAmount <= balance);
 
   const handleCopyAddress = async () => {
     if (!dest) return;
@@ -77,9 +88,19 @@ export function CashOutModal({
   const handleClose = () => {
     if (isBusy) return;
     onClose();
-    setStep("form");
+    setStep("pick");
     setConfirmed(false);
     setTxResult(null);
+    setRampAmount("");
+  };
+
+  const handleStartRamp = async () => {
+    if (!isValidRampAmount) return;
+    const ok = await startOfframp(parsedRampAmount);
+    if (ok) {
+      onSuccess();
+      handleClose();
+    }
   };
 
   const handleSend = async () => {
@@ -172,6 +193,13 @@ export function CashOutModal({
     }
   };
 
+  const title = (() => {
+    if (step === "success") return "Transfer Complete";
+    if (step === "ramp-amount") return "Cash Out";
+    if (step === "form" || step === "confirm") return "Cash Out to Exchange";
+    return "Cash Out";
+  })();
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       {/* Backdrop */}
@@ -184,9 +212,7 @@ export function CashOutModal({
       <div className="relative w-full max-w-md bg-card border border-border rounded-t-2xl sm:rounded-2xl p-5 space-y-4 animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:fade-in duration-200">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-foreground">
-            {step === "success" ? "Transfer Complete" : "Cash Out to Exchange"}
-          </h2>
+          <h2 className="text-lg font-bold text-foreground">{title}</h2>
           <button
             onClick={handleClose}
             className="p-1.5 rounded-lg hover:bg-muted/50 transition-colors"
@@ -195,7 +221,160 @@ export function CashOutModal({
           </button>
         </div>
 
-        {/* ───── FORM STEP ───── */}
+        {/* ───── PICK METHOD ───── */}
+        {step === "pick" && (
+          <>
+            {balance != null && (
+              <div className="flex items-center justify-between bg-secondary/50 rounded-lg px-3 py-2">
+                <span className="text-xs text-muted-foreground">Available balance</span>
+                <span className="text-sm font-semibold text-foreground">${balance.toFixed(2)}</span>
+              </div>
+            )}
+
+            <p className="text-sm text-muted-foreground">
+              Choose how you'd like to cash out your balance.
+            </p>
+
+            <div className="space-y-3">
+              {/* Fiat cash-out option */}
+              <button
+                onClick={() => {
+                  if (rampAvailable) {
+                    setRampAmount("");
+                    setStep("ramp-amount");
+                  }
+                }}
+                disabled={!rampAvailable}
+                className={`w-full text-left border rounded-xl p-4 transition-colors ${
+                  rampAvailable
+                    ? "border-primary/40 bg-primary/5 hover:bg-primary/10 cursor-pointer"
+                    : "border-border/50 bg-muted/20 opacity-60 cursor-not-allowed"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <Banknote className="w-5 h-5 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-foreground">Cash Out</p>
+                      {!rampAvailable && (
+                        <span className="text-[10px] font-medium bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
+                          Coming Soon
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {rampAvailable
+                        ? "Sell USDC and receive cash to your bank account or card"
+                        : "Direct-to-bank payouts — available soon"}
+                    </p>
+                  </div>
+                </div>
+              </button>
+
+              {/* Exchange cash-out option */}
+              <button
+                onClick={() => {
+                  setDest("");
+                  setAmount("");
+                  setConfirmed(false);
+                  setStep("form");
+                }}
+                className="w-full text-left border border-border/50 rounded-xl p-4 hover:bg-muted/30 transition-colors cursor-pointer"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-secondary/50 flex items-center justify-center shrink-0">
+                    <Building2 className="w-5 h-5 text-muted-foreground" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-foreground">Send to Exchange</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Send USDC to Coinbase, Binance, or any exchange wallet on Polygon
+                    </p>
+                  </div>
+                </div>
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ───── RAMP AMOUNT ───── */}
+        {step === "ramp-amount" && (
+          <>
+            <p className="text-sm text-muted-foreground">
+              Enter the amount you'd like to cash out. We'll convert your balance and open the payout flow.
+            </p>
+
+            {balance != null && (
+              <div className="flex items-center justify-between bg-secondary/50 rounded-lg px-3 py-2">
+                <span className="text-xs text-muted-foreground">Available balance</span>
+                <span className="text-sm font-semibold text-foreground">${balance.toFixed(2)}</span>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Amount (USD)
+              </label>
+              <Input
+                type="number"
+                value={rampAmount}
+                onChange={(e) => setRampAmount(e.target.value)}
+                placeholder="25.00"
+                min="5"
+                step="0.01"
+                className="text-sm"
+              />
+              {rampAmount && parsedRampAmount < 5 && (
+                <p className="text-xs text-destructive">Minimum $5.00</p>
+              )}
+              {rampAmount && balance != null && parsedRampAmount > balance && (
+                <p className="text-xs text-destructive">Exceeds available balance</p>
+              )}
+              {balance != null && (
+                <button
+                  onClick={() => setRampAmount(balance.toFixed(2))}
+                  className="text-xs text-primary hover:underline"
+                >
+                  Cash out max (${balance.toFixed(2)})
+                </button>
+              )}
+            </div>
+
+            <div className="bg-muted/30 border border-border/50 rounded-lg p-3 flex items-start gap-2">
+              <RefreshCw className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+              <p className="text-xs text-muted-foreground">
+                We'll automatically convert your balance before opening the payout provider. You'll choose your bank or card there.
+              </p>
+            </div>
+
+            <div className="flex gap-3 pt-1">
+              <Button variant="outline" onClick={() => setStep("pick")} className="flex-1">
+                Back
+              </Button>
+              <Button
+                onClick={handleStartRamp}
+                disabled={!isValidRampAmount || isBusy}
+                className="flex-1"
+              >
+                {isBusy ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                    {swapping ? "Converting…" : "Opening…"}
+                  </>
+                ) : (
+                  <>
+                    <Banknote className="w-4 h-4 mr-1" />
+                    Continue
+                  </>
+                )}
+              </Button>
+            </div>
+          </>
+        )}
+
+        {/* ───── EXCHANGE FORM STEP ───── */}
         {step === "form" && (
           <>
             <p className="text-sm text-muted-foreground">
@@ -300,10 +479,10 @@ export function CashOutModal({
             <div className="flex gap-3 pt-1">
               <Button
                 variant="outline"
-                onClick={handleClose}
+                onClick={() => setStep("pick")}
                 className="flex-1"
               >
-                Cancel
+                Back
               </Button>
               <Button
                 onClick={() => {
