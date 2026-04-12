@@ -226,6 +226,11 @@ Deno.serve(async (req) => {
       const { data: existing } = await sb.from("operators").select("id, status").eq("user_id", privyDid).maybeSingle();
       if (existing && existing.status !== "active") return jsonResp({ error: "payment_required", operator_id: existing.id }, 402);
       if (existing) {
+        // Subdomain collision check on update path
+        if (body.subdomain) {
+          const { data: subCollision } = await sb.from("operators").select("id").eq("subdomain", body.subdomain).neq("id", existing.id).maybeSingle();
+          if (subCollision) return jsonResp({ error: "subdomain_taken" }, 409);
+        }
         await sb.from("operators").update({
           brand_name: body.brand_name, subdomain: body.subdomain, logo_url: body.logo_url || null,
           theme: body.theme || "blue", fee_percent: body.fee_percent ?? 5, updated_at: new Date().toISOString(),
