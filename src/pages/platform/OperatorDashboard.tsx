@@ -375,19 +375,16 @@ export default function OperatorDashboard() {
           </div>
         </div>
 
-        {/* Withdraw */}
-        {availableBalance > 0.01 && (
+        {/* Earnings CTA — directs to Earnings tab */}
+        {revenue.total > 0 && (
           <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4 mb-8 flex items-center justify-between">
             <div>
-              <div className="text-sm font-medium text-emerald-400">{t("operator.dashboard.availableForWithdrawal")}</div>
-              <div className="text-2xl font-bold text-emerald-300">${availableBalance.toFixed(2)}</div>
+              <div className="text-sm font-medium text-emerald-400">Total Earnings</div>
+              <div className="text-2xl font-bold text-emerald-300">${revenue.total.toFixed(2)}</div>
+              <div className="text-xs text-white/30 mt-0.5">Earnings are sent directly to your payout wallet</div>
             </div>
-            <Button
-              onClick={handleWithdraw}
-              disabled={withdrawing}
-              className="bg-emerald-600 hover:bg-emerald-500 border-0"
-            >
-              {withdrawing ? t("operator.dashboard.processing") : t("operator.dashboard.requestWithdrawal")}
+            <Button onClick={() => setDashTab("earnings")} className="bg-emerald-600 hover:bg-emerald-500 border-0">
+              View Earnings
             </Button>
           </div>
         )}
