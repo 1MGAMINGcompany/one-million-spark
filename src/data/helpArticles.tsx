@@ -536,7 +536,7 @@ export const helpArticles: HelpArticleData[] = [
         </p>
         <ul className="list-disc list-inside space-y-3 text-white/60">
           <li><strong>Exchanges:</strong> Send your funds to any major exchange. Sell for USD, EUR, or your local currency and withdraw to your bank.</li>
-          <li><strong>On-ramp/off-ramp services:</strong> Services like MoonPay, Ramp, or Transak let you convert directly to your bank account or card.</li>
+          <li><strong>On-ramp/off-ramp services:</strong> Services like MoonPay or Ramp let you convert directly to your bank account or card.</li>
           <li><strong>Keep it:</strong> Many users prefer to keep winnings for future trades and predictions.</li>
         </ul>
 
