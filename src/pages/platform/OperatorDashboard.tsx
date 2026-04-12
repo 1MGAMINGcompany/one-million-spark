@@ -26,6 +26,10 @@ interface OperatorData {
   theme: string;
   fee_percent: number;
   status: string;
+  brand_color: string | null;
+  welcome_message: string | null;
+  support_email: string | null;
+  disabled_sports: string[];
 }
 
 const SPORT_OPTIONS = ["Soccer", "MMA", "Boxing", "NFL", "NBA", "NHL", "MLB", "NCAA", "Tennis"];
@@ -52,7 +56,24 @@ export default function OperatorDashboard() {
   const [newFeatured, setNewFeatured] = useState(false);
   const [creating, setCreating] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
-  const [dashTab, setDashTab] = useState<"overview" | "analytics" | "earnings" | "events">("overview");
+  const [dashTab, setDashTab] = useState<"overview" | "analytics" | "earnings" | "events" | "settings">("overview");
+
+  // Settings state
+  const [brandColor, setBrandColor] = useState("");
+  const [welcomeMsg, setWelcomeMsg] = useState("");
+  const [supportEmail, setSupportEmail] = useState("");
+  const [logoUrl, setLogoUrl] = useState("");
+  const [disabledSports, setDisabledSports] = useState<string[]>([]);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [appPaused, setAppPaused] = useState(false);
+  const [togglingPause, setTogglingPause] = useState(false);
+
+  // Event editing state
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [editSport, setEditSport] = useState("");
+  const [editDate, setEditDate] = useState("");
+  const [editFeatured, setEditFeatured] = useState(false);
+  const [savingEvent, setSavingEvent] = useState(false);
 
   const contactEmail = user?.email?.address || user?.google?.email || null;
 
@@ -74,10 +95,17 @@ export default function OperatorDashboard() {
       );
       const data = await res.json();
       if (data.operator) {
-        setOperator(data.operator);
-        fetchEvents(data.operator.id);
-        fetchFights(data.operator.id);
-        fetchRevenue(data.operator.id);
+        const op = data.operator;
+        setOperator(op);
+        setBrandColor(op.brand_color || "#4F46E5");
+        setWelcomeMsg(op.welcome_message || "");
+        setSupportEmail(op.support_email || "");
+        setLogoUrl(op.logo_url || "");
+        setDisabledSports(op.disabled_sports || []);
+        setAppPaused(op.status === "paused");
+        fetchEvents(op.id);
+        fetchFights(op.id);
+        fetchRevenue(op.id);
         // payouts fetch removed — real wallet balance used instead
       } else {
         navigate("/onboarding");
@@ -224,6 +252,100 @@ export default function OperatorDashboard() {
 
   /* Legacy handleWithdraw removed — operators now use Earnings tab with real wallet cash-out */
 
+  const saveSettings = async () => {
+    setSavingSettings(true);
+    try {
+      const token = await getAccessToken();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/operator-manage`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-privy-token": token || "" },
+          body: JSON.stringify({
+            action: "update_operator",
+            brand_color: brandColor,
+            welcome_message: welcomeMsg,
+            support_email: supportEmail,
+            logo_url: logoUrl || null,
+            disabled_sports: disabledSports,
+          }),
+        }
+      );
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Settings saved");
+        setOperator(prev => prev ? { ...prev, brand_color: brandColor, welcome_message: welcomeMsg, support_email: supportEmail, logo_url: logoUrl || null, disabled_sports: disabledSports } : prev);
+      } else {
+        toast.error(json.error || "Failed to save");
+      }
+    } catch {
+      toast.error("Failed to save settings");
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  const togglePause = async () => {
+    setTogglingPause(true);
+    const newStatus = appPaused ? "active" : "paused";
+    try {
+      const token = await getAccessToken();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/operator-manage`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-privy-token": token || "" },
+          body: JSON.stringify({ action: "update_operator", status: newStatus }),
+        }
+      );
+      const json = await res.json();
+      if (json.success) {
+        setAppPaused(!appPaused);
+        setOperator(prev => prev ? { ...prev, status: newStatus } : prev);
+        toast.success(newStatus === "paused" ? "App paused — predictions blocked" : "App resumed");
+      } else {
+        toast.error(json.error || "Failed to toggle pause");
+      }
+    } catch {
+      toast.error("Failed to toggle pause");
+    } finally {
+      setTogglingPause(false);
+    }
+  };
+
+  const saveEventEdit = async (eventId: string) => {
+    setSavingEvent(true);
+    try {
+      const token = await getAccessToken();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/operator-manage`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-privy-token": token || "" },
+          body: JSON.stringify({
+            action: "update_event",
+            event_id: eventId,
+            sport: editSport,
+            event_date: editDate || undefined,
+            is_featured: editFeatured,
+          }),
+        }
+      );
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Event updated");
+        setEditingEventId(null);
+        if (operator) { fetchEvents(operator.id); fetchFights(operator.id); }
+      } else {
+        toast.error(json.error || "Failed to update event");
+      }
+    } catch {
+      toast.error("Failed to update event");
+    } finally {
+      setSavingEvent(false);
+    }
+  };
+
   const copyAppLink = () => {
     if (!operator) return;
     navigator.clipboard.writeText(`https://1mg.live/${operator.subdomain}`);
@@ -271,10 +393,10 @@ export default function OperatorDashboard() {
       </nav>
 
       <div className="max-w-6xl mx-auto px-4 py-8">
-        <div className="flex gap-1 mb-6 bg-white/[0.03] p-1 rounded-lg w-fit">
-          {(["overview", "earnings", "analytics", "events"] as const).map(tab => (
-            <button key={tab} onClick={() => setDashTab(tab)} className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${dashTab === tab ? "bg-white/10 text-white" : "text-white/40 hover:text-white/60"}`}>
-              {tab === "overview" ? "Overview" : tab === "earnings" ? "💰 Earnings" : tab === "analytics" ? "📊 Analytics" : "Events"}
+        <div className="flex gap-1 mb-6 bg-white/[0.03] p-1 rounded-lg w-fit overflow-x-auto">
+          {(["overview", "earnings", "analytics", "events", "settings"] as const).map(tab => (
+            <button key={tab} onClick={() => setDashTab(tab)} className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${dashTab === tab ? "bg-white/10 text-white" : "text-white/40 hover:text-white/60"}`}>
+              {tab === "overview" ? "Overview" : tab === "earnings" ? "💰 Earnings" : tab === "analytics" ? "📊 Analytics" : tab === "settings" ? "⚙️ Settings" : "Events"}
             </button>
           ))}
         </div>
@@ -282,8 +404,108 @@ export default function OperatorDashboard() {
           <OperatorAnalyticsTab operatorId={operator.id} feePercent={operator.fee_percent} />
         ) : dashTab === "earnings" && operator ? (
           <OperatorEarningsTab operatorId={operator.id} getAccessToken={getAccessToken} />
+        ) : dashTab === "settings" && operator ? (
+          <div className="space-y-6">
+            {/* App Pause Toggle */}
+            <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-sm">App Status</h3>
+                  <p className="text-xs text-white/40 mt-1">
+                    {appPaused ? "Your app is paused. No new predictions can be placed." : "Your app is live and accepting predictions."}
+                  </p>
+                </div>
+                <button
+                  onClick={togglePause}
+                  disabled={togglingPause}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    appPaused
+                      ? "bg-green-600 hover:bg-green-500 text-white"
+                      : "bg-red-600/80 hover:bg-red-500 text-white"
+                  }`}
+                >
+                  {togglingPause ? "..." : appPaused ? "Resume App" : "Pause App"}
+                </button>
+              </div>
+            </div>
+
+            {/* Branding */}
+            <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5 space-y-4">
+              <h3 className="font-semibold text-sm">Branding</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-white/40 block mb-1">Logo URL</label>
+                  <Input value={logoUrl} onChange={e => setLogoUrl(e.target.value)} placeholder="https://..." className="bg-white/5 border-white/10 text-white text-sm" />
+                  <p className="text-[10px] text-white/20 mt-1">PNG or SVG recommended, square aspect ratio</p>
+                </div>
+                <div>
+                  <label className="text-xs text-white/40 block mb-1">Brand Color</label>
+                  <div className="flex items-center gap-2">
+                    <input type="color" value={brandColor} onChange={e => setBrandColor(e.target.value)} className="w-10 h-10 rounded border border-white/10 bg-transparent cursor-pointer" />
+                    <Input value={brandColor} onChange={e => setBrandColor(e.target.value)} placeholder="#4F46E5" className="bg-white/5 border-white/10 text-white text-sm w-28" />
+                  </div>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-xs text-white/40 block mb-1">Welcome Message</label>
+                  <Input value={welcomeMsg} onChange={e => setWelcomeMsg(e.target.value.slice(0, 500))} placeholder="Welcome to our predictions platform!" className="bg-white/5 border-white/10 text-white text-sm" />
+                  <p className="text-[10px] text-white/20 mt-1">{welcomeMsg.length}/500 characters</p>
+                </div>
+                <div>
+                  <label className="text-xs text-white/40 block mb-1">Support Email</label>
+                  <Input value={supportEmail} onChange={e => setSupportEmail(e.target.value)} placeholder="support@yourbrand.com" className="bg-white/5 border-white/10 text-white text-sm" />
+                </div>
+              </div>
+            </div>
+
+            {/* Sports Toggle */}
+            <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5 space-y-3">
+              <h3 className="font-semibold text-sm">Sports Visibility</h3>
+              <p className="text-xs text-white/40">Toggle sports off to hide them from your app. All sports are enabled by default.</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {SPORT_OPTIONS.map(sport => {
+                  const isDisabled = disabledSports.includes(sport);
+                  return (
+                    <button
+                      key={sport}
+                      onClick={() => {
+                        setDisabledSports(prev =>
+                          prev.includes(sport) ? prev.filter(s => s !== sport) : [...prev, sport]
+                        );
+                      }}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        isDisabled
+                          ? "bg-white/[0.02] text-white/20 border border-white/5"
+                          : "bg-emerald-600/20 text-emerald-400 border border-emerald-500/20"
+                      }`}
+                    >
+                      {isDisabled ? "❌" : "✅"} {sport}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Save */}
+            <Button
+              onClick={saveSettings}
+              disabled={savingSettings}
+              className="bg-blue-600 hover:bg-blue-500 border-0"
+            >
+              <Save size={16} /> {savingSettings ? "Saving..." : "Save Settings"}
+            </Button>
+          </div>
         ) : (
         <>
+        {/* Paused banner */}
+        {appPaused && (
+          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-4 flex items-center gap-3">
+            <Lock size={16} className="text-red-400 shrink-0" />
+            <div>
+              <div className="text-sm font-medium text-red-400">App Paused</div>
+              <div className="text-xs text-white/40">Your app is not accepting new predictions. Go to Settings to resume.</div>
+            </div>
+          </div>
+        )}
         {/* Your App Details card */}
         <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5 mb-8">
           <h3 className="text-sm font-semibold text-white/60 mb-3">{t("operator.dashboard.appDetails")}</h3>
@@ -447,13 +669,58 @@ export default function OperatorDashboard() {
             <div className="space-y-3">
               {events.map((ev: any) => {
                 const fight = fights.find((f: any) => f.operator_event_id === ev.id);
+                const isEditing = editingEventId === ev.id;
                 return (
-                  <OperatorEventActions
-                    key={ev.id}
-                    event={ev}
-                    fight={fight}
-                    onAction={handleEventAction}
-                  />
+                  <div key={ev.id}>
+                    <OperatorEventActions
+                      event={ev}
+                      fight={fight}
+                      onAction={handleEventAction}
+                    />
+                    {/* Edit button */}
+                    {ev.status !== "settled" && (
+                      <div className="mt-1">
+                        {isEditing ? (
+                          <div className="bg-white/[0.02] border border-white/5 rounded-lg p-3 space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="text-[10px] text-white/40">Sport</label>
+                                <select value={editSport} onChange={e => setEditSport(e.target.value)} className="w-full bg-white/5 border border-white/10 text-white rounded-md h-8 px-2 text-xs">
+                                  {SPORT_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-white/40">Date/Time</label>
+                                <Input type="datetime-local" value={editDate} onChange={e => setEditDate(e.target.value)} className="bg-white/5 border-white/10 text-white h-8 text-xs" />
+                              </div>
+                            </div>
+                            <label className="flex items-center gap-2 text-xs text-white/40 cursor-pointer">
+                              <input type="checkbox" checked={editFeatured} onChange={e => setEditFeatured(e.target.checked)} className="rounded" />
+                              Featured
+                            </label>
+                            <div className="flex gap-2">
+                              <Button size="sm" onClick={() => saveEventEdit(ev.id)} disabled={savingEvent} className="bg-blue-600 hover:bg-blue-500 border-0 text-xs h-7">
+                                {savingEvent ? "Saving..." : "Save"}
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => setEditingEventId(null)} className="border-white/10 text-white hover:bg-white/5 text-xs h-7">Cancel</Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setEditingEventId(ev.id);
+                              setEditSport(ev.sport || "Soccer");
+                              setEditDate(ev.event_date ? new Date(ev.event_date).toISOString().slice(0, 16) : "");
+                              setEditFeatured(ev.is_featured || false);
+                            }}
+                            className="text-[10px] text-white/20 hover:text-white/50 mt-1 flex items-center gap-1"
+                          >
+                            <Edit3 size={10} /> Edit event
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
