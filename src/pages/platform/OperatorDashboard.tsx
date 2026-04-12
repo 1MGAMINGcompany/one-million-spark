@@ -724,8 +724,8 @@ export default function OperatorDashboard() {
               <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-4 flex items-center gap-3">
                 <Lock size={16} className="text-red-400 shrink-0" />
                 <div>
-                  <div className="text-sm font-medium text-red-400">App Paused</div>
-                  <div className="text-xs text-white/40">Your app is not accepting new predictions. Go to Settings to resume.</div>
+                  <div className="text-sm font-medium text-red-400">{t("operator.dashboard.appPausedBanner")}</div>
+                  <div className="text-xs text-white/40">{t("operator.dashboard.appPausedBannerDesc")}</div>
                 </div>
               </div>
             )}
@@ -734,11 +734,11 @@ export default function OperatorDashboard() {
               <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 mb-4 flex items-center gap-3">
                 <Wallet size={16} className="text-yellow-400 shrink-0" />
                 <div className="flex-1">
-                  <div className="text-sm font-medium text-yellow-300">Payout Wallet Not Set</div>
-                  <div className="text-xs text-white/40">Your operator earnings cannot be swept until you set a payout wallet. Go to Earnings to configure it.</div>
+                  <div className="text-sm font-medium text-yellow-300">{t("operator.dashboard.payoutNotSet")}</div>
+                  <div className="text-xs text-white/40">{t("operator.dashboard.payoutNotSetDesc")}</div>
                 </div>
                 <Button size="sm" onClick={() => setDashTab("earnings")} className="bg-yellow-600 hover:bg-yellow-500 border-0 text-xs whitespace-nowrap">
-                  Set Wallet
+                  {t("operator.dashboard.setWallet")}
                 </Button>
               </div>
             )}
@@ -780,19 +780,19 @@ export default function OperatorDashboard() {
             {/* Key Stats */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
               <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
-                <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><TrendingUp size={14} /> Predictions</div>
+                <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><TrendingUp size={14} /> {t("operator.dashboard.predictions")}</div>
                 <div className="text-xl font-bold">{revenue.count}</div>
               </div>
               <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
-                <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><DollarSign size={14} /> Volume</div>
+                <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><DollarSign size={14} /> {t("operator.dashboard.volume")}</div>
                 <div className="text-xl font-bold">${fights.reduce((s: number, f: any) => s + (f.pool_a_usd || 0) + (f.pool_b_usd || 0), 0).toFixed(0)}</div>
               </div>
               <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
-                <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><DollarSign size={14} /> Earned</div>
+                <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><DollarSign size={14} /> {t("operator.dashboard.earned")}</div>
                 <div className="text-xl font-bold text-green-400">${revenue.total.toFixed(2)}</div>
               </div>
               <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
-                <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><Wallet size={14} /> Wallet</div>
+                <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><Wallet size={14} /> {t("operator.dashboard.wallet")}</div>
                 <div className="text-xl font-bold text-emerald-400">${walletBalance != null ? walletBalance.toFixed(2) : "—"}</div>
               </div>
             </div>
