@@ -477,6 +477,11 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
   const handleSubmit = async (amountUsd: number) => {
     if (!selectedFight || !selectedPick || !isConnected || !address) return;
+    // Enforce operator app pause
+    if (operator?.status === "paused") {
+      toast.error("This platform is currently paused", { description: "The operator has temporarily disabled new predictions." });
+      return;
+    }
     const acceptedRequote = acceptedRequoteRef.current;
     setSubmitting(true);
     resetAllowance();
