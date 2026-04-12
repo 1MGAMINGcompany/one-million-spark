@@ -12,9 +12,12 @@ import {
   Copy,
   Check,
   RefreshCw,
+  CheckCircle2,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 
 /** Native USDC on Polygon — what exchanges expect */
 const USDC_NATIVE = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359" as const;
@@ -24,6 +27,12 @@ interface CashOutModalProps {
   onClose: () => void;
   balance: number | null;
   onSuccess: () => void;
+}
+
+interface TxResult {
+  amount: number;
+  dest: string;
+  txHash: string;
 }
 
 export function CashOutModal({
@@ -37,9 +46,12 @@ export function CashOutModal({
   const [dest, setDest] = useState("");
   const [amount, setAmount] = useState("");
   const [sending, setSending] = useState(false);
-  const [step, setStep] = useState<"form" | "confirm">("form");
+  const [step, setStep] = useState<"form" | "confirm" | "success">("form");
   const [copied, setCopied] = useState(false);
+  const [copiedTx, setCopiedTx] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
+  const [txResult, setTxResult] = useState<TxResult | null>(null);
 
   if (!open) return null;
 
@@ -56,15 +68,28 @@ export function CashOutModal({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleCopyTxHash = async (hash: string) => {
+    await navigator.clipboard.writeText(hash);
+    setCopiedTx(true);
+    setTimeout(() => setCopiedTx(false), 2000);
+  };
+
+  const handleClose = () => {
+    if (isBusy) return;
+    onClose();
+    setStep("form");
+    setConfirmed(false);
+    setTxResult(null);
+  };
+
   const handleSend = async () => {
-    if (!isValidAddress || !isValidAmount) return;
+    if (!isValidAddress || !isValidAmount || !confirmed) return;
     setSending(true);
     try {
       // Step 1: Swap USDC.e → Native USDC
       setStatusMessage("Converting to native USDC…");
       const swapOk = await executeSwap(parsedAmount);
       if (!swapOk) {
-        // Swap failed or user rejected — stop here
         setSending(false);
         setStatusMessage("");
         return;
@@ -83,37 +108,54 @@ export function CashOutModal({
         functionName: "transfer",
         args: [dest as `0x${string}`, rawAmount],
       });
-      const txReceipt = await sendTransaction(
-        {
-          to: USDC_NATIVE,
-          chainId: 137,
-          data,
-        },
-        {
-          sponsor: true,
-          uiOptions: {
-            description: `Send $${parsedAmount.toFixed(2)} USDC to exchange`,
-            buttonText: "Send",
+
+      let txReceipt: any;
+      try {
+        txReceipt = await sendTransaction(
+          {
+            to: USDC_NATIVE,
+            chainId: 137,
+            data,
           },
-        },
-      );
+          {
+            sponsor: true,
+            uiOptions: {
+              description: `Send $${parsedAmount.toFixed(2)} USDC to exchange`,
+              buttonText: "Send",
+            },
+          },
+        );
+      } catch (sendErr: any) {
+        console.error("Send failed after swap:", sendErr);
+        if (
+          sendErr?.message?.includes("User rejected") ||
+          sendErr?.message?.includes("CLOSED_MODAL")
+        ) {
+          toast.info("Transaction cancelled. Your native USDC is still in your wallet.");
+        } else {
+          toast.error(
+            "Transfer failed after conversion. Your native USDC is safe in your wallet — you can retry or send manually.",
+            { duration: 8000 }
+          );
+        }
+        setSending(false);
+        setStatusMessage("");
+        return;
+      }
+
       const txHash =
         typeof txReceipt === "object" && txReceipt?.hash
           ? txReceipt.hash
           : String(txReceipt);
-      const shortHash = txHash
-        ? `${txHash.slice(0, 6)}…${txHash.slice(-4)}`
-        : "";
-      toast.success(
-        `Sent $${parsedAmount.toFixed(2)} USDC${shortHash ? ` (${shortHash})` : ""}`,
-        { duration: 6000 }
-      );
+
+      // Show success screen
+      setTxResult({
+        amount: parsedAmount,
+        dest,
+        txHash: txHash || "",
+      });
+      setStep("success");
       onSuccess();
-      onClose();
-      setDest("");
-      setAmount("");
-      setStep("form");
-      setStatusMessage("");
     } catch (e: any) {
       console.error("Cash out failed:", e);
       if (
@@ -135,32 +177,25 @@ export function CashOutModal({
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={() => {
-          if (!isBusy) {
-            onClose();
-            setStep("form");
-          }
-        }}
+        onClick={handleClose}
       />
 
       {/* Modal */}
       <div className="relative w-full max-w-md bg-card border border-border rounded-t-2xl sm:rounded-2xl p-5 space-y-4 animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:fade-in duration-200">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-foreground">Cash Out to Exchange</h2>
+          <h2 className="text-lg font-bold text-foreground">
+            {step === "success" ? "Transfer Complete" : "Cash Out to Exchange"}
+          </h2>
           <button
-            onClick={() => {
-              if (!isBusy) {
-                onClose();
-                setStep("form");
-              }
-            }}
+            onClick={handleClose}
             className="p-1.5 rounded-lg hover:bg-muted/50 transition-colors"
           >
             <X className="w-5 h-5 text-muted-foreground" />
           </button>
         </div>
 
+        {/* ───── FORM STEP ───── */}
         {step === "form" && (
           <>
             <p className="text-sm text-muted-foreground">
@@ -265,16 +300,16 @@ export function CashOutModal({
             <div className="flex gap-3 pt-1">
               <Button
                 variant="outline"
-                onClick={() => {
-                  onClose();
-                  setStep("form");
-                }}
+                onClick={handleClose}
                 className="flex-1"
               >
                 Cancel
               </Button>
               <Button
-                onClick={() => setStep("confirm")}
+                onClick={() => {
+                  setConfirmed(false);
+                  setStep("confirm");
+                }}
                 disabled={!isValidAddress || !isValidAmount}
                 className="flex-1"
               >
@@ -285,9 +320,9 @@ export function CashOutModal({
           </>
         )}
 
+        {/* ───── CONFIRM STEP ───── */}
         {step === "confirm" && (
           <>
-            {/* Confirmation step */}
             <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-amber-500" />
@@ -326,6 +361,18 @@ export function CashOutModal({
               </div>
             </div>
 
+            {/* Confirmation checkbox */}
+            <label className="flex items-start gap-2.5 cursor-pointer select-none">
+              <Checkbox
+                checked={confirmed}
+                onCheckedChange={(v) => setConfirmed(v === true)}
+                className="mt-0.5"
+              />
+              <span className="text-xs text-muted-foreground leading-relaxed">
+                I confirm this is a <strong>Polygon USDC</strong> deposit address on my exchange. I understand this transaction cannot be reversed.
+              </span>
+            </label>
+
             {statusMessage && (
               <div className="flex items-center gap-2 text-sm text-primary">
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -344,7 +391,7 @@ export function CashOutModal({
               </Button>
               <Button
                 onClick={handleSend}
-                disabled={isBusy}
+                disabled={isBusy || !confirmed}
                 variant="gold"
                 className="flex-1"
               >
@@ -364,9 +411,78 @@ export function CashOutModal({
           </>
         )}
 
-        <p className="text-[10px] text-center text-muted-foreground">
-          Network fee: ~$0.001 (sponsored) · Swap fee: ~$0.01
-        </p>
+        {/* ───── SUCCESS STEP ───── */}
+        {step === "success" && txResult && (
+          <>
+            <div className="flex flex-col items-center gap-3 py-2">
+              <div className="w-14 h-14 rounded-full bg-green-500/15 flex items-center justify-center">
+                <CheckCircle2 className="w-8 h-8 text-green-500" />
+              </div>
+              <p className="text-2xl font-bold text-foreground">
+                ${txResult.amount.toFixed(2)} sent
+              </p>
+            </div>
+
+            <div className="bg-secondary/50 rounded-lg p-3 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Token</span>
+                <span className="font-medium text-foreground">Native USDC</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Network</span>
+                <span className="font-medium text-foreground">Polygon</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground block mb-1">To</span>
+                <span className="font-mono text-xs text-foreground break-all">
+                  {txResult.dest}
+                </span>
+              </div>
+              {txResult.txHash && (
+                <div>
+                  <span className="text-muted-foreground block mb-1">Transaction</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono text-xs text-foreground">
+                      {txResult.txHash.slice(0, 10)}…{txResult.txHash.slice(-6)}
+                    </span>
+                    <button
+                      onClick={() => handleCopyTxHash(txResult.txHash)}
+                      className="p-0.5"
+                    >
+                      {copiedTx ? (
+                        <Check className="w-3.5 h-3.5 text-green-500" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5 text-muted-foreground" />
+                      )}
+                    </button>
+                    <a
+                      href={`https://polygonscan.com/tx/${txResult.txHash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-0.5"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground" />
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <p className="text-xs text-center text-muted-foreground">
+              Your exchange may take a few minutes to credit this deposit.
+            </p>
+
+            <Button onClick={handleClose} className="w-full">
+              Done
+            </Button>
+          </>
+        )}
+
+        {step !== "success" && (
+          <p className="text-[10px] text-center text-muted-foreground">
+            Network fee: ~$0.001 (sponsored) · Swap fee: ~$0.01
+          </p>
+        )}
       </div>
     </div>
   );
