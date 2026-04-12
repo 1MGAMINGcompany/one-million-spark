@@ -224,7 +224,7 @@ const AddFunds = () => {
   const { executeSwap, quoting, swapping } = useSwapToUsdce();
   const [funding, setFunding] = useState(false);
 
-  const USDC_BRIDGED = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
+  const USDC_NATIVE_FOR_ONRAMP = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359";
 
   const isLoggedIn = authenticated && isPrivyUser && !!walletAddress;
 
@@ -246,7 +246,7 @@ const AddFunds = () => {
         address: walletAddress,
         options: {
           chain: polygon,
-          asset: { erc20: USDC_BRIDGED as `0x${string}` },
+          asset: { erc20: USDC_NATIVE_FOR_ONRAMP as `0x${string}` },
           amount: "10",
           card: { preferredProvider: "moonpay" },
           defaultFundingMethod: "card",

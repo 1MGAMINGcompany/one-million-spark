@@ -18,7 +18,7 @@ import { Globe, Trophy, Loader2, ShieldCheck, Search, CalendarPlus, ChevronDown,
 import { useFundWallet, useSendTransaction } from "@privy-io/react-auth";
 import { polygon } from "viem/chains";
 import { encodeFunctionData, parseAbi } from "viem";
-import { USDC_E_CONTRACT, USDC_DECIMALS } from "@/lib/polygon-tokens";
+import { USDC_E_CONTRACT, USDC_NATIVE_CONTRACT, USDC_DECIMALS } from "@/lib/polygon-tokens";
 
 import { toast } from "sonner";
 import { dbg } from "@/lib/debugLog";
@@ -1380,7 +1380,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                     address,
                     options: {
                       chain: polygon,
-                      asset: { erc20: USDC_E_CONTRACT as `0x${string}` },
+                      asset: { erc20: USDC_NATIVE_CONTRACT as `0x${string}` },
                       amount: "10",
                       card: { preferredProvider: "moonpay" },
                       defaultFundingMethod: "card",
