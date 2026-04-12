@@ -31,6 +31,7 @@ interface OperatorData {
   welcome_message: string | null;
   support_email: string | null;
   disabled_sports: string[];
+  payout_wallet: string | null;
 }
 
 const SPORT_OPTIONS = ["Soccer", "MMA", "Boxing", "NFL", "NBA", "NHL", "MLB", "NCAA", "Tennis"];
