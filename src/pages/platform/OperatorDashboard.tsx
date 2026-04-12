@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import {
   Calendar, BarChart3, ExternalLink, Plus, DollarSign,
   TrendingUp, Edit3, Lock, Trophy, Wallet,
-  Copy, Mail, Check, Save,
+  Copy, Mail, Check, Save, AlertTriangle,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
@@ -18,6 +18,16 @@ import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
 import OperatorAnalyticsTab from "@/components/operator/OperatorAnalyticsTab";
 import OperatorEarningsTab from "@/components/operator/OperatorEarningsTab";
 import OperatorLogoUpload from "@/components/operator/OperatorLogoUpload";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface OperatorData {
   id: string;
