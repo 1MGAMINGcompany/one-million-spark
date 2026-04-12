@@ -252,6 +252,100 @@ export default function OperatorDashboard() {
 
   /* Legacy handleWithdraw removed — operators now use Earnings tab with real wallet cash-out */
 
+  const saveSettings = async () => {
+    setSavingSettings(true);
+    try {
+      const token = await getAccessToken();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/operator-manage`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-privy-token": token || "" },
+          body: JSON.stringify({
+            action: "update_operator",
+            brand_color: brandColor,
+            welcome_message: welcomeMsg,
+            support_email: supportEmail,
+            logo_url: logoUrl || null,
+            disabled_sports: disabledSports,
+          }),
+        }
+      );
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Settings saved");
+        setOperator(prev => prev ? { ...prev, brand_color: brandColor, welcome_message: welcomeMsg, support_email: supportEmail, logo_url: logoUrl || null, disabled_sports: disabledSports } : prev);
+      } else {
+        toast.error(json.error || "Failed to save");
+      }
+    } catch {
+      toast.error("Failed to save settings");
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  const togglePause = async () => {
+    setTogglingPause(true);
+    const newStatus = appPaused ? "active" : "paused";
+    try {
+      const token = await getAccessToken();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/operator-manage`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-privy-token": token || "" },
+          body: JSON.stringify({ action: "update_operator", status: newStatus }),
+        }
+      );
+      const json = await res.json();
+      if (json.success) {
+        setAppPaused(!appPaused);
+        setOperator(prev => prev ? { ...prev, status: newStatus } : prev);
+        toast.success(newStatus === "paused" ? "App paused — predictions blocked" : "App resumed");
+      } else {
+        toast.error(json.error || "Failed to toggle pause");
+      }
+    } catch {
+      toast.error("Failed to toggle pause");
+    } finally {
+      setTogglingPause(false);
+    }
+  };
+
+  const saveEventEdit = async (eventId: string) => {
+    setSavingEvent(true);
+    try {
+      const token = await getAccessToken();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/operator-manage`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-privy-token": token || "" },
+          body: JSON.stringify({
+            action: "update_event",
+            event_id: eventId,
+            sport: editSport,
+            event_date: editDate || undefined,
+            is_featured: editFeatured,
+          }),
+        }
+      );
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Event updated");
+        setEditingEventId(null);
+        if (operator) { fetchEvents(operator.id); fetchFights(operator.id); }
+      } else {
+        toast.error(json.error || "Failed to update event");
+      }
+    } catch {
+      toast.error("Failed to update event");
+    } finally {
+      setSavingEvent(false);
+    }
+  };
+
   const copyAppLink = () => {
     if (!operator) return;
     navigator.clipboard.writeText(`https://1mg.live/${operator.subdomain}`);
