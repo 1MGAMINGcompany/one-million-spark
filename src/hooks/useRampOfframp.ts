@@ -108,8 +108,10 @@ export function useRampOfframp() {
           }
         });
 
-        ramp.on("WIDGET_CLOSE", () => {
-          console.log("[useRampOfframp] widget closed");
+        ramp.on("*" as any, (event: any) => {
+          if (event?.type === "WIDGET_CLOSE") {
+            console.log("[useRampOfframp] widget closed");
+          }
         });
 
         ramp.show();
