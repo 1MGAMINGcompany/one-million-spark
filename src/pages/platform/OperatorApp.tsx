@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
+import { CashOutModal } from "@/components/CashOutModal";
 import { SportsWebSocketProvider, useLiveGameState } from "@/hooks/useSportsWebSocket";
 import LiveGameBadge, { LiveScoreDisplay } from "@/components/predictions/LiveGameBadge";
 import { useTranslation } from "react-i18next";
@@ -184,6 +185,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [timeFilter, setTimeFilter] = useState<"all" | "today" | "week">("all");
   const [showFundsModal, setShowFundsModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [showCashOut, setShowCashOut] = useState(false);
   const [withdrawDest, setWithdrawDest] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [funding, setFunding] = useState(false);
@@ -1538,25 +1540,16 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
               <div className="flex-1 h-px" style={{ backgroundColor: theme.cardBorder }} />
             </div>
 
-            {/* Option B: Sell for Cash via Transak */}
+            {/* Option B: Cash Out to Exchange */}
             <button
-              onClick={() => {
-                const params = new URLSearchParams({
-                  defaultCryptoCurrency: "USDC",
-                  network: "polygon",
-                  walletAddress: address || "",
-                  productsAvailed: "SELL",
-                  fiatCurrency: "USD",
-                });
-                window.open(`https://global.transak.com/?${params.toString()}`, "_blank");
-              }}
+              onClick={() => { setShowWithdrawModal(false); setShowCashOut(true); }}
               className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90"
               style={{ backgroundColor: theme.surfaceBg, color: theme.textPrimary, border: `1px solid ${theme.cardBorder}` }}
             >
-              💵 Sell for Cash (Bank Transfer)
+              💵 Cash Out to Coinbase
             </button>
             <p className="text-[10px] text-center" style={{ color: theme.textMuted }}>
-              Convert USDC to dollars via Transak — sent directly to your bank account
+              Send USDC to your Coinbase account — then withdraw to your bank
             </p>
 
             <button
@@ -1580,6 +1573,17 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         theme={theme}
       />
     </div>
+
+      {/* Cash Out Modal */}
+      <CashOutModal
+        open={showCashOut}
+        onClose={() => setShowCashOut(false)}
+        balance={usdc_balance}
+        onSuccess={() => {
+          setTimeout(refetchBalance, 5000);
+          setTimeout(refetchBalance, 15000);
+        }}
+      />
     </SportsWebSocketProvider>
   );
 }
