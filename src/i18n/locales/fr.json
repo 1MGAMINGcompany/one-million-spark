@@ -1556,6 +1556,11 @@
     "liveHalftime": "HT",
     "liveRound": "R",
     "liveSet": "Set"
+    "live": "EN DIRECT",
+    "final": "Final",
+    "implied": "Implicite",
+    "tomorrow": "Demain",
+    "min": "Min"
   },
   "gameMultiplayer": {
     "rooms": "Rooms",

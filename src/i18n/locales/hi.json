@@ -1560,6 +1560,11 @@
     "liveHalftime": "HT",
     "liveRound": "R",
     "liveSet": "Set"
+    "live": "लाइव",
+    "final": "अंतिम",
+    "implied": "अंतर्निहित",
+    "tomorrow": "कल",
+    "min": "न्यूनतम"
   },
   "gameMultiplayer": {
     "rooms": "Rooms",

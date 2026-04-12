@@ -1466,6 +1466,11 @@
     "liveHalftime": "HT",
     "liveRound": "R",
     "liveSet": "Set"
+    "live": "DAL VIVO",
+    "final": "Finale",
+    "implied": "Implicito",
+    "tomorrow": "Domani",
+    "min": "Min"
   },
   "platform": {
     "hero": {
