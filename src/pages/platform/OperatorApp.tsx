@@ -15,6 +15,10 @@ import { usePolymarketPrices } from "@/hooks/usePolymarketPrices";
 import { usePolymarketLivePrices } from "@/hooks/usePolymarketLivePrices";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Globe, Trophy, Loader2, ShieldCheck, Search, CalendarPlus, ChevronDown, Zap, Copy, ExternalLink, CreditCard, ArrowUpRight, AlertTriangle, LogOut } from "lucide-react";
+import { useFundWallet, useSendTransaction } from "@privy-io/react-auth";
+import { polygon } from "viem/chains";
+import { encodeFunctionData, parseAbi } from "viem";
+import { USDC_E_CONTRACT, USDC_DECIMALS } from "@/lib/polygon-tokens";
 
 import { toast } from "sonner";
 import { dbg } from "@/lib/debugLog";
@@ -182,6 +186,10 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [withdrawDest, setWithdrawDest] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [funding, setFunding] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
+  const { fundWallet } = useFundWallet();
+  const { sendTransaction } = useSendTransaction();
   const [requoteData, setRequoteData] = useState<RequoteData | null>(null);
   const acceptedRequoteRef = useRef<RequoteAcceptanceContext | null>(null);
 
@@ -1364,15 +1372,36 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
             )}
             {/* Buy with Card via Privy onramp */}
             <button
-              onClick={() => {
-                // Open Privy fund wallet flow for card purchases
-                window.open(`https://app.uniswap.org/swap?chain=polygon&outputCurrency=0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174`, "_blank");
+              onClick={async () => {
+                if (!address) return;
+                setFunding(true);
+                try {
+                  await fundWallet({
+                    address,
+                    options: {
+                      chain: polygon,
+                      asset: { erc20: USDC_E_CONTRACT as `0x${string}` },
+                      amount: "10",
+                    },
+                  });
+                  setTimeout(refetchBalance, 3000);
+                } catch (e: any) {
+                  if (e?.message !== "CLOSED_MODAL" && e?.message !== "User closed modal") {
+                    toast.error("Could not open funding. Please try again.");
+                  }
+                } finally {
+                  setFunding(false);
+                }
               }}
-              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90"
+              disabled={funding}
+              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-50"
               style={{ backgroundColor: theme.primary, color: theme.primaryForeground }}
             >
-              <CreditCard className="w-3.5 h-3.5" />
-              💳 Buy USDC with Card
+              {funding ? (
+                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Processing…</>
+              ) : (
+                <><CreditCard className="w-3.5 h-3.5" /> 💳 Buy USDC with Card</>
+              )}
             </button>
             <a
               href="https://app.uniswap.org/swap?chain=polygon"
@@ -1449,7 +1478,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
               <p className="text-[10px]" style={{ color: theme.textMuted }}>Network fee: ~$0.001 (sponsored)</p>
             </div>
             <button
-              onClick={() => {
+              onClick={async () => {
                 if (!withdrawDest.match(/^0x[a-fA-F0-9]{40}$/)) {
                   toast.error("Invalid wallet address — must start with 0x and be 42 characters");
                   return;
@@ -1459,21 +1488,55 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                   toast.error("Enter a valid amount");
                   return;
                 }
+                if (amt < 1) {
+                  toast.error("Minimum withdrawal is $1.00");
+                  return;
+                }
                 if (usdc_balance != null && amt > usdc_balance) {
                   toast.error(`Insufficient balance. You have $${usdc_balance.toFixed(2)} USDC`);
                   return;
                 }
-                const confirmed = confirm(`Send $${amt.toFixed(2)} USDC to ${withdrawDest}? This cannot be undone.`);
+                const confirmed = confirm(`Send $${amt.toFixed(2)} USDC to ${withdrawDest}?\n\nThis transaction cannot be reversed.`);
                 if (!confirmed) return;
-                toast.info("Withdrawal request submitted. Processing within 24 hours.", { duration: 6000 });
-                setShowWithdrawModal(false);
-                setWithdrawDest("");
-                setWithdrawAmount("");
+                setWithdrawing(true);
+                try {
+                  const rawAmount = BigInt(Math.floor(amt * 10 ** USDC_DECIMALS));
+                  const data = encodeFunctionData({
+                    abi: parseAbi(["function transfer(address to, uint256 amount) returns (bool)"]),
+                    functionName: "transfer",
+                    args: [withdrawDest as `0x${string}`, rawAmount],
+                  });
+                  const txReceipt = await sendTransaction({
+                    to: USDC_E_CONTRACT as `0x${string}`,
+                    chainId: 137,
+                    data,
+                  });
+                  const txHash = typeof txReceipt === "object" && txReceipt?.hash
+                    ? txReceipt.hash
+                    : String(txReceipt);
+                  const shortHash = txHash ? `${txHash.slice(0, 6)}…${txHash.slice(-4)}` : "";
+                  toast.success(`Sent $${amt.toFixed(2)} USDC${shortHash ? ` (${shortHash})` : ""}`, { duration: 6000 });
+                  setShowWithdrawModal(false);
+                  setWithdrawDest("");
+                  setWithdrawAmount("");
+                  setTimeout(refetchBalance, 5000);
+                  setTimeout(refetchBalance, 15000);
+                } catch (e: any) {
+                  console.error("Withdraw failed:", e);
+                  if (e?.message?.includes("User rejected") || e?.message?.includes("CLOSED_MODAL")) {
+                    toast.info("Transaction cancelled");
+                  } else {
+                    toast.error("Transfer failed. Please try again.");
+                  }
+                } finally {
+                  setWithdrawing(false);
+                }
               }}
-              className="w-full py-2.5 rounded-lg text-sm font-bold transition-opacity hover:opacity-90"
+              disabled={withdrawing}
+              className="w-full py-2.5 rounded-lg text-sm font-bold transition-opacity hover:opacity-90 disabled:opacity-50"
               style={{ backgroundColor: theme.primary, color: theme.primaryForeground }}
             >
-              Send to Wallet
+              {withdrawing ? <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> Sending…</> : "Send to Wallet"}
             </button>
 
             {/* Divider */}
