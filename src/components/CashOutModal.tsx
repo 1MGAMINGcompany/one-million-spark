@@ -36,6 +36,7 @@ export function CashOutModal({
 
   if (!open) return null;
 
+
   const parsedAmount = parseFloat(amount);
   const isValidAddress = /^0x[a-fA-F0-9]{40}$/.test(dest);
   const isValidAmount =
