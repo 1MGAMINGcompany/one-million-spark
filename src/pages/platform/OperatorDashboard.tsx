@@ -669,13 +669,58 @@ export default function OperatorDashboard() {
             <div className="space-y-3">
               {events.map((ev: any) => {
                 const fight = fights.find((f: any) => f.operator_event_id === ev.id);
+                const isEditing = editingEventId === ev.id;
                 return (
-                  <OperatorEventActions
-                    key={ev.id}
-                    event={ev}
-                    fight={fight}
-                    onAction={handleEventAction}
-                  />
+                  <div key={ev.id}>
+                    <OperatorEventActions
+                      event={ev}
+                      fight={fight}
+                      onAction={handleEventAction}
+                    />
+                    {/* Edit button */}
+                    {ev.status !== "settled" && (
+                      <div className="mt-1">
+                        {isEditing ? (
+                          <div className="bg-white/[0.02] border border-white/5 rounded-lg p-3 space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="text-[10px] text-white/40">Sport</label>
+                                <select value={editSport} onChange={e => setEditSport(e.target.value)} className="w-full bg-white/5 border border-white/10 text-white rounded-md h-8 px-2 text-xs">
+                                  {SPORT_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-white/40">Date/Time</label>
+                                <Input type="datetime-local" value={editDate} onChange={e => setEditDate(e.target.value)} className="bg-white/5 border-white/10 text-white h-8 text-xs" />
+                              </div>
+                            </div>
+                            <label className="flex items-center gap-2 text-xs text-white/40 cursor-pointer">
+                              <input type="checkbox" checked={editFeatured} onChange={e => setEditFeatured(e.target.checked)} className="rounded" />
+                              Featured
+                            </label>
+                            <div className="flex gap-2">
+                              <Button size="sm" onClick={() => saveEventEdit(ev.id)} disabled={savingEvent} className="bg-blue-600 hover:bg-blue-500 border-0 text-xs h-7">
+                                {savingEvent ? "Saving..." : "Save"}
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => setEditingEventId(null)} className="border-white/10 text-white hover:bg-white/5 text-xs h-7">Cancel</Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setEditingEventId(ev.id);
+                              setEditSport(ev.sport || "Soccer");
+                              setEditDate(ev.event_date ? new Date(ev.event_date).toISOString().slice(0, 16) : "");
+                              setEditFeatured(ev.is_featured || false);
+                            }}
+                            className="text-[10px] text-white/20 hover:text-white/50 mt-1 flex items-center gap-1"
+                          >
+                            <Edit3 size={10} /> Edit event
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
