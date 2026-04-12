@@ -16,6 +16,8 @@ import {
   ArrowRight,
   AlertTriangle,
   RefreshCw,
+  ArrowUpRight,
+  ArrowDownLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
@@ -23,6 +25,8 @@ import { usePrivyWallet } from "@/hooks/usePrivyWallet";
 import { usePolygonBalances } from "@/hooks/usePolygonBalances";
 import { useSwapToUsdce } from "@/hooks/useSwapToUsdce";
 import { toast } from "sonner";
+import { CashOutModal } from "@/components/CashOutModal";
+import { USDC_NATIVE_CONTRACT } from "@/lib/polygon-tokens";
 
 /* ── Sub-components ── */
 
@@ -196,9 +200,13 @@ function WalletAddressCard({
       <p className="font-mono text-xs text-foreground break-all select-all">
         {walletAddress}
       </p>
-      <p className="text-xs text-muted-foreground mt-2">
-        Already have funds? Send USDC to this address on <strong>Polygon</strong>.
-      </p>
+      <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="bg-muted/50 px-2 py-0.5 rounded text-[10px] font-medium uppercase">
+          Polygon
+        </span>
+        <span>·</span>
+        <span>USDC</span>
+      </div>
     </div>
   );
 }
@@ -223,8 +231,7 @@ const AddFunds = () => {
   const { fundWallet } = useFundWallet();
   const { executeSwap, quoting, swapping } = useSwapToUsdce();
   const [funding, setFunding] = useState(false);
-
-  const USDC_NATIVE_FOR_ONRAMP = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359";
+  const [showCashOut, setShowCashOut] = useState(false);
 
   const isLoggedIn = authenticated && isPrivyUser && !!walletAddress;
 
@@ -246,13 +253,12 @@ const AddFunds = () => {
         address: walletAddress,
         options: {
           chain: polygon,
-          asset: { erc20: USDC_NATIVE_FOR_ONRAMP as `0x${string}` },
+          asset: { erc20: USDC_NATIVE_CONTRACT as `0x${string}` },
           amount: "10",
           card: { preferredProvider: "moonpay" },
           defaultFundingMethod: "card",
         },
       });
-      // Refresh balances after funding modal closes
       setTimeout(refetch, 3000);
     } catch (e: any) {
       if (e?.message !== "CLOSED_MODAL" && e?.message !== "User closed modal") {
@@ -284,11 +290,11 @@ const AddFunds = () => {
             <DollarSign className="h-7 w-7 text-primary" />
           </div>
           <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2 font-cinzel">
-            {isLoggedIn ? "Trading Balance" : "Add Funds"}
+            {isLoggedIn ? "Add Money" : "Add Funds"}
           </h1>
           <p className="text-muted-foreground text-sm">
             {isLoggedIn
-              ? "Fund your account to start predicting."
+              ? "Buy USDC with card, Apple Pay, or Google Pay, or deposit from another wallet."
               : "Create an account in seconds — a secure wallet is set up automatically."}
           </p>
         </div>
@@ -307,14 +313,15 @@ const AddFunds = () => {
                 error={error}
               />
 
-              {/* Primary CTA */}
-              <div className="px-5 pb-5">
+              {/* Action buttons */}
+              <div className="px-5 pb-5 space-y-3">
+                {/* Buy with Card */}
                 <Button
                   onClick={handleFundWallet}
                   disabled={funding}
                   size="lg"
                   variant="gold"
-                  className="w-full text-lg"
+                  className="w-full text-base"
                 >
                   {funding ? (
                     <>
@@ -324,12 +331,40 @@ const AddFunds = () => {
                   ) : (
                     <>
                       <CreditCard className="mr-2 h-5 w-5" />
-                      Add Funds
+                      Buy USDC with Card
                     </>
                   )}
                 </Button>
-                <p className="text-center text-xs text-muted-foreground mt-2">
-                  Buy with card, Apple Pay, or Google Pay
+                <p className="text-center text-[11px] text-muted-foreground -mt-1">
+                  Buy uses secure payment provider · Card, Apple Pay, Google Pay
+                </p>
+
+                {/* Deposit from wallet */}
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="w-full text-base"
+                  onClick={() => {
+                    const el = document.getElementById("wallet-address-section");
+                    el?.scrollIntoView({ behavior: "smooth" });
+                  }}
+                >
+                  <ArrowDownLeft className="mr-2 h-5 w-5" />
+                  Deposit from Another Wallet
+                </Button>
+
+                {/* Cash out */}
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  className="w-full text-base"
+                  onClick={() => setShowCashOut(true)}
+                >
+                  <ArrowUpRight className="mr-2 h-5 w-5" />
+                  Cash Out
+                </Button>
+                <p className="text-center text-[11px] text-muted-foreground -mt-1">
+                  Cash out sends funds to your Coinbase account
                 </p>
               </div>
             </div>
@@ -344,10 +379,12 @@ const AddFunds = () => {
             )}
 
             {/* Wallet address */}
-            <WalletAddressCard
-              walletAddress={walletAddress!}
-              onCopy={handleCopyAddress}
-            />
+            <div id="wallet-address-section">
+              <WalletAddressCard
+                walletAddress={walletAddress!}
+                onCopy={handleCopyAddress}
+              />
+            </div>
 
             {/* Network warning */}
             <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 flex items-start gap-2.5">
@@ -393,6 +430,17 @@ const AddFunds = () => {
           </div>
         )}
       </div>
+
+      {/* Cash Out Modal */}
+      <CashOutModal
+        open={showCashOut}
+        onClose={() => setShowCashOut(false)}
+        balance={tradingBalance}
+        onSuccess={() => {
+          setTimeout(refetch, 5000);
+          setTimeout(refetch, 15000);
+        }}
+      />
     </div>
   );
 };
