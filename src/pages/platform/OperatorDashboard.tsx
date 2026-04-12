@@ -76,6 +76,7 @@ export default function OperatorDashboard() {
   const [savingSettings, setSavingSettings] = useState(false);
   const [appPaused, setAppPaused] = useState(false);
   const [togglingPause, setTogglingPause] = useState(false);
+  const [showPauseConfirm, setShowPauseConfirm] = useState(false);
 
   // Fee editing state (in Settings)
   const [editingFee, setEditingFee] = useState(false);
