@@ -50,6 +50,7 @@ interface PromoResult {
 
 export default function PurchasePage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { getAccessToken } = usePrivySafe();
   const { sendTransaction } = useSendTransaction();
   const { usdc_balance, usdc_balance_formatted, is_loading: balanceLoading, wallet_address } = usePolygonUSDC();
