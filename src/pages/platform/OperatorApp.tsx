@@ -1536,7 +1536,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
               className="w-full py-2.5 rounded-lg text-sm font-bold transition-opacity hover:opacity-90 disabled:opacity-50"
               style={{ backgroundColor: theme.primary, color: theme.primaryForeground }}
             >
-              Send to Wallet
+              {withdrawing ? <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> Sending…</> : "Send to Wallet"}
             </button>
 
             {/* Divider */}
