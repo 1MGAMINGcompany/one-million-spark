@@ -26,7 +26,7 @@ import { usePolygonBalances } from "@/hooks/usePolygonBalances";
 import { useSwapToUsdce } from "@/hooks/useSwapToUsdce";
 import { toast } from "sonner";
 import { CashOutModal } from "@/components/CashOutModal";
-import { USDC_NATIVE_CONTRACT } from "@/lib/polygon-tokens";
+
 
 /* ── Sub-components ── */
 
@@ -253,7 +253,7 @@ const AddFunds = () => {
         address: walletAddress,
         options: {
           chain: polygon,
-          asset: { erc20: USDC_NATIVE_CONTRACT as `0x${string}` },
+          asset: 'USDC',
           amount: "10",
           card: { preferredProvider: "moonpay" },
           defaultFundingMethod: "card",
