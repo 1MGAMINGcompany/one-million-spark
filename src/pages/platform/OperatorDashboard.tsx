@@ -117,19 +117,36 @@ export default function OperatorDashboard() {
     }
   };
 
-  const fetchPayouts = async (operatorId: string) => {
-    const { data } = await (supabase as any)
-      .from("operator_payouts")
-      .select("amount_usdc, status")
-      .eq("operator_id", operatorId);
-    if (data) {
-      const totalWithdrawn = data
-        .filter((p: any) => p.status === "paid")
-        .reduce((s: number, r: any) => s + Number(r.amount_usdc || 0), 0);
-      const pending = data
-        .filter((p: any) => p.status === "pending")
-        .reduce((s: number, r: any) => s + Number(r.amount_usdc || 0), 0);
-      setPayouts({ total_withdrawn: totalWithdrawn, pending });
+  const { usdc_balance: walletBalance } = usePolygonUSDC();
+
+  const updateFeePercent = async () => {
+    const val = Number(feeInput);
+    if (isNaN(val) || val < 0 || val > 20) {
+      toast.error("Fee must be between 0% and 20%");
+      return;
+    }
+    setSavingFee(true);
+    try {
+      const token = await getAccessToken();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/operator-manage`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-privy-token": token || "" },
+          body: JSON.stringify({ action: "update_operator", fee_percent: val }),
+        }
+      );
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Fee updated");
+        setOperator(prev => prev ? { ...prev, fee_percent: val } : prev);
+        setEditingFee(false);
+      } else {
+        toast.error(json.error || "Failed to update fee");
+      }
+    } catch {
+    } finally {
+      setSavingFee(false);
     }
   };
 
@@ -232,7 +249,7 @@ export default function OperatorDashboard() {
 
   if (!operator) return null;
 
-  const availableBalance = Math.max(0, revenue.total - payouts.total_withdrawn - payouts.pending);
+  
 
   return (
     <div className="min-h-screen bg-[#06080f] text-white">
