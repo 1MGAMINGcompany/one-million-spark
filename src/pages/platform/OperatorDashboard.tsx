@@ -9,9 +9,10 @@ import { toast } from "sonner";
 import {
   Calendar, BarChart3, ExternalLink, Plus, DollarSign,
   TrendingUp, Edit3, Lock, Trophy, ChevronDown, Wallet,
-  Copy, Mail, Check,
+  Copy, Mail, Check, Save,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
 import OperatorEventActions from "./OperatorEventActions";
 import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
 import OperatorAnalyticsTab from "@/components/operator/OperatorAnalyticsTab";
@@ -39,7 +40,9 @@ export default function OperatorDashboard() {
   const [events, setEvents] = useState<any[]>([]);
   const [fights, setFights] = useState<any[]>([]);
   const [revenue, setRevenue] = useState<{ total: number; count: number }>({ total: 0, count: 0 });
-  const [payouts, setPayouts] = useState<{ total_withdrawn: number; pending: number }>({ total_withdrawn: 0, pending: 0 });
+  const [editingFee, setEditingFee] = useState(false);
+  const [feeInput, setFeeInput] = useState("");
+  const [savingFee, setSavingFee] = useState(false);
 
   const [showNewEvent, setShowNewEvent] = useState(false);
   const [newTeamA, setNewTeamA] = useState("");
