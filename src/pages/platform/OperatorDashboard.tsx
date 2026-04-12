@@ -393,10 +393,10 @@ export default function OperatorDashboard() {
       </nav>
 
       <div className="max-w-6xl mx-auto px-4 py-8">
-        <div className="flex gap-1 mb-6 bg-white/[0.03] p-1 rounded-lg w-fit">
-          {(["overview", "earnings", "analytics", "events"] as const).map(tab => (
-            <button key={tab} onClick={() => setDashTab(tab)} className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${dashTab === tab ? "bg-white/10 text-white" : "text-white/40 hover:text-white/60"}`}>
-              {tab === "overview" ? "Overview" : tab === "earnings" ? "💰 Earnings" : tab === "analytics" ? "📊 Analytics" : "Events"}
+        <div className="flex gap-1 mb-6 bg-white/[0.03] p-1 rounded-lg w-fit overflow-x-auto">
+          {(["overview", "earnings", "analytics", "events", "settings"] as const).map(tab => (
+            <button key={tab} onClick={() => setDashTab(tab)} className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${dashTab === tab ? "bg-white/10 text-white" : "text-white/40 hover:text-white/60"}`}>
+              {tab === "overview" ? "Overview" : tab === "earnings" ? "💰 Earnings" : tab === "analytics" ? "📊 Analytics" : tab === "settings" ? "⚙️ Settings" : "Events"}
             </button>
           ))}
         </div>
@@ -404,8 +404,108 @@ export default function OperatorDashboard() {
           <OperatorAnalyticsTab operatorId={operator.id} feePercent={operator.fee_percent} />
         ) : dashTab === "earnings" && operator ? (
           <OperatorEarningsTab operatorId={operator.id} getAccessToken={getAccessToken} />
+        ) : dashTab === "settings" && operator ? (
+          <div className="space-y-6">
+            {/* App Pause Toggle */}
+            <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-sm">App Status</h3>
+                  <p className="text-xs text-white/40 mt-1">
+                    {appPaused ? "Your app is paused. No new predictions can be placed." : "Your app is live and accepting predictions."}
+                  </p>
+                </div>
+                <button
+                  onClick={togglePause}
+                  disabled={togglingPause}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    appPaused
+                      ? "bg-green-600 hover:bg-green-500 text-white"
+                      : "bg-red-600/80 hover:bg-red-500 text-white"
+                  }`}
+                >
+                  {togglingPause ? "..." : appPaused ? "Resume App" : "Pause App"}
+                </button>
+              </div>
+            </div>
+
+            {/* Branding */}
+            <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5 space-y-4">
+              <h3 className="font-semibold text-sm">Branding</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-white/40 block mb-1">Logo URL</label>
+                  <Input value={logoUrl} onChange={e => setLogoUrl(e.target.value)} placeholder="https://..." className="bg-white/5 border-white/10 text-white text-sm" />
+                  <p className="text-[10px] text-white/20 mt-1">PNG or SVG recommended, square aspect ratio</p>
+                </div>
+                <div>
+                  <label className="text-xs text-white/40 block mb-1">Brand Color</label>
+                  <div className="flex items-center gap-2">
+                    <input type="color" value={brandColor} onChange={e => setBrandColor(e.target.value)} className="w-10 h-10 rounded border border-white/10 bg-transparent cursor-pointer" />
+                    <Input value={brandColor} onChange={e => setBrandColor(e.target.value)} placeholder="#4F46E5" className="bg-white/5 border-white/10 text-white text-sm w-28" />
+                  </div>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-xs text-white/40 block mb-1">Welcome Message</label>
+                  <Input value={welcomeMsg} onChange={e => setWelcomeMsg(e.target.value.slice(0, 500))} placeholder="Welcome to our predictions platform!" className="bg-white/5 border-white/10 text-white text-sm" />
+                  <p className="text-[10px] text-white/20 mt-1">{welcomeMsg.length}/500 characters</p>
+                </div>
+                <div>
+                  <label className="text-xs text-white/40 block mb-1">Support Email</label>
+                  <Input value={supportEmail} onChange={e => setSupportEmail(e.target.value)} placeholder="support@yourbrand.com" className="bg-white/5 border-white/10 text-white text-sm" />
+                </div>
+              </div>
+            </div>
+
+            {/* Sports Toggle */}
+            <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5 space-y-3">
+              <h3 className="font-semibold text-sm">Sports Visibility</h3>
+              <p className="text-xs text-white/40">Toggle sports off to hide them from your app. All sports are enabled by default.</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {SPORT_OPTIONS.map(sport => {
+                  const isDisabled = disabledSports.includes(sport);
+                  return (
+                    <button
+                      key={sport}
+                      onClick={() => {
+                        setDisabledSports(prev =>
+                          prev.includes(sport) ? prev.filter(s => s !== sport) : [...prev, sport]
+                        );
+                      }}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        isDisabled
+                          ? "bg-white/[0.02] text-white/20 border border-white/5"
+                          : "bg-emerald-600/20 text-emerald-400 border border-emerald-500/20"
+                      }`}
+                    >
+                      {isDisabled ? "❌" : "✅"} {sport}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Save */}
+            <Button
+              onClick={saveSettings}
+              disabled={savingSettings}
+              className="bg-blue-600 hover:bg-blue-500 border-0"
+            >
+              <Save size={16} /> {savingSettings ? "Saving..." : "Save Settings"}
+            </Button>
+          </div>
         ) : (
         <>
+        {/* Paused banner */}
+        {appPaused && (
+          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-4 flex items-center gap-3">
+            <Lock size={16} className="text-red-400 shrink-0" />
+            <div>
+              <div className="text-sm font-medium text-red-400">App Paused</div>
+              <div className="text-xs text-white/40">Your app is not accepting new predictions. Go to Settings to resume.</div>
+            </div>
+          </div>
+        )}
         {/* Your App Details card */}
         <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5 mb-8">
           <h3 className="text-sm font-semibold text-white/60 mb-3">{t("operator.dashboard.appDetails")}</h3>
