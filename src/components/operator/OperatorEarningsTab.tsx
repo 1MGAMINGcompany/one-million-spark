@@ -7,7 +7,6 @@ import {
   Wallet, ExternalLink, Check, AlertTriangle, RefreshCw,
   ArrowUpRight, Clock, CheckCircle2, XCircle, Copy, DollarSign,
 } from "lucide-react";
-import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
 import { CashOutModal } from "@/components/CashOutModal";
 
 interface SweepRecord {
