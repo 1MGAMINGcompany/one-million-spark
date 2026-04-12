@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useSendTransaction } from "@privy-io/react-auth";
 import { encodeFunctionData, parseAbi } from "viem";
-import { USDC_E_CONTRACT, USDC_DECIMALS } from "@/lib/polygon-tokens";
+import { USDC_DECIMALS } from "@/lib/polygon-tokens";
+import { useSwapUsdceToNative } from "@/hooks/useSwapUsdceToNative";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -10,9 +11,13 @@ import {
   X,
   Copy,
   Check,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+
+/** Native USDC on Polygon — what exchanges expect */
+const USDC_NATIVE = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359" as const;
 
 interface CashOutModalProps {
   open: boolean;
@@ -28,15 +33,17 @@ export function CashOutModal({
   onSuccess,
 }: CashOutModalProps) {
   const { sendTransaction } = useSendTransaction();
+  const { executeSwap, swapping } = useSwapUsdceToNative();
   const [dest, setDest] = useState("");
   const [amount, setAmount] = useState("");
   const [sending, setSending] = useState(false);
   const [step, setStep] = useState<"form" | "confirm">("form");
   const [copied, setCopied] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("");
 
   if (!open) return null;
 
-
+  const isBusy = sending || swapping;
   const parsedAmount = parseFloat(amount);
   const isValidAddress = /^0x[a-fA-F0-9]{40}$/.test(dest);
   const isValidAmount =
@@ -53,6 +60,21 @@ export function CashOutModal({
     if (!isValidAddress || !isValidAmount) return;
     setSending(true);
     try {
+      // Step 1: Swap USDC.e → Native USDC
+      setStatusMessage("Converting to native USDC…");
+      const swapOk = await executeSwap(parsedAmount);
+      if (!swapOk) {
+        // Swap failed or user rejected — stop here
+        setSending(false);
+        setStatusMessage("");
+        return;
+      }
+
+      // Brief delay for swap to settle on-chain
+      setStatusMessage("Sending to exchange…");
+      await new Promise(r => setTimeout(r, 3000));
+
+      // Step 2: Send Native USDC to destination
       const rawAmount = BigInt(Math.floor(parsedAmount * 10 ** USDC_DECIMALS));
       const data = encodeFunctionData({
         abi: parseAbi([
@@ -61,11 +83,20 @@ export function CashOutModal({
         functionName: "transfer",
         args: [dest as `0x${string}`, rawAmount],
       });
-      const txReceipt = await sendTransaction({
-        to: USDC_E_CONTRACT as `0x${string}`,
-        chainId: 137,
-        data,
-      });
+      const txReceipt = await sendTransaction(
+        {
+          to: USDC_NATIVE,
+          chainId: 137,
+          data,
+        },
+        {
+          sponsor: true,
+          uiOptions: {
+            description: `Send $${parsedAmount.toFixed(2)} USDC to exchange`,
+            buttonText: "Send",
+          },
+        },
+      );
       const txHash =
         typeof txReceipt === "object" && txReceipt?.hash
           ? txReceipt.hash
@@ -82,6 +113,7 @@ export function CashOutModal({
       setDest("");
       setAmount("");
       setStep("form");
+      setStatusMessage("");
     } catch (e: any) {
       console.error("Cash out failed:", e);
       if (
@@ -94,6 +126,7 @@ export function CashOutModal({
       }
     } finally {
       setSending(false);
+      setStatusMessage("");
     }
   };
 
@@ -103,7 +136,7 @@ export function CashOutModal({
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={() => {
-          if (!sending) {
+          if (!isBusy) {
             onClose();
             setStep("form");
           }
@@ -114,10 +147,10 @@ export function CashOutModal({
       <div className="relative w-full max-w-md bg-card border border-border rounded-t-2xl sm:rounded-2xl p-5 space-y-4 animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:fade-in duration-200">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-foreground">Cash Out</h2>
+          <h2 className="text-lg font-bold text-foreground">Cash Out to Exchange</h2>
           <button
             onClick={() => {
-              if (!sending) {
+              if (!isBusy) {
                 onClose();
                 setStep("form");
               }
@@ -131,7 +164,7 @@ export function CashOutModal({
         {step === "form" && (
           <>
             <p className="text-sm text-muted-foreground">
-              Send your USDC to Coinbase to withdraw to your bank.
+              Send USDC to your Coinbase or exchange wallet. We automatically convert your balance to native USDC on Polygon before sending.
             </p>
 
             {/* Balance */}
@@ -149,7 +182,7 @@ export function CashOutModal({
             {/* Destination */}
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Coinbase wallet address
+                Exchange deposit address (Polygon)
               </label>
               <div className="relative">
                 <Input
@@ -212,12 +245,19 @@ export function CashOutModal({
               )}
             </div>
 
+            {/* Auto-convert info */}
+            <div className="bg-muted/30 border border-border/50 rounded-lg p-3 flex items-start gap-2">
+              <RefreshCw className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+              <p className="text-xs text-muted-foreground">
+                We will convert your balance to <strong>native USDC</strong> on Polygon before sending — compatible with all major exchanges.
+              </p>
+            </div>
+
             {/* Network info */}
             <div className="bg-muted/30 border border-border/50 rounded-lg p-3 flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
               <p className="text-xs text-muted-foreground">
-                Funds are sent on the <strong>Polygon</strong> network. Make
-                sure your Coinbase account supports receiving USDC on Polygon.
+                Make sure your exchange supports receiving <strong>USDC on Polygon</strong>. This transaction cannot be reversed.
               </p>
             </div>
 
@@ -256,7 +296,7 @@ export function CashOutModal({
                 </p>
               </div>
               <p className="text-xs text-muted-foreground">
-                Make sure this is your Coinbase address. This transaction{" "}
+                Make sure this is your exchange deposit address. This transaction{" "}
                 <strong>cannot be reversed</strong>.
               </p>
             </div>
@@ -268,6 +308,10 @@ export function CashOutModal({
                   <span className="font-semibold text-foreground">
                     ${parsedAmount.toFixed(2)} USDC
                   </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Token</span>
+                  <span className="font-medium text-foreground">Native USDC (auto-converted)</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Network</span>
@@ -282,30 +326,37 @@ export function CashOutModal({
               </div>
             </div>
 
+            {statusMessage && (
+              <div className="flex items-center gap-2 text-sm text-primary">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                {statusMessage}
+              </div>
+            )}
+
             <div className="flex gap-3 pt-1">
               <Button
                 variant="outline"
                 onClick={() => setStep("form")}
-                disabled={sending}
+                disabled={isBusy}
                 className="flex-1"
               >
                 Back
               </Button>
               <Button
                 onClick={handleSend}
-                disabled={sending}
+                disabled={isBusy}
                 variant="gold"
                 className="flex-1"
               >
-                {sending ? (
+                {isBusy ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                    Sending…
+                    {swapping ? "Converting…" : "Sending…"}
                   </>
                 ) : (
                   <>
                     <ArrowUpRight className="w-4 h-4 mr-1" />
-                    Send to Coinbase
+                    Send to Exchange
                   </>
                 )}
               </Button>
@@ -314,7 +365,7 @@ export function CashOutModal({
         )}
 
         <p className="text-[10px] text-center text-muted-foreground">
-          Network fee: ~$0.001 (sponsored)
+          Network fee: ~$0.001 (sponsored) · Swap fee: ~$0.01
         </p>
       </div>
     </div>
