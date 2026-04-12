@@ -5,8 +5,10 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import {
   Wallet, ExternalLink, Check, AlertTriangle, RefreshCw,
-  ArrowUpRight, Clock, CheckCircle2, XCircle, Copy,
+  ArrowUpRight, Clock, CheckCircle2, XCircle, Copy, DollarSign,
 } from "lucide-react";
+import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
+import { CashOutModal } from "@/components/CashOutModal";
 
 interface SweepRecord {
   id: string;
@@ -43,6 +45,9 @@ export default function OperatorEarningsTab({ operatorId, getAccessToken }: Prop
   const [walletInput, setWalletInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [showCashOut, setShowCashOut] = useState(false);
+
+  const { usdc_balance: walletBalance, refetch: refetchBalance } = usePolygonUSDC();
 
   const fetchSweepData = useCallback(async () => {
     try {
@@ -138,7 +143,35 @@ export default function OperatorEarningsTab({ operatorId, getAccessToken }: Prop
 
   return (
     <div className="space-y-6">
-      {/* Payout Wallet */}
+      {/* Wallet Balance + Cash Out */}
+      <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-white/60 flex items-center gap-2">
+            <DollarSign size={16} /> Wallet Balance
+          </h3>
+          <Button
+            size="sm"
+            onClick={() => setShowCashOut(true)}
+            disabled={!walletBalance || walletBalance < 1}
+            className="bg-emerald-600 hover:bg-emerald-500 border-0 text-xs gap-1"
+          >
+            <ArrowUpRight size={14} /> Cash Out
+          </Button>
+        </div>
+        <div className="text-3xl font-bold text-white">
+          ${walletBalance != null ? walletBalance.toFixed(2) : "—"}
+        </div>
+        <p className="text-xs text-white/30 mt-1">
+          USDC in your operator wallet — send to exchange or another wallet anytime
+        </p>
+      </div>
+
+      <CashOutModal
+        open={showCashOut}
+        onClose={() => setShowCashOut(false)}
+        balance={walletBalance}
+        onSuccess={() => { refetchBalance(); fetchSweepData(); }}
+      />
       <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-white/60 flex items-center gap-2">
