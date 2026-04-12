@@ -203,32 +203,7 @@ export default function OperatorDashboard() {
     }
   };
 
-  const handleWithdraw = async () => {
-    if (!operator) return;
-    setWithdrawing(true);
-    try {
-      const token = await getAccessToken();
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/operator-manage`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-privy-token": token || "" },
-          body: JSON.stringify({ action: "request_withdrawal" }),
-        }
-      );
-      const data = await res.json();
-      if (data.error) {
-        toast.error(t("operator.dashboard.withdrawalFailed"), { description: data.error });
-      } else {
-        toast.success(t("operator.dashboard.withdrawalRequested", { amount: data.amount?.toFixed(2) || "0.00" }));
-        fetchPayouts(operator.id);
-        fetchRevenue(operator.id);
-      }
-    } catch {
-    } finally {
-      setWithdrawing(false);
-    }
-  };
+  /* Legacy handleWithdraw removed — operators now use Earnings tab with real wallet cash-out */
 
   const copyAppLink = () => {
     if (!operator) return;
