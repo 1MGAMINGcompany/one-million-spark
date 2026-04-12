@@ -1466,6 +1466,11 @@
     "liveHalftime": "HT",
     "liveRound": "R",
     "liveSet": "Set"
+    "live": "مباشر",
+    "final": "نهائي",
+    "implied": "ضمني",
+    "tomorrow": "غداً",
+    "min": "الحد الأدنى"
   },
   "platform": {
     "hero": {

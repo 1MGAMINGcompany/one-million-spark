@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { LiveGameState } from "@/hooks/useSportsWebSocket";
 import type { OperatorTheme } from "@/lib/operatorThemes";
 
@@ -8,10 +9,11 @@ interface LiveGameBadgeProps {
 }
 
 /**
- * Sport-aware live game status badge.
- * Shows period, elapsed time, and score based on sport type.
+ * Sport-aware live game status badge with pulse animation.
  */
 export default function LiveGameBadge({ state, theme, className = "" }: LiveGameBadgeProps) {
+  const { t } = useTranslation();
+
   if (state.ended) {
     return (
       <span
@@ -21,7 +23,7 @@ export default function LiveGameBadge({ state, theme, className = "" }: LiveGame
           color: theme?.textSecondary || undefined,
         }}
       >
-        <span className="text-green-500">✓</span> Final
+        <span className="text-green-500">✓</span> {t("operator.final")}
         {state.score && <span className="ml-1 font-mono">{state.score}</span>}
       </span>
     );
@@ -41,9 +43,8 @@ export default function LiveGameBadge({ state, theme, className = "" }: LiveGame
       }}
     >
       <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-      LIVE
+      {t("operator.live")}
       {periodLabel && <span className="ml-0.5 font-mono">{periodLabel}</span>}
-      {state.score && <span className="ml-1 font-mono">{state.score}</span>}
     </span>
   );
 }
@@ -54,77 +55,39 @@ function formatPeriod(period?: string, elapsed?: string, sport?: string, status?
   const e = elapsed || "";
   const s = (status || "").toLowerCase();
 
-  // Halftime / Break
-  if (s === "break" || s === "halftime" || s === "ht") {
-    return "HT";
-  }
+  if (s === "break" || s === "halftime" || s === "ht") return "HT";
+  if (s === "penaltyshootout" || s === "penalties") return e ? `PEN ${e}` : "PEN";
 
-  // Penalty shootout
-  if (s === "penaltyshootout" || s === "penalties") {
-    return e ? `PEN ${e}` : "PEN";
-  }
-
-  // NHL / Hockey
   if (sport?.includes("hockey") || sport?.includes("nhl") || sport?.includes("ice")) {
     const label = p.startsWith("P") ? p : `P${p}`;
     return e ? `${label} ${e}` : label;
   }
-
-  // NBA / Basketball
   if (sport?.includes("basketball") || sport?.includes("nba")) {
     const label = p.startsWith("Q") ? p : `Q${p}`;
     return e ? `${label} ${e}` : label;
   }
-
-  // Soccer / Football / EPL / MLS / La Liga etc
   if (sport?.includes("soccer") || sport?.includes("football") || sport?.includes("futbol") ||
       sport?.includes("epl") || sport?.includes("mls") || sport?.includes("laliga") ||
       sport?.includes("bundesliga") || sport?.includes("serie") || sport?.includes("ligue")) {
     const halfLabel = p === "2" || p === "2H" ? "2H" : p === "1" || p === "1H" ? "1H" : p;
     return e ? `${halfLabel} ${e}'` : halfLabel;
   }
-
-  // Baseball / MLB
-  if (sport?.includes("baseball") || sport?.includes("mlb")) {
-    return e ? `${p} ${e}` : p;
-  }
-
-  // Tennis
-  if (sport?.includes("tennis")) {
-    return p ? `Set ${p}` : "";
-  }
-
-  // Cricket
-  if (sport?.includes("cricket")) {
-    return p || "";
-  }
-
-  // Esports
+  if (sport?.includes("baseball") || sport?.includes("mlb")) return e ? `${p} ${e}` : p;
+  if (sport?.includes("tennis")) return p ? `Set ${p}` : "";
+  if (sport?.includes("cricket")) return p || "";
   if (sport?.includes("esport") || sport?.includes("csgo") || sport?.includes("dota") || sport?.includes("lol")) {
     if (p && p.includes("/")) return `Map ${p.split("/")[0]}`;
     return p ? `Map ${p}` : "";
   }
-
-  // Generic fallback
   if (p && e) return `${p} ${e}`;
   return p || e;
 }
 
 /** Score display component for inline use between team names */
-export function LiveScoreDisplay({
-  state,
-  theme,
-}: {
-  state: LiveGameState;
-  theme?: OperatorTheme;
-}) {
+export function LiveScoreDisplay({ state, theme }: { state: LiveGameState; theme?: OperatorTheme }) {
   if (!state.score && state.scoreA == null) return null;
-
   return (
-    <span
-      className="text-sm font-bold font-mono tabular-nums"
-      style={{ color: theme?.primary || "#ef4444" }}
-    >
+    <span className="text-sm font-bold font-mono tabular-nums" style={{ color: theme?.primary || "#ef4444" }}>
       {state.score || `${state.scoreA ?? 0}-${state.scoreB ?? 0}`}
     </span>
   );

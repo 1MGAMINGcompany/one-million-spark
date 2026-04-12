@@ -1464,6 +1464,11 @@
     "liveHalftime": "HT",
     "liveRound": "R",
     "liveSet": "Set"
+    "live": "LIVE",
+    "final": "Final",
+    "implied": "Impliziert",
+    "tomorrow": "Morgen",
+    "min": "Min"
   },
   "platform": {
     "hero": {

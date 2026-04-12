@@ -1466,6 +1466,11 @@
     "liveHalftime": "HT",
     "liveRound": "R",
     "liveSet": "Set"
+    "live": "ライブ",
+    "final": "終了",
+    "implied": "予想確率",
+    "tomorrow": "明日",
+    "min": "最小"
   },
   "platform": {
     "hero": {

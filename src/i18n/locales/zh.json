@@ -1466,6 +1466,11 @@
     "liveHalftime": "HT",
     "liveRound": "R",
     "liveSet": "Set"
+    "live": "直播",
+    "final": "结束",
+    "implied": "隐含概率",
+    "tomorrow": "明天",
+    "min": "最低"
   },
   "platform": {
     "hero": {
