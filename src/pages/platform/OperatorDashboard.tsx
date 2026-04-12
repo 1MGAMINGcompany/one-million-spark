@@ -56,7 +56,24 @@ export default function OperatorDashboard() {
   const [newFeatured, setNewFeatured] = useState(false);
   const [creating, setCreating] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
-  const [dashTab, setDashTab] = useState<"overview" | "analytics" | "earnings" | "events">("overview");
+  const [dashTab, setDashTab] = useState<"overview" | "analytics" | "earnings" | "events" | "settings">("overview");
+
+  // Settings state
+  const [brandColor, setBrandColor] = useState("");
+  const [welcomeMsg, setWelcomeMsg] = useState("");
+  const [supportEmail, setSupportEmail] = useState("");
+  const [logoUrl, setLogoUrl] = useState("");
+  const [disabledSports, setDisabledSports] = useState<string[]>([]);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [appPaused, setAppPaused] = useState(false);
+  const [togglingPause, setTogglingPause] = useState(false);
+
+  // Event editing state
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [editSport, setEditSport] = useState("");
+  const [editDate, setEditDate] = useState("");
+  const [editFeatured, setEditFeatured] = useState(false);
+  const [savingEvent, setSavingEvent] = useState(false);
 
   const contactEmail = user?.email?.address || user?.google?.email || null;
 
