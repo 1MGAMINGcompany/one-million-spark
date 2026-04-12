@@ -796,6 +796,7 @@ export default function OperatorDashboard() {
                 <div className="text-xl font-bold text-emerald-400">${walletBalance != null ? walletBalance.toFixed(2) : "—"}</div>
                 <div className="text-[10px] text-white/20 mt-0.5">{t("operator.dashboard.connectedWallet")}</div>
               </div>
+            </div>
 
             {/* Most Popular Event */}
             {fights.length > 0 && (() => {
