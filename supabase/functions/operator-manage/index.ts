@@ -254,7 +254,11 @@ Deno.serve(async (req) => {
       if (body.brand_name) updates.brand_name = body.brand_name;
       if (body.logo_url !== undefined) updates.logo_url = body.logo_url;
       if (body.theme) updates.theme = body.theme;
-      if (body.fee_percent !== undefined) updates.fee_percent = body.fee_percent;
+      if (body.fee_percent !== undefined) {
+        const fp = Number(body.fee_percent);
+        if (isNaN(fp) || fp < 0 || fp > 20) return jsonResp({ error: "fee_percent must be between 0 and 20" }, 400);
+        updates.fee_percent = fp;
+      }
       await sb.from("operators").update(updates).eq("id", op.id);
       return jsonResp({ success: true });
     }

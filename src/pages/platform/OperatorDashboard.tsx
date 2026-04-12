@@ -9,9 +9,10 @@ import { toast } from "sonner";
 import {
   Calendar, BarChart3, ExternalLink, Plus, DollarSign,
   TrendingUp, Edit3, Lock, Trophy, ChevronDown, Wallet,
-  Copy, Mail, Check,
+  Copy, Mail, Check, Save,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
 import OperatorEventActions from "./OperatorEventActions";
 import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
 import OperatorAnalyticsTab from "@/components/operator/OperatorAnalyticsTab";
@@ -39,7 +40,9 @@ export default function OperatorDashboard() {
   const [events, setEvents] = useState<any[]>([]);
   const [fights, setFights] = useState<any[]>([]);
   const [revenue, setRevenue] = useState<{ total: number; count: number }>({ total: 0, count: 0 });
-  const [payouts, setPayouts] = useState<{ total_withdrawn: number; pending: number }>({ total_withdrawn: 0, pending: 0 });
+  const [editingFee, setEditingFee] = useState(false);
+  const [feeInput, setFeeInput] = useState("");
+  const [savingFee, setSavingFee] = useState(false);
 
   const [showNewEvent, setShowNewEvent] = useState(false);
   const [newTeamA, setNewTeamA] = useState("");
@@ -75,7 +78,7 @@ export default function OperatorDashboard() {
         fetchEvents(data.operator.id);
         fetchFights(data.operator.id);
         fetchRevenue(data.operator.id);
-        fetchPayouts(data.operator.id);
+        // payouts fetch removed — real wallet balance used instead
       } else {
         navigate("/onboarding");
       }
@@ -114,19 +117,36 @@ export default function OperatorDashboard() {
     }
   };
 
-  const fetchPayouts = async (operatorId: string) => {
-    const { data } = await (supabase as any)
-      .from("operator_payouts")
-      .select("amount_usdc, status")
-      .eq("operator_id", operatorId);
-    if (data) {
-      const totalWithdrawn = data
-        .filter((p: any) => p.status === "paid")
-        .reduce((s: number, r: any) => s + Number(r.amount_usdc || 0), 0);
-      const pending = data
-        .filter((p: any) => p.status === "pending")
-        .reduce((s: number, r: any) => s + Number(r.amount_usdc || 0), 0);
-      setPayouts({ total_withdrawn: totalWithdrawn, pending });
+  const { usdc_balance: walletBalance } = usePolygonUSDC();
+
+  const updateFeePercent = async () => {
+    const val = Number(feeInput);
+    if (isNaN(val) || val < 0 || val > 20) {
+      toast.error("Fee must be between 0% and 20%");
+      return;
+    }
+    setSavingFee(true);
+    try {
+      const token = await getAccessToken();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/operator-manage`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-privy-token": token || "" },
+          body: JSON.stringify({ action: "update_operator", fee_percent: val }),
+        }
+      );
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Fee updated");
+        setOperator(prev => prev ? { ...prev, fee_percent: val } : prev);
+        setEditingFee(false);
+      } else {
+        toast.error(json.error || "Failed to update fee");
+      }
+    } catch {
+    } finally {
+      setSavingFee(false);
     }
   };
 
@@ -229,7 +249,7 @@ export default function OperatorDashboard() {
 
   if (!operator) return null;
 
-  const availableBalance = Math.max(0, revenue.total - payouts.total_withdrawn - payouts.pending);
+  
 
   return (
     <div className="min-h-screen bg-[#06080f] text-white">
@@ -335,8 +355,9 @@ export default function OperatorDashboard() {
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-8">
           <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
-            <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><Wallet size={14} /> {t("operator.dashboard.available")}</div>
-            <div className="text-xl font-bold text-emerald-400">${availableBalance.toFixed(2)}</div>
+            <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><Wallet size={14} /> Wallet Balance</div>
+            <div className="text-xl font-bold text-emerald-400">${walletBalance != null ? walletBalance.toFixed(2) : "—"}</div>
+            <div className="text-[10px] text-white/30">USDC in wallet</div>
           </div>
           <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
             <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><Calendar size={14} /> {t("operator.dashboard.events")}</div>
@@ -344,8 +365,28 @@ export default function OperatorDashboard() {
           </div>
           <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
             <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><BarChart3 size={14} /> {t("operator.dashboard.yourFee")}</div>
-            <div className="text-xl font-bold">{operator.fee_percent}%</div>
-            <div className="text-[10px] text-white/30">{t("operator.dashboard.plusPlatform")}</div>
+            {editingFee ? (
+              <div className="flex items-center gap-2 mt-1">
+                <Input
+                  type="number"
+                  min={0}
+                  max={20}
+                  step={0.5}
+                  value={feeInput}
+                  onChange={(e) => setFeeInput(e.target.value)}
+                  className="bg-white/5 border-white/10 text-white w-20 h-8 text-sm"
+                />
+                <span className="text-white/60 text-sm">%</span>
+                <button onClick={updateFeePercent} disabled={savingFee} className="text-emerald-400 hover:text-emerald-300"><Save size={16} /></button>
+                <button onClick={() => setEditingFee(false)} className="text-white/30 hover:text-white/60 text-xs">✕</button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <div className="text-xl font-bold">{operator.fee_percent}%</div>
+                <button onClick={() => { setFeeInput(String(operator.fee_percent)); setEditingFee(true); }} className="text-white/30 hover:text-white/60"><Edit3 size={14} /></button>
+              </div>
+            )}
+            <div className="text-[10px] text-white/30">{editingFee ? "0–20%. Changes apply to future trades only." : t("operator.dashboard.plusPlatform")}</div>
           </div>
         </div>
 
