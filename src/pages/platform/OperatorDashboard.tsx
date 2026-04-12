@@ -355,8 +355,9 @@ export default function OperatorDashboard() {
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-8">
           <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
-            <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><Wallet size={14} /> {t("operator.dashboard.available")}</div>
-            <div className="text-xl font-bold text-emerald-400">${availableBalance.toFixed(2)}</div>
+            <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><Wallet size={14} /> Wallet Balance</div>
+            <div className="text-xl font-bold text-emerald-400">${walletBalance != null ? walletBalance.toFixed(2) : "—"}</div>
+            <div className="text-[10px] text-white/30">USDC in wallet</div>
           </div>
           <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
             <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><Calendar size={14} /> {t("operator.dashboard.events")}</div>
@@ -364,8 +365,28 @@ export default function OperatorDashboard() {
           </div>
           <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
             <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><BarChart3 size={14} /> {t("operator.dashboard.yourFee")}</div>
-            <div className="text-xl font-bold">{operator.fee_percent}%</div>
-            <div className="text-[10px] text-white/30">{t("operator.dashboard.plusPlatform")}</div>
+            {editingFee ? (
+              <div className="flex items-center gap-2 mt-1">
+                <Input
+                  type="number"
+                  min={0}
+                  max={20}
+                  step={0.5}
+                  value={feeInput}
+                  onChange={(e) => setFeeInput(e.target.value)}
+                  className="bg-white/5 border-white/10 text-white w-20 h-8 text-sm"
+                />
+                <span className="text-white/60 text-sm">%</span>
+                <button onClick={updateFeePercent} disabled={savingFee} className="text-emerald-400 hover:text-emerald-300"><Save size={16} /></button>
+                <button onClick={() => setEditingFee(false)} className="text-white/30 hover:text-white/60 text-xs">✕</button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <div className="text-xl font-bold">{operator.fee_percent}%</div>
+                <button onClick={() => { setFeeInput(String(operator.fee_percent)); setEditingFee(true); }} className="text-white/30 hover:text-white/60"><Edit3 size={14} /></button>
+              </div>
+            )}
+            <div className="text-[10px] text-white/30">{editingFee ? "0–20%. Changes apply to future trades only." : t("operator.dashboard.plusPlatform")}</div>
           </div>
         </div>
 
