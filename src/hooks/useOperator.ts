@@ -9,6 +9,11 @@ export interface Operator {
   logo_url: string | null;
   theme: string;
   fee_percent: number;
+  status: string;
+  brand_color: string | null;
+  welcome_message: string | null;
+  support_email: string | null;
+  disabled_sports: string[] | null;
   created_at: string;
 }
 
