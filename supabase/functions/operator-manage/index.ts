@@ -592,33 +592,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ── request_withdrawal (legacy — kept for backward compat) ──
-    if (action === "request_withdrawal") {
-      const { data: op } = await sb.from("operators").select("id").eq("user_id", privyDid).single();
-      if (!op) return jsonResp({ error: "not_found" }, 404);
-
-      const { data: revData } = await sb.from("operator_revenue").select("operator_fee_usdc").eq("operator_id", op.id);
-      const totalEarned = (revData || []).reduce((s: number, r: any) => s + Number(r.operator_fee_usdc || 0), 0);
-
-      const { data: payData } = await sb.from("operator_payouts").select("amount_usdc, status").eq("operator_id", op.id);
-      const totalPaid = (payData || []).reduce((s: number, r: any) => s + Number(r.amount_usdc || 0), 0);
-
-      const available = Math.max(0, totalEarned - totalPaid);
-      if (available < 0.01) return jsonResp({ error: "insufficient_balance" }, 400);
-
-      await sb.from("operator_payouts").insert({
-        operator_id: op.id, amount_usdc: available, status: "pending",
-      });
-
-      return jsonResp({ success: true, amount: available });
-    }
-
     // ── retry_failed_sweeps ──
     if (action === "retry_failed_sweeps") {
       const { data: op } = await sb.from("operators").select("id").eq("user_id", privyDid).single();
       if (!op) return jsonResp({ error: "not_found" }, 404);
 
-      // Reset failed sweeps back to accrued so prediction-confirm sweep or a manual sweep can retry
       const { data: failed } = await sb
         .from("operator_revenue")
         .update({ sweep_status: "accrued", sweep_error: null, sweep_attempted_at: null })
@@ -629,8 +607,15 @@ Deno.serve(async (req) => {
       return jsonResp({ success: true, reset_count: (failed || []).length });
     }
 
-    // ── list_all_operators (admin) ──
+    // ── list_all_operators (admin-only) ──
     if (action === "list_all_operators") {
+      // Resolve caller wallet via prediction_accounts, then verify admin status
+      const { data: account } = await sb.from("prediction_accounts").select("wallet_evm").eq("privy_did", privyDid).maybeSingle();
+      const callerWallet = account?.wallet_evm?.toLowerCase();
+      if (!callerWallet) return jsonResp({ error: "forbidden" }, 403);
+      const { data: adminRow } = await sb.from("prediction_admins").select("wallet").eq("wallet", callerWallet).maybeSingle();
+      if (!adminRow) return jsonResp({ error: "forbidden" }, 403);
+
       const { data } = await sb.from("operators").select("*, operator_settings(*)").order("created_at", { ascending: false });
       return jsonResp({ operators: data || [] });
     }
