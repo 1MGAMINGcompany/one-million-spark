@@ -48,7 +48,6 @@ export default function OperatorDashboard() {
   const [newDate, setNewDate] = useState("");
   const [newFeatured, setNewFeatured] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [withdrawing, setWithdrawing] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [dashTab, setDashTab] = useState<"overview" | "analytics" | "earnings" | "events">("overview");
 
