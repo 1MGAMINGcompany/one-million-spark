@@ -95,10 +95,17 @@ export default function OperatorDashboard() {
       );
       const data = await res.json();
       if (data.operator) {
-        setOperator(data.operator);
-        fetchEvents(data.operator.id);
-        fetchFights(data.operator.id);
-        fetchRevenue(data.operator.id);
+        const op = data.operator;
+        setOperator(op);
+        setBrandColor(op.brand_color || "#4F46E5");
+        setWelcomeMsg(op.welcome_message || "");
+        setSupportEmail(op.support_email || "");
+        setLogoUrl(op.logo_url || "");
+        setDisabledSports(op.disabled_sports || []);
+        setAppPaused(op.status === "paused");
+        fetchEvents(op.id);
+        fetchFights(op.id);
+        fetchRevenue(op.id);
         // payouts fetch removed — real wallet balance used instead
       } else {
         navigate("/onboarding");
