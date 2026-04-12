@@ -412,7 +412,7 @@ export default function OperatorDashboard() {
         <div className="flex gap-1 mb-6 bg-white/[0.03] p-1 rounded-lg w-fit overflow-x-auto">
           {(["overview", "earnings", "events", "analytics", "settings"] as const).map(tab => (
             <button key={tab} onClick={() => setDashTab(tab)} className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${dashTab === tab ? "bg-white/10 text-white" : "text-white/40 hover:text-white/60"}`}>
-              {tab === "overview" ? "Overview" : tab === "earnings" ? "💰 Earnings" : tab === "analytics" ? "📊 Analytics" : tab === "settings" ? "⚙️ Settings" : "📅 Events"}
+              {t(`operator.dashboard.tab${tab.charAt(0).toUpperCase() + tab.slice(1)}`)}
             </button>
           ))}
         </div>
@@ -435,13 +435,19 @@ export default function OperatorDashboard() {
             <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="font-semibold text-sm">App Status</h3>
+                  <h3 className="font-semibold text-sm">{t("operator.dashboard.appStatus")}</h3>
                   <p className="text-xs text-white/40 mt-1">
-                    {appPaused ? "Your app is paused. No new predictions can be placed." : "Your app is live and accepting predictions."}
+                    {appPaused ? t("operator.dashboard.appPausedDesc") : t("operator.dashboard.appLiveDesc")}
                   </p>
                 </div>
                 <button
-                  onClick={togglePause}
+                  onClick={() => {
+                    if (appPaused) {
+                      togglePause(); // Resume immediately, no confirmation needed
+                    } else {
+                      setShowPauseConfirm(true); // Show confirmation before pausing
+                    }
+                  }}
                   disabled={togglingPause}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     appPaused
@@ -449,16 +455,41 @@ export default function OperatorDashboard() {
                       : "bg-red-600/80 hover:bg-red-500 text-white"
                   }`}
                 >
-                  {togglingPause ? "..." : appPaused ? "Resume App" : "Pause App"}
+                  {togglingPause ? "..." : appPaused ? t("operator.dashboard.resumeApp") : t("operator.dashboard.pauseApp")}
                 </button>
               </div>
             </div>
 
+            {/* Pause Confirmation Dialog */}
+            <AlertDialog open={showPauseConfirm} onOpenChange={setShowPauseConfirm}>
+              <AlertDialogContent className="bg-[#0d1117] border-white/10 text-white">
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="flex items-center gap-2">
+                    <AlertTriangle size={18} className="text-yellow-400" />
+                    {t("operator.dashboard.pauseConfirmTitle")}
+                  </AlertDialogTitle>
+                  <AlertDialogDescription className="text-white/50">
+                    {t("operator.dashboard.pauseConfirmDesc")}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel className="border-white/10 text-white hover:bg-white/5">
+                    {t("operator.dashboard.cancel")}
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => { setShowPauseConfirm(false); togglePause(); }}
+                    className="bg-red-600 hover:bg-red-500 text-white border-0"
+                  >
+                    {t("operator.dashboard.pauseConfirmAction")}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
             {/* Section 2: Branding */}
             <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5 space-y-4">
-              <h3 className="font-semibold text-sm">Branding</h3>
+              <h3 className="font-semibold text-sm">{t("operator.dashboard.branding")}</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Logo — full-width */}
                 <div className="sm:col-span-2">
                   <OperatorLogoUpload
                     value={logoUrl}
@@ -467,23 +498,23 @@ export default function OperatorDashboard() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-white/40 block mb-1">Brand Color</label>
+                  <label className="text-xs text-white/40 block mb-1">{t("operator.dashboard.brandColor")}</label>
                   <div className="flex items-center gap-2">
                     <input type="color" value={brandColor} onChange={e => setBrandColor(e.target.value)} className="w-10 h-10 rounded border border-white/10 bg-transparent cursor-pointer" />
                     <Input value={brandColor} onChange={e => setBrandColor(e.target.value)} placeholder="#4F46E5" className="bg-white/5 border-white/10 text-white text-sm w-28" />
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs text-white/40 block mb-1">Welcome Message</label>
-                  <Input value={welcomeMsg} onChange={e => setWelcomeMsg(e.target.value.slice(0, 500))} placeholder="Welcome to our predictions platform!" className="bg-white/5 border-white/10 text-white text-sm" />
-                  <p className="text-[10px] text-white/20 mt-1">{welcomeMsg.length}/500 characters</p>
+                  <label className="text-xs text-white/40 block mb-1">{t("operator.dashboard.welcomeMessage")}</label>
+                  <Input value={welcomeMsg} onChange={e => setWelcomeMsg(e.target.value.slice(0, 500))} placeholder={t("operator.dashboard.welcomeMsgPlaceholder")} className="bg-white/5 border-white/10 text-white text-sm" />
+                  <p className="text-[10px] text-white/20 mt-1">{welcomeMsg.length}/500</p>
                 </div>
               </div>
             </div>
 
             {/* Section 3: Fee % */}
             <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5">
-              <h3 className="font-semibold text-sm mb-3">Operator Fee</h3>
+              <h3 className="font-semibold text-sm mb-3">{t("operator.dashboard.operatorFee")}</h3>
               {editingFee ? (
                 <div className="flex items-center gap-3">
                   <Input
@@ -497,9 +528,9 @@ export default function OperatorDashboard() {
                   />
                   <span className="text-white/60 text-sm">%</span>
                   <Button size="sm" onClick={updateFeePercent} disabled={savingFee} className="bg-emerald-600 hover:bg-emerald-500 border-0 text-xs gap-1">
-                    <Save size={14} /> {savingFee ? "Saving..." : "Save"}
+                    <Save size={14} /> {savingFee ? t("operator.dashboard.saving") : "Save"}
                   </Button>
-                  <button onClick={() => setEditingFee(false)} className="text-white/30 hover:text-white/60 text-xs">Cancel</button>
+                  <button onClick={() => setEditingFee(false)} className="text-white/30 hover:text-white/60 text-xs">{t("operator.dashboard.cancel")}</button>
                 </div>
               ) : (
                 <div className="flex items-center gap-3">
@@ -509,13 +540,13 @@ export default function OperatorDashboard() {
                   </button>
                 </div>
               )}
-              <p className="text-[10px] text-white/30 mt-2">0–20%. Changes apply to future trades only and do not alter past revenue.</p>
+              <p className="text-[10px] text-white/30 mt-2">{t("operator.dashboard.feeRange")}</p>
             </div>
 
             {/* Section 4: Sports Visibility */}
             <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5 space-y-3">
-              <h3 className="font-semibold text-sm">Sports Visibility</h3>
-              <p className="text-xs text-white/40">Toggle sports off to hide them from your app. All sports are enabled by default.</p>
+              <h3 className="font-semibold text-sm">{t("operator.dashboard.sportsVisibility")}</h3>
+              <p className="text-xs text-white/40">{t("operator.dashboard.sportsVisibilityDesc")}</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {SPORT_OPTIONS.map(sport => {
                   const isDisabled = disabledSports.includes(sport);
@@ -542,22 +573,22 @@ export default function OperatorDashboard() {
 
             {/* Section 5: Support / Contact */}
             <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5 space-y-3">
-              <h3 className="font-semibold text-sm">Support & Contact</h3>
+              <h3 className="font-semibold text-sm">{t("operator.dashboard.supportContact")}</h3>
               <div>
-                <label className="text-xs text-white/40 block mb-1">Support Email</label>
-                <Input value={supportEmail} onChange={e => setSupportEmail(e.target.value)} placeholder="support@yourbrand.com" className="bg-white/5 border-white/10 text-white text-sm" />
-                <p className="text-[10px] text-white/20 mt-1">Shown to users on your app for support inquiries</p>
+                <label className="text-xs text-white/40 block mb-1">{t("operator.dashboard.supportEmailLabel")}</label>
+                <Input value={supportEmail} onChange={e => setSupportEmail(e.target.value)} placeholder={t("operator.dashboard.supportEmailPlaceholder")} className="bg-white/5 border-white/10 text-white text-sm" />
+                <p className="text-[10px] text-white/20 mt-1">{t("operator.dashboard.supportEmailHelp")}</p>
               </div>
               {contactEmail && (
                 <div className="text-xs text-white/40 flex items-center gap-1">
-                  <Mail size={12} /> Your account: {contactEmail}
+                  <Mail size={12} /> {t("operator.dashboard.yourAccount")}: {contactEmail}
                 </div>
               )}
             </div>
 
             {/* Section 6: Domain */}
             <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5 space-y-2">
-              <h3 className="font-semibold text-sm">Domain</h3>
+              <h3 className="font-semibold text-sm">{t("operator.dashboard.domain")}</h3>
               <div className="flex items-center gap-2">
                 <code className="text-sm text-blue-400 font-mono">1mg.live/{operator.subdomain}</code>
                 <a
@@ -569,7 +600,7 @@ export default function OperatorDashboard() {
                   <ExternalLink size={14} />
                 </a>
               </div>
-              <p className="text-[10px] text-white/20">Custom domains coming soon. Contact support for early access.</p>
+              <p className="text-[10px] text-white/20">{t("operator.dashboard.customDomainsSoon")}</p>
             </div>
 
             {/* Save all settings */}
@@ -578,7 +609,7 @@ export default function OperatorDashboard() {
               disabled={savingSettings}
               className="bg-blue-600 hover:bg-blue-500 border-0"
             >
-              <Save size={16} /> {savingSettings ? "Saving..." : "Save Settings"}
+              <Save size={16} /> {savingSettings ? t("operator.dashboard.saving") : t("operator.dashboard.saveSettings")}
             </Button>
           </div>
         )}
