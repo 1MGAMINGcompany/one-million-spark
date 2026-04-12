@@ -557,8 +557,32 @@ Deno.serve(async (req) => {
         .filter((r: any) => r.sweep_status === "accrued")
         .reduce((s: number, r: any) => s + Number(r.operator_fee_usdc || 0), 0);
 
+      // Fetch on-chain USDC balance of payout wallet if set
+      let payout_wallet_balance: number | null = null;
+      if (op.payout_wallet) {
+        try {
+          const balanceOfData = "0x70a08231" + op.payout_wallet.slice(2).toLowerCase().padStart(64, "0");
+          for (const rpc of POLYGON_RPCS) {
+            try {
+              const r = await fetch(rpc, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: USDC_CONTRACT, data: balanceOfData }, "latest"] }),
+              });
+              if (!r.ok) continue;
+              const j = await r.json();
+              if (j.result) {
+                payout_wallet_balance = Number(BigInt(j.result)) / 1e6;
+                break;
+              }
+            } catch { continue; }
+          }
+        } catch { /* non-critical */ }
+      }
+
       return jsonResp({
         payout_wallet: op.payout_wallet,
+        payout_wallet_balance,
         total_earned: totalEarned,
         total_swept: totalSwept,
         pending_sweep: pendingSweep,
