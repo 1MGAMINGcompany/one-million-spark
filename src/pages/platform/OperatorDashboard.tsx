@@ -78,7 +78,7 @@ export default function OperatorDashboard() {
         fetchEvents(data.operator.id);
         fetchFights(data.operator.id);
         fetchRevenue(data.operator.id);
-        fetchPayouts(data.operator.id);
+        // payouts fetch removed — real wallet balance used instead
       } else {
         navigate("/onboarding");
       }
