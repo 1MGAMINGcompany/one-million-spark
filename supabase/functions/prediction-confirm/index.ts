@@ -377,7 +377,7 @@ Deno.serve(async (req) => {
           const platformFeeBps = 150;
           const platformFeeUsd = Number(((tradeOrder.requested_amount_usdc * platformFeeBps) / 10_000).toFixed(6));
           const operatorFeeUsd = Math.max(0, Number((tradeOrder.fee_usdc - platformFeeUsd).toFixed(6)));
-          await supabase.from("operator_revenue").insert({
+          const { data: revRow } = await supabase.from("operator_revenue").insert({
             operator_id: resolvedOperatorId,
             fight_id: tradeOrder.fight_id,
             entry_id: entry.id,
@@ -386,7 +386,33 @@ Deno.serve(async (req) => {
             operator_fee_usdc: operatorFeeUsd,
             total_fee_usdc: tradeOrder.fee_usdc,
             entry_amount_usdc: tradeOrder.requested_amount_usdc,
-          });
+          }).select("id").single();
+
+          // ── Sweep operator fee to operator wallet (non-blocking) ──
+          if (revRow && operatorFeeUsd > 0) {
+            try {
+              const { data: op } = await supabase
+                .from("operators")
+                .select("payout_wallet")
+                .eq("id", resolvedOperatorId)
+                .single();
+
+              if (op?.payout_wallet) {
+                const sweepResult = await sweepOperatorFee(
+                  supabase, revRow.id, operatorFeeUsd, op.payout_wallet,
+                );
+                if (sweepResult.success) {
+                  console.log(`[prediction-confirm] Operator sweep completed: tx=${sweepResult.txHash}`);
+                } else {
+                  console.warn(`[prediction-confirm] Operator sweep deferred: ${sweepResult.error}`);
+                }
+              } else {
+                console.log(`[prediction-confirm] No payout_wallet for operator ${resolvedOperatorId} — sweep skipped`);
+              }
+            } catch (sweepErr) {
+              console.warn("[prediction-confirm] Operator sweep error (non-fatal):", sweepErr);
+            }
+          }
         } catch (revErr) {
           console.warn("[prediction-confirm] operator_revenue insert failed:", revErr);
         }
