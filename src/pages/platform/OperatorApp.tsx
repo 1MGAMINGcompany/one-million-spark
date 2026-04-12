@@ -15,6 +15,10 @@ import { usePolymarketPrices } from "@/hooks/usePolymarketPrices";
 import { usePolymarketLivePrices } from "@/hooks/usePolymarketLivePrices";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Globe, Trophy, Loader2, ShieldCheck, Search, CalendarPlus, ChevronDown, Zap, Copy, ExternalLink, CreditCard, ArrowUpRight, AlertTriangle, LogOut } from "lucide-react";
+import { useFundWallet, useSendTransaction } from "@privy-io/react-auth";
+import { polygon } from "viem/chains";
+import { encodeFunctionData, parseAbi } from "viem";
+import { USDC_E_CONTRACT, USDC_DECIMALS } from "@/lib/polygon-tokens";
 
 import { toast } from "sonner";
 import { dbg } from "@/lib/debugLog";
@@ -182,6 +186,10 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [withdrawDest, setWithdrawDest] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [funding, setFunding] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
+  const { fundWallet } = useFundWallet();
+  const { sendTransaction } = useSendTransaction();
   const [requoteData, setRequoteData] = useState<RequoteData | null>(null);
   const acceptedRequoteRef = useRef<RequoteAcceptanceContext | null>(null);
 
