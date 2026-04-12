@@ -6,7 +6,7 @@ import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
 import { formatEventDateTime } from "@/lib/formatEventLocalDateTime";
 import type { Fight } from "@/components/predictions/FightCard";
 import { useLiveGameState } from "@/hooks/useSportsWebSocket";
-import LiveGameBadge, { LiveScoreDisplay } from "@/components/predictions/LiveGameBadge";
+import LiveGameBadge from "@/components/predictions/LiveGameBadge";
 import type { OperatorTheme } from "@/lib/operatorThemes";
 
 interface SimplePredictionCardProps {
@@ -49,6 +49,48 @@ function getOddsFromFight(fight: Fight): { priceA: number; priceB: number } {
   return { priceA: poolA / total, priceB: poolB / total };
 }
 
+/** Format sport-specific live state line */
+function formatLiveDetail(liveState: { period?: string; elapsed?: string; sport?: string; status?: string } | null, t: (k: string, o?: any) => string): string | null {
+  if (!liveState) return null;
+  const { period, elapsed, sport, status } = liveState;
+  if (!period && !elapsed) return null;
+  const s = (sport || "").toLowerCase();
+  const st = (status || "").toLowerCase();
+
+  if (st === "halftime" || st === "ht" || st === "break") return t("operator.liveHalftime");
+
+  // NHL / Hockey
+  if (s.includes("hockey") || s.includes("nhl") || s.includes("ice")) {
+    const p = period?.startsWith("P") ? period : `P${period}`;
+    return elapsed ? `${p} • ${elapsed}` : p;
+  }
+  // NBA / Basketball
+  if (s.includes("basketball") || s.includes("nba")) {
+    const q = period?.startsWith("Q") ? period : `Q${period}`;
+    return elapsed ? `${q} • ${elapsed}` : q;
+  }
+  // Soccer
+  if (s.includes("soccer") || s.includes("football") || s.includes("futbol") || s.includes("epl") || s.includes("mls") || s.includes("laliga") || s.includes("bundesliga") || s.includes("serie") || s.includes("ligue")) {
+    return elapsed ? `${elapsed}'` : period || null;
+  }
+  // MLB / Baseball
+  if (s.includes("baseball") || s.includes("mlb")) {
+    if (period && elapsed) return `${period} ${elapsed}`;
+    return period || elapsed || null;
+  }
+  // MMA / Boxing
+  if (s.includes("mma") || s.includes("ufc") || s.includes("boxing") || s.includes("fight")) {
+    const r = period ? `${t("operator.liveRound")}${period}` : "";
+    return elapsed ? `${r} • ${elapsed}` : r || null;
+  }
+  // Tennis
+  if (s.includes("tennis")) return period ? `${t("operator.liveSet")} ${period}` : null;
+
+  // Generic
+  if (period && elapsed) return `${period} • ${elapsed}`;
+  return period || elapsed || null;
+}
+
 export default function SimplePredictionCard({
   fight,
   onPredict,
@@ -70,7 +112,6 @@ export default function SimplePredictionCard({
   const multiplierB = priceB > 0 ? (1 / priceB) : 0;
   const pctReturnA = multiplierA > 0 ? Math.round((multiplierA - 1) * 100) : 0;
   const pctReturnB = multiplierB > 0 ? Math.round((multiplierB - 1) * 100) : 0;
-  // Market split for social proof bar
   const splitA = Math.round((priceA / (priceA + priceB || 1)) * 100);
 
   const liveState = useLiveGameState((fight as any).polymarket_slug);
@@ -89,51 +130,58 @@ export default function SimplePredictionCard({
   const userWon = isSettled && fight.winner === userPicked;
   const [winShared, setWinShared] = useState(false);
 
-  const eventDateStr = (fight as any).event_date
-    ? formatEventDateTime((fight as any).event_date)
-    : null;
-
+  const eventDateStr = (fight as any).event_date ? formatEventDateTime((fight as any).event_date) : null;
   const leagueName = (fight as any)._league || fight.event_name?.split(" — ")[0] || fight.event_name;
   const broadSportLabel = (fight as any)._broadSport && (fight as any)._broadSport !== "OTHER"
     ? ((fight as any)._broadSport as string).charAt(0) + ((fight as any)._broadSport as string).slice(1).toLowerCase()
     : null;
   const sportLeagueLabel = broadSportLabel && leagueName && leagueName !== "Other"
     ? `${broadSportLabel.toUpperCase()} • ${leagueName}`
-    : broadSportLabel
-      ? broadSportLabel.toUpperCase()
-      : leagueName;
+    : broadSportLabel ? broadSportLabel.toUpperCase() : leagueName;
   const timeLabel = getTimeLabel((fight as any).event_date, t);
+
+  const isLive = !!(liveState && liveState.live);
+  const isEnded = !!(liveState && liveState.ended);
+  const liveDetailText = formatLiveDetail(liveState, t);
 
   const cardStyle = {
     backgroundColor: theme.cardBg,
     border: `1px solid ${theme.cardBorder}`,
   };
 
-  const GraphButton = () => (
-    onGraph ? (
-      <button
-        onClick={(e) => { e.stopPropagation(); onGraph(fight); }}
-        className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-all hover:opacity-80"
-        style={{ backgroundColor: theme.surfaceBg, border: `1px solid ${theme.cardBorder}`, color: theme.textSecondary }}
-      >
-        <BarChart3 className="w-3 h-3" />
-        Graph
-      </button>
-    ) : null
+  const ActionButtons = () => (
+    <div className="flex items-center gap-1">
+      {onTips && (
+        <button onClick={(e) => { e.stopPropagation(); onTips(fight); }}
+          className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-all hover:opacity-80"
+          style={{ backgroundColor: theme.surfaceBg, border: `1px solid ${theme.cardBorder}`, color: theme.textSecondary }}>
+          <Lightbulb className="w-3 h-3" /> {t("operator.tips")}
+        </button>
+      )}
+      {onGraph && (
+        <button onClick={(e) => { e.stopPropagation(); onGraph(fight); }}
+          className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-all hover:opacity-80"
+          style={{ backgroundColor: theme.surfaceBg, border: `1px solid ${theme.cardBorder}`, color: theme.textSecondary }}>
+          <BarChart3 className="w-3 h-3" /> {t("operator.graph")}
+        </button>
+      )}
+    </div>
   );
 
-  const TipsButton = () => (
-    onTips ? (
-      <button
-        onClick={(e) => { e.stopPropagation(); onTips(fight); }}
-        className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-all hover:opacity-80"
-        style={{ backgroundColor: theme.surfaceBg, border: `1px solid ${theme.cardBorder}`, color: theme.textSecondary }}
-      >
-        <Lightbulb className="w-3 h-3" />
-        Tips
-      </button>
-    ) : null
-  );
+  // Score display block — reused across states
+  const LiveScoreBlock = ({ compact = false }: { compact?: boolean }) => {
+    if (!isLive || !liveState?.score) return null;
+    return (
+      <div className={`text-center ${compact ? "py-1" : "py-2"} rounded-xl`} style={{ backgroundColor: "#ef444410" }}>
+        <div className={`${compact ? "text-xl" : "text-2xl"} font-bold font-mono tabular-nums`} style={{ color: theme.textPrimary }}>
+          {liveState.score}
+        </div>
+        {liveDetailText && (
+          <div className="text-[10px] font-mono mt-0.5" style={{ color: theme.textMuted }}>{liveDetailText}</div>
+        )}
+      </div>
+    );
+  };
 
   // ---------- SETTLED STATE ----------
   if (isSettled && fight.winner) {
@@ -144,11 +192,9 @@ export default function SimplePredictionCard({
     const orderNeverExecuted = hasNoRealOrder || isNotExecuted;
 
     return (
-      <div className="rounded-2xl p-5" style={cardStyle}>
+      <div className="rounded-2xl p-4 sm:p-5" style={cardStyle}>
         {sportLeagueLabel && (
-          <div className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: theme.textMuted }}>
-            {sportLeagueLabel}
-          </div>
+          <div className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: theme.textMuted }}>{sportLeagueLabel}</div>
         )}
         <div className="text-center mb-3">
           <span className="text-xs font-bold text-green-500 uppercase tracking-wider">{t("operator.result")}</span>
@@ -160,10 +206,8 @@ export default function SimplePredictionCard({
           <div className="text-center mt-3">
             {orderNeverExecuted ? (
               <>
-                <p className="text-amber-400 font-bold text-sm">⚠️ Trade Not Executed</p>
-                <p className="text-xs mt-1" style={{ color: theme.textMuted }}>
-                  Your order was not placed on the exchange. No funds were committed.
-                </p>
+                <p className="text-amber-400 font-bold text-sm">⚠️ {t("operator.tradeNotExecuted")}</p>
+                <p className="text-xs mt-1" style={{ color: theme.textMuted }}>{t("operator.noFundsCommitted")}</p>
               </>
             ) : userWon ? (
               <>
@@ -172,12 +216,9 @@ export default function SimplePredictionCard({
                   <p className="text-green-400 text-lg font-bold mt-1">+${userEntry.reward_usd.toFixed(2)}</p>
                 )}
                 {!userEntry?.claimed && onClaim && (
-                  <button
-                    onClick={() => onClaim(fight.id)}
-                    disabled={claiming}
+                  <button onClick={() => onClaim(fight.id)} disabled={claiming}
                     className="mt-2 px-6 py-2 rounded-xl font-bold text-sm transition-all animate-pulse hover:animate-none"
-                    style={{ backgroundColor: theme.primary, color: theme.primaryForeground }}
-                  >
+                    style={{ backgroundColor: theme.primary, color: theme.primaryForeground }}>
                     {claiming ? t("operator.claiming") : `${t("operator.collectWinnings")}${userEntry?.reward_usd ? ` (+$${userEntry.reward_usd.toFixed(2)})` : ""}`}
                   </button>
                 )}
@@ -185,11 +226,9 @@ export default function SimplePredictionCard({
                   <div className="space-y-2 mt-2">
                     <p className="text-xs" style={{ color: theme.textMuted }}>{t("operator.winningsCollected")}</p>
                     {onShareWin && !winShared && (
-                      <button
-                        onClick={() => { onShareWin(fight); setWinShared(true); }}
+                      <button onClick={() => { onShareWin(fight); setWinShared(true); }}
                         className="px-5 py-2 rounded-xl font-bold text-sm transition-all hover:opacity-80"
-                        style={{ border: `1px solid ${theme.cardBorder}`, color: theme.textPrimary }}
-                      >
+                        style={{ border: `1px solid ${theme.cardBorder}`, color: theme.textPrimary }}>
                         🏆 {t("operator.shareYourWin")}
                       </button>
                     )}
@@ -209,69 +248,52 @@ export default function SimplePredictionCard({
   if (userPicked) {
     const pickedName = userPicked === "fighter_a" ? nameA : nameB;
     return (
-      <div className="rounded-2xl p-5" style={cardStyle}>
+      <div className="rounded-2xl p-4 sm:p-5" style={cardStyle}>
+        {/* Header */}
         <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {sportLeagueLabel && (
-              <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: theme.textMuted }}>
-                {sportLeagueLabel}
-              </div>
+              <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: theme.textMuted }}>{sportLeagueLabel}</div>
             )}
-            {liveState && (liveState.live || liveState.ended) && (
-              <LiveGameBadge state={liveState} theme={theme} />
-            )}
+            {liveState && (liveState.live || liveState.ended) && <LiveGameBadge state={liveState} theme={theme} />}
           </div>
-          <div className="flex items-center gap-1">
-            <TipsButton />
-            <GraphButton />
+          <ActionButtons />
+        </div>
+
+        {/* Live score */}
+        <LiveScoreBlock compact />
+
+        {/* Teams */}
+        <div className="flex items-center justify-between mb-3 mt-2">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            {logoA && <img src={logoA} className="w-6 h-6 object-contain shrink-0" alt="" />}
+            <span className="text-sm font-bold truncate" style={{ color: theme.textPrimary }}>{nameA}</span>
+          </div>
+          {!isLive || !liveState?.score ? (
+            <span className="text-xs font-bold mx-2 shrink-0" style={{ color: theme.textMuted }}>{t("operator.vs")}</span>
+          ) : <span className="mx-2" />}
+          <div className="flex items-center gap-2 min-w-0 flex-1 justify-end">
+            <span className="text-sm font-bold truncate text-right" style={{ color: theme.textPrimary }}>{nameB}</span>
+            {logoB && <img src={logoB} className="w-6 h-6 object-contain shrink-0" alt="" />}
           </div>
         </div>
 
-        {/* Live score between teams */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            {logoA && <img src={logoA} className="w-6 h-6 object-contain" alt="" />}
-            <span className="text-base font-bold" style={{ color: theme.textPrimary }}>{nameA}</span>
-          </div>
-          {liveState && liveState.live && liveState.score ? (
-            <div className="text-center">
-              <LiveScoreDisplay state={liveState} theme={theme} />
-              {(liveState.period || liveState.elapsed) && (
-                <div className="text-[9px] font-mono" style={{ color: theme.textMuted }}>
-                  {[liveState.period, liveState.elapsed].filter(Boolean).join(" • ")}
-                </div>
-              )}
-            </div>
-          ) : (
-            <span className="text-xs font-bold" style={{ color: theme.textMuted }}>{t("operator.vs")}</span>
-          )}
-          <div className="flex items-center gap-2">
-            <span className="text-base font-bold" style={{ color: theme.textPrimary }}>{nameB}</span>
-            {logoB && <img src={logoB} className="w-6 h-6 object-contain" alt="" />}
-          </div>
-        </div>
-        {eventDateStr && (
+        {eventDateStr && !isLive && (
           <p className="text-xs text-center mb-2" style={{ color: theme.textMuted }}>{eventDateStr}</p>
         )}
+
         <div className="text-center rounded-xl py-3 px-4" style={{ backgroundColor: theme.surfaceBg }}>
-           <p className="text-sm" style={{ color: theme.textSecondary }}>{t("operator.yourPick")}</p>
-           <p className="text-lg font-bold" style={{ color: theme.textPrimary }}>🎯 {pickedName}</p>
+          <p className="text-sm" style={{ color: theme.textSecondary }}>{t("operator.yourPick")}</p>
+          <p className="text-lg font-bold" style={{ color: theme.textPrimary }}>🎯 {pickedName}</p>
           {userEntry?.amount_usd && (
             <p className="text-xs mt-1" style={{ color: theme.textMuted }}>
               {t("operator.amountPlacedLabel", { amount: userEntry.amount_usd.toFixed(2) })}
             </p>
           )}
           {isOpen && onSell && userEntry?.polymarket_order_id && (
-            <button
-              onClick={() => onSell(fight.id)}
-              disabled={selling}
+            <button onClick={() => onSell(fight.id)} disabled={selling}
               className="mt-3 px-5 py-2 rounded-xl font-bold text-sm transition-all hover:opacity-80"
-              style={{
-                backgroundColor: "transparent",
-                border: `1.5px solid ${theme.primary}`,
-                color: theme.primary,
-              }}
-            >
+              style={{ backgroundColor: "transparent", border: `1.5px solid ${theme.primary}`, color: theme.primary }}>
               {selling ? t("operator.selling") : t("operator.sellPosition")}
             </button>
           )}
@@ -282,147 +304,105 @@ export default function SimplePredictionCard({
 
   // ---------- OPEN FOR PREDICTIONS ----------
   const gridCols = hasDrawOption ? "grid-cols-3" : "grid-cols-2";
-  const isLive = !!(liveState && liveState.live);
 
   return (
-    <div className="rounded-2xl p-5 space-y-3" style={cardStyle}>
-      {/* Header: Sport + League + Live/Time + Actions */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+    <div className="rounded-2xl p-4 sm:p-5 space-y-2.5" style={cardStyle}>
+      {/* Row 1: Sport + League + Status + Actions */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
           {sportLeagueLabel && (
-            <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: theme.textMuted }}>
+            <span className="text-[10px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ color: theme.textMuted }}>
               {sportLeagueLabel}
-            </div>
+            </span>
           )}
           {liveState && (liveState.live || liveState.ended) ? (
             <LiveGameBadge state={liveState} theme={theme} />
           ) : timeLabel ? (
-            <span
-              className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
-              style={{
-                backgroundColor: timeLabel.isUrgent ? "#ef444422" : theme.primary + "18",
-                color: timeLabel.isUrgent ? "#ef4444" : theme.primary,
-              }}
-            >
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap"
+              style={{ backgroundColor: timeLabel.isUrgent ? "#ef444422" : theme.primary + "18", color: timeLabel.isUrgent ? "#ef4444" : theme.primary }}>
               {timeLabel.text}
             </span>
           ) : null}
           {isLive && (
-            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1"
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5"
               style={{ backgroundColor: "#f9731622", color: "#f97316" }}>
-              <Flame className="w-2.5 h-2.5" /> Hot
+              <Flame className="w-2.5 h-2.5" /> {t("operator.hotMarket")}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1">
-          <TipsButton />
-          <GraphButton />
-        </div>
+        <ActionButtons />
       </div>
 
-      {/* Live score block — prominent when live */}
-      {isLive && liveState?.score && (
-        <div className="text-center py-2 rounded-xl" style={{ backgroundColor: "#ef444410" }}>
-          <div className="text-2xl font-bold font-mono tabular-nums" style={{ color: theme.textPrimary }}>
-            {liveState.score}
-          </div>
-          {(liveState.period || liveState.elapsed) && (
-            <div className="text-[10px] font-mono mt-0.5" style={{ color: theme.textMuted }}>
-              {[liveState.period, liveState.elapsed].filter(Boolean).join(" • ")}
-            </div>
-          )}
-        </div>
-      )}
+      {/* Row 2: Live score + period (prominent when live) */}
+      <LiveScoreBlock />
 
-      {/* Team names */}
+      {/* Row 3: Teams */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3 flex-1">
-          {logoA && <img src={logoA} className="w-8 h-8 object-contain" alt="" />}
-          <span className="text-lg font-bold leading-tight" style={{ color: theme.textPrimary }}>{nameA}</span>
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          {logoA && <img src={logoA} className="w-7 h-7 sm:w-8 sm:h-8 object-contain shrink-0" alt="" />}
+          <span className="text-base sm:text-lg font-bold leading-tight truncate" style={{ color: theme.textPrimary }}>{nameA}</span>
         </div>
-        <span className="text-sm font-bold mx-3" style={{ color: theme.textMuted }}>
-          {/* If live but no score block above, show inline */}
-          {isLive && liveState?.score ? null : (
-            liveState && liveState.live ? (
-              <LiveScoreDisplay state={liveState} theme={theme} />
-            ) : t("operator.vs")
-          )}
+        <span className="text-sm font-bold mx-2 shrink-0" style={{ color: theme.textMuted }}>
+          {isLive && liveState?.score ? "" : t("operator.vs")}
         </span>
-        <div className="flex items-center gap-3 flex-1 justify-end text-right">
-          <span className="text-lg font-bold leading-tight" style={{ color: theme.textPrimary }}>{nameB}</span>
-          {logoB && <img src={logoB} className="w-8 h-8 object-contain" alt="" />}
+        <div className="flex items-center gap-2 min-w-0 flex-1 justify-end">
+          <span className="text-base sm:text-lg font-bold leading-tight truncate text-right" style={{ color: theme.textPrimary }}>{nameB}</span>
+          {logoB && <img src={logoB} className="w-7 h-7 sm:w-8 sm:h-8 object-contain shrink-0" alt="" />}
         </div>
       </div>
 
-      {/* Event date (only when not live) */}
+      {/* Row 4: Event date (only non-live) */}
       {!isLive && eventDateStr && (
         <p className="text-xs text-center" style={{ color: theme.textMuted }}>{eventDateStr}</p>
       )}
 
-      {/* Pick buttons — multiplier-first */}
-      <div className={`grid ${gridCols} gap-3`}>
+      {/* Row 5: Pick buttons — multiplier-first */}
+      <div className={`grid ${gridCols} gap-2 sm:gap-3`}>
         <button
           onClick={() => isOpen && onPredict(fight, "fighter_a")}
           disabled={!isOpen}
-          className="rounded-xl py-3 px-2 text-center transition-all hover:shadow-md hover:scale-[1.02] disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{
-            backgroundColor: theme.surfaceBg,
-            border: `1px solid ${theme.cardBorder}`,
-          }}
-        >
-          <span className="block text-sm font-bold" style={{ color: theme.textPrimary }}>{nameA}</span>
-          <span className="block text-xl font-black mt-1" style={{ color: theme.primary }}>
+          className="rounded-xl py-2.5 sm:py-3 px-2 text-center transition-all hover:shadow-md active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+          style={{ backgroundColor: theme.surfaceBg, border: `1px solid ${theme.cardBorder}` }}>
+          <span className="block text-xs sm:text-sm font-bold truncate" style={{ color: theme.textPrimary }}>{nameA}</span>
+          <span className="block text-lg sm:text-xl font-black mt-0.5" style={{ color: theme.primary }}>
             {multiplierA > 0 ? `${multiplierA.toFixed(2)}x` : "—"}
           </span>
-          {pctReturnA > 0 && (
-            <span className="block text-[10px] font-bold mt-0.5 text-green-500">+{pctReturnA}%</span>
-          )}
+          {pctReturnA > 0 && <span className="block text-[10px] font-bold mt-0.5 text-green-500">+{pctReturnA}%</span>}
         </button>
         {hasDrawOption && (
-          <button
-            onClick={() => isOpen && onPredict(fight, "draw")}
-            disabled={!isOpen}
-            className="rounded-xl py-3 px-2 text-center transition-all hover:shadow-md disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ backgroundColor: theme.surfaceBg, border: `1px solid ${theme.cardBorder}` }}
-          >
-            <span className="block text-sm font-bold" style={{ color: theme.textPrimary }}>{t("operator.draw")}</span>
+          <button onClick={() => isOpen && onPredict(fight, "draw")} disabled={!isOpen}
+            className="rounded-xl py-2.5 sm:py-3 px-2 text-center transition-all hover:shadow-md disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ backgroundColor: theme.surfaceBg, border: `1px solid ${theme.cardBorder}` }}>
+            <span className="block text-xs sm:text-sm font-bold" style={{ color: theme.textPrimary }}>{t("operator.draw")}</span>
             <span className="block text-xs mt-1" style={{ color: theme.textMuted }}>{t("operator.available")}</span>
           </button>
         )}
         <button
           onClick={() => isOpen && onPredict(fight, "fighter_b")}
           disabled={!isOpen}
-          className="rounded-xl py-3 px-2 text-center transition-all hover:shadow-md hover:scale-[1.02] disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{
-            backgroundColor: theme.surfaceBg,
-            border: `1px solid ${theme.cardBorder}`,
-          }}
-        >
-          <span className="block text-sm font-bold" style={{ color: theme.textPrimary }}>{nameB}</span>
-          <span className="block text-xl font-black mt-1" style={{ color: theme.primary }}>
+          className="rounded-xl py-2.5 sm:py-3 px-2 text-center transition-all hover:shadow-md active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+          style={{ backgroundColor: theme.surfaceBg, border: `1px solid ${theme.cardBorder}` }}>
+          <span className="block text-xs sm:text-sm font-bold truncate" style={{ color: theme.textPrimary }}>{nameB}</span>
+          <span className="block text-lg sm:text-xl font-black mt-0.5" style={{ color: theme.primary }}>
             {multiplierB > 0 ? `${multiplierB.toFixed(2)}x` : "—"}
           </span>
-          {pctReturnB > 0 && (
-            <span className="block text-[10px] font-bold mt-0.5 text-green-500">+{pctReturnB}%</span>
-          )}
+          {pctReturnB > 0 && <span className="block text-[10px] font-bold mt-0.5 text-green-500">+{pctReturnB}%</span>}
         </button>
       </div>
 
-      {/* Market split bar — social proof */}
+      {/* Row 6: Market split bar */}
       <div className="space-y-1">
         <div className="flex justify-between text-[10px] font-medium" style={{ color: theme.textMuted }}>
           <span>{nameA} {splitA}%</span>
+          <span>{t("operator.marketSplit")}</span>
           <span>{nameB} {100 - splitA}%</span>
         </div>
         <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: theme.surfaceBg }}>
-          <div
-            className="h-full rounded-full transition-all duration-500"
-            style={{ width: `${splitA}%`, backgroundColor: theme.primary }}
-          />
+          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${splitA}%`, backgroundColor: theme.primary }} />
         </div>
       </div>
 
-      {/* Total pool */}
+      {/* Row 7: Total pool */}
       {(() => {
         const total = (fight.pool_a_usd ?? 0) + (fight.pool_b_usd ?? 0);
         if (total <= 0) return null;

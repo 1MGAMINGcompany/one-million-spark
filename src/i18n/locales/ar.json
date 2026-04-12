@@ -1456,7 +1456,16 @@
     "sold": "تم بيع المركز!",
     "sellFailed": "فشل البيع",
     "estimatedPayout": "العائد المتوقع",
-    "currentPrice": "السعر الحالي"
+    "currentPrice": "السعر الحالي",
+    "tips": "Tips",
+    "hotMarket": "Hot",
+    "marketSplit": "Market Split",
+    "tradeNotExecuted": "Trade Not Executed",
+    "noFundsCommitted": "Your order was not placed on the exchange. No funds were committed.",
+    "liveScore": "Score",
+    "liveHalftime": "HT",
+    "liveRound": "R",
+    "liveSet": "Set"
   },
   "platform": {
     "hero": {
@@ -1930,5 +1939,40 @@
     "invalidEmail": "أدخل بريداً إلكترونياً صالحاً",
     "joinedSuccess": "أنت في قائمة الانتظار!",
     "joinFailed": "فشل الانضمام. حاول مرة أخرى."
+  },
+  "prediction": {
+    "odds": "Odds",
+    "winChance": "Win Chance",
+    "youWin": "You Win",
+    "profit": "Profit",
+    "oddsChanged": "Odds Changed",
+    "previousOdds": "Previous odds",
+    "newOdds": "New odds",
+    "acceptNewOdds": "Accept New Odds & Submit",
+    "placePrediction": "Place Prediction",
+    "submitting": "Submitting…",
+    "checkingApproval": "Checking approval…",
+    "approveInWallet": "Approve in wallet…",
+    "confirmingApproval": "Confirming approval…",
+    "amount": "Amount",
+    "fee": "Fee",
+    "netAmount": "Net amount",
+    "potentialPayout": "Potential payout",
+    "minimum": "Min",
+    "minimumAmount": "Minimum: ${{min}}",
+    "enterAmount": "Enter Amount",
+    "tradingBalance": "Trading Balance",
+    "noFunds": "No Funds Available",
+    "addUSDCToPredict": "Add USDC to your wallet to start making predictions.",
+    "addFunds": "Add Funds",
+    "needUSDC": "Need USDC? Add funds →",
+    "insufficientBalance": "Insufficient balance.",
+    "convertUSDC": "Convert USDC to Trading Balance",
+    "haveUSDC": "You have ${{amount}} USDC that needs to be converted.",
+    "convertToTrading": "Convert to Trading Balance",
+    "amountTooSmall": "Amount too small to convert",
+    "swapQuoteReady": "Swap quote ready — redirecting to convert",
+    "conversionFailed": "Conversion failed",
+    "firstPredictionNote": "First prediction requires a one-time USDC approval. No charge until you submit."
   }
 }
