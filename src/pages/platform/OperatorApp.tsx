@@ -1126,6 +1126,12 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
       {/* Events — grouped by date */}
       <div className="max-w-4xl mx-auto px-4 py-4 space-y-4">
+        {/* Paused banner */}
+        {operator?.status === "paused" && (
+          <div className="rounded-xl px-4 py-3 text-center text-sm font-medium" style={{ backgroundColor: "rgba(239,68,68,0.1)", color: "#f87171", border: "1px solid rgba(239,68,68,0.2)" }}>
+            ⏸️ This platform is temporarily paused. New predictions are not available right now.
+          </div>
+        )}
         {/* Loading skeleton */}
         {!operatorFights && !backendDegraded && (
           <div className="space-y-3">
