@@ -1404,16 +1404,6 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                 <><CreditCard className="w-3.5 h-3.5" /> 💳 Buy USDC with Card</>
               )}
             </button>
-            <a
-              href="https://app.uniswap.org/swap?chain=polygon"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90"
-              style={{ backgroundColor: theme.surfaceBg, color: theme.textPrimary, border: `1px solid ${theme.cardBorder}` }}
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              {t("operator.getUsdce")}
-            </a>
             {/* Withdraw button */}
             <button
               onClick={() => { setShowFundsModal(false); setShowWithdrawModal(true); }}
