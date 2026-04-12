@@ -111,6 +111,11 @@ export default function OperatorDashboard() {
       const data = await res.json();
       if (data.operator) {
         const op = data.operator;
+        // Detect incomplete onboarding (purchased but never configured)
+        if (op.subdomain?.startsWith("pending-") || op.brand_name === "My App") {
+          navigate("/onboarding");
+          return;
+        }
         setOperator(op);
         setBrandColor(op.brand_color || "#4F46E5");
         setWelcomeMsg(op.welcome_message || "");
