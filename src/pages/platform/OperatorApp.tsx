@@ -1382,6 +1382,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                       chain: polygon,
                       asset: { erc20: USDC_E_CONTRACT as `0x${string}` },
                       amount: "10",
+                      card: { preferredProvider: "moonpay" },
                     },
                   });
                   setTimeout(refetchBalance, 3000);

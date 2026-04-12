@@ -248,6 +248,7 @@ const AddFunds = () => {
           chain: polygon,
           asset: { erc20: USDC_BRIDGED as `0x${string}` },
           amount: "10",
+          card: { preferredProvider: "moonpay" },
         },
       });
       // Refresh balances after funding modal closes
