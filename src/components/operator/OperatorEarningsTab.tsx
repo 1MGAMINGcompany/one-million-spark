@@ -45,6 +45,9 @@ export default function OperatorEarningsTab({ operatorId, getAccessToken }: Prop
   const [walletInput, setWalletInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [showCashOut, setShowCashOut] = useState(false);
+
+  const { balance: walletBalance, refetch: refetchBalance } = usePolygonUSDC();
 
   const fetchSweepData = useCallback(async () => {
     try {
