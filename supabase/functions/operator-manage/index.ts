@@ -39,6 +39,12 @@ const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 
+const ALLOWED_SPORTS_SET = new Set([
+  "NFL", "NBA", "NHL", "SOCCER", "MMA", "BOXING", "MLB", "TENNIS",
+  "GOLF", "NCAA", "CRICKET", "F1", "NASCAR", "MLS",
+  "UFC", "FUTBOL", "PGA", "FORMULA 1", "BARE KNUCKLE", "BKFC",
+]);
+
 async function sendWelcomeEmail(slug: string, feePercent: number) {
   if (!RESEND_API_KEY) { console.warn("[email] RESEND_API_KEY not set, skipping"); return; }
   const operatorUrl = `https://1mg.live/${slug}`;
@@ -248,7 +254,7 @@ Deno.serve(async (req) => {
 
     // ── update_operator ──
     if (action === "update_operator") {
-      const { data: op } = await sb.from("operators").select("id").eq("user_id", privyDid).single();
+      const { data: op } = await sb.from("operators").select("id, status").eq("user_id", privyDid).single();
       if (!op) return jsonResp({ error: "not_found" }, 404);
       const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
       if (body.brand_name) updates.brand_name = body.brand_name;
@@ -258,6 +264,39 @@ Deno.serve(async (req) => {
         const fp = Number(body.fee_percent);
         if (isNaN(fp) || fp < 0 || fp > 20) return jsonResp({ error: "fee_percent must be between 0 and 20" }, 400);
         updates.fee_percent = fp;
+      }
+      // Brand color validation
+      if (body.brand_color !== undefined) {
+        const color = String(body.brand_color).trim();
+        if (!/^#[0-9a-fA-F]{6}$/.test(color)) return jsonResp({ error: "brand_color must be a valid hex color (#RRGGBB)" }, 400);
+        updates.brand_color = color;
+      }
+      // Welcome message validation
+      if (body.welcome_message !== undefined) {
+        const msg = String(body.welcome_message || "").trim();
+        if (msg.length > 500) return jsonResp({ error: "welcome_message must be 500 characters or less" }, 400);
+        updates.welcome_message = msg || null;
+      }
+      // Support email validation
+      if (body.support_email !== undefined) {
+        const email = String(body.support_email || "").trim();
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return jsonResp({ error: "invalid support_email" }, 400);
+        updates.support_email = email || null;
+      }
+      // Disabled sports validation
+      if (body.disabled_sports !== undefined) {
+        if (!Array.isArray(body.disabled_sports)) return jsonResp({ error: "disabled_sports must be an array" }, 400);
+        for (const s of body.disabled_sports) {
+          if (typeof s !== "string") return jsonResp({ error: "disabled_sports entries must be strings" }, 400);
+        }
+        updates.disabled_sports = body.disabled_sports;
+      }
+      // App pause toggle — only allow active <-> paused
+      if (body.status !== undefined) {
+        const newStatus = body.status;
+        if (!["active", "paused"].includes(newStatus)) return jsonResp({ error: "status can only be 'active' or 'paused'" }, 400);
+        if (op.status !== "active" && op.status !== "paused") return jsonResp({ error: "cannot change status from current state" }, 400);
+        updates.status = newStatus;
       }
       await sb.from("operators").update(updates).eq("id", op.id);
       return jsonResp({ success: true });
@@ -277,8 +316,9 @@ Deno.serve(async (req) => {
 
     // ── create_event ── (auto-creates prediction_fight)
     if (action === "create_event") {
-      const { data: op } = await sb.from("operators").select("id, fee_percent, brand_name").eq("user_id", privyDid).single();
+      const { data: op } = await sb.from("operators").select("id, fee_percent, brand_name, status").eq("user_id", privyDid).single();
       if (!op) return jsonResp({ error: "not_found" }, 404);
+      if (op.status === "paused") return jsonResp({ error: "app_is_paused" }, 400);
 
       // ── Validation ──
       const teamA = (body.team_a || "").trim();
@@ -291,12 +331,7 @@ Deno.serve(async (req) => {
       if (!title) return jsonResp({ error: "Title is required" }, 400);
       if (!eventDate) return jsonResp({ error: "Event date is required" }, 400);
 
-      const ALLOWED_SPORTS = new Set([
-        "NFL", "NBA", "NHL", "SOCCER", "MMA", "BOXING", "MLB", "TENNIS",
-        "GOLF", "NCAA", "CRICKET", "F1", "NASCAR", "MLS",
-        "UFC", "FUTBOL", "PGA", "FORMULA 1", "BARE KNUCKLE", "BKFC",
-      ]);
-      if (!sport || !ALLOWED_SPORTS.has(sport)) {
+      if (!sport || !ALLOWED_SPORTS_SET.has(sport)) {
         return jsonResp({ error: `Invalid sport: "${body.sport}". Allowed: NFL, NBA, NHL, Soccer, MMA, Boxing, MLB, Tennis, Golf, NCAA, Cricket, F1, NASCAR, MLS` }, 400);
       }
 
@@ -323,6 +358,93 @@ Deno.serve(async (req) => {
       }).select("id").single();
       if (fightErr) console.error("[operator-manage] Failed to create prediction_fight:", fightErr);
       return jsonResp({ event, fight_id: fight?.id || null });
+    }
+
+    // ── update_event ── (safe editing of operator custom events)
+    if (action === "update_event") {
+      const { data: op } = await sb.from("operators").select("id").eq("user_id", privyDid).single();
+      if (!op) return jsonResp({ error: "not_found" }, 404);
+
+      const eventId = body.event_id;
+      if (!eventId) return jsonResp({ error: "event_id required" }, 400);
+
+      // Verify ownership
+      const { data: event } = await sb.from("operator_events").select("id, operator_id, status").eq("id", eventId).single();
+      if (!event || event.operator_id !== op.id) return jsonResp({ error: "not_your_event" }, 403);
+      if (event.status === "settled") return jsonResp({ error: "cannot_edit_settled_event" }, 400);
+
+      // Find linked fight
+      const { data: fight } = await sb.from("prediction_fights")
+        .select("id, operator_event_id, status")
+        .eq("operator_event_id", eventId)
+        .eq("operator_id", op.id)
+        .maybeSingle();
+
+      // Check if predictions exist — lock team names if so
+      let hasPredictions = false;
+      if (fight) {
+        const { count } = await sb.from("prediction_entries")
+          .select("id", { count: "exact", head: true })
+          .eq("fight_id", fight.id);
+        hasPredictions = (count || 0) > 0;
+      }
+
+      const eventUpdates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      const fightUpdates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+
+      // Team names — locked if predictions exist
+      if (body.team_a !== undefined || body.team_b !== undefined) {
+        if (hasPredictions) return jsonResp({ error: "cannot_change_teams_after_predictions" }, 400);
+        if (body.team_a) {
+          const teamA = String(body.team_a).trim();
+          if (!teamA) return jsonResp({ error: "team_a cannot be empty" }, 400);
+          eventUpdates.team_a = teamA;
+          fightUpdates.fighter_a_name = teamA;
+        }
+        if (body.team_b) {
+          const teamB = String(body.team_b).trim();
+          if (!teamB) return jsonResp({ error: "team_b cannot be empty" }, 400);
+          eventUpdates.team_b = teamB;
+          fightUpdates.fighter_b_name = teamB;
+        }
+        // Update title too
+        const newA = body.team_a ? String(body.team_a).trim() : undefined;
+        const newB = body.team_b ? String(body.team_b).trim() : undefined;
+        if (newA || newB) {
+          const titleA = newA || (event as any).team_a || "TBD";
+          const titleB = newB || (event as any).team_b || "TBD";
+          const newTitle = `${titleA} vs ${titleB}`;
+          eventUpdates.title = newTitle;
+          fightUpdates.title = newTitle;
+          fightUpdates.event_name = newTitle;
+        }
+      }
+
+      // Sport — always editable
+      if (body.sport !== undefined) {
+        const sport = String(body.sport).trim().toUpperCase();
+        if (!ALLOWED_SPORTS_SET.has(sport)) return jsonResp({ error: "invalid sport" }, 400);
+        eventUpdates.sport = body.sport;
+      }
+
+      // Date — always editable
+      if (body.event_date !== undefined) {
+        eventUpdates.event_date = body.event_date;
+        fightUpdates.event_date = body.event_date;
+      }
+
+      // Featured — always editable
+      if (body.is_featured !== undefined) {
+        eventUpdates.is_featured = !!body.is_featured;
+        fightUpdates.featured = !!body.is_featured;
+      }
+
+      await sb.from("operator_events").update(eventUpdates).eq("id", eventId);
+      if (fight && Object.keys(fightUpdates).length > 1) {
+        await sb.from("prediction_fights").update(fightUpdates).eq("id", fight.id);
+      }
+
+      return jsonResp({ success: true, teams_locked: hasPredictions });
     }
 
     // ── close_event ── (lock predictions)
