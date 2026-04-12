@@ -804,9 +804,9 @@ export default function OperatorDashboard() {
               const pool = (top.pool_a_usd || 0) + (top.pool_b_usd || 0);
               return (
                 <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4 mb-6">
-                  <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><Trophy size={14} /> Most Popular Event</div>
+                  <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><Trophy size={14} /> {t("operator.dashboard.mostPopularEvent")}</div>
                   <div className="text-sm font-bold text-white">{top.title || "—"}</div>
-                  <div className="text-xs text-white/40 mt-0.5">${pool.toFixed(0)} total pool • {top.shares_a + top.shares_b} predictions</div>
+                  <div className="text-xs text-white/40 mt-0.5">${pool.toFixed(0)} total pool • {top.shares_a + top.shares_b} {t("operator.dashboard.predictions").toLowerCase()}</div>
                 </div>
               );
             })()}
@@ -814,11 +814,11 @@ export default function OperatorDashboard() {
             {/* Quick Stats Row */}
             <div className="grid grid-cols-2 gap-3 mb-6">
               <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
-                <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><Calendar size={14} /> Events</div>
+                <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><Calendar size={14} /> {t("operator.dashboard.events")}</div>
                 <div className="text-xl font-bold">{events.length}</div>
               </div>
               <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
-                <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><BarChart3 size={14} /> Fee Rate</div>
+                <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><BarChart3 size={14} /> {t("operator.dashboard.feeRate")}</div>
                 <div className="text-xl font-bold">{operator.fee_percent}%</div>
               </div>
             </div>
@@ -827,12 +827,12 @@ export default function OperatorDashboard() {
             {revenue.total > 0 && (
               <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4 flex items-center justify-between">
                 <div>
-                  <div className="text-sm font-medium text-emerald-400">Total Earnings</div>
+                  <div className="text-sm font-medium text-emerald-400">{t("operator.dashboard.totalEarningsLabel")}</div>
                   <div className="text-2xl font-bold text-emerald-300">${revenue.total.toFixed(2)}</div>
-                  <div className="text-xs text-white/30 mt-0.5">Earnings are sent directly to your payout wallet</div>
+                  <div className="text-xs text-white/30 mt-0.5">{t("operator.dashboard.earningsSentToPayout")}</div>
                 </div>
                 <Button onClick={() => setDashTab("earnings")} className="bg-emerald-600 hover:bg-emerald-500 border-0">
-                  View Earnings
+                  {t("operator.dashboard.viewEarnings")}
                 </Button>
               </div>
             )}
