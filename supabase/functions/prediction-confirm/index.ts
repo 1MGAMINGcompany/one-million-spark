@@ -1,4 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
+import { privateKeyToAccount } from "npm:viem@2/accounts";
+import { createWalletClient, http, encodeFunctionData, parseAbi } from "npm:viem@2";
+import { polygon } from "npm:viem@2/chains";
 
 /**
  * prediction-confirm — Receives client-side CLOB order results.
