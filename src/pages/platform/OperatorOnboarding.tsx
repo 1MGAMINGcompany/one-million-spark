@@ -196,7 +196,7 @@ export default function OperatorOnboarding() {
               type="number"
               value={feePercent}
               onChange={(e) => setFeePercent(Number(e.target.value))}
-              min={1}
+              min={0}
               max={20}
               className="bg-white/5 border-white/10 text-white h-12 w-24"
             />
