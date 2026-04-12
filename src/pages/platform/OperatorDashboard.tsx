@@ -795,7 +795,7 @@ export default function OperatorDashboard() {
                 <div className="flex items-center gap-2 text-white/40 mb-1 text-xs"><Wallet size={14} /> {t("operator.dashboard.walletLabel")}</div>
                 <div className="text-xl font-bold text-emerald-400">${walletBalance != null ? walletBalance.toFixed(2) : "—"}</div>
                 <div className="text-[10px] text-white/20 mt-0.5">{t("operator.dashboard.connectedWallet")}</div>
-            </div>
+              </div>
 
             {/* Most Popular Event */}
             {fights.length > 0 && (() => {
