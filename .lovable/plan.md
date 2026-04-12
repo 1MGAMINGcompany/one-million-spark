@@ -1,32 +1,20 @@
 
 
-## Plan: Minimal fundWallet Asset Patch
+## Build Fix: Missing closing `</div>` in OperatorDashboard
 
-### What
-Change `asset: { erc20: USDC_NATIVE_FOR_ONRAMP as \`0x\${string}\` }` to `asset: 'USDC'` in all fundWallet calls.
+**Problem**: The stats grid `<div>` opened at line 781 is never closed. Everything from "Most Popular Event" (line 800) through the end of the Overview tab is incorrectly nested inside the 4-column grid, causing a JSX fragment mismatch at line 844.
 
-### Files to Change
+**Fix**: Add a single `</div>` after line 799 (after the 4th stat card) to close the grid.
 
-1. **`src/pages/AddFunds.tsx`** — `handleFundWallet` function, the `asset` property in the fundWallet options object
-2. **`src/pages/platform/OperatorApp.tsx`** — equivalent fundWallet call, same `asset` property change
+**File**: `src/pages/platform/OperatorDashboard.tsx`
 
-### What Changes
-In both files, the single line:
-```ts
-asset: { erc20: USDC_NATIVE_FOR_ONRAMP as `0x${string}` },
+**Change**: Insert `</div>` between lines 799 and 800:
 ```
-becomes:
-```ts
-asset: 'USDC',
+Line 798:   </div>
+Line 799:                          <-- currently empty line
++          </div>                  <-- ADD THIS to close the grid
+Line 800:   {/* Most Popular Event */}
 ```
 
-The `USDC_NATIVE_FOR_ONRAMP` import can be removed if it becomes unused.
-
-Everything else stays identical: `chain: polygon`, `amount`, `card`, `defaultFundingMethod`, wallet address, gasless config.
-
-### After Patching
-Will verify:
-- No other fundWallet calls still use raw ERC-20 object
-- No TypeScript errors
-- User should test on 1mg.live to confirm whether direct card flow opens
+No logic changes. No new features. Just one missing closing tag.
 
