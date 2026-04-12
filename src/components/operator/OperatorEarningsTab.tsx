@@ -24,6 +24,7 @@ interface SweepRecord {
 
 interface SweepSummary {
   payout_wallet: string | null;
+  payout_wallet_balance: number | null;
   total_earned: number;
   total_swept: number;
   pending_sweep: number;
@@ -46,8 +47,6 @@ export default function OperatorEarningsTab({ operatorId, getAccessToken }: Prop
   const [saving, setSaving] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [showCashOut, setShowCashOut] = useState(false);
-
-  const { usdc_balance: walletBalance, refetch: refetchBalance } = usePolygonUSDC();
 
   const fetchSweepData = useCallback(async () => {
     try {
@@ -143,34 +142,48 @@ export default function OperatorEarningsTab({ operatorId, getAccessToken }: Prop
 
   return (
     <div className="space-y-6">
-      {/* Wallet Balance + Cash Out */}
-      <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-white/60 flex items-center gap-2">
-            <DollarSign size={16} /> Wallet Balance
-          </h3>
-          <Button
-            size="sm"
-            onClick={() => setShowCashOut(true)}
-            disabled={!walletBalance || walletBalance < 1}
-            className="bg-emerald-600 hover:bg-emerald-500 border-0 text-xs gap-1"
-          >
-            <ArrowUpRight size={14} /> Cash Out
-          </Button>
+      {/* Payout Wallet Balance + Cash Out */}
+      {data.payout_wallet && (
+        <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-white/60 flex items-center gap-2">
+              <DollarSign size={16} /> Payout Wallet Balance
+            </h3>
+            <Button
+              size="sm"
+              onClick={() => setShowCashOut(true)}
+              disabled={data.payout_wallet_balance == null || data.payout_wallet_balance < 1}
+              className="bg-emerald-600 hover:bg-emerald-500 border-0 text-xs gap-1"
+            >
+              <ArrowUpRight size={14} /> Cash Out
+            </Button>
+          </div>
+          <div className="text-3xl font-bold text-white">
+            ${data.payout_wallet_balance != null ? data.payout_wallet_balance.toFixed(2) : "—"}
+          </div>
+          <p className="text-xs text-white/30 mt-1">
+            USDC.e in your payout wallet ({data.payout_wallet.slice(0, 6)}…{data.payout_wallet.slice(-4)}) — send to exchange or another wallet anytime
+          </p>
         </div>
-        <div className="text-3xl font-bold text-white">
-          ${walletBalance != null ? walletBalance.toFixed(2) : "—"}
+      )}
+
+      {!data.payout_wallet && (
+        <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle size={16} className="text-yellow-400" />
+            <h3 className="text-sm font-semibold text-yellow-300">Payout Wallet Required</h3>
+          </div>
+          <p className="text-xs text-yellow-200/60">
+            Set your payout wallet below to start receiving earnings. Without it, fees accrue in the platform treasury but cannot be swept to you.
+          </p>
         </div>
-        <p className="text-xs text-white/30 mt-1">
-          USDC in your operator wallet — send to exchange or another wallet anytime
-        </p>
-      </div>
+      )}
 
       <CashOutModal
         open={showCashOut}
         onClose={() => setShowCashOut(false)}
-        balance={walletBalance}
-        onSuccess={() => { refetchBalance(); fetchSweepData(); }}
+        balance={data.payout_wallet_balance}
+        onSuccess={() => { fetchSweepData(); }}
       />
       <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5">
         <div className="flex items-center justify-between mb-3">
