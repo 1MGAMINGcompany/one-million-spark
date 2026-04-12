@@ -1511,8 +1511,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                     chainId: 137,
                     data,
                   });
-                  const txHash = typeof txReceipt === "object" && txReceipt?.transactionHash
-                    ? txReceipt.transactionHash
+                  const txHash = typeof txReceipt === "object" && txReceipt?.hash
+                    ? txReceipt.hash
                     : String(txReceipt);
                   const shortHash = txHash ? `${txHash.slice(0, 6)}…${txHash.slice(-4)}` : "";
                   toast.success(`Sent $${amt.toFixed(2)} USDC${shortHash ? ` (${shortHash})` : ""}`, { duration: 6000 });
