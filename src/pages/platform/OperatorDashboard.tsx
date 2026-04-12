@@ -15,6 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import OperatorEventActions from "./OperatorEventActions";
 import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
 import OperatorAnalyticsTab from "@/components/operator/OperatorAnalyticsTab";
+import OperatorEarningsTab from "@/components/operator/OperatorEarningsTab";
 
 interface OperatorData {
   id: string;
@@ -49,7 +50,7 @@ export default function OperatorDashboard() {
   const [creating, setCreating] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
-  const [dashTab, setDashTab] = useState<"overview" | "analytics" | "events">("overview");
+  const [dashTab, setDashTab] = useState<"overview" | "analytics" | "earnings" | "events">("overview");
 
   const contactEmail = user?.email?.address || user?.google?.email || null;
 
