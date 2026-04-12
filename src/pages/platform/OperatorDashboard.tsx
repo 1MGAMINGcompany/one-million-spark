@@ -31,6 +31,7 @@ interface OperatorData {
   welcome_message: string | null;
   support_email: string | null;
   disabled_sports: string[];
+  payout_wallet: string | null;
 }
 
 const SPORT_OPTIONS = ["Soccer", "MMA", "Boxing", "NFL", "NBA", "NHL", "MLB", "NCAA", "Tennis"];
@@ -679,6 +680,19 @@ export default function OperatorDashboard() {
                   <div className="text-sm font-medium text-red-400">App Paused</div>
                   <div className="text-xs text-white/40">Your app is not accepting new predictions. Go to Settings to resume.</div>
                 </div>
+              </div>
+            )}
+            {/* Payout wallet warning */}
+            {!operator.payout_wallet && (
+              <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 mb-4 flex items-center gap-3">
+                <Wallet size={16} className="text-yellow-400 shrink-0" />
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-yellow-300">Payout Wallet Not Set</div>
+                  <div className="text-xs text-white/40">Your operator earnings cannot be swept until you set a payout wallet. Go to Earnings to configure it.</div>
+                </div>
+                <Button size="sm" onClick={() => setDashTab("earnings")} className="bg-yellow-600 hover:bg-yellow-500 border-0 text-xs whitespace-nowrap">
+                  Set Wallet
+                </Button>
               </div>
             )}
 

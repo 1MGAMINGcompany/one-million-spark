@@ -226,6 +226,11 @@ Deno.serve(async (req) => {
       const { data: existing } = await sb.from("operators").select("id, status").eq("user_id", privyDid).maybeSingle();
       if (existing && existing.status !== "active") return jsonResp({ error: "payment_required", operator_id: existing.id }, 402);
       if (existing) {
+        // Subdomain collision check on update path
+        if (body.subdomain) {
+          const { data: subCollision } = await sb.from("operators").select("id").eq("subdomain", body.subdomain).neq("id", existing.id).maybeSingle();
+          if (subCollision) return jsonResp({ error: "subdomain_taken" }, 409);
+        }
         await sb.from("operators").update({
           brand_name: body.brand_name, subdomain: body.subdomain, logo_url: body.logo_url || null,
           theme: body.theme || "blue", fee_percent: body.fee_percent ?? 5, updated_at: new Date().toISOString(),
@@ -552,8 +557,32 @@ Deno.serve(async (req) => {
         .filter((r: any) => r.sweep_status === "accrued")
         .reduce((s: number, r: any) => s + Number(r.operator_fee_usdc || 0), 0);
 
+      // Fetch on-chain USDC balance of payout wallet if set
+      let payout_wallet_balance: number | null = null;
+      if (op.payout_wallet) {
+        try {
+          const balanceOfData = "0x70a08231" + op.payout_wallet.slice(2).toLowerCase().padStart(64, "0");
+          for (const rpc of POLYGON_RPCS) {
+            try {
+              const r = await fetch(rpc, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: USDC_CONTRACT, data: balanceOfData }, "latest"] }),
+              });
+              if (!r.ok) continue;
+              const j = await r.json();
+              if (j.result) {
+                payout_wallet_balance = Number(BigInt(j.result)) / 1e6;
+                break;
+              }
+            } catch { continue; }
+          }
+        } catch { /* non-critical */ }
+      }
+
       return jsonResp({
         payout_wallet: op.payout_wallet,
+        payout_wallet_balance,
         total_earned: totalEarned,
         total_swept: totalSwept,
         pending_sweep: pendingSweep,
@@ -563,33 +592,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ── request_withdrawal (legacy — kept for backward compat) ──
-    if (action === "request_withdrawal") {
-      const { data: op } = await sb.from("operators").select("id").eq("user_id", privyDid).single();
-      if (!op) return jsonResp({ error: "not_found" }, 404);
-
-      const { data: revData } = await sb.from("operator_revenue").select("operator_fee_usdc").eq("operator_id", op.id);
-      const totalEarned = (revData || []).reduce((s: number, r: any) => s + Number(r.operator_fee_usdc || 0), 0);
-
-      const { data: payData } = await sb.from("operator_payouts").select("amount_usdc, status").eq("operator_id", op.id);
-      const totalPaid = (payData || []).reduce((s: number, r: any) => s + Number(r.amount_usdc || 0), 0);
-
-      const available = Math.max(0, totalEarned - totalPaid);
-      if (available < 0.01) return jsonResp({ error: "insufficient_balance" }, 400);
-
-      await sb.from("operator_payouts").insert({
-        operator_id: op.id, amount_usdc: available, status: "pending",
-      });
-
-      return jsonResp({ success: true, amount: available });
-    }
-
     // ── retry_failed_sweeps ──
     if (action === "retry_failed_sweeps") {
       const { data: op } = await sb.from("operators").select("id").eq("user_id", privyDid).single();
       if (!op) return jsonResp({ error: "not_found" }, 404);
 
-      // Reset failed sweeps back to accrued so prediction-confirm sweep or a manual sweep can retry
       const { data: failed } = await sb
         .from("operator_revenue")
         .update({ sweep_status: "accrued", sweep_error: null, sweep_attempted_at: null })
@@ -600,8 +607,15 @@ Deno.serve(async (req) => {
       return jsonResp({ success: true, reset_count: (failed || []).length });
     }
 
-    // ── list_all_operators (admin) ──
+    // ── list_all_operators (admin-only) ──
     if (action === "list_all_operators") {
+      // Resolve caller wallet via prediction_accounts, then verify admin status
+      const { data: account } = await sb.from("prediction_accounts").select("wallet_evm").eq("privy_did", privyDid).maybeSingle();
+      const callerWallet = account?.wallet_evm?.toLowerCase();
+      if (!callerWallet) return jsonResp({ error: "forbidden" }, 403);
+      const { data: adminRow } = await sb.from("prediction_admins").select("wallet").eq("wallet", callerWallet).maybeSingle();
+      if (!adminRow) return jsonResp({ error: "forbidden" }, 403);
+
       const { data } = await sb.from("operators").select("*, operator_settings(*)").order("created_at", { ascending: false });
       return jsonResp({ operators: data || [] });
     }
