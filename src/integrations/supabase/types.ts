@@ -785,6 +785,12 @@ export type Database = {
           operator_id: string
           payout_status: string
           platform_fee_usdc: number
+          sweep_attempted_at: string | null
+          sweep_completed_at: string | null
+          sweep_destination_wallet: string | null
+          sweep_error: string | null
+          sweep_status: string
+          sweep_tx_hash: string | null
           total_fee_usdc: number
           trade_order_id: string | null
         }
@@ -798,6 +804,12 @@ export type Database = {
           operator_id: string
           payout_status?: string
           platform_fee_usdc?: number
+          sweep_attempted_at?: string | null
+          sweep_completed_at?: string | null
+          sweep_destination_wallet?: string | null
+          sweep_error?: string | null
+          sweep_status?: string
+          sweep_tx_hash?: string | null
           total_fee_usdc?: number
           trade_order_id?: string | null
         }
@@ -811,6 +823,12 @@ export type Database = {
           operator_id?: string
           payout_status?: string
           platform_fee_usdc?: number
+          sweep_attempted_at?: string | null
+          sweep_completed_at?: string | null
+          sweep_destination_wallet?: string | null
+          sweep_error?: string | null
+          sweep_status?: string
+          sweep_tx_hash?: string | null
           total_fee_usdc?: number
           trade_order_id?: string | null
         }
@@ -863,6 +881,7 @@ export type Database = {
           fee_percent: number
           id: string
           logo_url: string | null
+          payout_wallet: string | null
           purchase_tx_hash: string | null
           status: string
           subdomain: string
@@ -880,6 +899,7 @@ export type Database = {
           fee_percent?: number
           id?: string
           logo_url?: string | null
+          payout_wallet?: string | null
           purchase_tx_hash?: string | null
           status?: string
           subdomain: string
@@ -897,6 +917,7 @@ export type Database = {
           fee_percent?: number
           id?: string
           logo_url?: string | null
+          payout_wallet?: string | null
           purchase_tx_hash?: string | null
           status?: string
           subdomain?: string

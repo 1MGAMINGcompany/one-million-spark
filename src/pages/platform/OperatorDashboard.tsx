@@ -15,6 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import OperatorEventActions from "./OperatorEventActions";
 import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
 import OperatorAnalyticsTab from "@/components/operator/OperatorAnalyticsTab";
+import OperatorEarningsTab from "@/components/operator/OperatorEarningsTab";
 
 interface OperatorData {
   id: string;
@@ -49,7 +50,7 @@ export default function OperatorDashboard() {
   const [creating, setCreating] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
-  const [dashTab, setDashTab] = useState<"overview" | "analytics" | "events">("overview");
+  const [dashTab, setDashTab] = useState<"overview" | "analytics" | "earnings" | "events">("overview");
 
   const contactEmail = user?.email?.address || user?.google?.email || null;
 
@@ -277,14 +278,16 @@ export default function OperatorDashboard() {
 
       <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="flex gap-1 mb-6 bg-white/[0.03] p-1 rounded-lg w-fit">
-          {(["overview", "analytics", "events"] as const).map(tab => (
+          {(["overview", "earnings", "analytics", "events"] as const).map(tab => (
             <button key={tab} onClick={() => setDashTab(tab)} className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${dashTab === tab ? "bg-white/10 text-white" : "text-white/40 hover:text-white/60"}`}>
-              {tab === "overview" ? "Overview" : tab === "analytics" ? "📊 Analytics" : "Events"}
+              {tab === "overview" ? "Overview" : tab === "earnings" ? "💰 Earnings" : tab === "analytics" ? "📊 Analytics" : "Events"}
             </button>
           ))}
         </div>
         {dashTab === "analytics" && operator ? (
           <OperatorAnalyticsTab operatorId={operator.id} feePercent={operator.fee_percent} />
+        ) : dashTab === "earnings" && operator ? (
+          <OperatorEarningsTab operatorId={operator.id} getAccessToken={getAccessToken} />
         ) : (
         <>
         {/* Your App Details card */}
@@ -372,19 +375,16 @@ export default function OperatorDashboard() {
           </div>
         </div>
 
-        {/* Withdraw */}
-        {availableBalance > 0.01 && (
+        {/* Earnings CTA — directs to Earnings tab */}
+        {revenue.total > 0 && (
           <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4 mb-8 flex items-center justify-between">
             <div>
-              <div className="text-sm font-medium text-emerald-400">{t("operator.dashboard.availableForWithdrawal")}</div>
-              <div className="text-2xl font-bold text-emerald-300">${availableBalance.toFixed(2)}</div>
+              <div className="text-sm font-medium text-emerald-400">Total Earnings</div>
+              <div className="text-2xl font-bold text-emerald-300">${revenue.total.toFixed(2)}</div>
+              <div className="text-xs text-white/30 mt-0.5">Earnings are sent directly to your payout wallet</div>
             </div>
-            <Button
-              onClick={handleWithdraw}
-              disabled={withdrawing}
-              className="bg-emerald-600 hover:bg-emerald-500 border-0"
-            >
-              {withdrawing ? t("operator.dashboard.processing") : t("operator.dashboard.requestWithdrawal")}
+            <Button onClick={() => setDashTab("earnings")} className="bg-emerald-600 hover:bg-emerald-500 border-0">
+              View Earnings
             </Button>
           </div>
         )}

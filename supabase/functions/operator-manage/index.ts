@@ -236,6 +236,7 @@ Deno.serve(async (req) => {
       const { data: operator, error } = await sb.from("operators").insert({
         user_id: privyDid, brand_name: body.brand_name, subdomain: body.subdomain,
         logo_url: body.logo_url || null, theme: body.theme || "blue", fee_percent: body.fee_percent ?? 5, status: "pending",
+        payout_wallet: body.payout_wallet || null,
       }).select().single();
       if (error) throw error;
       await sb.from("operator_settings").insert({
@@ -379,7 +380,64 @@ Deno.serve(async (req) => {
       return jsonResp({ success: true, outcome: "settled", winner });
     }
 
-    // ── request_withdrawal ──
+    // ── set_payout_wallet ──
+    if (action === "set_payout_wallet") {
+      const { data: op } = await sb.from("operators").select("id").eq("user_id", privyDid).single();
+      if (!op) return jsonResp({ error: "not_found" }, 404);
+      const wallet = body.payout_wallet;
+      if (!wallet || typeof wallet !== "string" || !/^0x[a-fA-F0-9]{40}$/.test(wallet)) {
+        return jsonResp({ error: "invalid_wallet_address" }, 400);
+      }
+      await sb.from("operators").update({
+        payout_wallet: wallet, updated_at: new Date().toISOString(),
+      }).eq("id", op.id);
+      return jsonResp({ success: true, payout_wallet: wallet });
+    }
+
+    // ── get_sweep_history ──
+    if (action === "get_sweep_history") {
+      const { data: op } = await sb.from("operators").select("id, payout_wallet").eq("user_id", privyDid).single();
+      if (!op) return jsonResp({ error: "not_found" }, 404);
+
+      const { data: sweeps } = await sb
+        .from("operator_revenue")
+        .select("id, operator_fee_usdc, sweep_status, sweep_tx_hash, sweep_destination_wallet, sweep_attempted_at, sweep_completed_at, sweep_error, created_at")
+        .eq("operator_id", op.id)
+        .neq("sweep_status", "accrued")
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      const { data: allRev } = await sb
+        .from("operator_revenue")
+        .select("operator_fee_usdc, sweep_status")
+        .eq("operator_id", op.id);
+
+      const totalEarned = (allRev || []).reduce((s: number, r: any) => s + Number(r.operator_fee_usdc || 0), 0);
+      const totalSwept = (allRev || [])
+        .filter((r: any) => r.sweep_status === "sent" || r.sweep_status === "reconciled")
+        .reduce((s: number, r: any) => s + Number(r.operator_fee_usdc || 0), 0);
+      const pendingSweep = (allRev || [])
+        .filter((r: any) => r.sweep_status === "sending")
+        .reduce((s: number, r: any) => s + Number(r.operator_fee_usdc || 0), 0);
+      const failedSweep = (allRev || [])
+        .filter((r: any) => r.sweep_status === "failed")
+        .reduce((s: number, r: any) => s + Number(r.operator_fee_usdc || 0), 0);
+      const accrued = (allRev || [])
+        .filter((r: any) => r.sweep_status === "accrued")
+        .reduce((s: number, r: any) => s + Number(r.operator_fee_usdc || 0), 0);
+
+      return jsonResp({
+        payout_wallet: op.payout_wallet,
+        total_earned: totalEarned,
+        total_swept: totalSwept,
+        pending_sweep: pendingSweep,
+        failed_sweep: failedSweep,
+        accrued,
+        sweeps: sweeps || [],
+      });
+    }
+
+    // ── request_withdrawal (legacy — kept for backward compat) ──
     if (action === "request_withdrawal") {
       const { data: op } = await sb.from("operators").select("id").eq("user_id", privyDid).single();
       if (!op) return jsonResp({ error: "not_found" }, 404);
@@ -398,6 +456,22 @@ Deno.serve(async (req) => {
       });
 
       return jsonResp({ success: true, amount: available });
+    }
+
+    // ── retry_failed_sweeps ──
+    if (action === "retry_failed_sweeps") {
+      const { data: op } = await sb.from("operators").select("id").eq("user_id", privyDid).single();
+      if (!op) return jsonResp({ error: "not_found" }, 404);
+
+      // Reset failed sweeps back to accrued so prediction-confirm sweep or a manual sweep can retry
+      const { data: failed } = await sb
+        .from("operator_revenue")
+        .update({ sweep_status: "accrued", sweep_error: null, sweep_attempted_at: null })
+        .eq("operator_id", op.id)
+        .eq("sweep_status", "failed")
+        .select("id");
+
+      return jsonResp({ success: true, reset_count: (failed || []).length });
     }
 
     // ── list_all_operators (admin) ──
