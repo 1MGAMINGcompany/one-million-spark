@@ -30,6 +30,7 @@ import EnableTradingBanner from "@/components/predictions/EnableTradingBanner";
 import OperatorBalanceBanner from "@/components/operator/OperatorBalanceBanner";
 import MarketGraphModal from "@/components/operator/MarketGraphModal";
 import MarketTipsModal from "@/components/operator/MarketTipsModal";
+import SmartPlayTutorial, { hasSeenTutorial } from "@/components/operator/SmartPlayTutorial";
 import SocialShareModal, { type ShareVariant } from "@/components/SocialShareModal";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
@@ -182,7 +183,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [graphFight, setGraphFight] = useState<Fight | null>(null);
   const [tipsFight, setTipsFight] = useState<Fight | null>(null);
   const [sportPickerOpen, setSportPickerOpen] = useState(false);
-  const [timeFilter, setTimeFilter] = useState<"all" | "today" | "week">("all");
+  const [timeFilter, setTimeFilter] = useState<"all" | "today" | "week" | "hot">("all");
+  const [showTutorial, setShowTutorial] = useState(false);
   const [showFundsModal, setShowFundsModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showCashOut, setShowCashOut] = useState(false);
@@ -262,6 +264,14 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   }, [address, operator?.id]);
 
   useEffect(() => { loadUserEntries(); }, [loadUserEntries]);
+
+  // Show tutorial for first-time visitors
+  useEffect(() => {
+    if (!hasSeenTutorial()) {
+      const timer = setTimeout(() => setShowTutorial(true), 1500);
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   // Auto-refresh user entries every 15s so settlement results appear without manual reload
   useEffect(() => {
@@ -438,6 +448,13 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       fights = fights.filter(f => {
         const d = new Date((f as any).event_date || 0).getTime();
         return d <= endOfWeek;
+      });
+    } else if (timeFilter === "hot") {
+      // Most Traded: sort by volume desc, no date filter
+      fights = [...fights].sort((a, b) => {
+        const va = (a as any).polymarket_volume_usd ?? 0;
+        const vb = (b as any).polymarket_volume_usd ?? 0;
+        return vb - va;
       });
     }
     if (searchQuery.trim()) {
@@ -1059,21 +1076,21 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
         {/* Time filter bar */}
         <div className="flex items-center gap-2">
-          {(["all", "today", "week"] as const).map(f => {
+          {(["all", "today", "week", "hot"] as const).map(f => {
             const isActive = timeFilter === f;
-            const label = f === "all" ? t("operator.all") : f === "today" ? t("operator.today") : t("operator.thisWeek");
+            const label = f === "all" ? t("operator.all") : f === "today" ? t("operator.today") : f === "week" ? t("operator.thisWeek") : t("operator.mostTraded");
             return (
               <button
                 key={f}
                 onClick={() => setTimeFilter(f)}
                 className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap"
                 style={{
-                  backgroundColor: isActive ? theme.primary + "18" : "transparent",
+                  backgroundColor: isActive ? (f === "hot" ? theme.primary + "22" : theme.primary + "18") : "transparent",
                   color: isActive ? theme.primary : theme.textMuted,
                   fontWeight: isActive ? 600 : 400,
                 }}
               >
-                {label}
+                {f === "hot" && "🔥 "}{label}
               </button>
             );
           })}
@@ -1324,13 +1341,22 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         />
       )}
 
-      {/* Market Tips Modal */}
+      {/* Market Tips / Smart Play Modal */}
       {tipsFight && (
         <MarketTipsModal
           fight={tipsFight}
           open={!!tipsFight}
           onClose={() => setTipsFight(null)}
           theme={theme}
+          onShowTutorial={() => { setTipsFight(null); setShowTutorial(true); }}
+        />
+      )}
+
+      {/* First-time tutorial */}
+      {showTutorial && (
+        <SmartPlayTutorial
+          theme={theme}
+          onClose={() => setShowTutorial(false)}
         />
       )}
 

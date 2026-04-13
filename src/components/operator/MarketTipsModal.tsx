@@ -1,21 +1,41 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { X, Lightbulb, TrendingUp, Activity, Wallet, Brain, Loader2 } from "lucide-react";
+import { X, Lightbulb, TrendingUp, Activity, Wallet, Brain, Loader2, HelpCircle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
 import { buildSmartMoneySummary } from "@/lib/smart-money";
 import type { Fight } from "@/components/predictions/FightCard";
 import type { OperatorTheme } from "@/lib/operatorThemes";
+import { hasSeenTutorial, resetTutorial } from "./SmartPlayTutorial";
 
 interface MarketTipsModalProps {
   fight: Fight | null;
   open: boolean;
   onClose: () => void;
   theme: OperatorTheme;
+  onShowTutorial?: () => void;
 }
 
-export default function MarketTipsModal({ fight, open, onClose, theme }: MarketTipsModalProps) {
+// Base tactic cards for imported (Polymarket) events
+const IMPORTED_TACTICS = [
+  { emoji: "⚡", title: "Buy before the move", desc: "The best entries often come before the crowd reacts." },
+  { emoji: "💰", title: "You can sell early", desc: "If your side rises, you can exit before the game ends and lock profit." },
+  { emoji: "🛡️", title: "Protect your bankroll", desc: "You don't need to hold every position to the end. Small wins add up." },
+  { emoji: "⏳", title: "Wait for better prices", desc: "Not every moment is a good entry. Patience can beat chasing." },
+  { emoji: "🧠", title: "Focus on what you know", desc: "The best traders usually stick to sports, teams, and spots they understand." },
+];
+
+// Custom-event variant tactic cards
+const CUSTOM_TACTICS = [
+  { emoji: "📋", title: "Follow the setup closely", desc: "Read the event rules carefully before entering." },
+  { emoji: "📈", title: "Prices can move before the end", desc: "If the market updates in your favor, you may be able to exit early." },
+  { emoji: "🎯", title: "Size your risk", desc: "Custom events can move differently, so stay disciplined with entry size." },
+  { emoji: "⏳", title: "Wait for clearer value", desc: "You don't need to enter immediately if the price doesn't look right." },
+  { emoji: "📖", title: "Know the event details", desc: "Custom rules, timing, and outcomes matter more than guessing fast." },
+];
+
+export default function MarketTipsModal({ fight, open, onClose, theme, onShowTutorial }: MarketTipsModalProps) {
   const { t, i18n } = useTranslation();
 
   const nameA = fight ? resolveOutcomeName(fight.fighter_a_name, "a", fight) : "";
@@ -28,6 +48,9 @@ export default function MarketTipsModal({ fight, open, onClose, theme }: MarketT
   const volume = (fight as any)?.polymarket_volume_usd ?? 0;
   const liquidity = (fight as any)?.polymarket_liquidity ?? 0;
 
+  const isCustomEvent = !!(fight as any)?.operator_id && !(fight as any)?.polymarket_slug;
+  const tactics = isCustomEvent ? CUSTOM_TACTICS : IMPORTED_TACTICS;
+
   const smartMoney = useMemo(() => buildSmartMoneySummary({
     priceA: pA,
     priceB: pB,
@@ -36,7 +59,7 @@ export default function MarketTipsModal({ fight, open, onClose, theme }: MarketT
     totalVolume: volume,
   }), [pA, pB, poolAUsd, poolBUsd, volume]);
 
-  // AI insight query – pass user language
+  // AI insight query
   const { data: aiInsight, isLoading: aiLoading } = useQuery({
     queryKey: ["tips-insight", fight?.id, i18n.language],
     queryFn: async () => {
@@ -61,7 +84,7 @@ export default function MarketTipsModal({ fight, open, onClose, theme }: MarketT
       return data;
     },
     staleTime: 5 * 60 * 1000,
-    enabled: open && !!fight,
+    enabled: open && !!fight && !isCustomEvent,
   });
 
   if (!open || !fight) return null;
@@ -84,15 +107,29 @@ export default function MarketTipsModal({ fight, open, onClose, theme }: MarketT
         <div className="flex items-center justify-between p-4 pb-2" style={{ borderBottom: `1px solid ${theme.cardBorder}` }}>
           <div className="flex items-center gap-2">
             <Lightbulb className="w-5 h-5" style={{ color: theme.primary }} />
-            <h3 className="text-base font-bold" style={{ color: theme.textPrimary }}>{t("marketTips.title")}</h3>
+            <h3 className="text-base font-bold" style={{ color: theme.textPrimary }}>Smart Play</h3>
           </div>
-          <button onClick={onClose} className="p-1 rounded-full hover:opacity-70 transition-opacity">
-            <X className="w-4 h-4" style={{ color: theme.textMuted }} />
-          </button>
+          <div className="flex items-center gap-1">
+            {onShowTutorial && (
+              <button onClick={onShowTutorial} className="p-1 rounded-full hover:opacity-70 transition-opacity" title="How it works">
+                <HelpCircle className="w-4 h-4" style={{ color: theme.textMuted }} />
+              </button>
+            )}
+            <button onClick={onClose} className="p-1 rounded-full hover:opacity-70 transition-opacity">
+              <X className="w-4 h-4" style={{ color: theme.textMuted }} />
+            </button>
+          </div>
+        </div>
+
+        {/* Helper line */}
+        <div className="px-4 pt-3 pb-1">
+          <p className="text-[11px] text-center" style={{ color: theme.textMuted }}>
+            Quick angles, entry ideas, and exit reminders.
+          </p>
         </div>
 
         {/* Event header */}
-        <div className="px-4 pt-3 pb-2 text-center">
+        <div className="px-4 pt-1 pb-2 text-center">
           <p className="text-sm font-bold" style={{ color: theme.textPrimary }}>
             {nameA} vs {nameB}
           </p>
@@ -101,109 +138,130 @@ export default function MarketTipsModal({ fight, open, onClose, theme }: MarketT
           </p>
         </div>
 
-        {/* Smart Money signals */}
-        <div className="px-4 py-3 space-y-2">
+        {/* Smart Money signals — only for imported events with data */}
+        {!isCustomEvent && (
+          <div className="px-4 py-3 space-y-2">
+            <h4 className="text-xs font-bold uppercase tracking-wider" style={{ color: theme.textMuted }}>
+              {t("marketTips.bigPlayerActivity")}
+            </h4>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { icon: Activity, label: t("marketTips.activity"), value: smartMoney.activity },
+                { icon: TrendingUp, label: t("marketTips.momentum"), value: smartMoney.momentum },
+                { icon: Wallet, label: t("marketTips.largeTrades"), value: smartMoney.whaleSignal },
+              ].map(({ icon: Icon, label, value }) => (
+                <div
+                  key={label}
+                  className="rounded-xl p-3 text-center"
+                  style={{ backgroundColor: theme.surfaceBg, border: `1px solid ${theme.cardBorder}` }}
+                >
+                  <Icon className="w-4 h-4 mx-auto mb-1" style={{ color: signalColor(value) }} />
+                  <p className="text-[9px] font-medium uppercase" style={{ color: theme.textMuted }}>{label}</p>
+                  <p className="text-[11px] font-bold mt-0.5" style={{ color: signalColor(value) }}>{value}</p>
+                </div>
+              ))}
+            </div>
+            <div className="rounded-xl p-3" style={{ backgroundColor: theme.surfaceBg, border: `1px solid ${theme.cardBorder}` }}>
+              <p className="text-xs" style={{ color: theme.textSecondary }}>
+                💡 {smartMoney.quickRead}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Tactic Cards */}
+        <div className="px-4 py-3 space-y-2" style={{ borderTop: `1px solid ${theme.cardBorder}` }}>
           <h4 className="text-xs font-bold uppercase tracking-wider" style={{ color: theme.textMuted }}>
-            {t("marketTips.bigPlayerActivity")}
+            {isCustomEvent ? "Event Playbook" : "Tactics"}
           </h4>
-          <div className="grid grid-cols-3 gap-2">
-            {[
-              { icon: Activity, label: t("marketTips.activity"), value: smartMoney.activity },
-              { icon: TrendingUp, label: t("marketTips.momentum"), value: smartMoney.momentum },
-              { icon: Wallet, label: t("marketTips.largeTrades"), value: smartMoney.whaleSignal },
-            ].map(({ icon: Icon, label, value }) => (
+          <div className="space-y-1.5">
+            {tactics.map((tac, i) => (
               <div
-                key={label}
-                className="rounded-xl p-3 text-center"
+                key={i}
+                className="rounded-xl p-3 flex items-start gap-2.5"
                 style={{ backgroundColor: theme.surfaceBg, border: `1px solid ${theme.cardBorder}` }}
               >
-                <Icon className="w-4 h-4 mx-auto mb-1" style={{ color: signalColor(value) }} />
-                <p className="text-[9px] font-medium uppercase" style={{ color: theme.textMuted }}>{label}</p>
-                <p className="text-[11px] font-bold mt-0.5" style={{ color: signalColor(value) }}>{value}</p>
+                <span className="text-base shrink-0 mt-0.5">{tac.emoji}</span>
+                <div>
+                  <p className="text-xs font-bold" style={{ color: theme.textPrimary }}>{tac.title}</p>
+                  <p className="text-[11px] mt-0.5 leading-relaxed" style={{ color: theme.textSecondary }}>{tac.desc}</p>
+                </div>
               </div>
             ))}
           </div>
-          {/* Quick read */}
-          <div className="rounded-xl p-3" style={{ backgroundColor: theme.surfaceBg, border: `1px solid ${theme.cardBorder}` }}>
-            <p className="text-xs" style={{ color: theme.textSecondary }}>
-              💡 {smartMoney.quickRead}
-            </p>
-          </div>
         </div>
 
-        {/* AI Analysis */}
-        <div className="px-4 py-3 space-y-2" style={{ borderTop: `1px solid ${theme.cardBorder}` }}>
-          <div className="flex items-center gap-2">
-            <Brain className="w-4 h-4" style={{ color: theme.primary }} />
-            <h4 className="text-xs font-bold uppercase tracking-wider" style={{ color: theme.textMuted }}>
-              {t("marketTips.aiAnalysis")}
-            </h4>
-          </div>
-
-          {aiLoading ? (
-            <div className="flex items-center justify-center py-6">
-              <Loader2 className="w-5 h-5 animate-spin" style={{ color: theme.primary }} />
-              <span className="text-xs ml-2" style={{ color: theme.textMuted }}>{t("marketTips.analyzingMarket")}</span>
+        {/* AI Analysis — only for imported events */}
+        {!isCustomEvent && (
+          <div className="px-4 py-3 space-y-2" style={{ borderTop: `1px solid ${theme.cardBorder}` }}>
+            <div className="flex items-center gap-2">
+              <Brain className="w-4 h-4" style={{ color: theme.primary }} />
+              <h4 className="text-xs font-bold uppercase tracking-wider" style={{ color: theme.textMuted }}>
+                {t("marketTips.aiAnalysis")}
+              </h4>
             </div>
-          ) : aiInsight && !aiInsight.fallback ? (
-            <div className="space-y-2">
-              {/* Confidence label */}
-              <div className="flex items-center gap-2">
-                <span
-                  className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                  style={{ backgroundColor: theme.primary + "22", color: theme.primary }}
-                >
-                  {aiInsight.confidenceLabel}
-                </span>
-                {aiInsight.signalTags?.map((tag: string) => (
+
+            {aiLoading ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="w-5 h-5 animate-spin" style={{ color: theme.primary }} />
+                <span className="text-xs ml-2" style={{ color: theme.textMuted }}>{t("marketTips.analyzingMarket")}</span>
+              </div>
+            ) : aiInsight && !aiInsight.fallback ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
                   <span
-                    key={tag}
-                    className="text-[10px] px-2 py-0.5 rounded-full"
-                    style={{ backgroundColor: theme.surfaceBg, color: theme.textSecondary, border: `1px solid ${theme.cardBorder}` }}
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                    style={{ backgroundColor: theme.primary + "22", color: theme.primary }}
                   >
-                    {tag}
+                    {aiInsight.confidenceLabel}
                   </span>
-                ))}
-              </div>
-
-              {/* Summary */}
-              <div className="rounded-xl p-3" style={{ backgroundColor: theme.surfaceBg, border: `1px solid ${theme.cardBorder}` }}>
-                <p className="text-xs leading-relaxed" style={{ color: theme.textPrimary }}>
-                  {aiInsight.summary}
-                </p>
-              </div>
-
-              {/* Big wallet insight */}
-              {aiInsight.bigWalletInsight && (
-                <div className="rounded-xl p-3" style={{ backgroundColor: theme.primary + "08", border: `1px solid ${theme.primary}22` }}>
-                  <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: theme.primary }}>
-                    🐋 {t("marketTips.bigWalletLeaning")}
-                  </p>
-                  <p className="text-xs leading-relaxed" style={{ color: theme.textSecondary }}>
-                    {aiInsight.bigWalletInsight}
+                  {aiInsight.signalTags?.map((tag: string) => (
+                    <span
+                      key={tag}
+                      className="text-[10px] px-2 py-0.5 rounded-full"
+                      style={{ backgroundColor: theme.surfaceBg, color: theme.textSecondary, border: `1px solid ${theme.cardBorder}` }}
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+                <div className="rounded-xl p-3" style={{ backgroundColor: theme.surfaceBg, border: `1px solid ${theme.cardBorder}` }}>
+                  <p className="text-xs leading-relaxed" style={{ color: theme.textPrimary }}>
+                    {aiInsight.summary}
                   </p>
                 </div>
-              )}
-
-              {/* Caution */}
-              {aiInsight.caution && (
-                <p className="text-[10px] italic" style={{ color: theme.textMuted }}>
-                  ⚠️ {aiInsight.caution}
+                {aiInsight.bigWalletInsight && (
+                  <div className="rounded-xl p-3" style={{ backgroundColor: theme.primary + "08", border: `1px solid ${theme.primary}22` }}>
+                    <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: theme.primary }}>
+                      🐋 {t("marketTips.bigWalletLeaning")}
+                    </p>
+                    <p className="text-xs leading-relaxed" style={{ color: theme.textSecondary }}>
+                      {aiInsight.bigWalletInsight}
+                    </p>
+                  </div>
+                )}
+                {aiInsight.caution && (
+                  <p className="text-[10px] italic" style={{ color: theme.textMuted }}>
+                    ⚠️ {aiInsight.caution}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-xl p-4 text-center" style={{ backgroundColor: theme.surfaceBg }}>
+                <p className="text-xs" style={{ color: theme.textMuted }}>
+                  {t("marketTips.aiUnavailable")}
                 </p>
-              )}
-            </div>
-          ) : (
-            <div className="rounded-xl p-4 text-center" style={{ backgroundColor: theme.surfaceBg }}>
-              <p className="text-xs" style={{ color: theme.textMuted }}>
-                {t("marketTips.aiUnavailable")}
-              </p>
-            </div>
-          )}
-        </div>
+              </div>
+            )}
+          </div>
+        )}
 
-        {/* Footer */}
+        {/* Key difference line */}
         <div className="px-4 py-3 text-center" style={{ borderTop: `1px solid ${theme.cardBorder}` }}>
-          <p className="text-[10px]" style={{ color: theme.textMuted }}>
+          <p className="text-[11px] font-medium" style={{ color: theme.primary }}>
+            💡 You can sell before the event ends.
+          </p>
+          <p className="text-[10px] mt-1" style={{ color: theme.textMuted }}>
             {t("marketTips.poweredBy")}
           </p>
         </div>
