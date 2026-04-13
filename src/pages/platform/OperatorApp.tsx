@@ -30,6 +30,7 @@ import EnableTradingBanner from "@/components/predictions/EnableTradingBanner";
 import OperatorBalanceBanner from "@/components/operator/OperatorBalanceBanner";
 import MarketGraphModal from "@/components/operator/MarketGraphModal";
 import MarketTipsModal from "@/components/operator/MarketTipsModal";
+import SmartPlayTutorial, { hasSeenTutorial } from "@/components/operator/SmartPlayTutorial";
 import SocialShareModal, { type ShareVariant } from "@/components/SocialShareModal";
 import { WalletGateModal } from "@/components/WalletGateModal";
 import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
@@ -182,8 +183,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [graphFight, setGraphFight] = useState<Fight | null>(null);
   const [tipsFight, setTipsFight] = useState<Fight | null>(null);
   const [sportPickerOpen, setSportPickerOpen] = useState(false);
-  const [timeFilter, setTimeFilter] = useState<"all" | "today" | "week">("all");
-  const [showFundsModal, setShowFundsModal] = useState(false);
+  const [timeFilter, setTimeFilter] = useState<"all" | "today" | "week" | "hot">("all");
+  const [showTutorial, setShowTutorial] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showCashOut, setShowCashOut] = useState(false);
   const [withdrawDest, setWithdrawDest] = useState("");
