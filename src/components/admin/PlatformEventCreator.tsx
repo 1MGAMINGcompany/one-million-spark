@@ -127,6 +127,7 @@ export default function PlatformEventCreator({ wallet, defaultVisibility = "all"
 
   const handleCreate = async () => {
     if (!teamA.trim() || !teamB.trim()) { toast.error("Both teams/fighters required"); return; }
+    if (!eventDate) { toast.error("Event date/time is required"); return; }
     if (visibility === "operator" && !selectedOperator) { toast.error("Please select an operator"); return; }
     setCreating(true);
     try {
@@ -356,7 +357,7 @@ export default function PlatformEventCreator({ wallet, defaultVisibility = "all"
           </label>
         </div>
 
-        <Button onClick={handleCreate} disabled={creating || !teamA.trim() || !teamB.trim() || (visibility === "operator" && !selectedOperator)} className="w-full gap-2">
+        <Button onClick={handleCreate} disabled={creating || !teamA.trim() || !teamB.trim() || !eventDate || (visibility === "operator" && !selectedOperator)} className="w-full gap-2">
           <Plus className="w-4 h-4" /> {creating ? "Creating..." : "Create & Go Live"}
         </Button>
       </div>
