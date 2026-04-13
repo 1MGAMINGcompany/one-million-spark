@@ -443,10 +443,23 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         return db - da; // newest first
       });
     }
-    // Operator Card: show only this operator's custom events
-    let fights = activeTab === "operator_card"
-      ? operatorCustomFights
-      : enrichedFights;
+    // Operator Card: show only this operator's custom events, skip sport/league/time filters
+    if (activeTab === "operator_card") {
+      let fights = [...operatorCustomFights];
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        fights = fights.filter(f =>
+          f.fighter_a_name.toLowerCase().includes(q) ||
+          f.fighter_b_name.toLowerCase().includes(q) ||
+          f.event_name.toLowerCase().includes(q)
+        );
+      }
+      if (featuredEvent) {
+        fights = fights.filter(f => f.id !== featuredEvent.id);
+      }
+      return fights;
+    }
+    let fights = enrichedFights;
     if (broadSportFilter !== "ALL") {
       fights = fights.filter(f => f._broadSport === broadSportFilter);
     }
@@ -1231,6 +1244,14 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                   {t("operator.noSearchResults", "No events match your search")}
                 </h3>
                 <p className="mt-2 text-sm" style={{ color: theme.textMuted }}>{t("operator.noSearchResultsDesc")}</p>
+              </>
+            ) : activeTab === "operator_card" ? (
+              <>
+                <CalendarPlus className="w-12 h-12 mx-auto mb-4" style={{ color: theme.textMuted }} />
+                <h3 className="text-lg font-bold" style={{ color: theme.textSecondary }}>No operator events yet</h3>
+                <p className="mt-2 text-sm max-w-sm mx-auto" style={{ color: theme.textMuted }}>
+                  Upcoming featured events will appear here.
+                </p>
               </>
             ) : (
               <>
