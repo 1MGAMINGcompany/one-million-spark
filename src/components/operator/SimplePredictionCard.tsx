@@ -318,7 +318,7 @@ export default function SimplePredictionCard({
           <span className="text-sm font-bold mx-2 shrink-0" style={{ color: theme.textMuted }}>{t("operator.vs")}</span>
           <div className="flex items-center gap-2 min-w-0 flex-1 justify-end">
             <span className="text-base sm:text-lg font-bold leading-tight truncate text-right" style={{ color: theme.textPrimary }}>{nameB}</span>
-            {logoB && <img src={logoB} className="w-7 h-7 sm:w-8 sm:h-8 object-contain shrink-0" alt="" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />}}
+            {logoB && <img src={logoB} className="w-7 h-7 sm:w-8 sm:h-8 object-contain shrink-0" alt="" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />}
           </div>
         </div>
       )}
