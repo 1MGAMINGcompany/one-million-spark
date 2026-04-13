@@ -139,13 +139,16 @@ export default function SimplePredictionCard({
     ...(isLive ? { boxShadow: `0 0 12px 0 ${theme.primary}15` } : {}),
   };
 
+  const volume = (fight as any).polymarket_volume_usd ?? 0;
+  const isHotVolume = volume >= 50_000;
+
   const ActionButtons = () => (
     <div className="flex items-center gap-1">
       {onTips && (
         <button onClick={(e) => { e.stopPropagation(); onTips(fight); }}
-          className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-all hover:opacity-80"
-          style={{ backgroundColor: theme.surfaceBg, border: `1px solid ${theme.cardBorder}`, color: theme.textSecondary }}>
-          <Lightbulb className="w-3 h-3" /> {t("operator.tips")}
+          className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold transition-all hover:opacity-80"
+          style={{ backgroundColor: theme.primary + "18", border: `1px solid ${theme.primary}33`, color: theme.primary }}>
+          <Lightbulb className="w-3 h-3" /> {t("operator.smartPlay")}
         </button>
       )}
       {onGraph && (
