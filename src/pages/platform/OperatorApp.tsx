@@ -185,6 +185,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const [sportPickerOpen, setSportPickerOpen] = useState(false);
   const [timeFilter, setTimeFilter] = useState<"all" | "today" | "week" | "hot">("all");
   const [showTutorial, setShowTutorial] = useState(false);
+  const [showFundsModal, setShowFundsModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showCashOut, setShowCashOut] = useState(false);
   const [withdrawDest, setWithdrawDest] = useState("");
