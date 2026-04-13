@@ -26,11 +26,11 @@ const IMPORTED_TACTICS = [
   { emoji: "🧠", title: "Focus on what you know", desc: "The best traders usually stick to sports, teams, and spots they understand." },
 ];
 
-// Custom-event variant tactic cards
+// Custom-event variant tactic cards (buy-only, no sell)
 const CUSTOM_TACTICS = [
   { emoji: "📋", title: "Follow the setup closely", desc: "Read the event rules carefully before entering." },
-  { emoji: "📈", title: "Prices can move before the end", desc: "If the market updates in your favor, you may be able to exit early." },
-  { emoji: "🎯", title: "Size your risk", desc: "Custom events can move differently, so stay disciplined with entry size." },
+  { emoji: "🔒", title: "Predictions are final", desc: "Once placed, your prediction cannot be sold or withdrawn before settlement." },
+  { emoji: "🎯", title: "Size your risk", desc: "Custom events settle after admin review, so stay disciplined with entry size." },
   { emoji: "⏳", title: "Wait for clearer value", desc: "You don't need to enter immediately if the price doesn't look right." },
   { emoji: "📖", title: "Know the event details", desc: "Custom rules, timing, and outcomes matter more than guessing fast." },
 ];
@@ -256,11 +256,17 @@ export default function MarketTipsModal({ fight, open, onClose, theme, onShowTut
           </div>
         )}
 
-        {/* Key difference line */}
+        {/* Key difference line — context-sensitive */}
         <div className="px-4 py-3 text-center" style={{ borderTop: `1px solid ${theme.cardBorder}` }}>
-          <p className="text-[11px] font-medium" style={{ color: theme.primary }}>
-            💡 You can sell before the event ends.
-          </p>
+          {(fight as any)?.polymarket_market_id ? (
+            <p className="text-[11px] font-medium" style={{ color: theme.primary }}>
+              💡 You can sell before the event ends.
+            </p>
+          ) : (
+            <p className="text-[11px] font-medium" style={{ color: theme.primary }}>
+              🔒 Predictions are final. Winners share the pot after settlement.
+            </p>
+          )}
           <p className="text-[10px] mt-1" style={{ color: theme.textMuted }}>
             {t("marketTips.poweredBy")}
           </p>
