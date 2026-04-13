@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import OperatorManagementTab from "@/components/admin/OperatorManagementTab";
 import AdminAuth from "@/components/admin/AdminAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -286,7 +287,7 @@ function PlatformAdminInner({ address }: { address: string }) {
   const [filter, setFilter] = useState<"active" | "settled" | "all">("active");
   const [sportFilter, setSportFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"browser" | "dashboard" | "analytics" | "activity">("browser");
+  const [activeTab, setActiveTab] = useState<"browser" | "dashboard" | "analytics" | "activity" | "operators">("browser");
 
   // Pagination
   const [page, setPage] = useState(0);
@@ -865,6 +866,7 @@ function PlatformAdminInner({ address }: { address: string }) {
             {([
               { key: "browser", label: "Browser", fullLabel: "Polymarket Browser", icon: <Download className="w-3 h-3" /> },
               { key: "dashboard", label: "Dashboard", fullLabel: "Events Dashboard", icon: <Globe className="w-3 h-3" /> },
+              { key: "operators", label: "Operators", fullLabel: "Operator Management", icon: <Users className="w-3 h-3" /> },
               { key: "analytics", label: "Analytics", fullLabel: "Analytics", icon: <BarChart3 className="w-3 h-3" /> },
               { key: "activity", label: "Activity", fullLabel: "Activity Log", icon: <Activity className="w-3 h-3" /> },
             ] as const).map(t => (
@@ -1457,7 +1459,10 @@ function PlatformAdminInner({ address }: { address: string }) {
           </Card>
         )}
 
-        {/* ═══ Promo Codes + Manual Creator (dashboard tab only) ═══ */}
+        {/* ══════ TAB: Operators ══════ */}
+        {activeTab === "operators" && <OperatorManagementTab />}
+
+
         {activeTab === "dashboard" && (
           <>
             <PromoCodeManager wallet={address!} />
