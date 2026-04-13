@@ -188,7 +188,7 @@ export default function BuyPredictionsApp() {
             <div className="text-5xl font-extrabold text-blue-400 mb-2">$2,400</div>
             <div className="text-white/40 text-sm mb-8">USDC · One-time setup fee</div>
             <ul className="text-left space-y-3 mb-8 max-w-xs mx-auto">
-              {["Fully branded app", "Built-in liquidity", "Digital payments included", "Custom fee structure", "Lifetime access"].map((i) => (
+              {["Fully branded app", "Built-in liquidity", "Digital payments included", "Custom fee structure", "Ongoing access"].map((i) => (
                 <li key={i} className="flex items-center gap-2 text-white/60 text-sm">
                   <Check size={16} className="text-blue-400 shrink-0" /> {i}
                 </li>

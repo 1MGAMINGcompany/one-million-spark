@@ -239,6 +239,7 @@ Deno.serve(async (req) => {
           brand_name: body.brand_name, subdomain: body.subdomain, logo_url: body.logo_url || null,
           theme: body.theme || "blue", fee_percent: body.fee_percent ?? 5, updated_at: new Date().toISOString(),
           agreement_version: body.agreement_version, agreement_accepted_at: new Date().toISOString(),
+          ...(body.payout_wallet ? { payout_wallet: body.payout_wallet } : {}),
         }).eq("id", existing.id);
         await sb.from("operator_settings").upsert({
           operator_id: existing.id, allowed_sports: body.allowed_sports || ["Soccer", "MMA", "Boxing"],

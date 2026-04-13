@@ -5,9 +5,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { usePrivySafe } from "@/hooks/usePrivySafe";
 import { usePrivyLogin } from "@/hooks/usePrivyLogin";
+import { usePrivyWallet } from "@/hooks/usePrivyWallet";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, ArrowLeft, Check, ExternalLink, Rocket } from "lucide-react";
+import { ArrowRight, ArrowLeft, Check, ExternalLink, Rocket, Wallet, Copy, Download, QrCode, Calendar, BarChart3, Link as LinkIcon } from "lucide-react";
 import OperatorQRCode from "@/components/operator/OperatorQRCode";
+import OperatorLogoUpload from "@/components/operator/OperatorLogoUpload";
 import { THEME_OPTIONS } from "@/lib/operatorThemes";
 
 const THEMES = THEME_OPTIONS.map(t => ({
@@ -208,9 +210,18 @@ function AgreementStep({
   );
 }
 
+const CHECKLIST_ITEMS = [
+  { icon: LinkIcon, label: "Copy your app link and share it", key: "link" },
+  { icon: QrCode, label: "Download your QR code for promotions", key: "qr" },
+  { icon: Wallet, label: "Confirm your payout wallet in Settings", key: "wallet" },
+  { icon: Calendar, label: "Create your first custom event", key: "event" },
+  { icon: BarChart3, label: "Check your earnings in the Dashboard", key: "earnings" },
+];
+
 export default function OperatorOnboarding() {
   const { authenticated, getAccessToken } = usePrivySafe();
   const { login } = usePrivyLogin();
+  const { walletAddress } = usePrivyWallet();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -223,7 +234,13 @@ export default function OperatorOnboarding() {
   const [theme, setTheme] = useState("blue");
   const [sports, setSports] = useState<string[]>(["Soccer", "MMA", "Boxing"]);
   const [feePercent, setFeePercent] = useState(5);
+  const [payoutWallet, setPayoutWallet] = useState("");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+
+  // Pre-fill payout wallet with Privy EVM wallet when available
+  if (walletAddress && !payoutWallet) {
+    setPayoutWallet(walletAddress);
+  }
 
   if (!authenticated) {
     return (
@@ -294,21 +311,13 @@ export default function OperatorOnboarding() {
       component: (
         <div className="space-y-4">
           <label className="text-sm text-white/60">
-            Logo URL (optional — you can add this later)
+            Upload or link your logo (optional — you can add this later)
           </label>
-          <Input
+          <OperatorLogoUpload
             value={logoUrl}
-            onChange={(e) => setLogoUrl(e.target.value)}
-            placeholder="https://..."
-            className="bg-white/5 border-white/10 text-white h-12 placeholder:text-white/20"
+            onChange={setLogoUrl}
+            operatorId="onboarding"
           />
-          {logoUrl && (
-            <img
-              src={logoUrl}
-              alt="Logo preview"
-              className="h-16 w-16 object-contain rounded-lg bg-white/5 p-2"
-            />
-          )}
         </div>
       ),
     },
@@ -402,6 +411,36 @@ export default function OperatorOnboarding() {
       ),
     },
     {
+      title: "Payout Wallet",
+      component: (
+        <div className="space-y-4">
+          <label className="text-sm text-white/60">
+            Where should your earnings be sent?
+          </label>
+          <Input
+            value={payoutWallet}
+            onChange={(e) => setPayoutWallet(e.target.value.trim())}
+            placeholder="0x... (Polygon wallet address)"
+            className="bg-white/5 border-white/10 text-white h-12 placeholder:text-white/20 font-mono text-sm"
+          />
+          <div className="bg-yellow-500/5 border border-yellow-500/10 rounded-xl p-3">
+            <p className="text-xs text-yellow-300/80 leading-relaxed">
+              <Wallet size={12} className="inline mr-1 -mt-0.5" />
+              <strong>Important:</strong> This is the wallet where your fee revenue (USDC.e on Polygon) will be automatically sent. Make sure it's a wallet you control. You can update this later in Settings.
+            </p>
+          </div>
+          {walletAddress && payoutWallet !== walletAddress && (
+            <button
+              onClick={() => setPayoutWallet(walletAddress)}
+              className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+            >
+              Use my connected wallet ({walletAddress.slice(0, 6)}...{walletAddress.slice(-4)})
+            </button>
+          )}
+        </div>
+      ),
+    },
+    {
       title: "Operator Agreement",
       component: (
         <AgreementStep
@@ -433,6 +472,7 @@ export default function OperatorOnboarding() {
             theme,
             fee_percent: feePercent,
             allowed_sports: sports,
+            payout_wallet: payoutWallet || null,
             agreement_version: AGREEMENT_VERSION,
           }),
         }
@@ -454,7 +494,7 @@ export default function OperatorOnboarding() {
     if (step === 0) return brandName.trim().length >= 2;
     if (step === 1) return subdomain.trim().length >= 3;
     if (step === 4) return sports.length > 0;
-    if (step === 6) return agreedToTerms;
+    if (step === 7) return agreedToTerms;
     return true;
   };
 
@@ -468,10 +508,21 @@ export default function OperatorOnboarding() {
             <span className="font-bold text-white">{brandName}</span> is now live at
           </p>
           <OperatorQRCode subdomain={subdomain} size={160} />
-          <p className="text-sm text-white/40 mt-4 mb-6">
-            Events from popular sports are already loaded. Share your app link or QR code to start earning!
-          </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+
+          {/* Post-launch checklist */}
+          <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5 mt-6 text-left">
+            <h3 className="text-sm font-semibold text-white/80 mb-3">What to do next</h3>
+            <div className="space-y-3">
+              {CHECKLIST_ITEMS.map((item) => (
+                <div key={item.key} className="flex items-center gap-3 text-sm text-white/60">
+                  <item.icon size={16} className="text-blue-400 shrink-0" />
+                  <span>{item.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 justify-center mt-6">
             <Button
               onClick={() => window.open(`https://1mg.live/${subdomain}`, "_blank")}
               className="bg-blue-600 hover:bg-blue-500 border-0 font-bold"
