@@ -266,7 +266,7 @@ export default function SimplePredictionCard({
               {t("operator.amountPlacedLabel", { amount: userEntry.amount_usd.toFixed(2) })}
             </p>
           )}
-          {isOpen && onSell && userEntry?.polymarket_order_id && (
+          {isOpen && onSell && userEntry?.polymarket_order_id && !!(fight as any).polymarket_market_id && (
             <button onClick={() => onSell(fight.id)} disabled={selling}
               className="mt-3 px-5 py-2 rounded-xl font-bold text-sm transition-all hover:opacity-80"
               style={{ backgroundColor: "transparent", border: `1.5px solid ${theme.primary}`, color: theme.primary }}>
@@ -411,10 +411,16 @@ export default function SimplePredictionCard({
         )}
       </div>
 
-      {/* Sell reminder line */}
-      <p className="text-center text-[10px]" style={{ color: theme.textMuted }}>
-        💡 {t("operator.sellReminder")}
-      </p>
+      {/* Bottom info line — context-sensitive */}
+      {(fight as any).polymarket_market_id ? (
+        <p className="text-center text-[10px]" style={{ color: theme.textMuted }}>
+          💡 {t("operator.sellReminder")}
+        </p>
+      ) : (
+        <p className="text-center text-[10px]" style={{ color: theme.textMuted }}>
+          🔒 {t("operator.customFinalNote", { defaultValue: "Predictions are final. Winners share the pot after settlement." })}
+        </p>
+      )}
     </div>
   );
 }
