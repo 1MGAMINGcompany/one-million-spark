@@ -100,10 +100,13 @@ export default function SimplePredictionCard({
 
   const liveState = useLiveGameState((fight as any).polymarket_slug);
 
-  const logoDataA = getTeamLogo(nameA, fight.event_name);
-  const logoDataB = getTeamLogo(nameB, fight.event_name);
-  const logoA = logoDataA?.url || null;
-  const logoB = logoDataB?.url || null;
+  // Prefer DB-stored photos/logos over ESPN CDN lookups (which may be blocked by CORS)
+  const dbLogoA = (fight as any).home_logo || (fight as any).fighter_a_photo || null;
+  const dbLogoB = (fight as any).away_logo || (fight as any).fighter_b_photo || null;
+  const fallbackA = getTeamLogo(nameA, fight.event_name);
+  const fallbackB = getTeamLogo(nameB, fight.event_name);
+  const logoA = dbLogoA || fallbackA?.url || null;
+  const logoB = dbLogoB || fallbackB?.url || null;
 
   const hasDrawOption = !!(fight as any).draw_allowed;
   const isStarted = (fight as any).event_date && new Date((fight as any).event_date).getTime() < Date.now();
