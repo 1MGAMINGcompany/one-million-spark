@@ -243,12 +243,16 @@ export default function PlatformEventCreator({ wallet, defaultVisibility = "all"
           </div>
         </div>
 
-        <Input
-          type="datetime-local"
-          value={eventDate}
-          onChange={e => setEventDate(e.target.value)}
-          className="text-foreground"
-        />
+        <div>
+          <label className="text-xs text-muted-foreground mb-1 block">Event Date/Time <span className="text-red-400">*</span></label>
+          <Input
+            type="datetime-local"
+            value={eventDate}
+            onChange={e => setEventDate(e.target.value)}
+            className="text-foreground"
+            required
+          />
+        </div>
 
         {/* Image URL section — collapsible */}
         <div>
