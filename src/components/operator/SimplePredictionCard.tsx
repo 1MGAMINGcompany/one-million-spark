@@ -334,6 +334,15 @@ export default function SimplePredictionCard({
         <p className="text-xs text-center" style={{ color: theme.textMuted }}>{eventDateStr}</p>
       )}
 
+      {/* Lopsided market warning */}
+      {isLopsided && (
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium"
+          style={{ backgroundColor: "rgba(245,158,11,0.12)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.25)" }}>
+          <Clock className="w-3.5 h-3.5 shrink-0" />
+          <span>Market nearly decided — odds are heavily one-sided</span>
+        </div>
+      )}
+
       {/* Row 5: Pick buttons — multiplier + implied probability */}
       <div className={`grid ${gridCols} gap-2`}>
         <button
