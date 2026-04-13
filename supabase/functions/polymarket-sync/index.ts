@@ -267,13 +267,13 @@ const LEAGUE_SOURCES: Record<string, LeagueSource> = {
   "boxing": { key: "boxing", label: "Boxing", sportType: "boxing", fetchStrategy: "search", searchSeed: ["boxing vs", "WBC", "WBA", "IBF title", "boxing match"] },
   "bkfc":   { key: "bkfc",   label: "BKFC",   sportType: "bkfc",   fetchStrategy: "search", searchSeed: ["BKFC", "bare knuckle"] },
   // ─── American Sports ───
-  "nfl":    { key: "nfl",    label: "NFL",    sportType: "nfl",    fetchStrategy: "tag", tagId: "450" },
-  "nba":    { key: "nba",    label: "NBA",    sportType: "nba",    fetchStrategy: "tag", tagId: "745", seriesId: "10345" },
-  "ncaab":  { key: "ncaab",  label: "NCAA Basketball", sportType: "ncaa", fetchStrategy: "tag", tagId: "100149" },
-  "cfb":    { key: "cfb",    label: "NCAA Football",   sportType: "ncaa", fetchStrategy: "tag", tagId: "100351" },
-  "nhl":    { key: "nhl",    label: "NHL",    sportType: "nhl",    fetchStrategy: "tag", tagId: "899" },
-  "mlb":    { key: "mlb",    label: "MLB",    sportType: "mlb",    fetchStrategy: "tag", tagId: "100381" },
-  "wnba":   { key: "wnba",   label: "WNBA",   sportType: "nba",    fetchStrategy: "tag", tagId: "100254" },
+  "nfl":    { key: "nfl",    label: "NFL",    sportType: "nfl",    fetchStrategy: "tag", tagId: "450",    seriesId: "10187" },
+  "nba":    { key: "nba",    label: "NBA",    sportType: "nba",    fetchStrategy: "tag", tagId: "745",    seriesId: "10345" },
+  "ncaab":  { key: "ncaab",  label: "NCAA Basketball", sportType: "ncaa", fetchStrategy: "tag", tagId: "100149", seriesId: "39" },
+  "cfb":    { key: "cfb",    label: "NCAA Football",   sportType: "ncaa", fetchStrategy: "tag", tagId: "100351", seriesId: "10210" },
+  "nhl":    { key: "nhl",    label: "NHL",    sportType: "nhl",    fetchStrategy: "tag", tagId: "899",    seriesId: "10346" },
+  "mlb":    { key: "mlb",    label: "MLB",    sportType: "mlb",    fetchStrategy: "tag", tagId: "100381", seriesId: "3" },
+  "wnba":   { key: "wnba",   label: "WNBA",   sportType: "nba",    fetchStrategy: "tag", tagId: "100254", seriesId: "10105" },
   // ─── Tennis ───
   "atp":    { key: "atp",    label: "ATP",    sportType: "tennis", fetchStrategy: "tag", tagId: "101232", seriesId: "10365" },
   "wta":    { key: "wta",    label: "WTA",    sportType: "tennis", fetchStrategy: "tag", tagId: "102123", seriesId: "10366" },
@@ -1855,13 +1855,14 @@ Deno.serve(async (req) => {
         "nba", "nhl", "mlb", "wnba", "ncaab", "cfb",
         // Tennis — auto-approve for operator visibility
         "atp", "wta",
+        // Cricket — auto-approve major leagues
+        "cricket", "cricket-ipl", "cricket-psl", "cricket-legends", "cricket-t20",
       ]);
 
       const PLATFORM_ONLY_KEYS = new Set([
         "tennis", "tennis-atp", "tennis-wta", "tennis-grand-slam",
         "golf", "f1",
-        "cricket", "cricket-ipl", "cricket-psl", "cricket-intl",
-        "cricket-legends", "cricket-t20", "cricket-bbl", "cricket-test",
+        "cricket-intl", "cricket-bbl", "cricket-test",
         "rugby", "table-tennis",
         "cs2",
       ]);
@@ -1907,7 +1908,7 @@ Deno.serve(async (req) => {
 
         const isAutoApproved = AUTO_APPROVED_KEYS.has(leagueKey);
         const vis = isAutoApproved ? "all" : "platform";
-        const statusOverride = isAutoApproved ? "approved" : "pending_review";
+        const statusOverride = isAutoApproved ? "open" : "pending_review";
         const tradingOn = true;
 
         try {
