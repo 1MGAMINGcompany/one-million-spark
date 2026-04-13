@@ -132,14 +132,25 @@ function OperatorCard({
   getAccessToken: () => Promise<string | null>;
   onRefresh: () => void;
 }) {
+  const [linkCopied, setLinkCopied] = useState(false);
+  const url = `https://1mg.live/${op.subdomain}`;
+
+  const copyLink = useCallback(() => {
+    navigator.clipboard.writeText(url);
+    setLinkCopied(true);
+    toast.success("Link copied!");
+    setTimeout(() => setLinkCopied(false), 2000);
+  }, [url]);
+
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden">
-      {/* Header */}
-      <div
-        className="p-3 flex items-center justify-between cursor-pointer hover:bg-muted/30 transition-colors"
-        onClick={onToggle}
-      >
-        <div className="flex items-center gap-3 min-w-0">
+      {/* Header — always visible */}
+      <div className="p-3 flex items-center gap-3">
+        {/* Logo + name */}
+        <div
+          className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
+          onClick={onToggle}
+        >
           {op.logo_url && (
             <img
               src={op.logo_url}
@@ -154,7 +165,28 @@ function OperatorCard({
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+
+        {/* Quick action buttons — always visible */}
+        <div className="flex items-center gap-1 shrink-0">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 p-0"
+            title="Open Public App"
+            onClick={(e) => { e.stopPropagation(); window.open(url, "_blank"); }}
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 p-0"
+            title="Copy URL"
+            onClick={(e) => { e.stopPropagation(); copyLink(); }}
+          >
+            {linkCopied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+          </Button>
+
           {!op.payout_wallet && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive flex items-center gap-0.5">
               <AlertTriangle className="w-3 h-3" /> No wallet
@@ -173,11 +205,19 @@ function OperatorCard({
           >
             {op.status}
           </span>
-          {expanded ? (
-            <ChevronUp className="w-4 h-4 text-muted-foreground" />
-          ) : (
-            <ChevronDown className="w-4 h-4 text-muted-foreground" />
-          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 p-0"
+            title={expanded ? "Collapse" : "Manage Operator"}
+            onClick={onToggle}
+          >
+            {expanded ? (
+              <ChevronUp className="w-4 h-4 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-muted-foreground" />
+            )}
+          </Button>
         </div>
       </div>
 
