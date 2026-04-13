@@ -100,10 +100,13 @@ export default function SimplePredictionCard({
 
   const liveState = useLiveGameState((fight as any).polymarket_slug);
 
-  const logoDataA = getTeamLogo(nameA, fight.event_name);
-  const logoDataB = getTeamLogo(nameB, fight.event_name);
-  const logoA = logoDataA?.url || null;
-  const logoB = logoDataB?.url || null;
+  // Prefer DB-stored photos/logos over ESPN CDN lookups (which may be blocked by CORS)
+  const dbLogoA = (fight as any).home_logo || (fight as any).fighter_a_photo || null;
+  const dbLogoB = (fight as any).away_logo || (fight as any).fighter_b_photo || null;
+  const fallbackA = getTeamLogo(nameA, fight.event_name);
+  const fallbackB = getTeamLogo(nameB, fight.event_name);
+  const logoA = dbLogoA || fallbackA?.url || null;
+  const logoB = dbLogoB || fallbackB?.url || null;
 
   const hasDrawOption = !!(fight as any).draw_allowed;
   const isStarted = (fight as any).event_date && new Date((fight as any).event_date).getTime() < Date.now();
@@ -309,13 +312,13 @@ export default function SimplePredictionCard({
       {(!isLive || !liveState?.score) && (
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 min-w-0 flex-1">
-            {logoA && <img src={logoA} className="w-7 h-7 sm:w-8 sm:h-8 object-contain shrink-0" alt="" />}
+            {logoA && <img src={logoA} className="w-7 h-7 sm:w-8 sm:h-8 object-contain shrink-0" alt="" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />}
             <span className="text-base sm:text-lg font-bold leading-tight truncate" style={{ color: theme.textPrimary }}>{nameA}</span>
           </div>
           <span className="text-sm font-bold mx-2 shrink-0" style={{ color: theme.textMuted }}>{t("operator.vs")}</span>
           <div className="flex items-center gap-2 min-w-0 flex-1 justify-end">
             <span className="text-base sm:text-lg font-bold leading-tight truncate text-right" style={{ color: theme.textPrimary }}>{nameB}</span>
-            {logoB && <img src={logoB} className="w-7 h-7 sm:w-8 sm:h-8 object-contain shrink-0" alt="" />}
+            {logoB && <img src={logoB} className="w-7 h-7 sm:w-8 sm:h-8 object-contain shrink-0" alt="" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />}
           </div>
         </div>
       )}
@@ -394,9 +397,9 @@ export default function SimplePredictionCard({
 function TeamLabel({ name, logo, theme, align = "left" }: { name: string; logo: string | null; theme: OperatorTheme; align?: "left" | "right" }) {
   return (
     <div className={`flex items-center gap-2 min-w-0 flex-1 ${align === "right" ? "justify-end" : ""}`}>
-      {align === "left" && logo && <img src={logo} className="w-6 h-6 object-contain shrink-0" alt="" />}
+      {align === "left" && logo && <img src={logo} className="w-6 h-6 object-contain shrink-0" alt="" onError={e => { (e.currentTarget).style.display = 'none'; }} />}
       <span className={`text-sm font-bold truncate ${align === "right" ? "text-right" : ""}`} style={{ color: theme.textPrimary }}>{name}</span>
-      {align === "right" && logo && <img src={logo} className="w-6 h-6 object-contain shrink-0" alt="" />}
+      {align === "right" && logo && <img src={logo} className="w-6 h-6 object-contain shrink-0" alt="" onError={e => { (e.currentTarget).style.display = 'none'; }} />}
     </div>
   );
 }
