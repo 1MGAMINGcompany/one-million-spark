@@ -131,6 +131,9 @@ export default function SimplePredictionCard({
   const isEnded = !!(liveState && liveState.ended);
   const liveDetailText = formatLiveDetail(liveState, t);
 
+  // Lopsided market safety: if one side is ≥95% implied, warn users
+  const isLopsided = (priceA >= 0.95 || priceB >= 0.95) && (fight.status === "live" || fight.status === "locked");
+
   const totalPool = (fight.pool_a_usd ?? 0) + (fight.pool_b_usd ?? 0);
 
   const cardStyle: React.CSSProperties = {
