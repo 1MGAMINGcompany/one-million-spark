@@ -441,6 +441,13 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         const d = new Date((f as any).event_date || 0).getTime();
         return d <= endOfWeek;
       });
+    } else if (timeFilter === "hot") {
+      // Most Traded: sort by volume desc, no date filter
+      fights = [...fights].sort((a, b) => {
+        const va = (a as any).polymarket_volume_usd ?? 0;
+        const vb = (b as any).polymarket_volume_usd ?? 0;
+        return vb - va;
+      });
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -1061,21 +1068,21 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
         {/* Time filter bar */}
         <div className="flex items-center gap-2">
-          {(["all", "today", "week"] as const).map(f => {
+          {(["all", "today", "week", "hot"] as const).map(f => {
             const isActive = timeFilter === f;
-            const label = f === "all" ? t("operator.all") : f === "today" ? t("operator.today") : t("operator.thisWeek");
+            const label = f === "all" ? t("operator.all") : f === "today" ? t("operator.today") : f === "week" ? t("operator.thisWeek") : t("operator.mostTraded");
             return (
               <button
                 key={f}
                 onClick={() => setTimeFilter(f)}
                 className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap"
                 style={{
-                  backgroundColor: isActive ? theme.primary + "18" : "transparent",
+                  backgroundColor: isActive ? (f === "hot" ? theme.primary + "22" : theme.primary + "18") : "transparent",
                   color: isActive ? theme.primary : theme.textMuted,
                   fontWeight: isActive ? 600 : 400,
                 }}
               >
-                {label}
+                {f === "hot" && "🔥 "}{label}
               </button>
             );
           })}
