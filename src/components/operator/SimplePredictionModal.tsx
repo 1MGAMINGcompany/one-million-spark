@@ -220,10 +220,13 @@ export default function SimplePredictionModal({
           </div>
         )}
 
-        {/* Custom event finality notice */}
+        {/* Custom event finality notice + pool */}
         {!(fight as any).polymarket_market_id && (
-          <div className="rounded-xl bg-white/5 border border-white/10 p-3 mb-4 text-center">
-            <p className="text-xs text-white/60">🔒 Predictions on custom events are final. Winners share the pot after the event is settled.</p>
+          <div className="rounded-xl bg-white/5 border border-white/10 p-3 mb-4 text-center space-y-1">
+            <p className="text-sm font-bold text-white/80">
+              💰 Total Pool: ${((fight.pool_a_usd ?? 0) + (fight.pool_b_usd ?? 0)).toFixed(2)}
+            </p>
+            <p className="text-xs text-white/60">🔒 Predictions are final. Winners share the pot after settlement.</p>
           </div>
         )}
 
