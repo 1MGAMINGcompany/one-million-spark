@@ -343,10 +343,12 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       const isOperatorEvent = (f as any).operator_id === operator?.id && (f as any).operator_id != null;
       return { ...f, _broadSport: broad, _league: league, _isOperatorEvent: isOperatorEvent };
     });
-    // Operator-created events appear first, then sorted by event_date
+    // Sort: featured first, then operator custom before imported, then by date
     mapped.sort((a, b) => {
-      if (a._isOperatorEvent && !b._isOperatorEvent) return -1;
-      if (!a._isOperatorEvent && b._isOperatorEvent) return 1;
+      const aFeat = (a as any).featured ? 1 : 0;
+      const bFeat = (b as any).featured ? 1 : 0;
+      if (aFeat !== bFeat) return bFeat - aFeat;
+      if (a._isOperatorEvent !== b._isOperatorEvent) return a._isOperatorEvent ? -1 : 1;
       const da = new Date((a as any).event_date || 0).getTime();
       const db = new Date((b as any).event_date || 0).getTime();
       return da - db;
