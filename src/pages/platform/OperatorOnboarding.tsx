@@ -223,7 +223,7 @@ function AgreementStep({
 const CHECKLIST_ITEMS = [
   { icon: LinkIcon, label: "Copy your app link and share it", key: "link" },
   { icon: QrCode, label: "Download your QR code for promotions", key: "qr" },
-  { icon: Wallet, label: "Confirm your payout wallet in Settings", key: "wallet" },
+  { icon: Wallet, label: "Confirm your payout wallet in Earnings", key: "wallet" },
   { icon: Calendar, label: "Create your first custom event", key: "event" },
   { icon: BarChart3, label: "Check your earnings in the Dashboard", key: "earnings" },
 ];
@@ -246,10 +246,14 @@ export default function OperatorOnboarding() {
   const [feePercent, setFeePercent] = useState(5);
   const [payoutWallet, setPayoutWallet] = useState("");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [walletPrefilled, setWalletPrefilled] = useState(false);
 
-  // Pre-fill payout wallet with Privy EVM wallet when available
-  if (walletAddress && !payoutWallet) {
-    setPayoutWallet(walletAddress);
+  // Pre-fill payout wallet with Privy EVM wallet once
+  if (walletAddress && !payoutWallet && !walletPrefilled) {
+    setTimeout(() => {
+      setPayoutWallet(walletAddress);
+      setWalletPrefilled(true);
+    }, 0);
   }
 
   if (!authenticated) {
