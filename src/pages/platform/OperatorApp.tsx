@@ -1144,7 +1144,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       </div>}
 
       {/* Featured event hero */}
-      {featuredEvent && activeTab === "events" && !searchQuery && (
+      {featuredEvent && (activeTab === "events" || activeTab === "operator_card") && !searchQuery && (
         <FeaturedEventHero
           fight={featuredEvent}
           theme={theme}
