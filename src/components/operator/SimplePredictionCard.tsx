@@ -385,12 +385,24 @@ export default function SimplePredictionCard({
         </div>
       </div>
 
-      {/* Row 7: Total pool */}
-      {totalPool > 0 && (
-        <p className="text-center text-[11px]" style={{ color: theme.textMuted }}>
-          {t("operator.totalPool")}: ${totalPool >= 1000 ? `${(totalPool / 1000).toFixed(0)}K` : totalPool.toFixed(0)}
-        </p>
-      )}
+      {/* Row 7: Total pool + Hot badge */}
+      <div className="flex items-center justify-center gap-2">
+        {totalPool > 0 && (
+          <p className="text-[11px]" style={{ color: theme.textMuted }}>
+            {t("operator.totalPool")}: ${totalPool >= 1000 ? `${(totalPool / 1000).toFixed(0)}K` : totalPool.toFixed(0)}
+          </p>
+        )}
+        {isHotVolume && (
+          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: theme.primary + "18", color: theme.primary }}>
+            🔥 {t("operator.mostTraded")}
+          </span>
+        )}
+      </div>
+
+      {/* Sell reminder line */}
+      <p className="text-center text-[10px]" style={{ color: theme.textMuted }}>
+        💡 {t("operator.sellReminder")}
+      </p>
     </div>
   );
 }
