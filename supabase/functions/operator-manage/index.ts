@@ -223,6 +223,10 @@ Deno.serve(async (req) => {
 
     // ── create_operator ──
     if (action === "create_operator") {
+      // Require agreement acceptance
+      if (!body.agreement_version || typeof body.agreement_version !== "string" || body.agreement_version.trim().length === 0) {
+        return jsonResp({ error: "agreement_version is required" }, 400);
+      }
       const { data: existing } = await sb.from("operators").select("id, status").eq("user_id", privyDid).maybeSingle();
       if (existing && existing.status !== "active") return jsonResp({ error: "payment_required", operator_id: existing.id }, 402);
       if (existing) {
@@ -234,6 +238,7 @@ Deno.serve(async (req) => {
         await sb.from("operators").update({
           brand_name: body.brand_name, subdomain: body.subdomain, logo_url: body.logo_url || null,
           theme: body.theme || "blue", fee_percent: body.fee_percent ?? 5, updated_at: new Date().toISOString(),
+          agreement_version: body.agreement_version, agreement_accepted_at: new Date().toISOString(),
         }).eq("id", existing.id);
         await sb.from("operator_settings").upsert({
           operator_id: existing.id, allowed_sports: body.allowed_sports || ["Soccer", "MMA", "Boxing"],
@@ -248,6 +253,7 @@ Deno.serve(async (req) => {
         user_id: privyDid, brand_name: body.brand_name, subdomain: body.subdomain,
         logo_url: body.logo_url || null, theme: body.theme || "blue", fee_percent: body.fee_percent ?? 5, status: "pending",
         payout_wallet: body.payout_wallet || null,
+        agreement_version: body.agreement_version, agreement_accepted_at: new Date().toISOString(),
       }).select().single();
       if (error) throw error;
       await sb.from("operator_settings").insert({
