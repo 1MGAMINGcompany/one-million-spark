@@ -1855,6 +1855,8 @@ Deno.serve(async (req) => {
         "nba", "nhl", "mlb", "wnba", "ncaab", "cfb",
         // Tennis — auto-approve for operator visibility
         "atp", "wta",
+        // Cricket — auto-approve major leagues
+        "cricket", "cricket-ipl", "cricket-psl", "cricket-legends", "cricket-t20",
       ]);
 
       const PLATFORM_ONLY_KEYS = new Set([
