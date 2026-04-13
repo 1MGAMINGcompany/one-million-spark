@@ -286,6 +286,10 @@ const erc20TransferFromAbi = parseAbi([
   "function allowance(address owner, address spender) view returns (uint256)",
 ]);
 
+const erc20TransferAbi = parseAbi([
+  "function transfer(address to, uint256 amount) returns (bool)",
+]);
+
 const POLYGON_RPCS = [
   "https://polygon-bor-rpc.publicnode.com",
   "https://polygon.drpc.org",

@@ -279,6 +279,7 @@ Deno.serve(async (req) => {
           source: "manual",
           polymarket_active: null,
           commission_bps: 500, // 5% for native 1MGAMING events
+          trading_allowed: true, // Allow predictions immediately
         })
         .select()
         .single();
@@ -351,9 +352,9 @@ Deno.serve(async (req) => {
 
       const { data, error } = await supabase
         .from("prediction_fights")
-        .update({ status: "result_selected", winner })
+        .update({ status: "result_selected", winner, trading_allowed: false })
         .eq("id", fight_id)
-        .eq("status", "live")
+        .in("status", ["open", "locked", "live"])
         .select()
         .single();
 
