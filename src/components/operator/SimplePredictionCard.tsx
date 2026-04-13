@@ -399,9 +399,10 @@ export default function SimplePredictionCard({
 
       {/* Row 7: Total pool + Hot badge */}
       <div className="flex items-center justify-center gap-2">
-        {totalPool > 0 && (
+        {/* Custom events: always show pool (even $0). Imported: only when > 0 */}
+        {(!(fight as any).polymarket_market_id || totalPool > 0) && (
           <p className="text-[11px]" style={{ color: theme.textMuted }}>
-            {t("operator.totalPool")}: ${totalPool >= 1000 ? `${(totalPool / 1000).toFixed(0)}K` : totalPool.toFixed(0)}
+            {t("operator.totalPool")}: ${totalPool >= 1000 ? `${(totalPool / 1000).toFixed(1)}K` : totalPool.toFixed(2)}
           </p>
         )}
         {isHotVolume && (
