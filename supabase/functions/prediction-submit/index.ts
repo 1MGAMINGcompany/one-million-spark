@@ -1543,14 +1543,14 @@ Deno.serve(async (req) => {
         .select()
         .single();
 
-      // ── OPERATOR REVENUE TRACKING ──
+      // ── OPERATOR REVENUE TRACKING + SWEEP ──
       const resolvedOperatorId = source_operator_id || fight.operator_id || null;
       if (resolvedOperatorId && entry) {
         try {
           const platformFeeBps = 150;
           const platformFeeUsd = Number(((parsedAmount * platformFeeBps) / 10_000).toFixed(6));
           const operatorFeeUsd = Math.max(0, Number((fee_usd - platformFeeUsd).toFixed(6)));
-          await supabase.from("operator_revenue").insert({
+          const { data: revRow } = await supabase.from("operator_revenue").insert({
             operator_id: resolvedOperatorId,
             fight_id,
             entry_id: entry.id,
@@ -1559,7 +1559,94 @@ Deno.serve(async (req) => {
             operator_fee_usdc: operatorFeeUsd,
             total_fee_usdc: fee_usd,
             entry_amount_usdc: parsedAmount,
-          });
+          }).select("id").single();
+
+          // ── Sweep operator fee to operator payout wallet (non-blocking) ──
+          if (revRow && operatorFeeUsd >= 0.01) {
+            try {
+              const { data: op } = await supabase
+                .from("operators")
+                .select("payout_wallet")
+                .eq("id", resolvedOperatorId)
+                .single();
+
+              if (op?.payout_wallet) {
+                // CAS: only sweep if still 'accrued'
+                const { data: claimed, error: casErr } = await supabase
+                  .from("operator_revenue")
+                  .update({
+                    sweep_status: "sending",
+                    sweep_attempted_at: new Date().toISOString(),
+                    sweep_destination_wallet: op.payout_wallet,
+                  })
+                  .eq("id", revRow.id)
+                  .eq("sweep_status", "accrued")
+                  .select("id")
+                  .single();
+
+                if (!casErr && claimed) {
+                  const relayerKey = Deno.env.get("FEE_RELAYER_PRIVATE_KEY");
+                  if (relayerKey) {
+                    try {
+                      const sweepAccount = privateKeyToAccount(
+                        (relayerKey.startsWith("0x") ? relayerKey : `0x${relayerKey}`) as `0x${string}`,
+                      );
+                      const sweepAmountRaw = BigInt(Math.floor(operatorFeeUsd * 10 ** USDC_DECIMALS));
+                      const sweepTxData = encodeFunctionData({
+                        abi: erc20TransferAbi,
+                        functionName: "transfer",
+                        args: [op.payout_wallet as `0x${string}`, sweepAmountRaw],
+                      });
+
+                      const [sweepNonce, sweepGas] = await Promise.all([
+                        polygonRpcCall({ jsonrpc: "2.0", id: 1, method: "eth_getTransactionCount", params: [sweepAccount.address, "pending"] }),
+                        polygonRpcCall({ jsonrpc: "2.0", id: 2, method: "eth_gasPrice", params: [] }),
+                      ]);
+
+                      if (sweepNonce.result && sweepGas.result) {
+                        const sweepWc = createWalletClient({
+                          account: sweepAccount,
+                          chain: polygon,
+                          transport: http(sweepNonce.rpc || POLYGON_RPCS[0]),
+                        });
+                        const sweepTxHash = await sweepWc.sendTransaction({
+                          to: USDC_CONTRACT as `0x${string}`,
+                          data: sweepTxData,
+                          gas: 100_000n,
+                          gasPrice: BigInt(sweepGas.result) * 12n / 10n,
+                          nonce: Number(BigInt(sweepNonce.result)),
+                          value: 0n,
+                        });
+                        await supabase.from("operator_revenue").update({
+                          sweep_status: "sent",
+                          sweep_tx_hash: sweepTxHash,
+                          sweep_completed_at: new Date().toISOString(),
+                        }).eq("id", revRow.id);
+                        console.log(`[prediction-submit] Operator sweep completed: tx=${sweepTxHash}`);
+                      } else {
+                        await supabase.from("operator_revenue").update({
+                          sweep_status: "failed", sweep_error: "rpc_unavailable",
+                        }).eq("id", revRow.id);
+                      }
+                    } catch (sweepTxErr: any) {
+                      await supabase.from("operator_revenue").update({
+                        sweep_status: "failed", sweep_error: sweepTxErr.message?.substring(0, 200),
+                      }).eq("id", revRow.id);
+                      console.warn("[prediction-submit] Operator sweep tx failed:", sweepTxErr.message);
+                    }
+                  } else {
+                    await supabase.from("operator_revenue").update({
+                      sweep_status: "failed", sweep_error: "relayer_not_configured",
+                    }).eq("id", revRow.id);
+                  }
+                }
+              } else {
+                console.log(`[prediction-submit] No payout_wallet for operator ${resolvedOperatorId} — sweep skipped`);
+              }
+            } catch (sweepErr: any) {
+              console.warn("[prediction-submit] Operator sweep error (non-fatal):", sweepErr.message);
+            }
+          }
         } catch (revErr) {
           console.warn("[prediction-submit] operator_revenue insert failed:", revErr);
         }
