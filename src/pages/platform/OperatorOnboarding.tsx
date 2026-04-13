@@ -238,11 +238,9 @@ export default function OperatorOnboarding() {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   // Pre-fill payout wallet with Privy EVM wallet when available
-  useState(() => {
-    if (walletAddress && !payoutWallet) {
-      setPayoutWallet(walletAddress);
-    }
-  });
+  if (walletAddress && !payoutWallet) {
+    setPayoutWallet(walletAddress);
+  }
 
   if (!authenticated) {
     return (
