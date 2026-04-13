@@ -639,7 +639,11 @@ function FightPredictionAdminInner({ address }: { address: string }) {
               <Input placeholder="Weight class" value={fightWeightClass} onChange={e => setFightWeightClass(e.target.value)} />
               <Input placeholder="Fight class (A/B/C)" value={fightClass} onChange={e => setFightClass(e.target.value)} />
             </div>
-            <Button className="w-full bg-primary text-primary-foreground" onClick={handleCreateFight} disabled={busy}>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Event Date/Time <span className="text-destructive">*</span></label>
+              <Input type="datetime-local" value={fightDate} onChange={e => setFightDate(e.target.value)} required />
+            </div>
+            <Button className="w-full bg-primary text-primary-foreground" onClick={handleCreateFight} disabled={busy || !fightDate}>
               {busy ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} Create Fight
             </Button>
           </div>
