@@ -874,6 +874,8 @@ export type Database = {
       }
       operators: {
         Row: {
+          agreement_accepted_at: string | null
+          agreement_version: string | null
           brand_color: string | null
           brand_name: string
           created_at: string
@@ -892,6 +894,8 @@ export type Database = {
           welcome_message: string | null
         }
         Insert: {
+          agreement_accepted_at?: string | null
+          agreement_version?: string | null
           brand_color?: string | null
           brand_name: string
           created_at?: string
@@ -910,6 +914,8 @@ export type Database = {
           welcome_message?: string | null
         }
         Update: {
+          agreement_accepted_at?: string | null
+          agreement_version?: string | null
           brand_color?: string | null
           brand_name?: string
           created_at?: string

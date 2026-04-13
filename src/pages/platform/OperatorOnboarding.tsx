@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { usePrivySafe } from "@/hooks/usePrivySafe";
 import { usePrivyLogin } from "@/hooks/usePrivyLogin";
 import { useNavigate } from "react-router-dom";
@@ -21,6 +23,116 @@ const SPORTS_OPTIONS = [
   "MLB", "Tennis", "UFC", "Cricket", "F1", "Esports",
 ];
 
+const AGREEMENT_VERSION = "1.0";
+
+const AGREEMENT_TEXT = `OPERATOR AGREEMENT — Version ${AGREEMENT_VERSION}
+
+Effective Date: Upon acceptance during onboarding.
+
+This Operator Agreement ("Agreement") governs your use of the 1MG platform ("Platform") as an operator. By checking the acceptance box and completing onboarding, you agree to the following terms.
+
+1. PLATFORM ACCESS
+
+You are granted a non-exclusive, revocable license to operate a branded prediction marketplace on the Platform. Your operator app will be accessible via a subdomain (e.g., 1mg.live/yourname). Access may be modified, suspended, or revoked at the Platform's sole discretion.
+
+2. OPERATOR RESPONSIBILITIES
+
+As an operator, you are responsible for:
+• Managing your branded app and its public-facing content.
+• Ensuring all marketing, promotions, and communications comply with applicable laws and regulations in the jurisdictions where you operate.
+• Providing accurate brand information during onboarding.
+• Monitoring your app for prohibited or inappropriate activity.
+
+3. MARKETING & COMPLIANCE
+
+You are solely responsible for ensuring that your marketing activities, advertising, and user-facing communications comply with all applicable local, state, national, and international laws. The Platform does not provide legal, regulatory, or compliance advice.
+
+4. REVENUE DISCLAIMER
+
+There is no guarantee of revenue, earnings, or profits from operating on the Platform. Revenue depends on user activity, market conditions, event availability, and other factors outside the Platform's control. Past performance is not indicative of future results.
+
+5. FEES & PAYOUTS
+
+• The Platform charges a 1.5% platform fee on each prediction transaction.
+• Your operator fee (set during onboarding, 0–20%) is added on top of the platform fee.
+• You retain 100% of your operator fee revenue.
+• Payouts are processed according to the Platform's standard payout schedule and are subject to minimum thresholds and verification requirements.
+• The Platform reserves the right to modify fee structures with reasonable notice.
+
+6. SUSPENSION & TERMINATION
+
+The Platform reserves the right to suspend or terminate your operator account at any time, with or without notice, for any reason, including but not limited to:
+• Violation of this Agreement.
+• Fraudulent, misleading, or illegal activity.
+• Failure to comply with applicable laws or regulations.
+• Inactivity for an extended period.
+• Any conduct that the Platform determines, in its sole discretion, is harmful to the Platform, its users, or its reputation.
+
+Upon termination, access to your operator dashboard and branded app may be immediately revoked.
+
+7. LIMITATION OF LIABILITY
+
+The Platform is provided "as is" without warranties of any kind, express or implied. To the maximum extent permitted by law:
+• The Platform shall not be liable for any indirect, incidental, consequential, or punitive damages.
+• The Platform's total liability shall not exceed the fees paid by you in the 30 days preceding the claim.
+• The Platform is not responsible for losses arising from market conditions, user behavior, regulatory changes, or technical issues beyond its reasonable control.
+
+8. PROHIBITED CONDUCT
+
+You agree not to:
+• Use the Platform for any illegal, fraudulent, or deceptive purpose.
+• Manipulate markets, outcomes, or user predictions.
+• Misrepresent your identity, brand, or affiliation.
+• Engage in money laundering, terrorist financing, or sanctions violations.
+• Scrape, reverse-engineer, or interfere with Platform systems.
+• Create multiple operator accounts without authorization.
+• Encourage or facilitate violations of this Agreement by users or third parties.
+
+9. MODIFICATIONS
+
+The Platform may update this Agreement at any time. Continued use of the Platform after changes constitutes acceptance of the updated terms. Material changes will be communicated via dashboard notification or email where possible.
+
+10. GOVERNING LAW
+
+This Agreement is governed by applicable law. Any disputes shall be resolved through binding arbitration or the courts of competent jurisdiction as determined by the Platform.
+
+By accepting this Agreement, you acknowledge that you have read, understood, and agree to be bound by all terms above.`;
+
+function AgreementStep({
+  agreed,
+  onToggle,
+}: {
+  agreed: boolean;
+  onToggle: (checked: boolean) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <label className="text-sm text-white/60">
+        Please review the Operator Agreement before launching your app.
+      </label>
+      <ScrollArea className="h-64 w-full rounded-lg border border-white/10 bg-white/5 p-4">
+        <pre className="whitespace-pre-wrap text-xs text-white/70 font-sans leading-relaxed pr-4">
+          {AGREEMENT_TEXT}
+        </pre>
+      </ScrollArea>
+      <div className="flex items-start gap-3 pt-2">
+        <Checkbox
+          id="agreement-checkbox"
+          checked={agreed}
+          onCheckedChange={(checked) => onToggle(checked === true)}
+          className="mt-0.5 border-white/30 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+        />
+        <label
+          htmlFor="agreement-checkbox"
+          className="text-sm text-white/80 cursor-pointer select-none leading-snug"
+        >
+          I have read and agree to the Operator Agreement
+        </label>
+      </div>
+    </div>
+  );
+}
+
 export default function OperatorOnboarding() {
   const { authenticated, getAccessToken } = usePrivySafe();
   const { login } = usePrivyLogin();
@@ -36,6 +148,7 @@ export default function OperatorOnboarding() {
   const [theme, setTheme] = useState("blue");
   const [sports, setSports] = useState<string[]>(["Soccer", "MMA", "Boxing"]);
   const [feePercent, setFeePercent] = useState(5);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   if (!authenticated) {
     return (
@@ -213,6 +326,15 @@ export default function OperatorOnboarding() {
         </div>
       ),
     },
+    {
+      title: "Operator Agreement",
+      component: (
+        <AgreementStep
+          agreed={agreedToTerms}
+          onToggle={setAgreedToTerms}
+        />
+      ),
+    },
   ];
 
   const handleCreate = async () => {
@@ -236,6 +358,7 @@ export default function OperatorOnboarding() {
             theme,
             fee_percent: feePercent,
             allowed_sports: sports,
+            agreement_version: AGREEMENT_VERSION,
           }),
         }
       );
@@ -256,6 +379,7 @@ export default function OperatorOnboarding() {
     if (step === 0) return brandName.trim().length >= 2;
     if (step === 1) return subdomain.trim().length >= 3;
     if (step === 4) return sports.length > 0;
+    if (step === 6) return agreedToTerms;
     return true;
   };
 
