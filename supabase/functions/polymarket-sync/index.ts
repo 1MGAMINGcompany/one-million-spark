@@ -294,6 +294,8 @@ const LEAGUE_SOURCES: Record<string, LeagueSource> = {
   "cricket-t20":     { key: "cricket-t20",     label: "T20 Brisbane",    sportType: "cricket", fetchStrategy: "tag", tagId: "104447", seriesId: "11513" },
   "cricket-bbl":     { key: "cricket-bbl",     label: "BBL",             sportType: "cricket", fetchStrategy: "search", searchSeed: ["Big Bash League", "BBL vs"] },
   "cricket-test":    { key: "cricket-test",    label: "Test",            sportType: "cricket", fetchStrategy: "search", searchSeed: ["Test cricket", "Test match vs"] },
+  // ─── Rugby ───
+  "rugby":        { key: "rugby",        label: "Rugby",         sportType: "rugby", fetchStrategy: "search", searchSeed: ["rugby vs", "Six Nations", "Super Rugby", "Premiership Rugby", "rugby union"] },
   // ─── Other ───
   "table-tennis": { key: "table-tennis", label: "Table Tennis", sportType: "tennis", fetchStrategy: "search", searchSeed: ["table tennis", "ping pong"] },
 };
