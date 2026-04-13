@@ -275,8 +275,8 @@ const LEAGUE_SOURCES: Record<string, LeagueSource> = {
   "mlb":    { key: "mlb",    label: "MLB",    sportType: "mlb",    fetchStrategy: "tag", tagId: "100381" },
   "wnba":   { key: "wnba",   label: "WNBA",   sportType: "nba",    fetchStrategy: "tag", tagId: "100254" },
   // ─── Tennis ───
-  "atp":    { key: "atp",    label: "ATP",    sportType: "tennis", fetchStrategy: "tag", tagId: "101232" },
-  "wta":    { key: "wta",    label: "WTA",    sportType: "tennis", fetchStrategy: "tag", tagId: "102123" },
+  "atp":    { key: "atp",    label: "ATP",    sportType: "tennis", fetchStrategy: "tag", tagId: "101232", seriesId: "10365" },
+  "wta":    { key: "wta",    label: "WTA",    sportType: "tennis", fetchStrategy: "tag", tagId: "102123", seriesId: "10366" },
   "tennis":        { key: "tennis",        label: "Tennis",        sportType: "tennis", fetchStrategy: "search", searchSeed: ["ATP vs", "WTA vs", "Wimbledon", "US Open vs", "Roland Garros vs", "Australian Open vs", "tennis vs"] },
   "tennis-atp":    { key: "tennis-atp",    label: "Tennis ATP",    sportType: "tennis", fetchStrategy: "search", searchSeed: ["ATP vs", "ATP Tour"] },
   "tennis-wta":    { key: "tennis-wta",    label: "Tennis WTA",    sportType: "tennis", fetchStrategy: "search", searchSeed: ["WTA vs", "WTA Tour"] },
@@ -1853,10 +1853,12 @@ Deno.serve(async (req) => {
         "primeira-liga", "concacaf", "conmebol", "fifa-friendlies",
         // Major American sports — auto-approve for in-play trading
         "nba", "nhl", "mlb", "wnba", "ncaab", "cfb",
+        // Tennis — auto-approve for operator visibility
+        "atp", "wta",
       ]);
 
       const PLATFORM_ONLY_KEYS = new Set([
-        "atp", "wta", "tennis", "tennis-atp", "tennis-wta", "tennis-grand-slam",
+        "tennis", "tennis-atp", "tennis-wta", "tennis-grand-slam",
         "golf", "f1",
         "cricket", "cricket-ipl", "cricket-psl", "cricket-intl",
         "cricket-legends", "cricket-t20", "cricket-bbl", "cricket-test",
