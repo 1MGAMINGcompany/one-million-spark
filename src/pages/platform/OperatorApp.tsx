@@ -179,7 +179,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     } catch {}
   }, [broadSportFilter, leagueFilter]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"events" | "picks">("events");
+  const [activeTab, setActiveTab] = useState<"events" | "picks" | "operator_card">("events");
   const [graphFight, setGraphFight] = useState<Fight | null>(null);
   const [tipsFight, setTipsFight] = useState<Fight | null>(null);
   const [sportPickerOpen, setSportPickerOpen] = useState(false);
@@ -395,24 +395,35 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
     }];
   }, [enrichedFights, sportCounts]);
 
+  // ── Operator custom event count (for dynamic tab) ──
+  const operatorCustomFights = useMemo(
+    () => enrichedFights.filter(f => f._isOperatorEvent),
+    [enrichedFights],
+  );
+
   // ── Featured event ──
   const featuredEvent = useMemo(() => {
     if (broadSportFilter !== "ALL" || searchQuery || activeTab === "picks") return null;
+    const source = activeTab === "operator_card" ? operatorCustomFights : enrichedFights;
+    if (source.length === 0) return null;
     const now = Date.now();
-    // 1. Actually live event (confirmed by fight status)
-    const live = enrichedFights.find(f => f.status === "live");
+    // 1. Operator featured event always wins when available
+    const opFeatured = source.find(f => f._isOperatorEvent && (f as any).featured);
+    if (opFeatured) return opFeatured;
+    // 2. Actually live event (confirmed by fight status)
+    const live = source.find(f => f.status === "live");
     if (live) return live;
-    // 2. Next event today
+    // 3. Next event today
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999);
-    const today = enrichedFights.find(f => {
+    const today = source.find(f => {
       const d = new Date((f as any).event_date || 0).getTime();
       return d >= now && d <= endOfDay.getTime();
     });
     if (today) return today;
-    // 3. Next upcoming
-    return enrichedFights.find(f => new Date((f as any).event_date || 0).getTime() >= now) || null;
-  }, [enrichedFights, broadSportFilter, searchQuery, activeTab]);
+    // 4. Next upcoming
+    return source.find(f => new Date((f as any).event_date || 0).getTime() >= now) || null;
+  }, [enrichedFights, operatorCustomFights, broadSportFilter, searchQuery, activeTab]);
 
   // ── Build league tabs (Level 2) for selected sport ──
   const leagueTabs = useMemo(() => {
@@ -432,7 +443,10 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         return db - da; // newest first
       });
     }
-    let fights = enrichedFights;
+    // Operator Card: show only this operator's custom events
+    let fights = activeTab === "operator_card"
+      ? operatorCustomFights
+      : enrichedFights;
     if (broadSportFilter !== "ALL") {
       fights = fights.filter(f => f._broadSport === broadSportFilter);
     }
@@ -474,7 +488,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       fights = fights.filter(f => f.id !== featuredEvent.id);
     }
     return fights;
-  }, [enrichedFights, broadSportFilter, leagueFilter, searchQuery, activeTab, picksFights, timeFilter, featuredEvent]);
+  }, [enrichedFights, operatorCustomFights, broadSportFilter, leagueFilter, searchQuery, activeTab, picksFights, timeFilter, featuredEvent]);
 
   // ── Date-grouped fights for display ──
   const dateGroups = useMemo(() => groupByDate(filteredFights), [filteredFights]);
@@ -977,29 +991,37 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       {isConnected && (
         <div className="max-w-4xl mx-auto px-4 pt-3">
           <div
-            className="flex gap-1 rounded-lg p-1 w-fit"
-            style={{ backgroundColor: theme.surfaceBg }}
+            className="flex gap-1 rounded-lg p-1 overflow-x-auto scrollbar-hide"
+            style={{ backgroundColor: theme.surfaceBg, scrollbarWidth: "none", msOverflowStyle: "none" }}
           >
-            {(["events", "picks"] as const).map(tab => (
+            {(
+              [
+                { key: "events" as const, label: t("operator.events") },
+                { key: "picks" as const, label: `${t("operator.myPicks")}${userEntries.length > 0 ? ` (${userEntries.length})` : ""}` },
+                ...(operatorCustomFights.length > 0
+                  ? [{ key: "operator_card" as const, label: `${operator?.brand_name || "Operator"} Card` }]
+                  : []),
+              ]
+            ).map(tab => (
               <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className="px-4 py-1.5 rounded-md text-sm font-medium transition-all"
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className="shrink-0 px-4 py-1.5 rounded-md text-sm font-medium transition-all whitespace-nowrap"
                 style={{
-                  backgroundColor: activeTab === tab ? theme.cardBg : "transparent",
-                  color: activeTab === tab ? theme.textPrimary : theme.textMuted,
-                  boxShadow: activeTab === tab ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                  backgroundColor: activeTab === tab.key ? theme.cardBg : "transparent",
+                  color: activeTab === tab.key ? theme.textPrimary : theme.textMuted,
+                  boxShadow: activeTab === tab.key ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
                 }}
               >
-                {tab === "events" ? t("operator.events") : `${t("operator.myPicks")}${userEntries.length > 0 ? ` (${userEntries.length})` : ""}`}
+                {tab.label}
               </button>
             ))}
           </div>
         </div>
       )}
 
-      {/* Level 1: Broad Sport Tabs (scrollable chips) — hidden in My Picks */}
-      {activeTab !== "picks" && <div className="max-w-4xl mx-auto px-4 pt-3 space-y-2">
+      {/* Level 1: Broad Sport Tabs (scrollable chips) — hidden in My Picks and Operator Card */}
+      {activeTab === "events" && <div className="max-w-4xl mx-auto px-4 pt-3 space-y-2">
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
           {/* All Sports button → opens modal */}
           <button
@@ -1122,7 +1144,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       </div>}
 
       {/* Featured event hero */}
-      {featuredEvent && activeTab === "events" && !searchQuery && (
+      {featuredEvent && (activeTab === "events" || activeTab === "operator_card") && !searchQuery && (
         <FeaturedEventHero
           fight={featuredEvent}
           theme={theme}
