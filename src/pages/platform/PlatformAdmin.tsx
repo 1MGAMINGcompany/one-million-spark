@@ -866,6 +866,7 @@ function PlatformAdminInner({ address }: { address: string }) {
             {([
               { key: "browser", label: "Browser", fullLabel: "Polymarket Browser", icon: <Download className="w-3 h-3" /> },
               { key: "dashboard", label: "Dashboard", fullLabel: "Events Dashboard", icon: <Globe className="w-3 h-3" /> },
+              { key: "operators", label: "Operators", fullLabel: "Operator Management", icon: <Users className="w-3 h-3" /> },
               { key: "analytics", label: "Analytics", fullLabel: "Analytics", icon: <BarChart3 className="w-3 h-3" /> },
               { key: "activity", label: "Activity", fullLabel: "Activity Log", icon: <Activity className="w-3 h-3" /> },
             ] as const).map(t => (
