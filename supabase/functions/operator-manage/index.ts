@@ -614,17 +614,119 @@ Deno.serve(async (req) => {
       return jsonResp({ success: true, reset_count: (failed || []).length });
     }
 
+    // ══════ ADMIN-SCOPED ACTIONS ══════
+    // Helper: verify platform admin
+    async function requireAdmin(): Promise<string | null> {
+      const { data: account } = await sb.from("prediction_accounts").select("wallet_evm").eq("privy_did", privyDid).maybeSingle();
+      const w = account?.wallet_evm?.toLowerCase();
+      if (!w) return null;
+      const { data: adminRow } = await sb.from("prediction_admins").select("wallet").eq("wallet", w).maybeSingle();
+      return adminRow ? w : null;
+    }
+
     // ── list_all_operators (admin-only) ──
     if (action === "list_all_operators") {
-      // Resolve caller wallet via prediction_accounts, then verify admin status
-      const { data: account } = await sb.from("prediction_accounts").select("wallet_evm").eq("privy_did", privyDid).maybeSingle();
-      const callerWallet = account?.wallet_evm?.toLowerCase();
-      if (!callerWallet) return jsonResp({ error: "forbidden" }, 403);
-      const { data: adminRow } = await sb.from("prediction_admins").select("wallet").eq("wallet", callerWallet).maybeSingle();
-      if (!adminRow) return jsonResp({ error: "forbidden" }, 403);
-
+      const adminWallet = await requireAdmin();
+      if (!adminWallet) return jsonResp({ error: "forbidden" }, 403);
       const { data } = await sb.from("operators").select("*, operator_settings(*)").order("created_at", { ascending: false });
       return jsonResp({ operators: data || [] });
+    }
+
+    // ── admin_get_operator_events (admin-only) ──
+    if (action === "admin_get_operator_events") {
+      const adminWallet = await requireAdmin();
+      if (!adminWallet) return jsonResp({ error: "forbidden" }, 403);
+      const opId = body.operator_id;
+      if (!opId) return jsonResp({ error: "operator_id required" }, 400);
+      const { data: events } = await sb.from("operator_events").select("*").eq("operator_id", opId).order("created_at", { ascending: false });
+      // Get linked fights
+      const { data: fights } = await sb.from("prediction_fights").select("id, operator_event_id, status, winner, pool_a_usd, pool_b_usd, shares_a, shares_b, settled_at, trading_allowed").eq("operator_id", opId);
+      return jsonResp({ events: events || [], fights: fights || [] });
+    }
+
+    // ── admin_close_event (admin-only) ──
+    if (action === "admin_close_event") {
+      const adminWallet = await requireAdmin();
+      if (!adminWallet) return jsonResp({ error: "forbidden" }, 403);
+      const { event_id, fight_id, operator_id } = body;
+      if (!event_id || !operator_id) return jsonResp({ error: "event_id and operator_id required" }, 400);
+      if (fight_id) {
+        const { data: fight } = await sb.from("prediction_fights").select("id, operator_id, status").eq("id", fight_id).single();
+        if (!fight || fight.operator_id !== operator_id) return jsonResp({ error: "fight_not_found" }, 404);
+        if (fight.status !== "open") return jsonResp({ error: "already_closed" }, 400);
+        await sb.from("prediction_fights").update({ status: "locked", trading_allowed: false, updated_at: new Date().toISOString() }).eq("id", fight_id);
+      }
+      await sb.from("operator_events").update({ status: "closed", updated_at: new Date().toISOString() }).eq("id", event_id).eq("operator_id", operator_id);
+      await sb.from("automation_logs").insert({ action: "admin_close_event", fight_id, source: "operator-manage", details: { event_id, operator_id, admin: adminWallet } });
+      return jsonResp({ success: true });
+    }
+
+    // ── admin_settle_event (admin-only) ──
+    if (action === "admin_settle_event") {
+      const adminWallet = await requireAdmin();
+      if (!adminWallet) return jsonResp({ error: "forbidden" }, 403);
+      const { fight_id, winner, event_id, operator_id } = body;
+      if (!fight_id || !winner || !operator_id) return jsonResp({ error: "fight_id, winner, operator_id required" }, 400);
+      if (!["fighter_a", "fighter_b", "draw"].includes(winner)) return jsonResp({ error: "invalid winner" }, 400);
+      const { data: fight } = await sb.from("prediction_fights").select("id, operator_id, status, winner, settled_at").eq("id", fight_id).single();
+      if (!fight || fight.operator_id !== operator_id) return jsonResp({ error: "fight_not_found" }, 404);
+      if (fight.settled_at) return jsonResp({ error: "already_settled" }, 400);
+      if (fight.winner) return jsonResp({ error: "winner_already_set" }, 400);
+      const now = new Date().toISOString();
+      if (winner === "draw") {
+        await sb.from("prediction_fights").update({ status: "cancelled", winner: "draw", trading_allowed: false, refund_status: "pending", updated_at: now }).eq("id", fight_id);
+        if (event_id) await sb.from("operator_events").update({ status: "settled", updated_at: now }).eq("id", event_id).eq("operator_id", operator_id);
+        await sb.from("automation_logs").insert({ action: "admin_settle_event", fight_id, source: "operator-manage", details: { winner, operator_id, admin: adminWallet } });
+        return jsonResp({ success: true, outcome: "draw_refund_pending" });
+      }
+      const claimsOpenAt = new Date(Date.now() + 3 * 60 * 1000).toISOString();
+      await sb.from("prediction_fights").update({ winner, status: "confirmed", confirmed_at: now, claims_open_at: claimsOpenAt, trading_allowed: false, updated_at: now }).eq("id", fight_id);
+      if (event_id) await sb.from("operator_events").update({ status: "settled", updated_at: now }).eq("id", event_id).eq("operator_id", operator_id);
+      await sb.from("automation_logs").insert({ action: "admin_settle_event", fight_id, source: "operator-manage", details: { winner, operator_id, admin: adminWallet } });
+      return jsonResp({ success: true, outcome: "settled", winner });
+    }
+
+    // ── admin_toggle_operator_status (admin-only) ──
+    if (action === "admin_toggle_operator_status") {
+      const adminWallet = await requireAdmin();
+      if (!adminWallet) return jsonResp({ error: "forbidden" }, 403);
+      const { operator_id, new_status } = body;
+      if (!operator_id || !["active", "paused"].includes(new_status)) return jsonResp({ error: "operator_id and valid new_status required" }, 400);
+      await sb.from("operators").update({ status: new_status, updated_at: new Date().toISOString() }).eq("id", operator_id);
+      await sb.from("automation_logs").insert({ action: "admin_toggle_operator_status", source: "operator-manage", details: { operator_id, new_status, admin: adminWallet } });
+      return jsonResp({ success: true });
+    }
+
+    // ── admin_create_event (admin-only, create event for any operator) ──
+    if (action === "admin_create_event") {
+      const adminWallet = await requireAdmin();
+      if (!adminWallet) return jsonResp({ error: "forbidden" }, 403);
+      const { operator_id } = body;
+      if (!operator_id) return jsonResp({ error: "operator_id required" }, 400);
+      const { data: op } = await sb.from("operators").select("id, fee_percent, brand_name, status").eq("id", operator_id).single();
+      if (!op) return jsonResp({ error: "operator_not_found" }, 404);
+      const teamA = (body.team_a || "").trim();
+      const teamB = (body.team_b || "").trim();
+      const title = (body.title || "").trim();
+      const sport = (body.sport || "").trim().toUpperCase();
+      const eventDate = body.event_date || null;
+      if (!teamA || !teamB) return jsonResp({ error: "Both teams required" }, 400);
+      if (!title) return jsonResp({ error: "Title required" }, 400);
+      if (!eventDate) return jsonResp({ error: "Event date required" }, 400);
+      if (!sport || !ALLOWED_SPORTS_SET.has(sport)) return jsonResp({ error: `Invalid sport` }, 400);
+      const { data: event, error: evErr } = await sb.from("operator_events").insert({
+        operator_id: op.id, title, sport: body.sport, team_a: teamA, team_b: teamB,
+        event_date: eventDate, image_url: body.image_url || null, is_featured: body.is_featured || false, status: "open",
+      }).select().single();
+      if (evErr) throw evErr;
+      const commissionBps = Math.round((op.fee_percent + 1) * 100);
+      const { data: fight } = await sb.from("prediction_fights").insert({
+        title, fighter_a_name: teamA, fighter_b_name: teamB, event_name: title, event_date: eventDate,
+        status: "open", source: "operator", trading_allowed: true, operator_id: op.id, operator_event_id: event.id,
+        commission_bps: commissionBps, featured: body.is_featured || false, draw_allowed: body.draw_allowed || false,
+      }).select("id").single();
+      await sb.from("automation_logs").insert({ action: "admin_create_event", source: "operator-manage", details: { operator_id, title, admin: adminWallet } });
+      return jsonResp({ event, fight_id: fight?.id || null });
     }
 
     return jsonResp({ error: "unknown_action" }, 400);
