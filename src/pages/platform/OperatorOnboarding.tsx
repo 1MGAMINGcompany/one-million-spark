@@ -223,7 +223,7 @@ function AgreementStep({
 const CHECKLIST_ITEMS = [
   { icon: LinkIcon, label: "Copy your app link and share it", key: "link" },
   { icon: QrCode, label: "Download your QR code for promotions", key: "qr" },
-  { icon: Wallet, label: "Confirm your payout wallet in Settings", key: "wallet" },
+  { icon: Wallet, label: "Confirm your payout wallet in Earnings", key: "wallet" },
   { icon: Calendar, label: "Create your first custom event", key: "event" },
   { icon: BarChart3, label: "Check your earnings in the Dashboard", key: "earnings" },
 ];
