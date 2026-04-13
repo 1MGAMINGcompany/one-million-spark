@@ -217,7 +217,7 @@ export default function PurchasePage() {
               {[
                 { icon: Shield, text: "Complete backend infrastructure" },
                 { icon: Fuel, text: "All gas fees covered" },
-                { icon: Headphones, text: "24/7 support" },
+                { icon: Headphones, text: "Priority support" },
                 { icon: DollarSign, text: "Built-in liquidity & money flow" },
               ].map(({ icon: Icon, text }) => (
                 <div key={text} className="flex items-center gap-3 text-sm text-white/60">
