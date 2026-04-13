@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Plus, Zap } from "lucide-react";
+import { Plus, Zap, Search, Building2 } from "lucide-react";
 import { getTeamLogo } from "@/lib/teamLogos";
 
 const SPORT_GROUPS = [
@@ -48,13 +48,18 @@ const SPORT_GROUPS = [
   },
 ];
 
-const ALL_SPORTS = SPORT_GROUPS.flatMap(g => g.sports);
-
 const VISIBILITY_OPTIONS = [
   { value: "flagship", label: "1MGAMING.com only" },
   { value: "platform", label: "1MG.live only" },
   { value: "all", label: "Both" },
+  { value: "operator", label: "Specific operator app" },
 ] as const;
+
+interface OperatorOption {
+  id: string;
+  brand_name: string;
+  subdomain: string;
+}
 
 export default function PlatformEventCreator({ wallet, defaultVisibility = "all" }: { wallet: string; defaultVisibility?: string }) {
   const [sport, setSport] = useState("Soccer");
@@ -67,16 +72,50 @@ export default function PlatformEventCreator({ wallet, defaultVisibility = "all"
   const [visibility, setVisibility] = useState(defaultVisibility);
   const [creating, setCreating] = useState(false);
 
+  // Operator selection state
+  const [operators, setOperators] = useState<OperatorOption[]>([]);
+  const [operatorSearch, setOperatorSearch] = useState("");
+  const [selectedOperator, setSelectedOperator] = useState<OperatorOption | null>(null);
+  const [loadingOperators, setLoadingOperators] = useState(false);
+
+  // Load operators when "operator" visibility is selected
+  useEffect(() => {
+    if (visibility !== "operator") {
+      setSelectedOperator(null);
+      return;
+    }
+    if (operators.length > 0) return;
+    setLoadingOperators(true);
+    (supabase as any)
+      .from("operators")
+      .select("id, brand_name, subdomain")
+      .eq("status", "active")
+      .order("brand_name")
+      .then(({ data, error }: any) => {
+        if (!error && data) setOperators(data);
+        setLoadingOperators(false);
+      });
+  }, [visibility]);
+
+  const filteredOperators = operators.filter(
+    (op) =>
+      op.brand_name.toLowerCase().includes(operatorSearch.toLowerCase()) ||
+      op.subdomain.toLowerCase().includes(operatorSearch.toLowerCase())
+  );
+
   const handleCreate = async () => {
     if (!teamA.trim() || !teamB.trim()) { toast.error("Both teams/fighters required"); return; }
+    if (visibility === "operator" && !selectedOperator) { toast.error("Please select an operator"); return; }
     setCreating(true);
     try {
       const title = `${teamA.trim()} vs ${teamB.trim()}`;
       const eventName = league ? `${league} — ${title}` : title;
 
-      // Auto-detect logos
       const logoA = getTeamLogo(teamA.trim(), sport);
       const logoB = getTeamLogo(teamB.trim(), sport);
+
+      // When targeting a specific operator, set visibility to "platform"
+      const effectiveVisibility = visibility === "operator" ? "platform" : visibility;
 
       const { data, error } = await supabase.functions.invoke("prediction-admin", {
         body: {
@@ -92,17 +131,21 @@ export default function PlatformEventCreator({ wallet, defaultVisibility = "all"
           draw_allowed: drawAllowed,
           home_logo: logoA?.url || null,
           away_logo: logoB?.url || null,
-          visibility,
+          visibility: effectiveVisibility,
+          operator_id: selectedOperator?.id || null,
         },
       });
       if (error || data?.error) throw new Error(data?.error || error?.message);
-      toast.success(`"${title}" is now live!`);
+      const targetLabel = selectedOperator ? `for ${selectedOperator.brand_name}` : "";
+      toast.success(`"${title}" is now live ${targetLabel}!`);
       setTeamA("");
       setTeamB("");
       setLeague("");
       setEventDate("");
       setFeatured(false);
       setDrawAllowed(false);
+      setSelectedOperator(null);
+      setOperatorSearch("");
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -110,7 +153,6 @@ export default function PlatformEventCreator({ wallet, defaultVisibility = "all"
     }
   };
 
-  // Preview logos
   const previewA = teamA.trim() ? getTeamLogo(teamA.trim(), sport) : null;
   const previewB = teamB.trim() ? getTeamLogo(teamB.trim(), sport) : null;
 
@@ -186,12 +228,59 @@ export default function PlatformEventCreator({ wallet, defaultVisibility = "all"
           <label className="text-xs text-muted-foreground mb-1 block">Visibility</label>
           <select
             value={visibility}
-            onChange={e => setVisibility(e.target.value)}
+            onChange={e => { setVisibility(e.target.value); setSelectedOperator(null); }}
             className="bg-background border border-border rounded-md h-10 px-3 text-sm text-foreground w-full"
           >
             {VISIBILITY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
+
+        {/* Operator picker — only when "Specific operator app" selected */}
+        {visibility === "operator" && (
+          <div className="border border-border rounded-md p-3 space-y-2 bg-secondary/30">
+            <label className="text-xs text-muted-foreground flex items-center gap-1">
+              <Building2 className="w-3 h-3" /> Select operator
+            </label>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
+              <Input
+                value={operatorSearch}
+                onChange={e => setOperatorSearch(e.target.value)}
+                placeholder="Search by name or slug..."
+                className="pl-8"
+              />
+            </div>
+            {loadingOperators ? (
+              <p className="text-xs text-muted-foreground">Loading operators…</p>
+            ) : (
+              <div className="max-h-32 overflow-y-auto space-y-1">
+                {filteredOperators.length === 0 && (
+                  <p className="text-xs text-muted-foreground py-1">No operators found</p>
+                )}
+                {filteredOperators.map(op => (
+                  <button
+                    key={op.id}
+                    type="button"
+                    onClick={() => setSelectedOperator(op)}
+                    className={`w-full text-left px-2 py-1.5 rounded text-xs transition-colors ${
+                      selectedOperator?.id === op.id
+                        ? "bg-primary/20 text-primary border border-primary/30"
+                        : "hover:bg-secondary text-foreground"
+                    }`}
+                  >
+                    <span className="font-medium">{op.brand_name}</span>
+                    <span className="text-muted-foreground ml-1">/{op.subdomain}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {selectedOperator && (
+              <p className="text-xs text-green-400">
+                ✓ Will appear in <strong>{selectedOperator.brand_name}</strong> (/{selectedOperator.subdomain})
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="flex items-center gap-6">
           <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
@@ -204,7 +293,7 @@ export default function PlatformEventCreator({ wallet, defaultVisibility = "all"
           </label>
         </div>
 
-        <Button onClick={handleCreate} disabled={creating || !teamA.trim() || !teamB.trim()} className="w-full gap-2">
+        <Button onClick={handleCreate} disabled={creating || !teamA.trim() || !teamB.trim() || (visibility === "operator" && !selectedOperator)} className="w-full gap-2">
           <Plus className="w-4 h-4" /> {creating ? "Creating..." : "Create & Go Live"}
         </Button>
       </div>

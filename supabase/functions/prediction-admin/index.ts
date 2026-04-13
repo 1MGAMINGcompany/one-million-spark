@@ -1046,10 +1046,18 @@ Deno.serve(async (req) => {
     // ── Quick Platform Event Creation ──
 
     if (action === "createPlatformFight") {
-      const { title, event_name, fighter_a_name, fighter_b_name, sport, event_date, featured, draw_allowed, home_logo, away_logo, visibility } = body;
+      const { title, event_name, fighter_a_name, fighter_b_name, sport, event_date, featured, draw_allowed, home_logo, away_logo, visibility, operator_id } = body;
       if (!fighter_a_name || !fighter_b_name) return json({ error: "Both team names required" }, 400);
 
       const validVisibility = ["flagship", "platform", "all"].includes(visibility) ? visibility : "all";
+
+      // If operator_id provided, verify it exists
+      let resolvedOperatorId: string | null = null;
+      if (operator_id) {
+        const { data: op } = await supabase.from("operators").select("id").eq("id", operator_id).maybeSingle();
+        if (!op) return json({ error: "Operator not found" }, 400);
+        resolvedOperatorId = op.id;
+      }
 
       const { data: fight, error } = await supabase
         .from("prediction_fights")
@@ -1067,6 +1075,7 @@ Deno.serve(async (req) => {
           commission_bps: 100, // 1% platform fee only
           visibility: validVisibility,
           event_date: event_date || null,
+          operator_id: resolvedOperatorId,
         })
         .select("id")
         .single();
@@ -1078,7 +1087,7 @@ Deno.serve(async (req) => {
         fight_id: fight.id,
         admin_wallet: wallet,
         source: "prediction-admin",
-        details: { sport, event_date, draw_allowed },
+        details: { sport, event_date, draw_allowed, operator_id: resolvedOperatorId, created_on_behalf: !!resolvedOperatorId },
       });
 
       return json({ fight_id: fight.id, success: true });
