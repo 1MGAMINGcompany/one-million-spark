@@ -220,6 +220,13 @@ export default function SimplePredictionModal({
           </div>
         )}
 
+        {/* Custom event finality notice */}
+        {!(fight as any).polymarket_market_id && (
+          <div className="rounded-xl bg-white/5 border border-white/10 p-3 mb-4 text-center">
+            <p className="text-xs text-white/60">🔒 Predictions on custom events are final. Winners share the pot after the event is settled.</p>
+          </div>
+        )}
+
         {/* Submit */}
         <button
           onClick={() => currentAmount >= MIN_USD && onSubmit(currentAmount)}
