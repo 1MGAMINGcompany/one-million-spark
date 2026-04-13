@@ -999,7 +999,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
                 { key: "events" as const, label: t("operator.events") },
                 { key: "picks" as const, label: `${t("operator.myPicks")}${userEntries.length > 0 ? ` (${userEntries.length})` : ""}` },
                 ...(operatorCustomFights.length > 0
-                  ? [{ key: "operator_card" as const, label: `${operator?.brand_name || "Operator"} Card` }]
+                  ? [{ key: "operator_card" as const, label: `${(operator?.brand_name || "Operator").split(/\s+/)[0]} Card` }]
                   : []),
               ]
             ).map(tab => (
