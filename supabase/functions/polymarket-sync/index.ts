@@ -268,7 +268,7 @@ const LEAGUE_SOURCES: Record<string, LeagueSource> = {
   "bkfc":   { key: "bkfc",   label: "BKFC",   sportType: "bkfc",   fetchStrategy: "search", searchSeed: ["BKFC", "bare knuckle"] },
   // ─── American Sports ───
   "nfl":    { key: "nfl",    label: "NFL",    sportType: "nfl",    fetchStrategy: "tag", tagId: "450" },
-  "nba":    { key: "nba",    label: "NBA",    sportType: "nba",    fetchStrategy: "tag", tagId: "745" },
+  "nba":    { key: "nba",    label: "NBA",    sportType: "nba",    fetchStrategy: "tag", tagId: "745", seriesId: "10345" },
   "ncaab":  { key: "ncaab",  label: "NCAA Basketball", sportType: "ncaa", fetchStrategy: "tag", tagId: "100149" },
   "cfb":    { key: "cfb",    label: "NCAA Football",   sportType: "ncaa", fetchStrategy: "tag", tagId: "100351" },
   "nhl":    { key: "nhl",    label: "NHL",    sportType: "nhl",    fetchStrategy: "tag", tagId: "899" },
