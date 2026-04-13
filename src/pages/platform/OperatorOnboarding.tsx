@@ -246,10 +246,14 @@ export default function OperatorOnboarding() {
   const [feePercent, setFeePercent] = useState(5);
   const [payoutWallet, setPayoutWallet] = useState("");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [walletPrefilled, setWalletPrefilled] = useState(false);
 
-  // Pre-fill payout wallet with Privy EVM wallet when available
-  if (walletAddress && !payoutWallet) {
-    setPayoutWallet(walletAddress);
+  // Pre-fill payout wallet with Privy EVM wallet once
+  if (walletAddress && !payoutWallet && !walletPrefilled) {
+    setTimeout(() => {
+      setPayoutWallet(walletAddress);
+      setWalletPrefilled(true);
+    }, 0);
   }
 
   if (!authenticated) {
