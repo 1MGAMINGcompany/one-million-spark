@@ -1459,7 +1459,10 @@ function PlatformAdminInner({ address }: { address: string }) {
           </Card>
         )}
 
-        {/* ═══ Promo Codes + Manual Creator (dashboard tab only) ═══ */}
+        {/* ══════ TAB: Operators ══════ */}
+        {activeTab === "operators" && <OperatorManagementTab />}
+
+
         {activeTab === "dashboard" && (
           <>
             <PromoCodeManager wallet={address!} />
