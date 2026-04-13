@@ -358,6 +358,10 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       const aFeat = (a as any).featured ? 1 : 0;
       const bFeat = (b as any).featured ? 1 : 0;
       if (aFeat !== bFeat) return bFeat - aFeat;
+      // Higher featured_priority wins among featured events
+      const aPri = (a as any).featured_priority || 0;
+      const bPri = (b as any).featured_priority || 0;
+      if (aPri !== bPri) return bPri - aPri;
       if (a._isOperatorEvent !== b._isOperatorEvent) return a._isOperatorEvent ? -1 : 1;
       const da = new Date((a as any).event_date || 0).getTime();
       const db = new Date((b as any).event_date || 0).getTime();
