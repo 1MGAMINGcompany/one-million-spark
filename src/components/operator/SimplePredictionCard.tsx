@@ -397,9 +397,9 @@ export default function SimplePredictionCard({
 function TeamLabel({ name, logo, theme, align = "left" }: { name: string; logo: string | null; theme: OperatorTheme; align?: "left" | "right" }) {
   return (
     <div className={`flex items-center gap-2 min-w-0 flex-1 ${align === "right" ? "justify-end" : ""}`}>
-      {align === "left" && logo && <img src={logo} className="w-6 h-6 object-contain shrink-0" alt="" />}
+      {align === "left" && logo && <img src={logo} className="w-6 h-6 object-contain shrink-0" alt="" onError={e => { (e.currentTarget).style.display = 'none'; }} />}
       <span className={`text-sm font-bold truncate ${align === "right" ? "text-right" : ""}`} style={{ color: theme.textPrimary }}>{name}</span>
-      {align === "right" && logo && <img src={logo} className="w-6 h-6 object-contain shrink-0" alt="" />}
+      {align === "right" && logo && <img src={logo} className="w-6 h-6 object-contain shrink-0" alt="" onError={e => { (e.currentTarget).style.display = 'none'; }} />}
     </div>
   );
 }
