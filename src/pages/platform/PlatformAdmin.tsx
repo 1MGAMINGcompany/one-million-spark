@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import OperatorManagementTab from "@/components/admin/OperatorManagementTab";
 import AdminAuth from "@/components/admin/AdminAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -286,7 +287,7 @@ function PlatformAdminInner({ address }: { address: string }) {
   const [filter, setFilter] = useState<"active" | "settled" | "all">("active");
   const [sportFilter, setSportFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"browser" | "dashboard" | "analytics" | "activity">("browser");
+  const [activeTab, setActiveTab] = useState<"browser" | "dashboard" | "analytics" | "activity" | "operators">("browser");
 
   // Pagination
   const [page, setPage] = useState(0);
