@@ -228,12 +228,12 @@ interface LeagueSource {
 
 // Manual sport tag IDs for sports NOT in /sports endpoint
 const MANUAL_SPORT_TAGS: Record<string, string> = {
-  ufc: "1637",
+  ufc: "279",
   boxing: "267",
   golf: "1349",
   f1: "1351",
   chess: "1376",
-  mma: "1637",
+  mma: "279",
   bkfc: "267",
 };
 
