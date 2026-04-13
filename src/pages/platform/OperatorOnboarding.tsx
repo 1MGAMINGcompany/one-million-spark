@@ -163,7 +163,17 @@ Any dispute arising out of or relating to this Agreement or the Platform shall b
 
 This Agreement constitutes the entire agreement between you and the Platform regarding operator access and use of the Platform, except for any separate written agreement expressly entered into between you and us.
 
-15. ACCEPTANCE
+15. ADVERTISING AND PROMOTIONAL RIGHTS
+
+For standard operator apps purchased under the standard platform pricing plan, including the current $2,400 operator app, the Platform reserves the right to display, place, run, or test platform advertising, house ads, promotional content, cross-promotions, featured placements, sponsored content, or similar commercial messaging within the operator app experience.
+
+These placements may include promotions for the Platform, other operator apps, partner campaigns, featured events, or other commercial content selected by the Platform.
+
+For premium full white-label operator apps purchased under a separate premium custom agreement, including the $24,000 full white-label offering, the Platform will not place 1mg.live advertising, promotional placements, or visible 1mg.live commercial branding inside the operator app unless separately agreed in writing.
+
+The Platform retains sole discretion over the format, placement, frequency, and type of advertising or promotional content shown in standard operator apps.
+
+16. ACCEPTANCE
 
 By checking the acceptance box and completing operator onboarding, you confirm that:
 
