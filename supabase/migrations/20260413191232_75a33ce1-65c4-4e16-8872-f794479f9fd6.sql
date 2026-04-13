@@ -1,0 +1,1 @@
+ALTER TABLE public.prediction_fights ALTER COLUMN polymarket_active SET DEFAULT NULL;

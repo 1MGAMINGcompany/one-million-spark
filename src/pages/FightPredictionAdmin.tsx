@@ -203,6 +203,7 @@ function FightPredictionAdminInner({ address }: { address: string }) {
   const [fightEventName, setFightEventName] = useState("");
   const [fightWeightClass, setFightWeightClass] = useState("");
   const [fightClass, setFightClass] = useState("");
+  const [fightDate, setFightDate] = useState("");
 
   // Confirmation dialog
   const [confirmAction, setConfirmAction] = useState<{
@@ -357,14 +358,16 @@ function FightPredictionAdminInner({ address }: { address: string }) {
   // ── Fight actions ──
   const handleCreateFight = async () => {
     if (!fightTitle || !fighterA || !fighterB) { toast.error("Fill in all fields"); return; }
+    if (!fightDate) { toast.error("Event date/time is required"); return; }
     try {
       await callAdmin("createFight", {
         title: fightTitle, fighter_a_name: fighterA, fighter_b_name: fighterB,
         event_name: fightEventName, event_id: fightEventId || null,
         weight_class: fightWeightClass || null, fight_class: fightClass || null,
+        event_date: new Date(fightDate).toISOString(),
       });
       toast.success("Fight created!");
-      setFightTitle(""); setFighterA(""); setFighterB(""); setFightWeightClass(""); setFightClass("");
+      setFightTitle(""); setFighterA(""); setFighterB(""); setFightWeightClass(""); setFightClass(""); setFightDate("");
       loadData();
     } catch (err: any) { toast.error(err.message); }
   };
@@ -636,7 +639,11 @@ function FightPredictionAdminInner({ address }: { address: string }) {
               <Input placeholder="Weight class" value={fightWeightClass} onChange={e => setFightWeightClass(e.target.value)} />
               <Input placeholder="Fight class (A/B/C)" value={fightClass} onChange={e => setFightClass(e.target.value)} />
             </div>
-            <Button className="w-full bg-primary text-primary-foreground" onClick={handleCreateFight} disabled={busy}>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Event Date/Time <span className="text-destructive">*</span></label>
+              <Input type="datetime-local" value={fightDate} onChange={e => setFightDate(e.target.value)} required />
+            </div>
+            <Button className="w-full bg-primary text-primary-foreground" onClick={handleCreateFight} disabled={busy || !fightDate}>
               {busy ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} Create Fight
             </Button>
           </div>

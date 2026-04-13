@@ -257,9 +257,12 @@ Deno.serve(async (req) => {
     // ── Fight Management ──
 
     if (action === "createFight") {
-      const { title, fighter_a_name, fighter_b_name, event_name, event_id, weight_class, fight_class } = body;
+      const { title, fighter_a_name, fighter_b_name, event_name, event_id, weight_class, fight_class, event_date } = body;
       if (!title || !fighter_a_name || !fighter_b_name) {
         return json({ error: "Missing fight details" }, 400);
+      }
+      if (!event_date) {
+        return json({ error: "event_date is required for custom fights" }, 400);
       }
 
       const { data, error } = await supabase
@@ -272,7 +275,9 @@ Deno.serve(async (req) => {
           event_id: event_id || null,
           weight_class: weight_class || null,
           fight_class: fight_class || null,
+          event_date,
           source: "manual",
+          polymarket_active: null,
           commission_bps: 500, // 5% for native 1MGAMING events
         })
         .select()
@@ -1048,6 +1053,7 @@ Deno.serve(async (req) => {
     if (action === "createPlatformFight") {
       const { title, event_name, fighter_a_name, fighter_b_name, sport, event_date, featured, draw_allowed, home_logo, away_logo, fighter_a_photo, fighter_b_photo, visibility, operator_id } = body;
       if (!fighter_a_name || !fighter_b_name) return json({ error: "Both team names required" }, 400);
+      if (!event_date) return json({ error: "event_date is required for custom events" }, 400);
 
       const validVisibility = ["flagship", "platform", "all"].includes(visibility) ? visibility : "all";
 
@@ -1081,7 +1087,8 @@ Deno.serve(async (req) => {
           fighter_b_photo: safeUrl(fighter_b_photo),
           commission_bps: 100,
           visibility: validVisibility,
-          event_date: event_date || null,
+          event_date,
+          polymarket_active: null,
           operator_id: resolvedOperatorId,
         })
         .select("id")
