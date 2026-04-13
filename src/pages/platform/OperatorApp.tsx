@@ -265,6 +265,14 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
   useEffect(() => { loadUserEntries(); }, [loadUserEntries]);
 
+  // Show tutorial for first-time visitors
+  useEffect(() => {
+    if (!hasSeenTutorial()) {
+      const timer = setTimeout(() => setShowTutorial(true), 1500);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
   // Auto-refresh user entries every 15s so settlement results appear without manual reload
   useEffect(() => {
     if (!address) return;
