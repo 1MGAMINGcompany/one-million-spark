@@ -17,21 +17,23 @@ export default defineConfig(({ mode }) => ({
       registerType: 'autoUpdate',
       manifest: false, // Use existing site.webmanifest
       workbox: {
-        globPatterns: ['**/*.{html,ico,png,svg,webmanifest}'],
+        // Only precache static assets — NOT JS/CSS (Vite hashes those already)
+        globPatterns: ['**/*.{ico,png,svg,webmanifest}'],
+        // Use NetworkFirst for navigation so users always get the latest index.html
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api/, /^\/~oauth/],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
+        // Skip waiting so new SW activates immediately on next load
+        skipWaiting: true,
+        clientsClaim: true,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
             handler: 'CacheFirst',
             options: { cacheName: 'google-fonts', expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 } },
           },
-          {
-            urlPattern: /\.(?:js|css)$/i,
-            handler: 'StaleWhileRevalidate',
-            options: { cacheName: 'static-resources', expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 30 } },
-          },
+          // JS/CSS use content-hashed filenames — let the browser cache handle them
+          // No SW runtime caching needed; eliminates stale-bundle risk
         ],
       },
     }),
