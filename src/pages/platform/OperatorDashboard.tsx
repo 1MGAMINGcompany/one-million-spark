@@ -18,6 +18,7 @@ import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
 import OperatorAnalyticsTab from "@/components/operator/OperatorAnalyticsTab";
 import OperatorEarningsTab from "@/components/operator/OperatorEarningsTab";
 import OperatorLogoUpload from "@/components/operator/OperatorLogoUpload";
+import OperatorQRCode from "@/components/operator/OperatorQRCode";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -766,7 +767,7 @@ export default function OperatorDashboard() {
                   </a>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 mb-4">
                 <Button onClick={copyAppLink} size="sm" variant="outline" className="border-white/10 text-white hover:bg-white/5 text-xs gap-1.5">
                   {linkCopied ? <Check size={12} /> : <Copy size={12} />}
                   {t("operator.dashboard.copyLink")}
@@ -774,6 +775,10 @@ export default function OperatorDashboard() {
                 <span className={`text-xs px-2 py-1 rounded-full ${operator.status === "active" ? "bg-green-500/10 text-green-400" : "bg-yellow-500/10 text-yellow-400"}`}>
                   {operator.status}
                 </span>
+              </div>
+              <div className="border-t border-white/5 pt-4">
+                <p className="text-xs text-white/40 mb-3">Share your app</p>
+                <OperatorQRCode subdomain={operator.subdomain} size={140} />
               </div>
             </div>
 

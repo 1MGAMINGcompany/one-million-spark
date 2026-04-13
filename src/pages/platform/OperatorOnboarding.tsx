@@ -5,6 +5,7 @@ import { usePrivySafe } from "@/hooks/usePrivySafe";
 import { usePrivyLogin } from "@/hooks/usePrivyLogin";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, ArrowLeft, Check, ExternalLink, Rocket } from "lucide-react";
+import OperatorQRCode from "@/components/operator/OperatorQRCode";
 import { THEME_OPTIONS } from "@/lib/operatorThemes";
 
 const THEMES = THEME_OPTIONS.map(t => ({
@@ -267,16 +268,9 @@ export default function OperatorOnboarding() {
           <p className="text-white/50 mb-2">
             <span className="font-bold text-white">{brandName}</span> is now live at
           </p>
-          <a
-            href={`https://1mg.live/${subdomain}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 text-xl font-bold text-blue-400 hover:text-blue-300 transition-colors mb-8"
-          >
-            1mg.live/{subdomain} <ExternalLink className="w-5 h-5" />
-          </a>
-          <p className="text-sm text-white/40 mb-8">
-            Events from popular sports are already loaded. Share your app link to start earning!
+          <OperatorQRCode subdomain={subdomain} size={160} />
+          <p className="text-sm text-white/40 mt-4 mb-6">
+            Events from popular sports are already loaded. Share your app link or QR code to start earning!
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button
