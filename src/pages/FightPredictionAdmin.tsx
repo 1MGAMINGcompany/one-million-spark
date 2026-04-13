@@ -203,6 +203,7 @@ function FightPredictionAdminInner({ address }: { address: string }) {
   const [fightEventName, setFightEventName] = useState("");
   const [fightWeightClass, setFightWeightClass] = useState("");
   const [fightClass, setFightClass] = useState("");
+  const [fightDate, setFightDate] = useState("");
 
   // Confirmation dialog
   const [confirmAction, setConfirmAction] = useState<{
@@ -357,14 +358,16 @@ function FightPredictionAdminInner({ address }: { address: string }) {
   // ── Fight actions ──
   const handleCreateFight = async () => {
     if (!fightTitle || !fighterA || !fighterB) { toast.error("Fill in all fields"); return; }
+    if (!fightDate) { toast.error("Event date/time is required"); return; }
     try {
       await callAdmin("createFight", {
         title: fightTitle, fighter_a_name: fighterA, fighter_b_name: fighterB,
         event_name: fightEventName, event_id: fightEventId || null,
         weight_class: fightWeightClass || null, fight_class: fightClass || null,
+        event_date: new Date(fightDate).toISOString(),
       });
       toast.success("Fight created!");
-      setFightTitle(""); setFighterA(""); setFighterB(""); setFightWeightClass(""); setFightClass("");
+      setFightTitle(""); setFighterA(""); setFighterB(""); setFightWeightClass(""); setFightClass(""); setFightDate("");
       loadData();
     } catch (err: any) { toast.error(err.message); }
   };
