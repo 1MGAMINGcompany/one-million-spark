@@ -1333,13 +1333,22 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
         />
       )}
 
-      {/* Market Tips Modal */}
+      {/* Market Tips / Smart Play Modal */}
       {tipsFight && (
         <MarketTipsModal
           fight={tipsFight}
           open={!!tipsFight}
           onClose={() => setTipsFight(null)}
           theme={theme}
+          onShowTutorial={() => { setTipsFight(null); setShowTutorial(true); }}
+        />
+      )}
+
+      {/* First-time tutorial */}
+      {showTutorial && (
+        <SmartPlayTutorial
+          theme={theme}
+          onClose={() => setShowTutorial(false)}
         />
       )}
 
