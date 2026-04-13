@@ -25,78 +25,153 @@ const SPORTS_OPTIONS = [
 
 const AGREEMENT_VERSION = "1.0";
 
-const AGREEMENT_TEXT = `OPERATOR AGREEMENT — Version ${AGREEMENT_VERSION}
+const AGREEMENT_TEXT = `OPERATOR AGREEMENT v${AGREEMENT_VERSION}
 
-Effective Date: Upon acceptance during onboarding.
+This Operator Agreement ("Agreement") is entered into between 1mg.live / 1MG Live ("Platform," "we," "us," or "our") and the operator accepting this Agreement ("Operator," "you," or "your").
 
-This Operator Agreement ("Agreement") governs your use of the 1MG platform ("Platform") as an operator. By checking the acceptance box and completing onboarding, you agree to the following terms.
+By checking the acceptance box and completing onboarding, you agree to be bound by this Agreement.
 
-1. PLATFORM ACCESS
+1. ACCESS TO THE PLATFORM
 
-You are granted a non-exclusive, revocable license to operate a branded prediction marketplace on the Platform. Your operator app will be accessible via a subdomain (e.g., 1mg.live/yourname). Access may be modified, suspended, or revoked at the Platform's sole discretion.
+We grant you a limited, revocable, non-exclusive, non-transferable right to access and use the 1mg.live operator tools, operator dashboard, public operator app page, and related platform services solely for lawful business use in accordance with this Agreement.
 
-2. OPERATOR RESPONSIBILITIES
+This Agreement does not transfer ownership of the 1mg.live platform, software, infrastructure, liquidity integrations, admin systems, backend systems, or intellectual property to you. Your access is a permission to use the Platform, not a sale of the Platform itself.
 
-As an operator, you are responsible for:
-• Managing your branded app and its public-facing content.
-• Ensuring all marketing, promotions, and communications comply with applicable laws and regulations in the jurisdictions where you operate.
-• Providing accurate brand information during onboarding.
-• Monitoring your app for prohibited or inappropriate activity.
+2. OPERATOR ROLE
 
-3. MARKETING & COMPLIANCE
+As an Operator, you may create, configure, brand, and manage your operator app within the features made available by the Platform. You are responsible for your own branding, promotions, communications, custom event content, and operator activity conducted through your operator account.
 
-You are solely responsible for ensuring that your marketing activities, advertising, and user-facing communications comply with all applicable local, state, national, and international laws. The Platform does not provide legal, regulatory, or compliance advice.
+You are responsible for ensuring that all information you provide to the Platform is accurate and current, including your payout wallet, support email, branding materials, and any event details you publish.
 
-4. REVENUE DISCLAIMER
+3. COMPLIANCE AND LOCAL RESPONSIBILITY
 
-There is no guarantee of revenue, earnings, or profits from operating on the Platform. Revenue depends on user activity, market conditions, event availability, and other factors outside the Platform's control. Past performance is not indicative of future results.
+You are solely responsible for understanding and complying with all laws, regulations, rules, restrictions, licensing requirements, tax obligations, advertising rules, consumer protection laws, and platform-use restrictions applicable to you, your users, your promotions, and your jurisdiction.
 
-5. FEES & PAYOUTS
+The Platform does not provide legal, regulatory, tax, or licensing advice. Your use of the Platform does not mean that your activity is legal in your location or in the locations of your users. You are solely responsible for determining whether your use of the Platform is lawful and appropriate.
 
-• The Platform charges a 1.5% platform fee on each prediction transaction.
-• Your operator fee (set during onboarding, 0–20%) is added on top of the platform fee.
-• You retain 100% of your operator fee revenue.
-• Payouts are processed according to the Platform's standard payout schedule and are subject to minimum thresholds and verification requirements.
-• The Platform reserves the right to modify fee structures with reasonable notice.
+4. NO GUARANTEE OF REVENUE OR SUCCESS
 
-6. SUSPENSION & TERMINATION
+We do not guarantee traffic, users, profits, revenue, trading volume, operator earnings, business success, uptime, market availability, or any financial result from your use of the Platform.
 
-The Platform reserves the right to suspend or terminate your operator account at any time, with or without notice, for any reason, including but not limited to:
-• Violation of this Agreement.
-• Fraudulent, misleading, or illegal activity.
-• Failure to comply with applicable laws or regulations.
-• Inactivity for an extended period.
-• Any conduct that the Platform determines, in its sole discretion, is harmful to the Platform, its users, or its reputation.
+Any revenue examples, calculators, estimates, demos, examples, or projections are for illustration only and do not constitute a promise or guarantee of actual results.
 
-Upon termination, access to your operator dashboard and branded app may be immediately revoked.
+5. FEES, PAYMENTS, AND PAYOUTS
 
-7. LIMITATION OF LIABILITY
+Operator app purchase fees, platform fees, and operator earnings are governed by the rules and systems in effect on the Platform at the time of use.
 
-The Platform is provided "as is" without warranties of any kind, express or implied. To the maximum extent permitted by law:
-• The Platform shall not be liable for any indirect, incidental, consequential, or punitive damages.
-• The Platform's total liability shall not exceed the fees paid by you in the 30 days preceding the claim.
-• The Platform is not responsible for losses arising from market conditions, user behavior, regulatory changes, or technical issues beyond its reasonable control.
+Unless otherwise stated in a separate written agreement:
 
-8. PROHIBITED CONDUCT
+• the Platform charges its stated platform fee, including the current 1.5% platform fee where applicable,
+
+• the Operator retains the operator fee portion configured within the Platform, subject to the Platform's accounting, treasury, wallet, payout, and settlement systems,
+
+• app purchase payments are final except where required by law or expressly approved by us,
+
+• payouts and earnings may depend on proper wallet setup, successful sweeps, platform accounting, and operational status.
+
+You are responsible for ensuring your payout wallet information is correct. We are not responsible for losses caused by an incorrect wallet address, incompatible wallet, third-party wallet failure, exchange deposit errors, user wallet errors, or unsupported chains/assets.
+
+6. PLATFORM CONTROL, SUSPENSION, AND TERMINATION
+
+We may suspend, restrict, disable, remove, or terminate your access to the Platform, your operator account, your operator app, specific features, or specific events at any time if we reasonably believe:
+
+• you violated this Agreement,
+
+• your conduct creates legal, compliance, fraud, security, reputational, or operational risk,
+
+• you engage in abuse, manipulation, deceptive conduct, prohibited promotions, or misuse of the Platform,
+
+• your account, app, branding, events, or user activity create risk for us, our infrastructure, or other users,
+
+• payment obligations are not met,
+
+• continued access is not commercially or operationally feasible.
+
+We may also modify, limit, or discontinue parts of the Platform at any time.
+
+7. PROHIBITED CONDUCT
 
 You agree not to:
-• Use the Platform for any illegal, fraudulent, or deceptive purpose.
-• Manipulate markets, outcomes, or user predictions.
-• Misrepresent your identity, brand, or affiliation.
-• Engage in money laundering, terrorist financing, or sanctions violations.
-• Scrape, reverse-engineer, or interfere with Platform systems.
-• Create multiple operator accounts without authorization.
-• Encourage or facilitate violations of this Agreement by users or third parties.
 
-9. MODIFICATIONS
+• use the Platform for unlawful, fraudulent, deceptive, abusive, manipulative, or unauthorized purposes,
 
-The Platform may update this Agreement at any time. Continued use of the Platform after changes constitutes acceptance of the updated terms. Material changes will be communicated via dashboard notification or email where possible.
+• misrepresent your relationship to 1mg.live or mislead users about the nature of the Platform,
 
-10. GOVERNING LAW
+• post false, defamatory, infringing, obscene, abusive, or prohibited content,
 
-This Agreement is governed by applicable law. Any disputes shall be resolved through binding arbitration or the courts of competent jurisdiction as determined by the Platform.
+• create misleading custom events or settle events dishonestly,
 
-By accepting this Agreement, you acknowledge that you have read, understood, and agree to be bound by all terms above.`;
+• attempt to exploit, disrupt, reverse engineer, scrape, overload, or interfere with the Platform,
+
+• bypass fees, security controls, permissions, account restrictions, or admin safeguards,
+
+• use branding, logos, names, domains, or content that infringe the rights of others,
+
+• engage in spam, fake traffic, fake engagement, fake users, or fraudulent promotional activity.
+
+8. OPERATOR CONTENT AND BRANDING
+
+You retain responsibility for the branding, logos, names, descriptions, event text, and promotional materials you upload or use. You represent that you have the right to use that content.
+
+You grant us the limited right to host, display, reproduce, process, and use your submitted content as needed to operate and display your operator app and provide Platform services to you.
+
+We may remove or disable content that we believe violates this Agreement or creates risk.
+
+9. THIRD-PARTY SERVICES
+
+The Platform may rely on third-party services, including wallets, market data providers, liquidity sources, payment providers, hosting providers, analytics providers, or communication services.
+
+We are not responsible for downtime, delays, errors, restrictions, interruptions, deplatforming, payment failures, wallet failures, market unavailability, or service changes caused by third parties.
+
+10. LIMITATION OF LIABILITY
+
+To the maximum extent allowed by law, the Platform and its owners, operators, affiliates, contractors, employees, and service providers will not be liable for any indirect, incidental, special, consequential, exemplary, or punitive damages, or for lost profits, lost revenue, lost data, lost business opportunities, user losses, market losses, trading losses, reputational harm, or service interruptions arising out of or related to your use of the Platform.
+
+To the maximum extent allowed by law, our total liability arising out of or relating to this Agreement or the Platform will not exceed the total amount of fees actually paid by you to us for operator access during the three-month period immediately preceding the event giving rise to the claim.
+
+11. INDEMNIFICATION
+
+You agree to defend, indemnify, and hold harmless the Platform and its owners, affiliates, contractors, employees, and service providers from and against claims, liabilities, damages, losses, costs, and expenses, including reasonable legal fees, arising out of or related to:
+
+• your use of the Platform,
+
+• your operator app,
+
+• your branding, content, events, and promotions,
+
+• your violation of this Agreement,
+
+• your violation of law, regulation, or third-party rights,
+
+• disputes involving your users, your conduct, or your marketing.
+
+12. MODIFICATIONS TO THE AGREEMENT
+
+We may update this Agreement from time to time. If we make material changes, we may require acceptance of a new version before continued use of the Platform or certain features.
+
+Your continued use of the Platform after an update becomes effective may constitute acceptance of the updated version where permitted by law.
+
+13. GOVERNING LAW AND DISPUTES
+
+This Agreement will be governed by the laws of the jurisdiction selected by the Platform, without regard to conflict-of-law principles.
+
+Any dispute arising out of or relating to this Agreement or the Platform shall be resolved in the courts or dispute forum chosen by the Platform, unless otherwise required by applicable law.
+
+14. ENTIRE AGREEMENT
+
+This Agreement constitutes the entire agreement between you and the Platform regarding operator access and use of the Platform, except for any separate written agreement expressly entered into between you and us.
+
+15. ACCEPTANCE
+
+By checking the acceptance box and completing operator onboarding, you confirm that:
+
+• you have read and understood this Agreement,
+
+• you are legally able to accept it,
+
+• you agree to be bound by it,
+
+• you understand that your use of the Platform is subject to this Agreement.`;
 
 function AgreementStep({
   agreed,
@@ -126,7 +201,7 @@ function AgreementStep({
           htmlFor="agreement-checkbox"
           className="text-sm text-white/80 cursor-pointer select-none leading-snug"
         >
-          I have read and agree to the Operator Agreement
+          I have read and agree to the Operator Agreement.
         </label>
       </div>
     </div>
