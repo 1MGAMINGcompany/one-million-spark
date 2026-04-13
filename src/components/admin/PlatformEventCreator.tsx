@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Plus, Zap, Search, Building2 } from "lucide-react";
+import { Plus, Zap, Search, Building2, ImageIcon } from "lucide-react";
 import { getTeamLogo } from "@/lib/teamLogos";
 
 const SPORT_GROUPS = [
@@ -61,6 +61,23 @@ interface OperatorOption {
   subdomain: string;
 }
 
+/** Small image preview with onError fallback */
+function ImagePreview({ url, label }: { url: string; label: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!url || failed) return null;
+  return (
+    <div className="flex items-center gap-1.5 mt-1">
+      <img
+        src={url}
+        alt={label}
+        className="w-8 h-8 rounded object-contain border border-border"
+        onError={() => setFailed(true)}
+      />
+      <span className="text-[10px] text-green-400">✓ Preview OK</span>
+    </div>
+  );
+}
+
 export default function PlatformEventCreator({ wallet, defaultVisibility = "all" }: { wallet: string; defaultVisibility?: string }) {
   const [sport, setSport] = useState("Soccer");
   const [league, setLeague] = useState("");
@@ -71,6 +88,11 @@ export default function PlatformEventCreator({ wallet, defaultVisibility = "all"
   const [drawAllowed, setDrawAllowed] = useState(false);
   const [visibility, setVisibility] = useState(defaultVisibility);
   const [creating, setCreating] = useState(false);
+
+  // Image URL state
+  const [photoA, setPhotoA] = useState("");
+  const [photoB, setPhotoB] = useState("");
+  const [showImages, setShowImages] = useState(false);
 
   // Operator selection state
   const [operators, setOperators] = useState<OperatorOption[]>([]);
@@ -131,6 +153,8 @@ export default function PlatformEventCreator({ wallet, defaultVisibility = "all"
           draw_allowed: drawAllowed,
           home_logo: logoA?.url || null,
           away_logo: logoB?.url || null,
+          fighter_a_photo: photoA.trim() || null,
+          fighter_b_photo: photoB.trim() || null,
           visibility: effectiveVisibility,
           operator_id: selectedOperator?.id || null,
         },
@@ -146,6 +170,8 @@ export default function PlatformEventCreator({ wallet, defaultVisibility = "all"
       setDrawAllowed(false);
       setSelectedOperator(null);
       setOperatorSearch("");
+      setPhotoA("");
+      setPhotoB("");
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -222,6 +248,43 @@ export default function PlatformEventCreator({ wallet, defaultVisibility = "all"
           onChange={e => setEventDate(e.target.value)}
           className="text-foreground"
         />
+
+        {/* Image URL section — collapsible */}
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowImages(!showImages)}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ImageIcon className="w-3.5 h-3.5" />
+            {showImages ? "Hide" : "Add"} fighter/team images (optional)
+          </button>
+          {showImages && (
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              <div>
+                <Input
+                  value={photoA}
+                  onChange={e => setPhotoA(e.target.value)}
+                  placeholder="Image URL — Fighter/Team A"
+                  className="text-xs"
+                />
+                <ImagePreview url={photoA.trim()} label="Fighter A" />
+              </div>
+              <div>
+                <Input
+                  value={photoB}
+                  onChange={e => setPhotoB(e.target.value)}
+                  placeholder="Image URL — Fighter/Team B"
+                  className="text-xs"
+                />
+                <ImagePreview url={photoB.trim()} label="Fighter B" />
+              </div>
+              <p className="col-span-2 text-[10px] text-muted-foreground">
+                Paste direct image URLs (png, jpg, webp). These override auto-detected logos.
+              </p>
+            </div>
+          )}
+        </div>
 
         {/* Visibility selector */}
         <div>

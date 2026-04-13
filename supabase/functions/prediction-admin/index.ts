@@ -1046,7 +1046,7 @@ Deno.serve(async (req) => {
     // ── Quick Platform Event Creation ──
 
     if (action === "createPlatformFight") {
-      const { title, event_name, fighter_a_name, fighter_b_name, sport, event_date, featured, draw_allowed, home_logo, away_logo, visibility, operator_id } = body;
+      const { title, event_name, fighter_a_name, fighter_b_name, sport, event_date, featured, draw_allowed, home_logo, away_logo, fighter_a_photo, fighter_b_photo, visibility, operator_id } = body;
       if (!fighter_a_name || !fighter_b_name) return json({ error: "Both team names required" }, 400);
 
       const validVisibility = ["flagship", "platform", "all"].includes(visibility) ? visibility : "all";
@@ -1059,6 +1059,10 @@ Deno.serve(async (req) => {
         resolvedOperatorId = op.id;
       }
 
+      // Validate image URLs if provided (basic URL check)
+      const urlRegex = /^https?:\/\/.+/i;
+      const safeUrl = (v: unknown) => (typeof v === "string" && urlRegex.test(v)) ? v : null;
+
       const { data: fight, error } = await supabase
         .from("prediction_fights")
         .insert({
@@ -1070,9 +1074,12 @@ Deno.serve(async (req) => {
           source: "manual",
           trading_allowed: true,
           featured: featured || false,
-          home_logo: home_logo || null,
-          away_logo: away_logo || null,
-          commission_bps: 100, // 1% platform fee only
+          draw_allowed: draw_allowed || false,
+          home_logo: safeUrl(home_logo),
+          away_logo: safeUrl(away_logo),
+          fighter_a_photo: safeUrl(fighter_a_photo),
+          fighter_b_photo: safeUrl(fighter_b_photo),
+          commission_bps: 100,
           visibility: validVisibility,
           event_date: event_date || null,
           operator_id: resolvedOperatorId,
