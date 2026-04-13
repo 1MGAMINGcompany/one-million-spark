@@ -632,6 +632,8 @@ function findWinnerMarket(ev: GammaEvent): GammaMarketExt | null {
     /-game[0-9]/i, /-map[0-9]/i, /-round[0-9]/i,
     /-most-sixes/i, /-most-fours/i, /-first-wicket/i,
     /-first-blood/i, /-first-kill/i, /-total-kills/i,
+    // MMA/UFC prop filters
+    /-win-by-/i, /-totals-/i, /-go-the-distance/i, /-win-by-submission/i,
   ];
   const evSlug = (ev.slug || "").toLowerCase();
   if (slugRejectPatterns.some(re => re.test(evSlug))) return null;
