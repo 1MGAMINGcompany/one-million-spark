@@ -1908,7 +1908,7 @@ Deno.serve(async (req) => {
 
         const isAutoApproved = AUTO_APPROVED_KEYS.has(leagueKey);
         const vis = isAutoApproved ? "all" : "platform";
-        const statusOverride = isAutoApproved ? "approved" : "pending_review";
+        const statusOverride = isAutoApproved ? "open" : "pending_review";
         const tradingOn = true;
 
         try {
