@@ -1,47 +1,28 @@
 
 
-## Operator Agreement Patch — Implementation Plan
+## Plan: Extract Canadian Fighter Photos from Promo Image
 
-### Summary
-Add a mandatory Operator Agreement step as the final onboarding step. Three files changed, one migration added. No other systems touched.
+**Goal**: Crop individual fighter portraits from the uploaded Team Canada promo image and update each fight's database record with proper per-fighter photos.
 
----
+### Fighter Mapping (left to right in image)
 
-### 1. Database Migration
-Add two nullable columns to `public.operators`:
-```sql
-ALTER TABLE public.operators
-  ADD COLUMN IF NOT EXISTS agreement_version text DEFAULT NULL,
-  ADD COLUMN IF NOT EXISTS agreement_accepted_at timestamptz DEFAULT NULL;
-```
+| Position | Name | Fight | DB Field |
+|----------|------|-------|----------|
+| Far left | Benito Pisanelli | Barrera vs Pisanelli | `fighter_b_photo` |
+| Center-left | Mehana Yahiatene | Yahiatene vs Cruz | `fighter_a_photo` |
+| Center | Jacon Caron | Caron vs Aviles | `fighter_a_photo` |
+| Center-right | Dan Zhou | Zhou vs Olvera | `fighter_a_photo` |
+| Far right | Quentin Pignolet | Garcia vs Pignolet | `fighter_b_photo` |
 
-### 2. Frontend — `src/pages/platform/OperatorOnboarding.tsx`
-- Add state: `const [agreedToTerms, setAgreedToTerms] = useState(false);`
-- Add a 7th step (index 6) to the `steps` array with title "Operator Agreement"
-- Step content: scrollable container (`max-h-64 overflow-y-auto`) with static agreement text covering all required sections, plus a checkbox using the existing `Checkbox` component
-- Checkbox label: "I have read and agree to the Operator Agreement"
-- `isStepValid()`: for step 6, return `agreedToTerms`
-- `handleCreate`: add `agreement_version: "1.0"` to the JSON body
-- Import `Checkbox` from `@/components/ui/checkbox`
+### Steps
 
-The agreement text will be structured with clear section headings (Platform Access, Operator Responsibilities, Revenue Disclaimer, Suspension/Termination, Liability, Fees/Payouts, Prohibited Conduct). Easily replaceable with final legal copy later.
+1. **Copy uploaded image** to sandbox filesystem
+2. **Crop 5 individual portraits** using Python Pillow — shoulders-up cuts for each fighter, removing background text/logos as much as possible
+3. **Upload each cropped photo** to the `fighter-photos` storage bucket under `silvertooth/` (e.g. `silvertooth/pisanelli.png`)
+4. **Update 5 `prediction_fights` rows** — set the correct `fighter_a_photo` or `fighter_b_photo` column to the new individual photo URL (replacing the current shared fight-pair photos)
 
-### 3. Backend — `supabase/functions/operator-manage/index.ts`
-In the `create_operator` action (line 225–258):
-- After existing validation, add: if `body.agreement_version` is missing or not a non-empty string, return 400 error
-- On insert (line 247–251): add `agreement_version: body.agreement_version, agreement_accepted_at: new Date().toISOString()` to the insert object
-- On update path (line 234–237): add the same two fields to the update object
-
-### Files Changed
-| File | Change |
-|------|--------|
-| `supabase/migrations/[new].sql` | Add 2 columns to operators |
-| `src/pages/platform/OperatorOnboarding.tsx` | Add agreement step + checkbox + send version |
-| `supabase/functions/operator-manage/index.ts` | Validate + store agreement fields |
-
-### Guarantees
-- Launch button stays disabled until checkbox is checked
-- Server rejects `create_operator` without `agreement_version`
-- No changes to wallet, purchase, admin, sweep, event, or any other flow
-- Agreement text is static/replaceable — no external fetch needed
+### What Won't Change
+- No component code changes — `SimplePredictionCard` already renders individual fighter photos
+- Fight data, odds, pools, status all untouched
+- Mexican fighter photos will be done separately after you upload that image
 
