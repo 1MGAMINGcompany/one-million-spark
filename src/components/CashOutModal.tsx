@@ -498,11 +498,14 @@ export function CashOutModal({
             </div>
 
             {/* Network info */}
-            <div className="bg-muted/30 border border-border/50 rounded-lg p-3 flex items-start gap-2">
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-              <p className="text-xs text-muted-foreground">
-                Make sure your exchange supports receiving <strong>USDC on Polygon</strong>. This transaction cannot be reversed.
-              </p>
+              <ul className="text-xs text-muted-foreground space-y-0.5 list-disc list-inside">
+                <li>Use a <strong>Polygon USDC</strong> deposit address</li>
+                <li>Make sure your exchange supports the exact token and network</li>
+                <li>Only use an account that belongs to you</li>
+                <li>Crypto transfers cannot be reversed</li>
+              </ul>
             </div>
 
             {/* Actions */}
