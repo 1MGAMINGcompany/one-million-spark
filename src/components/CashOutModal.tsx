@@ -378,8 +378,38 @@ export function CashOutModal({
         {step === "form" && (
           <>
             <p className="text-sm text-muted-foreground">
-              Send USDC to your Coinbase or exchange wallet. We automatically convert your balance to native USDC on Polygon before sending.
+              To cash out right now, send your funds to your own exchange account using a deposit address you control.
             </p>
+
+            {/* How it works */}
+            <div className="bg-secondary/40 border border-border/40 rounded-xl p-3 space-y-2.5">
+              <p className="text-xs font-semibold text-foreground">How it works</p>
+              <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                <li>Copy your deposit address from your own exchange</li>
+                <li>Paste it here</li>
+                <li>We send your funds there</li>
+                <li>You cash out from your exchange account</li>
+              </ol>
+            </div>
+
+            {/* What is an exchange? */}
+            <details className="group">
+              <summary className="text-xs text-primary cursor-pointer hover:underline list-none flex items-center gap-1">
+                <span className="group-open:rotate-90 transition-transform text-[10px]">▶</span>
+                What is an exchange?
+              </summary>
+              <div className="mt-1.5 bg-muted/30 border border-border/40 rounded-lg p-2.5 space-y-1.5">
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  An exchange is a crypto app or website where you can receive crypto and later convert it to cash in your bank account or other supported payout methods.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Examples include Coinbase, Binance, Kraken, Shakepay, and other exchanges available in your country.
+                </p>
+                <p className="text-[10px] text-muted-foreground/70">
+                  Available exchanges and payout options depend on your country.
+                </p>
+              </div>
+            </details>
 
             {/* Balance */}
             {balance != null && (
