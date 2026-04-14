@@ -973,7 +973,8 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
       )}
 
       {/* Tab bar: Events | My Picks */}
-      {isConnected && (
+      {/* Tab bar: visible to all users; My Picks only shown when signed in */}
+      {(isConnected || operatorCustomFights.length > 0) && (
         <div className="max-w-4xl mx-auto px-4 pt-3">
           <div
             className="flex gap-1 rounded-lg p-1 overflow-x-auto scrollbar-hide"
@@ -982,7 +983,9 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
             {(
               [
                 { key: "events" as const, label: t("operator.events") },
-                { key: "picks" as const, label: `${t("operator.myPicks")}${userEntries.length > 0 ? ` (${userEntries.length})` : ""}` },
+                ...(isConnected
+                  ? [{ key: "picks" as const, label: `${t("operator.myPicks")}${userEntries.length > 0 ? ` (${userEntries.length})` : ""}` }]
+                  : []),
                 ...(operatorCustomFights.length > 0
                   ? [{ key: "operator_card" as const, label: `${(operator?.brand_name || "Operator").split(/\s+/)[0]} Card` }]
                   : []),
