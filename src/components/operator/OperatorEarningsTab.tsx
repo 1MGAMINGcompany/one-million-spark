@@ -34,10 +34,13 @@ interface SweepSummary {
 
 interface Props {
   operatorId: string;
+  operatorUserId: string;
+  loggedInUserId: string;
+  walletAddress: string | null;
   getAccessToken: () => Promise<string | null>;
 }
 
-export default function OperatorEarningsTab({ operatorId, getAccessToken }: Props) {
+export default function OperatorEarningsTab({ operatorId, operatorUserId, loggedInUserId, walletAddress, getAccessToken }: Props) {
   const { t } = useTranslation();
   const [data, setData] = useState<SweepSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,6 +49,7 @@ export default function OperatorEarningsTab({ operatorId, getAccessToken }: Prop
   const [saving, setSaving] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [showCashOut, setShowCashOut] = useState(false);
+  const [autoSetDone, setAutoSetDone] = useState(false);
 
   const fetchSweepData = useCallback(async () => {
     try {
@@ -67,6 +71,35 @@ export default function OperatorEarningsTab({ operatorId, getAccessToken }: Prop
   }, [getAccessToken]);
 
   useEffect(() => { fetchSweepData(); }, [fetchSweepData]);
+
+  // Auto-heal: silently set payout wallet if owner matches and wallet is missing
+  useEffect(() => {
+    if (autoSetDone) return;
+    if (!data || data.payout_wallet) return;
+    if (!walletAddress) return;
+    if (operatorUserId !== loggedInUserId) return;
+    setAutoSetDone(true);
+    (async () => {
+      try {
+        const token = await getAccessToken();
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/operator-manage`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-privy-token": token || "" },
+            body: JSON.stringify({ action: "set_payout_wallet", payout_wallet: walletAddress }),
+          }
+        );
+        const json = await res.json();
+        if (json.success) {
+          console.log("[OperatorEarnings] Auto-set payout wallet to", walletAddress);
+          fetchSweepData();
+        }
+      } catch (e) {
+        console.warn("[OperatorEarnings] Auto-set payout wallet failed:", e);
+      }
+    })();
+  }, [data, walletAddress, operatorUserId, loggedInUserId, autoSetDone, getAccessToken, fetchSweepData]);
 
   const savePayoutWallet = async () => {
     if (!/^0x[a-fA-F0-9]{40}$/.test(walletInput)) {
