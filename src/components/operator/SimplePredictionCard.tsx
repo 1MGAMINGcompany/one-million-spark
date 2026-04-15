@@ -242,7 +242,7 @@ export default function SimplePredictionCard({
 
         {/* Live score prominently */}
         {isLive && liveState?.score && (
-          <LiveScoreBlock nameA={nameA} nameB={nameB} liveState={liveState} liveDetailText={liveDetailText} theme={theme} />
+          <LiveScoreBlock nameA={nameA} nameB={nameB} logoA={logoA} logoB={logoB} liveState={liveState} liveDetailText={liveDetailText} theme={theme} />
         )}
 
         {/* Teams (when no live score) */}
@@ -311,7 +311,7 @@ export default function SimplePredictionCard({
 
       {/* Row 2: LIVE score block (prominent, above everything else) */}
       {isLive && liveState?.score && (
-        <LiveScoreBlock nameA={nameA} nameB={nameB} liveState={liveState} liveDetailText={liveDetailText} theme={theme} />
+        <LiveScoreBlock nameA={nameA} nameB={nameB} logoA={logoA} logoB={logoB} liveState={liveState} liveDetailText={liveDetailText} theme={theme} />
       )}
 
       {/* Row 3: Teams (shown when NOT live or no score) */}
@@ -438,8 +438,9 @@ function TeamLabel({ name, logo, theme, align = "left" }: { name: string; logo: 
   );
 }
 
-function LiveScoreBlock({ nameA, nameB, liveState, liveDetailText, theme }: {
+function LiveScoreBlock({ nameA, nameB, logoA, logoB, liveState, liveDetailText, theme }: {
   nameA: string; nameB: string;
+  logoA: string | null; logoB: string | null;
   liveState: { score?: string; scoreA?: number; scoreB?: number };
   liveDetailText: string | null;
   theme: OperatorTheme;
@@ -450,11 +451,17 @@ function LiveScoreBlock({ nameA, nameB, liveState, liveDetailText, theme }: {
   return (
     <div className="text-center py-2 px-3 rounded-xl" style={{ backgroundColor: "#ef444408", border: "1px solid #ef444415" }}>
       <div className="flex items-center justify-center gap-3">
-        <span className="text-sm font-bold truncate max-w-[30%]" style={{ color: theme.textPrimary }}>{nameA}</span>
+        <div className="flex items-center gap-1.5 min-w-0 max-w-[30%]">
+          {logoA && <img src={logoA} className="w-5 h-5 object-contain shrink-0" alt="" onError={e => { (e.currentTarget).style.display = 'none'; }} />}
+          <span className="text-sm font-bold truncate" style={{ color: theme.textPrimary }}>{nameA}</span>
+        </div>
         <span className="text-2xl font-black font-mono tabular-nums" style={{ color: theme.textPrimary }}>
           {sA} <span style={{ color: theme.textMuted }}>—</span> {sB}
         </span>
-        <span className="text-sm font-bold truncate max-w-[30%]" style={{ color: theme.textPrimary }}>{nameB}</span>
+        <div className="flex items-center gap-1.5 min-w-0 max-w-[30%]">
+          <span className="text-sm font-bold truncate" style={{ color: theme.textPrimary }}>{nameB}</span>
+          {logoB && <img src={logoB} className="w-5 h-5 object-contain shrink-0" alt="" onError={e => { (e.currentTarget).style.display = 'none'; }} />}
+        </div>
       </div>
       {liveDetailText && (
         <div className="text-[10px] font-mono mt-0.5" style={{ color: theme.textMuted }}>{liveDetailText}</div>
