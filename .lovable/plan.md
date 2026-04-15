@@ -1,39 +1,82 @@
 
 
-## Plan: Fix Missing Payout Wallet for $0 Promo Operators
+## Plan: Safe Payout Wallet Auto-Heal + Demo Ownership Bind
 
-### Root Cause
+### A) Demo DB Update
 
-The onboarding flow has a payout wallet step (step 6), but it has **no validation** — `isStepValid()` returns `true` by default for that step. Operators can click "Next" with an empty wallet field.
+Update the `demo` operator record to bind your real Privy identity and wallet:
 
-For $0 promo users specifically: they authenticate via Privy (which does create an embedded wallet), but the pre-fill logic at line 252 depends on `walletAddress` being ready. If the Privy wallet hasn't hydrated yet, the field stays empty and the user breezes past it.
-
-### Fix (2 changes, minimal)
-
-**1. Auto-default payout wallet from Privy wallet during `create_operator`**
-In `src/pages/platform/OperatorOnboarding.tsx`, update `handleCreate` (line 468) to fall back to `walletAddress` if `payoutWallet` is empty:
-
-```ts
-payout_wallet: payoutWallet || walletAddress || null,
+```sql
+UPDATE operators
+SET user_id = 'did:privy:cmlqvouen00te0clhp5wog5ke',
+    payout_wallet = '0x3ed68845cf4528c80ff62094b52eeabca29db5a4'
+WHERE subdomain = 'demo';
 ```
 
-This ensures that even if the user skips the field, their Privy embedded wallet is used as the default destination.
+### B) Auto-Set Payout Wallet Code Change
 
-**2. Add soft validation on the payout wallet step**
-In `isStepValid()` (line 507), add a check for step 6 (the payout wallet step):
+In `src/components/operator/OperatorEarningsTab.tsx`:
+
+1. Add `walletAddress` prop (the logged-in user's Privy EVM wallet) and `operatorUserId` prop (the operator's `user_id` from the DB)
+2. After `fetchSweepData` returns, add a one-time `useEffect`:
 
 ```ts
-if (step === 6) return !!payoutWallet || !!walletAddress; // at least one must exist
+useEffect(() => {
+  if (data && !data.payout_wallet && walletAddress && operatorUserId === loggedInUserId) {
+    // Auto-set payout wallet silently
+    autoSetPayoutWallet(walletAddress);
+  }
+}, [data, walletAddress, operatorUserId, loggedInUserId]);
 ```
 
-This prevents proceeding only if there's truly no wallet available at all (edge case).
+In `src/pages/platform/OperatorDashboard.tsx`:
 
-### What This Does NOT Change
-- No logic changes to sweep, cash-out, or earnings
-- No backend changes
-- The payout wallet field remains optional to manually fill — but defaults to the Privy wallet automatically
-- Existing operators (demo, silvertooth) still need their wallets set manually via admin or earnings tab
+3. Pass the additional props from the dashboard, which already has access to the operator record and the Privy user:
 
-### For Existing $0 Promo Operators (demo, silvertooth)
-After the code fix, we should update their `payout_wallet` in the DB to their Privy embedded wallet addresses so sweeps can begin flowing.
+```tsx
+<OperatorEarningsTab
+  operatorId={operator.id}
+  operatorUserId={operator.user_id}              // NEW
+  loggedInUserId={user?.id || ""}                 // NEW — Privy DID
+  walletAddress={walletAddress}                   // NEW — from usePrivyWallet
+  getAccessToken={getAccessToken}
+/>
+```
+
+### C) Safety Condition (Prevents Ownership Changes)
+
+The auto-set logic has this exact guard:
+
+```
+if operator.user_id === logged-in Privy DID
+  AND payout_wallet is null
+  AND walletAddress exists
+  → call set_payout_wallet
+```
+
+- `user_id` is **never modified** by this code
+- Only `payout_wallet` is updated
+- If the logged-in user does NOT match the operator owner, nothing happens
+
+### D) Silvertooth Binding Process (Later, Manual)
+
+1. The Silvertooth person visits 1mg.live and logs in with Privy (using their email)
+2. Privy creates their embedded wallet automatically
+3. You (or I) capture their real Privy DID and wallet address from the `prediction_accounts` table
+4. Run a one-time explicit DB update:
+   ```sql
+   UPDATE operators
+   SET user_id = '<their-real-privy-did>',
+       payout_wallet = '<their-real-wallet>'
+   WHERE subdomain = 'silvertooth';
+   ```
+5. After that, the auto-heal logic covers any future wallet changes
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| DB migration | Update `demo` operator `user_id` + `payout_wallet` |
+| `OperatorEarningsTab.tsx` | Add auto-set payout wallet with ownership guard |
+| `OperatorDashboard.tsx` | Pass `operatorUserId`, `loggedInUserId`, `walletAddress` props |
 
