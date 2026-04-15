@@ -486,7 +486,7 @@ export default function OperatorOnboarding() {
             theme,
             fee_percent: feePercent,
             allowed_sports: sports,
-            payout_wallet: payoutWallet || null,
+            payout_wallet: payoutWallet || walletAddress || null,
             agreement_version: AGREEMENT_VERSION,
           }),
         }
@@ -508,6 +508,7 @@ export default function OperatorOnboarding() {
     if (step === 0) return brandName.trim().length >= 2;
     if (step === 1) return subdomain.trim().length >= 3;
     if (step === 4) return sports.length > 0;
+    if (step === 6) return !!payoutWallet || !!walletAddress;
     if (step === 7) return agreedToTerms;
     return true;
   };
