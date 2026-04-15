@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { usePrivySafe } from "@/hooks/usePrivySafe";
+import { usePrivyWallet } from "@/hooks/usePrivyWallet";
 import { usePrivyLogin } from "@/hooks/usePrivyLogin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,7 @@ import {
 
 interface OperatorData {
   id: string;
+  user_id: string;
   brand_name: string;
   subdomain: string;
   logo_url: string | null;
@@ -50,6 +52,7 @@ const SPORT_OPTIONS = ["Soccer", "MMA", "Boxing", "NFL", "NBA", "NHL", "MLB", "N
 export default function OperatorDashboard() {
   const { t } = useTranslation();
   const { authenticated, getAccessToken, user } = usePrivySafe();
+  const { walletAddress } = usePrivyWallet();
   const { login } = usePrivyLogin();
   const navigate = useNavigate();
   const [operator, setOperator] = useState<OperatorData | null>(null);
@@ -425,7 +428,13 @@ export default function OperatorDashboard() {
 
         {/* ─── EARNINGS TAB ─── */}
         {dashTab === "earnings" && (
-          <OperatorEarningsTab operatorId={operator.id} getAccessToken={getAccessToken} />
+          <OperatorEarningsTab
+            operatorId={operator.id}
+            operatorUserId={operator.user_id}
+            loggedInUserId={user?.id || ""}
+            walletAddress={walletAddress}
+            getAccessToken={getAccessToken}
+          />
         )}
 
         {/* ─── SETTINGS TAB ─── */}
