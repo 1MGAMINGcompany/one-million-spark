@@ -247,9 +247,19 @@ export default function SimplePredictionModal({
         {/* Live payout */}
         {currentAmount >= MIN_USD && (
           <div className="rounded-xl bg-white/5 p-4 mb-6 space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-white/50">{t("operator.modal.predictReturn", { amount: currentAmount.toFixed(2) })}</span>
-              <span className="font-bold text-lg" style={{ color: themeColor }}>${payout.toFixed(2)}</span>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-white/50 flex items-center gap-2">
+                {t("operator.modal.predictReturn", { amount: currentAmount.toFixed(2) })}
+                {effectiveTier === "small" && showSmallChip && (
+                  <span className="text-[10px] text-amber-400 font-semibold animate-pulse">⟳ {t("operator.modal.oddsUpdated")}</span>
+                )}
+              </span>
+              <span className="font-bold text-lg flex items-center gap-2">
+                {effectiveTier === "large" && (
+                  <span className="text-white/40 line-through text-sm">${oldPayout.toFixed(2)}</span>
+                )}
+                <span style={{ color: themeColor }}>${payout.toFixed(2)}</span>
+              </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-white/50">{t("operator.modal.profit")}</span>
