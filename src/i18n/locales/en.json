@@ -1906,7 +1906,13 @@
       "processing": "Processing...",
       "enterMinAmount": "Enter amount (${{min}} min)",
       "placePredictionAmount": "Place ${{amount}} Prediction",
-      "serviceFee": "Service fee applies"
+      "serviceFee": "Service fee applies",
+      "oddsUpdated": "Odds updated",
+      "marketMovedTitle": "Market moved significantly",
+      "marketMovedBody": "Please review the updated odds before predicting.",
+      "reviewUpdatedOdds": "Review Updated Odds",
+      "cancel": "Cancel",
+      "acceptNewOddsAndPlace": "Accept New Odds — Place ${{amount}} Prediction"
     },
     "adminActions": {
       "closePredictions": "Close Predictions",

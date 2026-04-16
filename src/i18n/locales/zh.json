@@ -1497,7 +1497,13 @@
       "processing": "处理中...",
       "enterMinAmount": "输入金额（最低 ${{min}}）",
       "placePredictionAmount": "下注 ${{amount}} 预测",
-      "serviceFee": "收取服务费"
+      "serviceFee": "收取服务费",
+      "oddsUpdated": "赔率已更新",
+      "marketMovedTitle": "市场大幅波动",
+      "marketMovedBody": "请在预测前查看更新后的赔率。",
+      "reviewUpdatedOdds": "查看更新赔率",
+      "cancel": "取消",
+      "acceptNewOddsAndPlace": "接受新赔率 — 下注 ${{amount}}"
     },
     "adminActions": {
       "closePredictions": "关闭预测",

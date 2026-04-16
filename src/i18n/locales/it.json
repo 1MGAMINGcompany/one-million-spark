@@ -1497,7 +1497,13 @@
       "processing": "Elaborazione...",
       "enterMinAmount": "Inserisci importo (${{min}} min)",
       "placePredictionAmount": "Prevedi ${{amount}}",
-      "serviceFee": "Si applica commissione di servizio"
+      "serviceFee": "Si applica commissione di servizio",
+      "oddsUpdated": "Quote aggiornate",
+      "marketMovedTitle": "Il mercato si è mosso significativamente",
+      "marketMovedBody": "Controlla le quote aggiornate prima di prevedere.",
+      "reviewUpdatedOdds": "Rivedi quote aggiornate",
+      "cancel": "Annulla",
+      "acceptNewOddsAndPlace": "Accetta nuove quote — Prevedi ${{amount}}"
     },
     "adminActions": {
       "closePredictions": "Chiudi Previsioni",

@@ -1587,7 +1587,13 @@
       "processing": "Processando...",
       "enterMinAmount": "Insira valor (${{min}} mín)",
       "placePredictionAmount": "Prever ${{amount}}",
-      "serviceFee": "Taxa de serviço aplica"
+      "serviceFee": "Taxa de serviço aplica",
+      "oddsUpdated": "Probabilidades atualizadas",
+      "marketMovedTitle": "O mercado mudou significativamente",
+      "marketMovedBody": "Revise as probabilidades atualizadas antes de prever.",
+      "reviewUpdatedOdds": "Rever probabilidades atualizadas",
+      "cancel": "Cancelar",
+      "acceptNewOddsAndPlace": "Aceitar novas probabilidades — Prever ${{amount}}"
     },
     "adminActions": {
       "closePredictions": "Fechar Previsões",

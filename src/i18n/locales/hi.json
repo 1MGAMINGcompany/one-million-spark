@@ -1591,7 +1591,13 @@
       "processing": "प्रोसेसिंग...",
       "enterMinAmount": "राशि दर्ज करें (${{min}} न्यूनतम)",
       "placePredictionAmount": "${{amount}} भविष्यवाणी करें",
-      "serviceFee": "सेवा शुल्क लागू"
+      "serviceFee": "सेवा शुल्क लागू",
+      "oddsUpdated": "ऑड्स अपडेट हुए",
+      "marketMovedTitle": "बाज़ार में बड़ा बदलाव",
+      "marketMovedBody": "भविष्यवाणी से पहले अपडेटेड ऑड्स की समीक्षा करें।",
+      "reviewUpdatedOdds": "अपडेटेड ऑड्स देखें",
+      "cancel": "रद्द करें",
+      "acceptNewOddsAndPlace": "नए ऑड्स स्वीकारें — ${{amount}} की भविष्यवाणी करें"
     },
     "adminActions": {
       "closePredictions": "भविष्यवाणियाँ बंद करें",

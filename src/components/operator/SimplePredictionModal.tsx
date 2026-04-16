@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { X, Loader2, Share2, AlertTriangle, RefreshCw } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { X, Loader2, Share2, AlertTriangle, RefreshCw, Zap } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
 import { getTeamLogo } from "@/lib/teamLogos";
@@ -89,6 +89,49 @@ export default function SimplePredictionModal({
   const profit = payout - currentAmount;
   const multiplier = currentAmount > 0 ? (payout / currentAmount).toFixed(2) : "—";
 
+  // ── Live odds drift detection (Polymarket events only) ───────────────────
+  const currentPrice = pick === "fighter_a" ? (fight.price_a ?? 0) : pick === "fighter_b" ? (fight.price_b ?? 0) : 0;
+  const [baselinePrice, setBaselinePrice] = useState(currentPrice);
+  const [showSmallChip, setShowSmallChip] = useState(false);
+  const lastChipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Reset baseline when pick changes
+  useEffect(() => {
+    setBaselinePrice(currentPrice);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pick]);
+
+  const drift = !isCustomEvent && baselinePrice > 0 && currentPrice > 0
+    ? Math.abs(currentPrice - baselinePrice) / baselinePrice
+    : 0;
+  const quoteTier: "fresh" | "small" | "large" | "extreme" =
+    drift >= 0.15 ? "extreme" : drift >= 0.05 ? "large" : drift > 0.001 ? "small" : "fresh";
+  // Server requote takes priority over client-side drift
+  const effectiveTier = requoteData ? "fresh" : quoteTier;
+
+  // Briefly show "odds updated" chip on each small movement
+  useEffect(() => {
+    if (quoteTier === "small") {
+      setShowSmallChip(true);
+      if (lastChipTimer.current) clearTimeout(lastChipTimer.current);
+      lastChipTimer.current = setTimeout(() => setShowSmallChip(false), 2000);
+    }
+    return () => { if (lastChipTimer.current) clearTimeout(lastChipTimer.current); };
+  }, [currentPrice, quoteTier]);
+
+  // Old payout using baseline price (for crossed-out display on large drift)
+  const oldPayout = (() => {
+    if (baselinePrice <= 0 || currentAmount <= 0) return payout;
+    const fee = currentAmount * getFeeRate(fight);
+    const net = currentAmount - fee;
+    return net / baselinePrice;
+  })();
+
+  const handleSubmitWithBaselineSync = (amt: number) => {
+    setBaselinePrice(currentPrice);
+    onSubmit(amt);
+  };
+
   // Success screen
   if (showSuccess) {
     return (
@@ -121,6 +164,32 @@ export default function SimplePredictionModal({
             className="text-white/40 hover:text-white/60 text-sm font-medium transition-colors"
           >
             {t("operator.modal.done")}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Extreme drift screen — block submission until user reviews
+  if (effectiveTier === "extreme") {
+    return (
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
+        <div className="w-full max-w-md bg-[#0d1117] rounded-t-3xl sm:rounded-3xl p-8 text-center" onClick={e => e.stopPropagation()}>
+          <div className="text-5xl mb-4">⚠️</div>
+          <h2 className="text-xl font-bold text-white mb-2">{t("operator.modal.marketMovedTitle")}</h2>
+          <p className="text-white/60 text-sm mb-6">{t("operator.modal.marketMovedBody")}</p>
+          <button
+            onClick={() => setBaselinePrice(currentPrice)}
+            className="w-full py-3 rounded-xl font-bold text-white text-sm mb-3 transition-all"
+            style={{ backgroundColor: themeColor }}
+          >
+            {t("operator.modal.reviewUpdatedOdds")}
+          </button>
+          <button
+            onClick={onClose}
+            className="text-white/40 hover:text-white/60 text-sm font-medium transition-colors"
+          >
+            {t("operator.modal.cancel")}
           </button>
         </div>
       </div>
@@ -178,9 +247,19 @@ export default function SimplePredictionModal({
         {/* Live payout */}
         {currentAmount >= MIN_USD && (
           <div className="rounded-xl bg-white/5 p-4 mb-6 space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-white/50">{t("operator.modal.predictReturn", { amount: currentAmount.toFixed(2) })}</span>
-              <span className="font-bold text-lg" style={{ color: themeColor }}>${payout.toFixed(2)}</span>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-white/50 flex items-center gap-2">
+                {t("operator.modal.predictReturn", { amount: currentAmount.toFixed(2) })}
+                {effectiveTier === "small" && showSmallChip && (
+                  <span className="text-[10px] text-amber-400 font-semibold animate-pulse">⟳ {t("operator.modal.oddsUpdated")}</span>
+                )}
+              </span>
+              <span className="font-bold text-lg flex items-center gap-2">
+                {effectiveTier === "large" && (
+                  <span className="text-white/40 line-through text-sm">${oldPayout.toFixed(2)}</span>
+                )}
+                <span style={{ color: themeColor }}>${payout.toFixed(2)}</span>
+              </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-white/50">{t("operator.modal.profit")}</span>
@@ -232,23 +311,37 @@ export default function SimplePredictionModal({
           </div>
         )}
 
-        {/* Submit */}
-        <button
-          onClick={() => currentAmount >= MIN_USD && onSubmit(currentAmount)}
-          disabled={submitting || currentAmount < MIN_USD}
-          className="w-full py-4 rounded-xl font-bold text-lg text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{ backgroundColor: submitting ? undefined : themeColor }}
-        >
-          {submitting ? (
-            <span className="flex items-center justify-center gap-2">
-              <Loader2 className="w-5 h-5 animate-spin" /> {t("operator.modal.processing")}
-            </span>
-          ) : currentAmount < MIN_USD ? (
-            t("operator.modal.enterMinAmount", { min: MIN_USD })
-          ) : (
-            t("operator.modal.placePredictionAmount", { amount: currentAmount.toFixed(2) })
-          )}
-        </button>
+        {/* Submit — large drift shows accept-new-odds button instead of standard submit */}
+        {effectiveTier === "large" && currentAmount >= MIN_USD ? (
+          <button
+            onClick={() => handleSubmitWithBaselineSync(currentAmount)}
+            disabled={submitting}
+            className="w-full py-4 rounded-xl font-bold text-lg text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-yellow-500 shadow-lg shadow-amber-500/30"
+          >
+            {submitting ? (
+              <><Loader2 className="w-5 h-5 animate-spin" /> {t("operator.modal.processing")}</>
+            ) : (
+              <><Zap className="w-5 h-5" /> {t("operator.modal.acceptNewOddsAndPlace", { amount: currentAmount.toFixed(2) })}</>
+            )}
+          </button>
+        ) : (
+          <button
+            onClick={() => currentAmount >= MIN_USD && handleSubmitWithBaselineSync(currentAmount)}
+            disabled={submitting || currentAmount < MIN_USD}
+            className="w-full py-4 rounded-xl font-bold text-lg text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ backgroundColor: submitting ? undefined : themeColor }}
+          >
+            {submitting ? (
+              <span className="flex items-center justify-center gap-2">
+                <Loader2 className="w-5 h-5 animate-spin" /> {t("operator.modal.processing")}
+              </span>
+            ) : currentAmount < MIN_USD ? (
+              t("operator.modal.enterMinAmount", { min: MIN_USD })
+            ) : (
+              t("operator.modal.placePredictionAmount", { amount: currentAmount.toFixed(2) })
+            )}
+          </button>
+        )}
 
         <p className="text-center text-[10px] text-white/15 mt-3">
           {t("operator.modal.serviceFee")} • {operatorBrandName || "1MG"}
