@@ -1475,7 +1475,45 @@
     "sellReminder": "يمكنك البيع قبل انتهاء الحدث.",
     "mostTraded": "الأكثر تداولاً",
     "customFinalNote": "التوقعات نهائية. الفائزون يتقاسمون المجموع بعد التسوية.",
-    "lopsidedWarning": "السوق شبه محسوم — الاحتمالات أحادية الجانب بشكل كبير"
+    "lopsidedWarning": "السوق شبه محسوم — الاحتمالات أحادية الجانب بشكل كبير",
+    "modal": {
+      "placePrediction": "ضع توقعاً",
+      "enterAmount": "أدخل المبلغ ($)",
+      "customAmount": "مبلغ مخصص",
+      "yourPick": "اختيارك",
+      "predictionPlaced": "تم وضع التوقع!",
+      "youPicked": "اخترت {{name}}",
+      "ifTheyWin": "إذا فازوا، تحصل على",
+      "predictReturn": "توقع ${{amount}} ← العائد",
+      "profit": "الربح",
+      "shareYourPick": "شارك اختيارك",
+      "done": "تم",
+      "oddsChanged": "تغيرت الاحتمالات",
+      "previousOdds": "الاحتمالات السابقة",
+      "newOdds": "الاحتمالات الجديدة",
+      "acceptNewOdds": "قبول الاحتمالات الجديدة والإرسال",
+      "totalPool": "إجمالي المجموع: ${{amount}}",
+      "predictionsFinal": "التوقعات نهائية. الفائزون يتقاسمون المجموع بعد التسوية.",
+      "processing": "جارٍ المعالجة...",
+      "enterMinAmount": "أدخل المبلغ (${{min}} كحد أدنى)",
+      "placePredictionAmount": "توقع ${{amount}}",
+      "serviceFee": "تُطبق رسوم الخدمة"
+    },
+    "adminActions": {
+      "closePredictions": "إغلاق التوقعات",
+      "setWinner": "تحديد الفائز:",
+      "confirmSettle": "تأكيد والتسوية",
+      "settling": "جارٍ التسوية...",
+      "settled": "تمت التسوية",
+      "confirmed": "مؤكد",
+      "locked": "مقفل",
+      "live": "مباشر",
+      "drawOption": "تعادل",
+      "winner": "الفائز:",
+      "noDate": "بدون تاريخ",
+      "pool": "مجموع",
+      "shares": "حصص"
+    }
   },
   "platform": {
     "hero": {

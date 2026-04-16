@@ -1475,7 +1475,45 @@
     "sellReminder": "您可以在活动结束前卖出。",
     "mostTraded": "交易最多",
     "customFinalNote": "预测是最终的。获胜者在结算后分享奖池。",
-    "lopsidedWarning": "市场几乎已定 — 赔率严重偏向一方"
+    "lopsidedWarning": "市场几乎已定 — 赔率严重偏向一方",
+    "modal": {
+      "placePrediction": "下注预测",
+      "enterAmount": "输入金额 ($)",
+      "customAmount": "自定义金额",
+      "yourPick": "你的选择",
+      "predictionPlaced": "预测已下注！",
+      "youPicked": "你选择了 {{name}}",
+      "ifTheyWin": "如果他们赢了，你将获得",
+      "predictReturn": "预测 ${{amount}} → 回报",
+      "profit": "利润",
+      "shareYourPick": "分享你的选择",
+      "done": "完成",
+      "oddsChanged": "赔率已变",
+      "previousOdds": "之前的赔率",
+      "newOdds": "新赔率",
+      "acceptNewOdds": "接受新赔率并提交",
+      "totalPool": "总奖池：${{amount}}",
+      "predictionsFinal": "预测是最终的。获胜者在结算后分享奖池。",
+      "processing": "处理中...",
+      "enterMinAmount": "输入金额（最低 ${{min}}）",
+      "placePredictionAmount": "下注 ${{amount}} 预测",
+      "serviceFee": "收取服务费"
+    },
+    "adminActions": {
+      "closePredictions": "关闭预测",
+      "setWinner": "设定赢家：",
+      "confirmSettle": "确认并结算",
+      "settling": "结算中...",
+      "settled": "已结算",
+      "confirmed": "已确认",
+      "locked": "已锁定",
+      "live": "直播",
+      "drawOption": "平局",
+      "winner": "赢家：",
+      "noDate": "无日期",
+      "pool": "奖池",
+      "shares": "份额"
+    }
   },
   "platform": {
     "hero": {

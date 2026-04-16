@@ -1475,7 +1475,45 @@
     "sellReminder": "イベント終了前に売却できます。",
     "mostTraded": "最も取引された",
     "customFinalNote": "予測は確定です。勝者は決済後にポットを分け合います。",
-    "lopsidedWarning": "マーケットはほぼ決定済み — オッズが大きく偏っています"
+    "lopsidedWarning": "マーケットはほぼ決定済み — オッズが大きく偏っています",
+    "modal": {
+      "placePrediction": "予測を行う",
+      "enterAmount": "金額を入力 ($)",
+      "customAmount": "カスタム金額",
+      "yourPick": "あなたの選択",
+      "predictionPlaced": "予測完了！",
+      "youPicked": "{{name}} を選びました",
+      "ifTheyWin": "勝利した場合の受取額",
+      "predictReturn": "${{amount}} 予測 → リターン",
+      "profit": "利益",
+      "shareYourPick": "選択をシェア",
+      "done": "完了",
+      "oddsChanged": "オッズが変更されました",
+      "previousOdds": "以前のオッズ",
+      "newOdds": "新しいオッズ",
+      "acceptNewOdds": "新しいオッズを受け入れて送信",
+      "totalPool": "合計プール：${{amount}}",
+      "predictionsFinal": "予測は確定です。勝者は決済後にポットを分け合います。",
+      "processing": "処理中...",
+      "enterMinAmount": "金額を入力（最低 ${{min}}）",
+      "placePredictionAmount": "${{amount}} を予測",
+      "serviceFee": "サービス手数料が適用されます"
+    },
+    "adminActions": {
+      "closePredictions": "予測を締め切る",
+      "setWinner": "勝者を設定：",
+      "confirmSettle": "確認して決済",
+      "settling": "決済中...",
+      "settled": "決済済み",
+      "confirmed": "確認済み",
+      "locked": "ロック済み",
+      "live": "ライブ",
+      "drawOption": "引き分け",
+      "winner": "勝者：",
+      "noDate": "日付なし",
+      "pool": "プール",
+      "shares": "シェア"
+    }
   },
   "platform": {
     "hero": {
