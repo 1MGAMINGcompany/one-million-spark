@@ -311,23 +311,37 @@ export default function SimplePredictionModal({
           </div>
         )}
 
-        {/* Submit */}
-        <button
-          onClick={() => currentAmount >= MIN_USD && onSubmit(currentAmount)}
-          disabled={submitting || currentAmount < MIN_USD}
-          className="w-full py-4 rounded-xl font-bold text-lg text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{ backgroundColor: submitting ? undefined : themeColor }}
-        >
-          {submitting ? (
-            <span className="flex items-center justify-center gap-2">
-              <Loader2 className="w-5 h-5 animate-spin" /> {t("operator.modal.processing")}
-            </span>
-          ) : currentAmount < MIN_USD ? (
-            t("operator.modal.enterMinAmount", { min: MIN_USD })
-          ) : (
-            t("operator.modal.placePredictionAmount", { amount: currentAmount.toFixed(2) })
-          )}
-        </button>
+        {/* Submit — large drift shows accept-new-odds button instead of standard submit */}
+        {effectiveTier === "large" && currentAmount >= MIN_USD ? (
+          <button
+            onClick={() => handleSubmitWithBaselineSync(currentAmount)}
+            disabled={submitting}
+            className="w-full py-4 rounded-xl font-bold text-lg text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-yellow-500 shadow-lg shadow-amber-500/30"
+          >
+            {submitting ? (
+              <><Loader2 className="w-5 h-5 animate-spin" /> {t("operator.modal.processing")}</>
+            ) : (
+              <><Zap className="w-5 h-5" /> {t("operator.modal.acceptNewOddsAndPlace", { amount: currentAmount.toFixed(2) })}</>
+            )}
+          </button>
+        ) : (
+          <button
+            onClick={() => currentAmount >= MIN_USD && handleSubmitWithBaselineSync(currentAmount)}
+            disabled={submitting || currentAmount < MIN_USD}
+            className="w-full py-4 rounded-xl font-bold text-lg text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ backgroundColor: submitting ? undefined : themeColor }}
+          >
+            {submitting ? (
+              <span className="flex items-center justify-center gap-2">
+                <Loader2 className="w-5 h-5 animate-spin" /> {t("operator.modal.processing")}
+              </span>
+            ) : currentAmount < MIN_USD ? (
+              t("operator.modal.enterMinAmount", { min: MIN_USD })
+            ) : (
+              t("operator.modal.placePredictionAmount", { amount: currentAmount.toFixed(2) })
+            )}
+          </button>
+        )}
 
         <p className="text-center text-[10px] text-white/15 mt-3">
           {t("operator.modal.serviceFee")} • {operatorBrandName || "1MG"}
