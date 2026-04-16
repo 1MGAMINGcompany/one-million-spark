@@ -1587,7 +1587,13 @@
       "processing": "Traitement...",
       "enterMinAmount": "Entrez le montant (${{min}} min)",
       "placePredictionAmount": "Prédire ${{amount}}",
-      "serviceFee": "Frais de service applicables"
+      "serviceFee": "Frais de service applicables",
+      "oddsUpdated": "Cotes mises à jour",
+      "marketMovedTitle": "Le marché a bougé significativement",
+      "marketMovedBody": "Veuillez vérifier les nouvelles cotes avant de prédire.",
+      "reviewUpdatedOdds": "Vérifier les nouvelles cotes",
+      "cancel": "Annuler",
+      "acceptNewOddsAndPlace": "Accepter les nouvelles cotes — Prédire ${{amount}}"
     },
     "adminActions": {
       "closePredictions": "Fermer les Prédictions",

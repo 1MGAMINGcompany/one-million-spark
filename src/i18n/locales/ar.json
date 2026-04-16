@@ -1497,7 +1497,13 @@
       "processing": "جارٍ المعالجة...",
       "enterMinAmount": "أدخل المبلغ (${{min}} كحد أدنى)",
       "placePredictionAmount": "توقع ${{amount}}",
-      "serviceFee": "تُطبق رسوم الخدمة"
+      "serviceFee": "تُطبق رسوم الخدمة",
+      "oddsUpdated": "تم تحديث الاحتمالات",
+      "marketMovedTitle": "تحرّك السوق بشكل كبير",
+      "marketMovedBody": "يرجى مراجعة الاحتمالات المحدثة قبل التنبؤ.",
+      "reviewUpdatedOdds": "مراجعة الاحتمالات المحدثة",
+      "cancel": "إلغاء",
+      "acceptNewOddsAndPlace": "قبول الاحتمالات الجديدة — توقع ${{amount}}"
     },
     "adminActions": {
       "closePredictions": "إغلاق التوقعات",

@@ -1694,7 +1694,13 @@
       "processing": "Procesando...",
       "enterMinAmount": "Ingrese monto (${{min}} mín)",
       "placePredictionAmount": "Predecir ${{amount}}",
-      "serviceFee": "Comisión de servicio aplica"
+      "serviceFee": "Comisión de servicio aplica",
+      "oddsUpdated": "Cuotas actualizadas",
+      "marketMovedTitle": "El mercado se movió significativamente",
+      "marketMovedBody": "Revisa las cuotas actualizadas antes de predecir.",
+      "reviewUpdatedOdds": "Revisar cuotas actualizadas",
+      "cancel": "Cancelar",
+      "acceptNewOddsAndPlace": "Aceptar nuevas cuotas — Predecir ${{amount}}"
     },
     "adminActions": {
       "closePredictions": "Cerrar Predicciones",

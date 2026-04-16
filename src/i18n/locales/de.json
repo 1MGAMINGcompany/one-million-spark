@@ -1495,7 +1495,13 @@
       "processing": "Verarbeitung...",
       "enterMinAmount": "Betrag eingeben (${{min}} Min.)",
       "placePredictionAmount": "${{amount}} vorhersagen",
-      "serviceFee": "Servicegebühr fällt an"
+      "serviceFee": "Servicegebühr fällt an",
+      "oddsUpdated": "Quoten aktualisiert",
+      "marketMovedTitle": "Markt hat sich stark bewegt",
+      "marketMovedBody": "Bitte überprüfe die aktualisierten Quoten vor der Vorhersage.",
+      "reviewUpdatedOdds": "Aktualisierte Quoten prüfen",
+      "cancel": "Abbrechen",
+      "acceptNewOddsAndPlace": "Neue Quoten akzeptieren — Vorhersage ${{amount}}"
     },
     "adminActions": {
       "closePredictions": "Vorhersagen schließen",

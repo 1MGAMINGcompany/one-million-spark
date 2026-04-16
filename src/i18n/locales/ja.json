@@ -1497,7 +1497,13 @@
       "processing": "処理中...",
       "enterMinAmount": "金額を入力（最低 ${{min}}）",
       "placePredictionAmount": "${{amount}} を予測",
-      "serviceFee": "サービス手数料が適用されます"
+      "serviceFee": "サービス手数料が適用されます",
+      "oddsUpdated": "オッズ更新",
+      "marketMovedTitle": "マーケットが大きく動きました",
+      "marketMovedBody": "予測の前に更新されたオッズをご確認ください。",
+      "reviewUpdatedOdds": "更新されたオッズを確認",
+      "cancel": "キャンセル",
+      "acceptNewOddsAndPlace": "新しいオッズを承諾 — ${{amount}} を予測"
     },
     "adminActions": {
       "closePredictions": "予測を締め切る",
