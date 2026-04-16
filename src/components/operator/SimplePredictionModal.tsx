@@ -170,6 +170,32 @@ export default function SimplePredictionModal({
     );
   }
 
+  // Extreme drift screen — block submission until user reviews
+  if (effectiveTier === "extreme") {
+    return (
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
+        <div className="w-full max-w-md bg-[#0d1117] rounded-t-3xl sm:rounded-3xl p-8 text-center" onClick={e => e.stopPropagation()}>
+          <div className="text-5xl mb-4">⚠️</div>
+          <h2 className="text-xl font-bold text-white mb-2">{t("operator.modal.marketMovedTitle")}</h2>
+          <p className="text-white/60 text-sm mb-6">{t("operator.modal.marketMovedBody")}</p>
+          <button
+            onClick={() => setBaselinePrice(currentPrice)}
+            className="w-full py-3 rounded-xl font-bold text-white text-sm mb-3 transition-all"
+            style={{ backgroundColor: themeColor }}
+          >
+            {t("operator.modal.reviewUpdatedOdds")}
+          </button>
+          <button
+            onClick={onClose}
+            className="text-white/40 hover:text-white/60 text-sm font-medium transition-colors"
+          >
+            {t("operator.modal.cancel")}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
       <div className="w-full max-w-md bg-[#0d1117] rounded-t-3xl sm:rounded-3xl p-6" onClick={e => e.stopPropagation()}>
