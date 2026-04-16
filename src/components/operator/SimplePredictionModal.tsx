@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { X, Loader2, Share2, AlertTriangle, RefreshCw } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { X, Loader2, Share2, AlertTriangle, RefreshCw, Zap } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
 import { getTeamLogo } from "@/lib/teamLogos";
