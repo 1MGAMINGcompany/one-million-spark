@@ -1,82 +1,46 @@
 
 
-## Plan: Safe Payout Wallet Auto-Heal + Demo Ownership Bind
+## Plan: Tiered live-odds requote UX in SimplePredictionModal
 
-### A) Demo DB Update
+### Problem
+Live WS prices already flow into the `fight` prop and silently re-render the payout. There's no protection against the user submitting against a price that just jumped, and the only "requote" UI is the backend 409 path. We need a tiered, client-side movement detector that runs while the modal is open.
 
-Update the `demo` operator record to bind your real Privy identity and wallet:
+### Approach (single file change)
+All changes go in `src/components/operator/SimplePredictionModal.tsx`. No backend, no parent, no other components.
 
-```sql
-UPDATE operators
-SET user_id = 'did:privy:cmlqvouen00te0clhp5wog5ke',
-    payout_wallet = '0x3ed68845cf4528c80ff62094b52eeabca29db5a4'
-WHERE subdomain = 'demo';
-```
+1. **Track baseline price**
+   - On modal mount, snapshot the picked side's price into `baselinePriceRef` and a `baselinePrice` state.
+   - On every render, read the current price from `fight.price_a` / `fight.price_b` (already updated by WS via parent).
+   - Compute `drift = Math.abs(current - baseline) / baseline` (guard divide-by-zero; skip if baseline ≤ 0).
 
-### B) Auto-Set Payout Wallet Code Change
+2. **Three tiers**
+   - `small` (drift < 5%): silently update payout. Show a tiny `⟳ Odds updated` chip in amber near the payout box for ~2s after each change. Submit button stays active and uses the new price.
+   - `large` (5% ≤ drift < 15%): show the live payout with the **old return crossed out** and the new return bold next to it. Replace the primary submit button with a single gold "⚡ Accept New Odds — Place $X Prediction" button. On click, update baseline → new price and submit. Original submit is hidden (never two active buttons).
+   - `extreme` (drift ≥ 15%): replace the modal body with a centered warning screen: "⚠️ Market moved significantly — please review the updated odds before predicting" with two buttons: "Review Updated Odds" (resets baseline to current price, returns to normal modal state) and "Cancel" (calls `onClose`).
 
-In `src/components/operator/OperatorEarningsTab.tsx`:
+3. **State machine**
+   - `quoteState: "fresh" | "drifted-small" | "drifted-large" | "drifted-extreme"` derived from drift.
+   - On submit (any path), update baseline to the price actually being submitted so post-submit re-renders don't immediately re-trigger a tier.
+   - Reset baseline whenever `pick` changes or modal reopens.
 
-1. Add `walletAddress` prop (the logged-in user's Privy EVM wallet) and `operatorUserId` prop (the operator's `user_id` from the DB)
-2. After `fetchSweepData` returns, add a one-time `useEffect`:
+4. **Coexistence with existing backend 409 requote**
+   - Keep the existing `requoteData` block exactly as-is — it handles the server-rejected case after submit. The new client-side tiers handle pre-submit drift. They cannot show simultaneously: if `requoteData` is present, skip rendering the drift banners (server requote takes priority since it's the authoritative final price).
 
-```ts
-useEffect(() => {
-  if (data && !data.payout_wallet && walletAddress && operatorUserId === loggedInUserId) {
-    // Auto-set payout wallet silently
-    autoSetPayoutWallet(walletAddress);
-  }
-}, [data, walletAddress, operatorUserId, loggedInUserId]);
-```
+5. **i18n**
+   - Add 6 new keys under `operator.modal`: `oddsUpdated`, `marketMovedTitle`, `marketMovedBody`, `reviewUpdatedOdds`, `cancel`, `acceptNewOddsAndPlace` (with `{amount}` interpolation).
+   - Add to all 10 locale files.
 
-In `src/pages/platform/OperatorDashboard.tsx`:
+6. **Custom (non-Polymarket) events**
+   - Skip drift detection entirely — custom events use parimutuel pools, not live odds. Guard: only run drift logic when `!isCustomEvent`.
 
-3. Pass the additional props from the dashboard, which already has access to the operator record and the Privy user:
+### Files changed
+- `src/components/operator/SimplePredictionModal.tsx` (single component, ~60 lines added)
+- `src/i18n/locales/{en,es,pt,fr,de,it,zh,ja,ar,hi}.json` (6 keys each)
 
-```tsx
-<OperatorEarningsTab
-  operatorId={operator.id}
-  operatorUserId={operator.user_id}              // NEW
-  loggedInUserId={user?.id || ""}                 // NEW — Privy DID
-  walletAddress={walletAddress}                   // NEW — from usePrivyWallet
-  getAccessToken={getAccessToken}
-/>
-```
-
-### C) Safety Condition (Prevents Ownership Changes)
-
-The auto-set logic has this exact guard:
-
-```
-if operator.user_id === logged-in Privy DID
-  AND payout_wallet is null
-  AND walletAddress exists
-  → call set_payout_wallet
-```
-
-- `user_id` is **never modified** by this code
-- Only `payout_wallet` is updated
-- If the logged-in user does NOT match the operator owner, nothing happens
-
-### D) Silvertooth Binding Process (Later, Manual)
-
-1. The Silvertooth person visits 1mg.live and logs in with Privy (using their email)
-2. Privy creates their embedded wallet automatically
-3. You (or I) capture their real Privy DID and wallet address from the `prediction_accounts` table
-4. Run a one-time explicit DB update:
-   ```sql
-   UPDATE operators
-   SET user_id = '<their-real-privy-did>',
-       payout_wallet = '<their-real-wallet>'
-   WHERE subdomain = 'silvertooth';
-   ```
-5. After that, the auto-heal logic covers any future wallet changes
-
-### Files Changed
-
-| File | Change |
-|------|--------|
-| DB migration | Update `demo` operator `user_id` + `payout_wallet` |
-| `OperatorEarningsTab.tsx` | Add auto-set payout wallet with ownership guard |
-| `OperatorDashboard.tsx` | Pass `operatorUserId`, `loggedInUserId`, `walletAddress` props |
+### What does NOT change
+- No backend changes
+- No changes to `usePolymarketLivePrices` or parent `OperatorApp.tsx`
+- No changes to existing `requoteData` server-side flow, `TradeTicket`, or `PredictionModal.tsx` (flagship)
+- No changes to settlement, payout, sweep, or trading logic
+- Custom/operator events are unaffected
 
