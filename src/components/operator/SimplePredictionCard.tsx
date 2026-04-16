@@ -339,7 +339,7 @@ export default function SimplePredictionCard({
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium"
           style={{ backgroundColor: "rgba(245,158,11,0.12)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.25)" }}>
           <Clock className="w-3.5 h-3.5 shrink-0" />
-          <span>Market nearly decided — odds are heavily one-sided</span>
+          <span>{t("operator.lopsidedWarning")}</span>
         </div>
       )}
 

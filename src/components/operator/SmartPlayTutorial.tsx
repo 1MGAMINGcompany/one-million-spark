@@ -1,26 +1,9 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { X, ChevronRight } from "lucide-react";
 import type { OperatorTheme } from "@/lib/operatorThemes";
 
 const TUTORIAL_KEY = "1mg-smart-play-tutorial-seen";
-
-const STEPS = [
-  {
-    emoji: "🎯",
-    title: "Pick your side",
-    desc: "Choose the outcome you believe has value before the price moves.",
-  },
-  {
-    emoji: "📈",
-    title: "Watch the market live",
-    desc: "Prices move during the event. Your position can gain or lose value before the final result.",
-  },
-  {
-    emoji: "💰",
-    title: "Sell anytime before it ends",
-    desc: "You don't have to wait for the final whistle. Lock profit or cut risk early whenever you want.",
-  },
-];
 
 interface Props {
   theme: OperatorTheme;
@@ -40,7 +23,26 @@ export function resetTutorial(): void {
 }
 
 export default function SmartPlayTutorial({ theme, onClose }: Props) {
+  const { t } = useTranslation();
   const [step, setStep] = useState(0);
+
+  const STEPS = [
+    {
+      emoji: "🎯",
+      title: t("smartPlay.tutorialStep1Title"),
+      desc: t("smartPlay.tutorialStep1Desc"),
+    },
+    {
+      emoji: "📈",
+      title: t("smartPlay.tutorialStep2Title"),
+      desc: t("smartPlay.tutorialStep2Desc"),
+    },
+    {
+      emoji: "💰",
+      title: t("smartPlay.tutorialStep3Title"),
+      desc: t("smartPlay.tutorialStep3Desc"),
+    },
+  ];
 
   const handleNext = () => {
     if (step < STEPS.length - 1) {
@@ -96,9 +98,9 @@ export default function SmartPlayTutorial({ theme, onClose }: Props) {
           style={{ backgroundColor: theme.primary, color: theme.primaryForeground }}
         >
           {step < STEPS.length - 1 ? (
-            <>Next <ChevronRight className="w-4 h-4" /></>
+            <>{t("smartPlay.next")} <ChevronRight className="w-4 h-4" /></>
           ) : (
-            "Got it — Let's go!"
+            t("smartPlay.gotIt")
           )}
         </button>
 
@@ -107,7 +109,7 @@ export default function SmartPlayTutorial({ theme, onClose }: Props) {
           className="mt-2 w-full py-2 text-xs font-medium transition-opacity hover:opacity-70"
           style={{ color: theme.textMuted }}
         >
-          Skip
+          {t("smartPlay.skip")}
         </button>
       </div>
     </div>

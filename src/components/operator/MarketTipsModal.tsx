@@ -17,24 +17,6 @@ interface MarketTipsModalProps {
   onShowTutorial?: () => void;
 }
 
-// Base tactic cards for imported (Polymarket) events
-const IMPORTED_TACTICS = [
-  { emoji: "⚡", title: "Buy before the move", desc: "The best entries often come before the crowd reacts." },
-  { emoji: "💰", title: "You can sell early", desc: "If your side rises, you can exit before the game ends and lock profit." },
-  { emoji: "🛡️", title: "Protect your bankroll", desc: "You don't need to hold every position to the end. Small wins add up." },
-  { emoji: "⏳", title: "Wait for better prices", desc: "Not every moment is a good entry. Patience can beat chasing." },
-  { emoji: "🧠", title: "Focus on what you know", desc: "The best traders usually stick to sports, teams, and spots they understand." },
-];
-
-// Custom-event variant tactic cards (buy-only, no sell)
-const CUSTOM_TACTICS = [
-  { emoji: "📋", title: "Follow the setup closely", desc: "Read the event rules carefully before entering." },
-  { emoji: "🔒", title: "Predictions are final", desc: "Once placed, your prediction cannot be sold or withdrawn before settlement." },
-  { emoji: "🎯", title: "Size your risk", desc: "Custom events settle after admin review, so stay disciplined with entry size." },
-  { emoji: "⏳", title: "Wait for clearer value", desc: "You don't need to enter immediately if the price doesn't look right." },
-  { emoji: "📖", title: "Know the event details", desc: "Custom rules, timing, and outcomes matter more than guessing fast." },
-];
-
 export default function MarketTipsModal({ fight, open, onClose, theme, onShowTutorial }: MarketTipsModalProps) {
   const { t, i18n } = useTranslation();
 
@@ -49,7 +31,25 @@ export default function MarketTipsModal({ fight, open, onClose, theme, onShowTut
   const liquidity = (fight as any)?.polymarket_liquidity ?? 0;
 
   const isCustomEvent = !!(fight as any)?.operator_id && !(fight as any)?.polymarket_slug;
-  const tactics = isCustomEvent ? CUSTOM_TACTICS : IMPORTED_TACTICS;
+
+  // Build tactic cards from i18n keys
+  const importedTactics = useMemo(() => [
+    { emoji: "⚡", title: t("smartPlay.importedTactic1Title"), desc: t("smartPlay.importedTactic1Desc") },
+    { emoji: "💰", title: t("smartPlay.importedTactic2Title"), desc: t("smartPlay.importedTactic2Desc") },
+    { emoji: "🛡️", title: t("smartPlay.importedTactic3Title"), desc: t("smartPlay.importedTactic3Desc") },
+    { emoji: "⏳", title: t("smartPlay.importedTactic4Title"), desc: t("smartPlay.importedTactic4Desc") },
+    { emoji: "🧠", title: t("smartPlay.importedTactic5Title"), desc: t("smartPlay.importedTactic5Desc") },
+  ], [t]);
+
+  const customTactics = useMemo(() => [
+    { emoji: "📋", title: t("smartPlay.customTactic1Title"), desc: t("smartPlay.customTactic1Desc") },
+    { emoji: "🔒", title: t("smartPlay.customTactic2Title"), desc: t("smartPlay.customTactic2Desc") },
+    { emoji: "🎯", title: t("smartPlay.customTactic3Title"), desc: t("smartPlay.customTactic3Desc") },
+    { emoji: "⏳", title: t("smartPlay.customTactic4Title"), desc: t("smartPlay.customTactic4Desc") },
+    { emoji: "📖", title: t("smartPlay.customTactic5Title"), desc: t("smartPlay.customTactic5Desc") },
+  ], [t]);
+
+  const tactics = isCustomEvent ? customTactics : importedTactics;
 
   const smartMoney = useMemo(() => buildSmartMoneySummary({
     priceA: pA,
@@ -107,11 +107,11 @@ export default function MarketTipsModal({ fight, open, onClose, theme, onShowTut
         <div className="flex items-center justify-between p-4 pb-2" style={{ borderBottom: `1px solid ${theme.cardBorder}` }}>
           <div className="flex items-center gap-2">
             <Lightbulb className="w-5 h-5" style={{ color: theme.primary }} />
-            <h3 className="text-base font-bold" style={{ color: theme.textPrimary }}>Smart Play</h3>
+            <h3 className="text-base font-bold" style={{ color: theme.textPrimary }}>{t("smartPlay.title")}</h3>
           </div>
           <div className="flex items-center gap-1">
             {onShowTutorial && (
-              <button onClick={onShowTutorial} className="p-1 rounded-full hover:opacity-70 transition-opacity" title="How it works">
+              <button onClick={onShowTutorial} className="p-1 rounded-full hover:opacity-70 transition-opacity" title={t("smartPlay.howItWorks")}>
                 <HelpCircle className="w-4 h-4" style={{ color: theme.textMuted }} />
               </button>
             )}
@@ -124,7 +124,7 @@ export default function MarketTipsModal({ fight, open, onClose, theme, onShowTut
         {/* Helper line */}
         <div className="px-4 pt-3 pb-1">
           <p className="text-[11px] text-center" style={{ color: theme.textMuted }}>
-            Quick angles, entry ideas, and exit reminders.
+            {t("smartPlay.helperText")}
           </p>
         </div>
 
@@ -172,7 +172,7 @@ export default function MarketTipsModal({ fight, open, onClose, theme, onShowTut
         {/* Tactic Cards */}
         <div className="px-4 py-3 space-y-2" style={{ borderTop: `1px solid ${theme.cardBorder}` }}>
           <h4 className="text-xs font-bold uppercase tracking-wider" style={{ color: theme.textMuted }}>
-            {isCustomEvent ? "Event Playbook" : "Tactics"}
+            {isCustomEvent ? t("smartPlay.eventPlaybook") : t("smartPlay.tacticsTitle")}
           </h4>
           <div className="space-y-1.5">
             {tactics.map((tac, i) => (
@@ -260,11 +260,11 @@ export default function MarketTipsModal({ fight, open, onClose, theme, onShowTut
         <div className="px-4 py-3 text-center" style={{ borderTop: `1px solid ${theme.cardBorder}` }}>
           {(fight as any)?.polymarket_market_id ? (
             <p className="text-[11px] font-medium" style={{ color: theme.primary }}>
-              💡 You can sell before the event ends.
+              💡 {t("smartPlay.sellFooter")}
             </p>
           ) : (
             <p className="text-[11px] font-medium" style={{ color: theme.primary }}>
-              🔒 Predictions are final. Winners share the pot after settlement.
+              🔒 {t("smartPlay.customFooter")}
             </p>
           )}
           <p className="text-[10px] mt-1" style={{ color: theme.textMuted }}>
