@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Lock, Trophy, ChevronDown, ChevronUp } from "lucide-react";
 
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export default function OperatorEventActions({ event, fight, onAction }: Props) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [settling, setSettling] = useState(false);
   const [selectedWinner, setSelectedWinner] = useState<string | null>(null);
@@ -42,9 +44,9 @@ export default function OperatorEventActions({ event, fight, onAction }: Props) 
           <div className="text-sm text-white/40 flex items-center gap-2 flex-wrap">
             <span>{event.sport}</span>
             <span>•</span>
-            <span>{event.event_date ? new Date(event.event_date).toLocaleDateString() : "No date"}</span>
-            {event.is_featured && <span className="text-yellow-400 text-xs">⭐ Featured</span>}
-            {poolTotal > 0 && <span className="text-green-400 text-xs">${poolTotal.toFixed(2)} pool</span>}
+            <span>{event.event_date ? new Date(event.event_date).toLocaleDateString() : t("operator.adminActions.noDate")}</span>
+            {event.is_featured && <span className="text-yellow-400 text-xs">⭐ {t("operator.dashboard.featured")}</span>}
+            {poolTotal > 0 && <span className="text-green-400 text-xs">${poolTotal.toFixed(2)} {t("operator.adminActions.pool")}</span>}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -54,9 +56,9 @@ export default function OperatorEventActions({ event, fight, onAction }: Props) 
             isOpen ? "bg-green-500/10 text-green-400" :
             "bg-white/5 text-white/40"
           }`}>
-            {isSettled ? (hasWinner ? "Settled" : "Confirmed") :
-             isLocked ? "Locked" :
-             isOpen ? "Live" : fightStatus}
+            {isSettled ? (hasWinner ? t("operator.adminActions.settled") : t("operator.adminActions.confirmed")) :
+             isLocked ? t("operator.adminActions.locked") :
+             isOpen ? t("operator.adminActions.live") : fightStatus}
           </span>
           {expanded ? <ChevronUp size={16} className="text-white/30" /> : <ChevronDown size={16} className="text-white/30" />}
         </div>
@@ -70,12 +72,12 @@ export default function OperatorEventActions({ event, fight, onAction }: Props) 
               <div className="bg-white/[0.02] rounded-lg p-2 text-center">
                 <div className="text-white/40 text-xs">{event.team_a}</div>
                 <div className="font-medium">${Number(fight.pool_a_usd || 0).toFixed(2)}</div>
-                <div className="text-[10px] text-white/30">{Number(fight.shares_a || 0)} shares</div>
+                <div className="text-[10px] text-white/30">{Number(fight.shares_a || 0)} {t("operator.adminActions.shares")}</div>
               </div>
               <div className="bg-white/[0.02] rounded-lg p-2 text-center">
                 <div className="text-white/40 text-xs">{event.team_b}</div>
                 <div className="font-medium">${Number(fight.pool_b_usd || 0).toFixed(2)}</div>
-                <div className="text-[10px] text-white/30">{Number(fight.shares_b || 0)} shares</div>
+                <div className="text-[10px] text-white/30">{Number(fight.shares_b || 0)} {t("operator.adminActions.shares")}</div>
               </div>
             </div>
           )}
@@ -89,13 +91,13 @@ export default function OperatorEventActions({ event, fight, onAction }: Props) 
                 className="border-orange-500/30 text-orange-400 hover:bg-orange-500/10"
                 onClick={(e) => { e.stopPropagation(); onAction("close_event", event.id, { fight_id: fight?.id }); }}
               >
-                <Lock size={14} /> Close Predictions
+                <Lock size={14} /> {t("operator.adminActions.closePredictions")}
               </Button>
             )}
 
             {(isLocked || isOpen) && !isSettled && (
               <div className="w-full space-y-2 mt-1">
-                <div className="text-xs text-white/50 font-medium">Set Winner:</div>
+                <div className="text-xs text-white/50 font-medium">{t("operator.adminActions.setWinner")}</div>
                 <div className="flex gap-2">
                   <Button
                     size="sm"
@@ -128,7 +130,7 @@ export default function OperatorEventActions({ event, fight, onAction }: Props) 
                     }
                     onClick={(e) => { e.stopPropagation(); setSelectedWinner("draw"); }}
                   >
-                    Draw
+                    {t("operator.adminActions.drawOption")}
                   </Button>
                 </div>
                 {selectedWinner && (
@@ -138,7 +140,7 @@ export default function OperatorEventActions({ event, fight, onAction }: Props) 
                     className="bg-purple-600 hover:bg-purple-500 border-0 w-full"
                     onClick={(e) => { e.stopPropagation(); handleSettle(); }}
                   >
-                    <Trophy size={14} /> {settling ? "Settling..." : "Confirm & Settle"}
+                    <Trophy size={14} /> {settling ? t("operator.adminActions.settling") : t("operator.adminActions.confirmSettle")}
                   </Button>
                 )}
               </div>
@@ -146,9 +148,10 @@ export default function OperatorEventActions({ event, fight, onAction }: Props) 
 
             {isSettled && hasWinner && (
               <div className="text-sm text-purple-300">
-                Winner: <span className="font-bold">
+                {t("operator.adminActions.winner")}{" "}
+                <span className="font-bold">
                   {fight.winner === "fighter_a" ? event.team_a :
-                   fight.winner === "fighter_b" ? event.team_b : "Draw"}
+                   fight.winner === "fighter_b" ? event.team_b : t("operator.adminActions.drawOption")}
                 </span>
               </div>
             )}
