@@ -89,6 +89,49 @@ export default function SimplePredictionModal({
   const profit = payout - currentAmount;
   const multiplier = currentAmount > 0 ? (payout / currentAmount).toFixed(2) : "—";
 
+  // ── Live odds drift detection (Polymarket events only) ───────────────────
+  const currentPrice = pick === "fighter_a" ? (fight.price_a ?? 0) : pick === "fighter_b" ? (fight.price_b ?? 0) : 0;
+  const [baselinePrice, setBaselinePrice] = useState(currentPrice);
+  const [showSmallChip, setShowSmallChip] = useState(false);
+  const lastChipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Reset baseline when pick changes
+  useEffect(() => {
+    setBaselinePrice(currentPrice);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pick]);
+
+  const drift = !isCustomEvent && baselinePrice > 0 && currentPrice > 0
+    ? Math.abs(currentPrice - baselinePrice) / baselinePrice
+    : 0;
+  const quoteTier: "fresh" | "small" | "large" | "extreme" =
+    drift >= 0.15 ? "extreme" : drift >= 0.05 ? "large" : drift > 0.001 ? "small" : "fresh";
+  // Server requote takes priority over client-side drift
+  const effectiveTier = requoteData ? "fresh" : quoteTier;
+
+  // Briefly show "odds updated" chip on each small movement
+  useEffect(() => {
+    if (quoteTier === "small") {
+      setShowSmallChip(true);
+      if (lastChipTimer.current) clearTimeout(lastChipTimer.current);
+      lastChipTimer.current = setTimeout(() => setShowSmallChip(false), 2000);
+    }
+    return () => { if (lastChipTimer.current) clearTimeout(lastChipTimer.current); };
+  }, [currentPrice, quoteTier]);
+
+  // Old payout using baseline price (for crossed-out display on large drift)
+  const oldPayout = (() => {
+    if (baselinePrice <= 0 || currentAmount <= 0) return payout;
+    const fee = currentAmount * getFeeRate(fight);
+    const net = currentAmount - fee;
+    return net / baselinePrice;
+  })();
+
+  const handleSubmitWithBaselineSync = (amt: number) => {
+    setBaselinePrice(currentPrice);
+    onSubmit(amt);
+  };
+
   // Success screen
   if (showSuccess) {
     return (
