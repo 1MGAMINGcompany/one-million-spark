@@ -1,14 +1,12 @@
 import { useState, useEffect } from "react";
 import { X, Loader2, Share2, AlertTriangle, RefreshCw } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { resolveOutcomeName } from "@/lib/resolveOutcomeName";
 import { getTeamLogo } from "@/lib/teamLogos";
 import type { Fight } from "@/components/predictions/FightCard";
 import type { TradeResult, RequoteData } from "@/components/predictions/tradeResultTypes";
 import type { ApprovalStep } from "@/hooks/useAllowanceGate";
 import ApprovalStepIndicator from "@/components/predictions/ApprovalStepIndicator";
-
-const AMOUNTS = [5, 10, 25, 50, 100];
-const MIN_USD = 1.0;
 
 function getFeeRate(fight: Fight): number {
   if (fight.commission_bps != null) return fight.commission_bps / 10_000;
@@ -19,7 +17,7 @@ function calcPayout(fight: Fight, pick: "fighter_a" | "fighter_b" | "draw", amou
   if (amount <= 0) return 0;
   const fee = amount * getFeeRate(fight);
   const net = amount - fee;
-  if (pick === "draw") return net * 3; // simplified draw payout
+  if (pick === "draw") return net * 3;
   const pA = fight.price_a ?? 0;
   const pB = fight.price_b ?? 0;
   let price = pick === "fighter_a" ? pA : pB;
@@ -68,11 +66,17 @@ export default function SimplePredictionModal({
   requoteData,
   onAcceptRequote,
 }: Props) {
-  const [amount, setAmount] = useState(10);
+  const { t } = useTranslation();
+
+  const isCustomEvent = !(fight as any).polymarket_market_id;
+  const MIN_USD = isCustomEvent ? 2 : 5;
+  const AMOUNTS = isCustomEvent ? [2, 5, 10, 25, 50] : [5, 10, 25, 50, 100];
+
+  const [amount, setAmount] = useState(AMOUNTS[1]);
   const [customAmount, setCustomAmount] = useState("");
 
   const pickedName = pick === "draw"
-    ? "Draw"
+    ? t("operator.draw")
     : resolveOutcomeName(
         pick === "fighter_a" ? fight.fighter_a_name : fight.fighter_b_name,
         pick === "fighter_a" ? "a" : "b",
@@ -91,34 +95,32 @@ export default function SimplePredictionModal({
       <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
         <div className="w-full max-w-md bg-[#0d1117] rounded-t-3xl sm:rounded-3xl p-8 text-center" onClick={e => e.stopPropagation()}>
           <div className="text-5xl mb-4">🎯</div>
-          <h2 className="text-xl font-bold text-white mb-2">Prediction Placed!</h2>
+          <h2 className="text-xl font-bold text-white mb-2">{t("operator.modal.predictionPlaced")}</h2>
           <p className="text-white/60 text-sm mb-4">
-            You picked <span className="font-bold text-white">{pickedName}</span>
+            {t("operator.modal.youPicked", { name: pickedName })}
           </p>
           <div className="rounded-xl bg-white/5 p-4 mb-6">
-            <p className="text-sm text-white/50">If they win, you receive</p>
+            <p className="text-sm text-white/50">{t("operator.modal.ifTheyWin")}</p>
             <p className="text-3xl font-bold mt-1" style={{ color: themeColor }}>
               ${(tradeResult?.net_amount_usdc ? calcPayout(fight, pick, tradeResult.net_amount_usdc + (tradeResult.fee_usdc ?? 0)) : payout).toFixed(2)}
             </p>
           </div>
 
-          {/* Primary: Share Your Pick */}
           {onSharePick && (
             <button
               onClick={onSharePick}
               className="w-full py-3 rounded-xl font-bold text-white text-sm mb-3 flex items-center justify-center gap-2 transition-all"
               style={{ backgroundColor: themeColor }}
             >
-              <Share2 className="w-4 h-4" /> SHARE YOUR PICK
+              <Share2 className="w-4 h-4" /> {t("operator.modal.shareYourPick")}
             </button>
           )}
 
-          {/* Secondary: Done */}
           <button
             onClick={onClose}
             className="text-white/40 hover:text-white/60 text-sm font-medium transition-colors"
           >
-            Done
+            {t("operator.modal.done")}
           </button>
         </div>
       </div>
@@ -130,7 +132,7 @@ export default function SimplePredictionModal({
       <div className="w-full max-w-md bg-[#0d1117] rounded-t-3xl sm:rounded-3xl p-6" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-bold text-white">Place Prediction</h2>
+          <h2 className="text-lg font-bold text-white">{t("operator.modal.placePrediction")}</h2>
           <button onClick={onClose} className="text-white/40 hover:text-white p-1">
             <X className="w-5 h-5" />
           </button>
@@ -140,14 +142,14 @@ export default function SimplePredictionModal({
         <div className="flex items-center gap-3 mb-6 p-4 rounded-xl bg-white/5">
           {logo && <img src={logo} className="w-10 h-10 object-contain" alt="" />}
           <div>
-            <p className="text-xs text-white/40">Your Pick</p>
+            <p className="text-xs text-white/40">{t("operator.modal.yourPick")}</p>
             <p className="text-lg font-bold text-white">{pickedName}</p>
           </div>
         </div>
 
         {/* Amount selection */}
         <div className="mb-4">
-          <p className="text-sm text-white/50 mb-2">Enter Amount ($)</p>
+          <p className="text-sm text-white/50 mb-2">{t("operator.modal.enterAmount")}</p>
           <div className="flex gap-2 mb-3 flex-wrap">
             {AMOUNTS.map(a => (
               <button
@@ -166,7 +168,7 @@ export default function SimplePredictionModal({
           <input
             type="number"
             inputMode="decimal"
-            placeholder="Custom amount"
+            placeholder={t("operator.modal.customAmount")}
             value={customAmount}
             onChange={e => setCustomAmount(e.target.value)}
             className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white text-lg font-bold placeholder:text-white/20 focus:outline-none focus:border-white/30"
@@ -177,11 +179,11 @@ export default function SimplePredictionModal({
         {currentAmount >= MIN_USD && (
           <div className="rounded-xl bg-white/5 p-4 mb-6 space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-white/50">Predict ${currentAmount.toFixed(2)} → Return</span>
+              <span className="text-white/50">{t("operator.modal.predictReturn", { amount: currentAmount.toFixed(2) })}</span>
               <span className="font-bold text-lg" style={{ color: themeColor }}>${payout.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-white/50">Profit</span>
+              <span className="text-white/50">{t("operator.modal.profit")}</span>
               <span className="text-green-400 font-bold">+${profit.toFixed(2)} ({multiplier}x)</span>
             </div>
           </div>
@@ -199,14 +201,14 @@ export default function SimplePredictionModal({
           <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-4 mb-4 space-y-3">
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-              <p className="text-sm font-bold text-white">Odds Changed</p>
+              <p className="text-sm font-bold text-white">{t("operator.modal.oddsChanged")}</p>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-white/50">Previous odds</span>
+              <span className="text-white/50">{t("operator.modal.previousOdds")}</span>
               <span className="text-white/60 line-through">{((1 / requoteData.old_price) * 100).toFixed(0)}% → ${(currentAmount / requoteData.old_price).toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-white/50">New odds</span>
+              <span className="text-white/50">{t("operator.modal.newOdds")}</span>
               <span className="font-bold" style={{ color: themeColor }}>{((1 / requoteData.new_price) * 100).toFixed(0)}% → ${requoteData.updated_payout.toFixed(2)}</span>
             </div>
             <button
@@ -215,18 +217,18 @@ export default function SimplePredictionModal({
               className="w-full py-3 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2 transition-all"
               style={{ backgroundColor: themeColor }}
             >
-              <RefreshCw className="w-4 h-4" /> Accept New Odds & Submit
+              <RefreshCw className="w-4 h-4" /> {t("operator.modal.acceptNewOdds")}
             </button>
           </div>
         )}
 
         {/* Custom event finality notice + pool */}
-        {!(fight as any).polymarket_market_id && (
+        {isCustomEvent && (
           <div className="rounded-xl bg-white/5 border border-white/10 p-3 mb-4 text-center space-y-1">
             <p className="text-sm font-bold text-white/80">
-              💰 Total Pool: ${((fight.pool_a_usd ?? 0) + (fight.pool_b_usd ?? 0)).toFixed(2)}
+              💰 {t("operator.modal.totalPool", { amount: ((fight.pool_a_usd ?? 0) + (fight.pool_b_usd ?? 0)).toFixed(2) })}
             </p>
-            <p className="text-xs text-white/60">🔒 Predictions are final. Winners share the pot after settlement.</p>
+            <p className="text-xs text-white/60">🔒 {t("operator.modal.predictionsFinal")}</p>
           </div>
         )}
 
@@ -239,17 +241,17 @@ export default function SimplePredictionModal({
         >
           {submitting ? (
             <span className="flex items-center justify-center gap-2">
-              <Loader2 className="w-5 h-5 animate-spin" /> Processing...
+              <Loader2 className="w-5 h-5 animate-spin" /> {t("operator.modal.processing")}
             </span>
           ) : currentAmount < MIN_USD ? (
-            "Enter amount ($1 min)"
+            t("operator.modal.enterMinAmount", { min: MIN_USD })
           ) : (
-            `Place $${currentAmount.toFixed(2)} Prediction`
+            t("operator.modal.placePredictionAmount", { amount: currentAmount.toFixed(2) })
           )}
         </button>
 
         <p className="text-center text-[10px] text-white/15 mt-3">
-          Service fee applies • {operatorBrandName || "1MG"}
+          {t("operator.modal.serviceFee")} • {operatorBrandName || "1MG"}
         </p>
       </div>
     </div>

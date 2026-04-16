@@ -1473,7 +1473,45 @@
     "sellReminder": "Sie können vor dem Eventende verkaufen.",
     "mostTraded": "Meistgehandelt",
     "customFinalNote": "Vorhersagen sind endgültig. Gewinner teilen den Pot nach der Abrechnung.",
-    "lopsidedWarning": "Markt fast entschieden — Quoten sind stark einseitig"
+    "lopsidedWarning": "Markt fast entschieden — Quoten sind stark einseitig",
+    "modal": {
+      "placePrediction": "Vorhersage platzieren",
+      "enterAmount": "Betrag eingeben ($)",
+      "customAmount": "Benutzerdefinierter Betrag",
+      "yourPick": "Ihre Wahl",
+      "predictionPlaced": "Vorhersage platziert!",
+      "youPicked": "Sie haben {{name}} gewählt",
+      "ifTheyWin": "Bei Gewinn erhalten Sie",
+      "predictReturn": "${{amount}} vorhersagen → Rendite",
+      "profit": "Gewinn",
+      "shareYourPick": "WAHL TEILEN",
+      "done": "Fertig",
+      "oddsChanged": "Quoten geändert",
+      "previousOdds": "Vorherige Quoten",
+      "newOdds": "Neue Quoten",
+      "acceptNewOdds": "Neue Quoten akzeptieren & absenden",
+      "totalPool": "Gesamtpool: ${{amount}}",
+      "predictionsFinal": "Vorhersagen sind endgültig. Gewinner teilen den Pot nach der Abrechnung.",
+      "processing": "Verarbeitung...",
+      "enterMinAmount": "Betrag eingeben (${{min}} Min.)",
+      "placePredictionAmount": "${{amount}} vorhersagen",
+      "serviceFee": "Servicegebühr fällt an"
+    },
+    "adminActions": {
+      "closePredictions": "Vorhersagen schließen",
+      "setWinner": "Gewinner festlegen:",
+      "confirmSettle": "Bestätigen & Abrechnen",
+      "settling": "Abrechnung...",
+      "settled": "Abgerechnet",
+      "confirmed": "Bestätigt",
+      "locked": "Gesperrt",
+      "live": "Live",
+      "drawOption": "Unentschieden",
+      "winner": "Gewinner:",
+      "noDate": "Kein Datum",
+      "pool": "Pool",
+      "shares": "Anteile"
+    }
   },
   "platform": {
     "hero": {

@@ -1475,7 +1475,45 @@
     "sellReminder": "Puoi vendere prima della fine dell'evento.",
     "mostTraded": "Più scambiato",
     "customFinalNote": "Le previsioni sono definitive. I vincitori condividono il montepremi dopo la liquidazione.",
-    "lopsidedWarning": "Mercato quasi deciso — le quote sono fortemente sbilanciate"
+    "lopsidedWarning": "Mercato quasi deciso — le quote sono fortemente sbilanciate",
+    "modal": {
+      "placePrediction": "Effettua Previsione",
+      "enterAmount": "Inserisci Importo ($)",
+      "customAmount": "Importo personalizzato",
+      "yourPick": "La Tua Scelta",
+      "predictionPlaced": "Previsione Effettuata!",
+      "youPicked": "Hai scelto {{name}}",
+      "ifTheyWin": "Se vincono, ricevi",
+      "predictReturn": "Prevedi ${{amount}} → Ritorno",
+      "profit": "Profitto",
+      "shareYourPick": "CONDIVIDI LA TUA SCELTA",
+      "done": "Fatto",
+      "oddsChanged": "Quote Cambiate",
+      "previousOdds": "Quote precedenti",
+      "newOdds": "Nuove quote",
+      "acceptNewOdds": "Accetta Nuove Quote e Invia",
+      "totalPool": "Montepremi Totale: ${{amount}}",
+      "predictionsFinal": "Le previsioni sono definitive. I vincitori condividono il montepremi dopo la liquidazione.",
+      "processing": "Elaborazione...",
+      "enterMinAmount": "Inserisci importo (${{min}} min)",
+      "placePredictionAmount": "Prevedi ${{amount}}",
+      "serviceFee": "Si applica commissione di servizio"
+    },
+    "adminActions": {
+      "closePredictions": "Chiudi Previsioni",
+      "setWinner": "Imposta Vincitore:",
+      "confirmSettle": "Conferma e Liquida",
+      "settling": "Liquidazione...",
+      "settled": "Liquidato",
+      "confirmed": "Confermato",
+      "locked": "Bloccato",
+      "live": "In Diretta",
+      "drawOption": "Pareggio",
+      "winner": "Vincitore:",
+      "noDate": "Nessuna data",
+      "pool": "montepremi",
+      "shares": "quote"
+    }
   },
   "platform": {
     "hero": {
