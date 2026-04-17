@@ -45,6 +45,77 @@ const ALLOWED_SPORTS_SET = new Set([
   "UFC", "FUTBOL", "PGA", "FORMULA 1", "BARE KNUCKLE", "BKFC",
 ]);
 
+// ── Operator-purchase referral commission tiers ──
+// Configurable per price tier. Future: add { price: 24000, commission: 4000 }.
+const COMMISSION_BY_PRICE: Array<{ price: number; commission: number }> = [
+  { price: 2400, commission: 400 },
+];
+
+/**
+ * Best-effort: validates a referral code against player_profiles, guards against
+ * self-referral, stamps the operator row (idempotent), and inserts a commission
+ * event into operator_purchase_referrals. NEVER throws — purchase must succeed
+ * even if attribution fails.
+ */
+// deno-lint-ignore no-explicit-any
+async function recordReferralBestEffort(sb: any, opts: {
+  operatorId: string;
+  privyDid: string;
+  referralCode?: string | null;
+  txHash?: string | null;
+  amountCharged: number;
+}) {
+  try {
+    const code = opts.referralCode?.trim().toUpperCase();
+    if (!code) return;
+
+    // Validate against existing player_profiles referral_code namespace
+    const { data: refProfile } = await sb
+      .from("player_profiles")
+      .select("wallet, referral_code")
+      .eq("referral_code", code)
+      .maybeSingle();
+    if (!refProfile) return; // unknown code — silent ignore
+
+    // Self-referral guard via payout_wallet comparison
+    const { data: opRow } = await sb
+      .from("operators")
+      .select("payout_wallet")
+      .eq("id", opts.operatorId)
+      .maybeSingle();
+    if (
+      opRow?.payout_wallet &&
+      opRow.payout_wallet.toLowerCase() === refProfile.wallet.toLowerCase()
+    ) {
+      return; // self-referral
+    }
+
+    const tier = COMMISSION_BY_PRICE.find((t) => t.price === opts.amountCharged);
+    const commission = tier?.commission ?? 0;
+
+    // Idempotent stamp on operator row (only if referral_code not already set)
+    await sb.from("operators").update({
+      referral_code: code,
+      referred_by_wallet: refProfile.wallet,
+    }).eq("id", opts.operatorId).is("referral_code", null);
+
+    // Commission event
+    await sb.from("operator_purchase_referrals").insert({
+      operator_id: opts.operatorId,
+      referral_code: code,
+      referred_by_wallet: refProfile.wallet,
+      purchase_tx_hash: opts.txHash ?? null,
+      purchase_amount_usdc: opts.amountCharged,
+      commission_usdc: commission,
+      payout_status: "accrued",
+    });
+    console.log("[referral] recorded", { operator: opts.operatorId, code, commission });
+  } catch (e) {
+    console.error("[referral] best-effort insert failed:", e);
+    // NEVER throw
+  }
+}
+
 async function sendWelcomeEmail(slug: string, feePercent: number) {
   if (!RESEND_API_KEY) { console.warn("[email] RESEND_API_KEY not set, skipping"); return; }
   const operatorUrl = `https://1mg.live/${slug}`;
@@ -136,6 +207,7 @@ Deno.serve(async (req) => {
     if (action === "confirm_purchase") {
       const txHash = body.tx_hash;
       const promoCode = body.promo_code;
+      const referralCode: string | undefined = typeof body.referral_code === "string" ? body.referral_code : undefined;
 
       // If promo code provided, validate and potentially skip payment
       if (promoCode) {
@@ -153,12 +225,19 @@ Deno.serve(async (req) => {
           // Full discount — activate without payment
           await sb.from("promo_codes").update({ uses_count: promo.uses_count + 1 }).eq("id", promo.id);
           const { data: existing } = await sb.from("operators").select("id, status, subdomain, fee_percent").eq("user_id", privyDid).maybeSingle();
+          let activatedOpId: string | null = null;
           if (existing) {
             await sb.from("operators").update({ status: "active", updated_at: new Date().toISOString() }).eq("id", existing.id);
+            activatedOpId = existing.id;
             sendWelcomeEmail(existing.subdomain || "your-app", existing.fee_percent ?? 5).catch(e => console.error("[email]", e));
           } else {
-            await sb.from("operators").insert({ user_id: privyDid, brand_name: "My App", subdomain: "pending-" + Date.now(), status: "active" });
-            sendWelcomeEmail("pending-" + Date.now(), 5).catch(e => console.error("[email]", e));
+            const pendingSub = "pending-" + Date.now();
+            const { data: inserted } = await sb.from("operators").insert({ user_id: privyDid, brand_name: "My App", subdomain: pendingSub, status: "active" }).select("id").single();
+            activatedOpId = inserted?.id ?? null;
+            sendWelcomeEmail(pendingSub, 5).catch(e => console.error("[email]", e));
+          }
+          if (activatedOpId) {
+            await recordReferralBestEffort(sb, { operatorId: activatedOpId, privyDid, referralCode, txHash: null, amountCharged: 0 });
           }
           return jsonResp({ success: true, status: "active", promo_applied: true, amount_charged: 0 });
         }
@@ -175,12 +254,19 @@ Deno.serve(async (req) => {
         if (!verification.valid) return jsonResp({ error: verification.error || "verification_failed" }, 400);
         await sb.from("promo_codes").update({ uses_count: promo.uses_count + 1 }).eq("id", promo.id);
         const { data: existing } = await sb.from("operators").select("id, status, subdomain, fee_percent").eq("user_id", privyDid).maybeSingle();
+        let activatedOpId: string | null = null;
         if (existing) {
           await sb.from("operators").update({ status: "active", purchase_tx_hash: txHash, updated_at: new Date().toISOString() }).eq("id", existing.id);
+          activatedOpId = existing.id;
           sendWelcomeEmail(existing.subdomain || "your-app", existing.fee_percent ?? 5).catch(e => console.error("[email]", e));
         } else {
-          await sb.from("operators").insert({ user_id: privyDid, brand_name: "My App", subdomain: "pending-" + Date.now(), status: "active", purchase_tx_hash: txHash });
+          const pendingSub = "pending-" + Date.now();
+          const { data: inserted } = await sb.from("operators").insert({ user_id: privyDid, brand_name: "My App", subdomain: pendingSub, status: "active", purchase_tx_hash: txHash }).select("id").single();
+          activatedOpId = inserted?.id ?? null;
           sendWelcomeEmail("pending", 5).catch(e => console.error("[email]", e));
+        }
+        if (activatedOpId) {
+          await recordReferralBestEffort(sb, { operatorId: activatedOpId, privyDid, referralCode, txHash, amountCharged: discountedPrice });
         }
         return jsonResp({ success: true, status: "active", promo_applied: true });
       }
@@ -195,12 +281,19 @@ Deno.serve(async (req) => {
       const verification = await verifyTxOnChain(txHash, FULL_PRICE_RAW);
       if (!verification.valid) return jsonResp({ error: verification.error || "verification_failed" }, 400);
       const { data: existing } = await sb.from("operators").select("id, status, subdomain, fee_percent").eq("user_id", privyDid).maybeSingle();
+      let activatedOpId: string | null = null;
       if (existing) {
         await sb.from("operators").update({ status: "active", purchase_tx_hash: txHash, updated_at: new Date().toISOString() }).eq("id", existing.id);
+        activatedOpId = existing.id;
         sendWelcomeEmail(existing.subdomain || "your-app", existing.fee_percent ?? 5).catch(e => console.error("[email]", e));
       } else {
-        await sb.from("operators").insert({ user_id: privyDid, brand_name: "My App", subdomain: "pending-" + Date.now(), status: "active", purchase_tx_hash: txHash });
+        const pendingSub = "pending-" + Date.now();
+        const { data: inserted } = await sb.from("operators").insert({ user_id: privyDid, brand_name: "My App", subdomain: pendingSub, status: "active", purchase_tx_hash: txHash }).select("id").single();
+        activatedOpId = inserted?.id ?? null;
         sendWelcomeEmail("pending", 5).catch(e => console.error("[email]", e));
+      }
+      if (activatedOpId) {
+        await recordReferralBestEffort(sb, { operatorId: activatedOpId, privyDid, referralCode, txHash, amountCharged: 2400 });
       }
       return jsonResp({ success: true, status: "active" });
     }

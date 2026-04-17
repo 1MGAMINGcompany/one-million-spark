@@ -9,6 +9,11 @@ import { Input } from "@/components/ui/input";
 import { usePolygonUSDC } from "@/hooks/usePolygonUSDC";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  useOperatorReferralCapture,
+  getPendingOperatorRef,
+  clearPendingOperatorRef,
+} from "@/hooks/useOperatorReferralCapture";
+import {
   ArrowRight,
   CheckCircle,
   Loader2,
@@ -55,6 +60,8 @@ export default function PurchasePage() {
   const { sendTransaction } = useSendTransaction();
   const { usdc_balance, usdc_balance_formatted, is_loading: balanceLoading, wallet_address } = usePolygonUSDC();
 
+  useOperatorReferralCapture();
+
   const [step, setStep] = useState<Step>("disclosure");
   const [agreedFee, setAgreedFee] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
@@ -92,6 +99,8 @@ export default function PurchasePage() {
     try {
       const token = await getAccessToken();
 
+      const pendingRef = getPendingOperatorRef() || undefined;
+
       // Free with promo code — no tx needed
       if (effectivePrice === 0 && promoResult?.valid) {
         setStep("confirming");
@@ -101,11 +110,16 @@ export default function PurchasePage() {
           {
             method: "POST",
             headers: { "Content-Type": "application/json", "x-privy-token": token || "" },
-            body: JSON.stringify({ action: "confirm_purchase", promo_code: promoCode.trim() }),
+            body: JSON.stringify({
+              action: "confirm_purchase",
+              promo_code: promoCode.trim(),
+              referral_code: pendingRef,
+            }),
           }
         );
         const result = await res.json();
         if (!res.ok) throw new Error(result.error || "Verification failed");
+        clearPendingOperatorRef();
         setStep("success");
         return;
       }
@@ -139,6 +153,7 @@ export default function PurchasePage() {
             action: "confirm_purchase",
             tx_hash: hash,
             promo_code: promoCode.trim() || undefined,
+            referral_code: pendingRef,
           }),
         }
       );
@@ -147,6 +162,7 @@ export default function PurchasePage() {
         throw new Error(result.error || "Verification failed");
       }
 
+      clearPendingOperatorRef();
       setStep("success");
     } catch (e: any) {
       console.error("[PurchasePage] Error:", e);

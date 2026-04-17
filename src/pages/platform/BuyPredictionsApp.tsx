@@ -5,6 +5,7 @@ import { usePrivySafe } from "@/hooks/usePrivySafe";
 import { usePrivyLogin } from "@/hooks/usePrivyLogin";
 import { useSeoMeta } from "@/components/seo/SeoMeta";
 import JsonLd from "@/components/seo/JsonLd";
+import { useOperatorReferralCapture } from "@/hooks/useOperatorReferralCapture";
 
 const FEATURES = [
   "Your own branded predictions app",
@@ -66,6 +67,8 @@ export default function BuyPredictionsApp() {
   const navigate = useNavigate();
   const { ready, authenticated } = usePrivySafe();
   const { login } = usePrivyLogin();
+
+  useOperatorReferralCapture();
 
   const handleCTA = () => {
     if (authenticated) navigate("/purchase");
