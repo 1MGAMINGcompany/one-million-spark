@@ -1,160 +1,86 @@
 
 
-## Operator Purchase Referral Attribution — Smallest Safe Patch
+## Trackdesk Integration — Smallest Safe Patch
 
-### Files Changed (5)
+### Real flow (verified)
+- 1mg.live runs the `PlatformApp` shell. Routes touched: `/` (`LandingPage`), `/buy-predictions-app` (`BuyPredictionsApp`), `/purchase` (`PurchasePage`).
+- On successful `confirm_purchase` today, `PurchasePage` flips to `step="success"` and renders an inline success card with a "Start Setup" button. There is **no** dedicated success route yet.
+- `index.html` is the single shared HTML for both 1mgaming.com and 1mg.live.
 
-1. **NEW** `src/hooks/useOperatorReferralCapture.ts` — captures `?ref=CODE` to `localStorage`, key `1mg_operator_ref`. Helper exports: `getPendingOperatorRef()`, `clearPendingOperatorRef()`.
-2. `src/pages/platform/LandingPage.tsx` — call `useOperatorReferralCapture()` on mount.
-3. `src/pages/platform/BuyPredictionsApp.tsx` — call `useOperatorReferralCapture()` on mount.
-4. `src/pages/platform/PurchasePage.tsx` — call hook on mount; read pending ref via `getPendingOperatorRef()`; include `referral_code` in both `confirm_purchase` request bodies (free-promo path + standard path); call `clearPendingOperatorRef()` on success.
-5. `supabase/functions/operator-manage/index.ts` — extend `confirm_purchase` action with best-effort referral insert at the end of all 4 success branches (free-promo, partial-promo + new, partial-promo + existing, full-price + new, full-price + existing).
+### Files changed (3 + 1 new)
 
-### Migration SQL (additive only)
+1. **`index.html`** — add Trackdesk click script (cdn.trackdesk.com) inside `<head>`, guarded by hostname so it only runs on `1mg.live` / `www.1mg.live`. Single global include covers `/`, `/buy-predictions-app`, `/purchase` (SPA — script loads once on first page load).
+2. **NEW `src/pages/platform/OperatorPurchaseSuccess.tsx`** — minimal success screen that:
+   - Reads `purchase_tx_hash` (or generated id) and `amount` from `location.state` or query string.
+   - Fires Trackdesk conversion script in a `useEffect` wrapped in try/catch (never throws).
+   - Renders the same success UI currently inline in `PurchasePage` ("You're In!" + Start Setup CTA → `/onboarding`).
+3. **`src/pages/platform/PlatformApp.tsx`** — add one route: `/operator-purchase-success` (no auth gate so a refreshed page still resolves; success is idempotent).
+4. **`src/pages/platform/PurchasePage.tsx`** — on success branches (free-promo and paid), instead of `setStep("success")`, `navigate("/operator-purchase-success", { state: { txHash, amount: effectivePrice } })`. Keep all other logic identical.
 
-```sql
--- 1. Operators table: nullable additive columns
-alter table public.operators
-  add column if not exists referral_code text,
-  add column if not exists referred_by_wallet text;
+### Trackdesk script placements
 
--- 2. New commission events table
-create table if not exists public.operator_purchase_referrals (
-  id uuid primary key default gen_random_uuid(),
-  operator_id uuid not null references public.operators(id) on delete cascade,
-  referral_code text not null,
-  referred_by_wallet text,
-  purchase_tx_hash text,
-  purchase_amount_usdc numeric not null default 0,
-  commission_usdc numeric not null default 0,
-  payout_status text not null default 'accrued',  -- accrued | paid | void
-  payout_tx_hash text,
-  created_at timestamptz not null default now()
-);
+**Click script — `index.html` `<head>` (after the existing 1mg.live meta block, before charset is fine; standard pattern is end of `<head>`):**
 
-create index if not exists idx_op_purchase_ref_operator
-  on public.operator_purchase_referrals(operator_id);
-create index if not exists idx_op_purchase_ref_code
-  on public.operator_purchase_referrals(referral_code);
-create index if not exists idx_op_purchase_ref_wallet
-  on public.operator_purchase_referrals(referred_by_wallet);
-
--- 3. RLS: deny all client writes; allow public read (mirrors operator_revenue policy pattern)
-alter table public.operator_purchase_referrals enable row level security;
-
-create policy "deny_client_writes_operator_purchase_referrals"
-  on public.operator_purchase_referrals for all
-  using (false) with check (false);
-
-create policy "public_read_operator_purchase_referrals"
-  on public.operator_purchase_referrals for select
-  using (true);
+```html
+<script>
+  (function(){
+    var h=location.hostname;
+    if(h!=='1mg.live'&&h!=='www.1mg.live')return;
+    (function(t,d,k){
+      (t[k]=t[k]||[]).push(d);
+      var f=document.getElementsByTagName('script')[0],
+          s=document.createElement('script');
+      s.async=1;s.src='//cdn.trackdesk.com/tracking.js';
+      f.parentNode.insertBefore(s,f);
+    })(window,'1mg-live','TrackdeskObject');
+  })();
+</script>
 ```
+*(`'1mg-live'` is the Trackdesk account/program slug — replace with the actual Trackdesk-issued identifier when known.)*
 
-### Edge Function Logic — `operator-manage` confirm_purchase (additive only)
-
-After every operator activation (`status: "active"`), run a single best-effort helper:
+**Conversion script — only inside `OperatorPurchaseSuccess.tsx` `useEffect`:**
 
 ```ts
-// Commission table: 2400 USDC tier → 400 USDC commission
-const COMMISSION_BY_PRICE: Array<{ price: number; commission: number }> = [
-  { price: 2400, commission: 400 },
-  // future: { price: 24000, commission: 4000 },
-];
-
-async function recordReferralBestEffort(
-  sb: any,
-  opts: {
-    operatorId: string;
-    privyDid: string;
-    referralCode?: string;
-    txHash?: string | null;
-    amountCharged: number;
-  },
-) {
+useEffect(() => {
   try {
-    const code = opts.referralCode?.trim().toUpperCase();
-    if (!code) return;
-
-    // Validate code against player_profiles
-    const { data: refProfile } = await sb
-      .from("player_profiles")
-      .select("wallet, referral_code")
-      .eq("referral_code", code)
-      .maybeSingle();
-    if (!refProfile) return; // unknown code — silently ignore
-
-    // Self-referral guard: compare referrer wallet to operator's payout wallet OR privy_did mapping
-    const { data: opRow } = await sb
-      .from("operators")
-      .select("payout_wallet")
-      .eq("id", opts.operatorId)
-      .maybeSingle();
-    if (opRow?.payout_wallet && opRow.payout_wallet.toLowerCase() === refProfile.wallet.toLowerCase()) {
-      return; // self-referral
-    }
-
-    // Commission lookup (defaults to 0 if tier not configured)
-    const tier = COMMISSION_BY_PRICE.find(t => t.price === opts.amountCharged);
-    const commission = tier?.commission ?? 0;
-
-    // Stamp referral on operators row (idempotent — only if not already set)
-    await sb.from("operators").update({
-      referral_code: code,
-      referred_by_wallet: refProfile.wallet,
-    }).eq("id", opts.operatorId).is("referral_code", null);
-
-    // Insert commission event
-    await sb.from("operator_purchase_referrals").insert({
-      operator_id: opts.operatorId,
-      referral_code: code,
-      referred_by_wallet: refProfile.wallet,
-      purchase_tx_hash: opts.txHash ?? null,
-      purchase_amount_usdc: opts.amountCharged,
-      commission_usdc: commission,
-      payout_status: "accrued",
+    if (typeof window === "undefined") return;
+    if (!/^(www\.)?1mg\.live$/i.test(location.hostname)) return;
+    const td = (window as any).trackdesk;
+    if (typeof td !== "function") return;
+    td("1mg-live", "conversion", {
+      conversionType: "sale",
+      amount: { value: amount ?? 2400, currency: "USD" },
+      externalId: txHash || `purchase_${Date.now()}`,
     });
   } catch (e) {
-    console.error("[referral] best-effort insert failed:", e);
-    // NEVER throw — purchase must succeed
+    console.warn("[Trackdesk] conversion fire failed (non-blocking)", e);
   }
-}
+}, [txHash, amount]);
 ```
 
-Called once per success branch with `amountCharged` = 0 (free promo), `discountedPrice` (partial promo), or 2400 (full price). The existing return statements stay exactly the same.
+### What does NOT change
+Privy login, wallet creation, `/add-funds` funding, USDC.e Polygon payment, `verifyTxOnChain`, replay protection, `confirm_purchase` backend, operator creation, ownership binding (`user_id = privyDid`), payout wallet auto-fill, agreement v1.0, onboarding, public slug launch, operator referral attribution (`useOperatorReferralCapture` + `1mg_operator_ref`), settlement, sweep, trading.
 
-### What Does NOT Change
-
-- Privy login, wallet funding, USDC.e Polygon payment
-- On-chain verification (`verifyTxOnChain`)
-- Replay protection (`purchase_tx_hash` uniqueness)
-- Operator creation logic (insert/update)
-- Ownership binding (`user_id = privyDid`)
-- Payout wallet auto-fill (onboarding)
-- Agreement v1.0 logic
-- Onboarding flow & public slug launch
-- Trading, settlement, payout, sweep
-- Existing player-side referral system (`useReferralCapture`, `referral-bind`)
-
-### Risk Check
+### Risk check
 
 | Risk | Mitigation |
 |---|---|
-| Referral insert fails | Wrapped in try/catch; never throws; purchase always returns success |
-| Invalid referral code | Silent ignore (no error to user) |
-| Self-referral | Wallet comparison against `payout_wallet`; silent skip |
-| Race: same code used twice | `idx_op_purchase_ref_operator` allows multiple events per operator (intended for future re-attribution); operator row stamped only if `referral_code IS NULL` |
-| RLS regression | Additive deny-all policy + public read mirrors `operator_revenue` pattern |
-| `?ref=` collision with player referral | Different localStorage key (`1mg_operator_ref` vs `1mg_pending_referral`); both can coexist |
+| Trackdesk CDN blocked / fails to load | Conversion call wrapped in try/catch + `typeof td !== "function"` guard; never throws, never blocks UI |
+| Conversion fires on flagship (1mgaming.com) | Hostname guards on both click and conversion scripts |
+| Duplicate conversion on refresh | Acceptable — `externalId = purchase_tx_hash` lets Trackdesk dedupe server-side; idempotent by design |
+| Success page deep-link with no state | Falls back to `externalId = purchase_${Date.now()}`; user still sees success UI; no purchase logic re-runs |
+| Conversion fires on failed purchase | Impossible — page only reached via `navigate()` from success branch in `PurchasePage` |
+| Click script breaks 1mgaming.com | Hostname guard returns early; zero effect on flagship |
+| Operator referral collision (`1mg_operator_ref`) | Untouched — Trackdesk uses its own cookie; both attribution systems coexist |
 
-### Test Plan
+### Test plan
 
-1. **No referral**: visit `/`, sign in, buy → operator created, no row in `operator_purchase_referrals`. ✅
-2. **Valid referral**: visit `/?ref=PARTNER01`, complete purchase → operator row has `referral_code='PARTNER01'`, `referred_by_wallet` set; one row in `operator_purchase_referrals` with `commission_usdc=400`, `payout_status='accrued'`. ✅
-3. **Invalid referral code**: visit `/?ref=NOTREAL`, complete purchase → operator created, no referral row, no error to user. ✅
-4. **Self-referral**: referrer's own wallet visits with their own code, completes purchase → operator created, no referral row. ✅
-5. **Free promo + referral**: visit `/?ref=PARTNER01`, apply 100% promo → operator activated; referral row with `commission_usdc=0` (since amountCharged=0 has no tier match) + `purchase_tx_hash=null`. ✅
-6. **Capture persistence**: visit `/?ref=PARTNER01` → leave site → return to `/purchase` → ref still applied. ✅
-7. **URL cleanup**: after capture, `?ref=` is stripped from URL via `history.replaceState`. ✅
-8. **Migration safety**: re-run migration → `if not exists` guards prevent duplicate column/table errors. ✅
+1. **Click script load (1mg.live)**: visit `/`, DevTools Network → `tracking.js` from `cdn.trackdesk.com` loads. ✅
+2. **Click script skipped (1mgaming.com)**: visit flagship → no Trackdesk request fires. ✅
+3. **Affiliate link**: visit `/?aff=PARTNER01` → Trackdesk click registered (cookie set). ✅
+4. **Successful purchase**: complete real or promo-free purchase → redirect to `/operator-purchase-success` → `trackdesk('1mg-live','conversion',...)` fires once with `externalId = txHash`, amount, currency=USD. ✅
+5. **Failed purchase**: trigger a confirm_purchase error → stays on `step="error"`, no navigation, no conversion fired. ✅
+6. **CDN blocked**: block `cdn.trackdesk.com` in DevTools → success page still renders, Start Setup button still navigates to `/onboarding`. ✅
+7. **Free-promo path**: 100% promo code → redirect to success page → conversion fires with `amount.value = 0`. ✅
+8. **Operator referral coexistence**: `/?ref=PARTNER01&aff=TRACKDESK01` → `1mg_operator_ref` set AND Trackdesk click registered; both flow through to confirm_purchase + success. ✅
 
