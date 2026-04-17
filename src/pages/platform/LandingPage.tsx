@@ -23,6 +23,7 @@ import { usePrivySafe } from "@/hooks/usePrivySafe";
 import { usePrivyLogin } from "@/hooks/usePrivyLogin";
 import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
 import { useSeoMeta } from "@/components/seo/SeoMeta";
+import { useOperatorReferralCapture } from "@/hooks/useOperatorReferralCapture";
 
 import footballImg from "@/assets/football-1mg.png";
 import basketballImg from "@/assets/basketball-1mg.png";
@@ -222,6 +223,8 @@ export default function LandingPage() {
   const navigate = useNavigate();
   const { ready, authenticated, logout, user } = usePrivySafe();
   const { login } = usePrivyLogin();
+
+  useOperatorReferralCapture();
 
   useSeoMeta({
     title: "1MG.live — Launch Your Own Predictions App in Minutes",
