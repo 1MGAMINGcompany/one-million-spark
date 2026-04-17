@@ -45,6 +45,77 @@ const ALLOWED_SPORTS_SET = new Set([
   "UFC", "FUTBOL", "PGA", "FORMULA 1", "BARE KNUCKLE", "BKFC",
 ]);
 
+// ── Operator-purchase referral commission tiers ──
+// Configurable per price tier. Future: add { price: 24000, commission: 4000 }.
+const COMMISSION_BY_PRICE: Array<{ price: number; commission: number }> = [
+  { price: 2400, commission: 400 },
+];
+
+/**
+ * Best-effort: validates a referral code against player_profiles, guards against
+ * self-referral, stamps the operator row (idempotent), and inserts a commission
+ * event into operator_purchase_referrals. NEVER throws — purchase must succeed
+ * even if attribution fails.
+ */
+// deno-lint-ignore no-explicit-any
+async function recordReferralBestEffort(sb: any, opts: {
+  operatorId: string;
+  privyDid: string;
+  referralCode?: string | null;
+  txHash?: string | null;
+  amountCharged: number;
+}) {
+  try {
+    const code = opts.referralCode?.trim().toUpperCase();
+    if (!code) return;
+
+    // Validate against existing player_profiles referral_code namespace
+    const { data: refProfile } = await sb
+      .from("player_profiles")
+      .select("wallet, referral_code")
+      .eq("referral_code", code)
+      .maybeSingle();
+    if (!refProfile) return; // unknown code — silent ignore
+
+    // Self-referral guard via payout_wallet comparison
+    const { data: opRow } = await sb
+      .from("operators")
+      .select("payout_wallet")
+      .eq("id", opts.operatorId)
+      .maybeSingle();
+    if (
+      opRow?.payout_wallet &&
+      opRow.payout_wallet.toLowerCase() === refProfile.wallet.toLowerCase()
+    ) {
+      return; // self-referral
+    }
+
+    const tier = COMMISSION_BY_PRICE.find((t) => t.price === opts.amountCharged);
+    const commission = tier?.commission ?? 0;
+
+    // Idempotent stamp on operator row (only if referral_code not already set)
+    await sb.from("operators").update({
+      referral_code: code,
+      referred_by_wallet: refProfile.wallet,
+    }).eq("id", opts.operatorId).is("referral_code", null);
+
+    // Commission event
+    await sb.from("operator_purchase_referrals").insert({
+      operator_id: opts.operatorId,
+      referral_code: code,
+      referred_by_wallet: refProfile.wallet,
+      purchase_tx_hash: opts.txHash ?? null,
+      purchase_amount_usdc: opts.amountCharged,
+      commission_usdc: commission,
+      payout_status: "accrued",
+    });
+    console.log("[referral] recorded", { operator: opts.operatorId, code, commission });
+  } catch (e) {
+    console.error("[referral] best-effort insert failed:", e);
+    // NEVER throw
+  }
+}
+
 async function sendWelcomeEmail(slug: string, feePercent: number) {
   if (!RESEND_API_KEY) { console.warn("[email] RESEND_API_KEY not set, skipping"); return; }
   const operatorUrl = `https://1mg.live/${slug}`;
