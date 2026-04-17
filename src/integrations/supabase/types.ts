@@ -774,6 +774,53 @@ export type Database = {
         }
         Relationships: []
       }
+      operator_purchase_referrals: {
+        Row: {
+          commission_usdc: number
+          created_at: string
+          id: string
+          operator_id: string
+          payout_status: string
+          payout_tx_hash: string | null
+          purchase_amount_usdc: number
+          purchase_tx_hash: string | null
+          referral_code: string
+          referred_by_wallet: string | null
+        }
+        Insert: {
+          commission_usdc?: number
+          created_at?: string
+          id?: string
+          operator_id: string
+          payout_status?: string
+          payout_tx_hash?: string | null
+          purchase_amount_usdc?: number
+          purchase_tx_hash?: string | null
+          referral_code: string
+          referred_by_wallet?: string | null
+        }
+        Update: {
+          commission_usdc?: number
+          created_at?: string
+          id?: string
+          operator_id?: string
+          payout_status?: string
+          payout_tx_hash?: string | null
+          purchase_amount_usdc?: number
+          purchase_tx_hash?: string | null
+          referral_code?: string
+          referred_by_wallet?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "operator_purchase_referrals_operator_id_fkey"
+            columns: ["operator_id"]
+            isOneToOne: false
+            referencedRelation: "operators"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       operator_revenue: {
         Row: {
           created_at: string
@@ -885,6 +932,8 @@ export type Database = {
           logo_url: string | null
           payout_wallet: string | null
           purchase_tx_hash: string | null
+          referral_code: string | null
+          referred_by_wallet: string | null
           status: string
           subdomain: string
           support_email: string | null
@@ -905,6 +954,8 @@ export type Database = {
           logo_url?: string | null
           payout_wallet?: string | null
           purchase_tx_hash?: string | null
+          referral_code?: string | null
+          referred_by_wallet?: string | null
           status?: string
           subdomain: string
           support_email?: string | null
@@ -925,6 +976,8 @@ export type Database = {
           logo_url?: string | null
           payout_wallet?: string | null
           purchase_tx_hash?: string | null
+          referral_code?: string | null
+          referred_by_wallet?: string | null
           status?: string
           subdomain?: string
           support_email?: string | null
