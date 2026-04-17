@@ -9,6 +9,7 @@ import OperatorOnboarding from "./OperatorOnboarding";
 import OperatorDashboard from "./OperatorDashboard";
 import OperatorApp from "./OperatorApp";
 import PurchasePage from "./PurchasePage";
+import OperatorPurchaseSuccess from "./OperatorPurchaseSuccess";
 import BuyPredictionsApp from "./BuyPredictionsApp";
 import HelpCenter from "@/pages/HelpCenter";
 import HelpArticle from "@/pages/HelpArticle";
@@ -97,6 +98,7 @@ export default function PlatformApp({ context }: PlatformAppProps) {
       <Route path="/" element={<LandingPage />} />
       <Route path="/buy-predictions-app" element={<BuyPredictionsApp />} />
       <Route path="/purchase" element={<RequireAuth><PurchasePage /></RequireAuth>} />
+      <Route path="/operator-purchase-success" element={<OperatorPurchaseSuccess />} />
       <Route path="/onboarding" element={<RequireActiveOperator><OperatorOnboarding /></RequireActiveOperator>} />
       <Route path="/dashboard" element={<RequireActiveOperator><OperatorDashboard /></RequireActiveOperator>} />
       <Route path="/help" element={<HelpCenter />} />

@@ -117,10 +117,12 @@ export default function PurchasePage() {
             }),
           }
         );
-        const result = await res.json();
+      const result = await res.json();
         if (!res.ok) throw new Error(result.error || "Verification failed");
         clearPendingOperatorRef();
-        setStep("success");
+        navigate("/operator-purchase-success", {
+          state: { txHash: null, amount: effectivePrice },
+        });
         return;
       }
 
@@ -163,7 +165,9 @@ export default function PurchasePage() {
       }
 
       clearPendingOperatorRef();
-      setStep("success");
+      navigate("/operator-purchase-success", {
+        state: { txHash: hash, amount: effectivePrice },
+      });
     } catch (e: any) {
       console.error("[PurchasePage] Error:", e);
       setError(e?.message || "Transaction failed");
@@ -171,28 +175,7 @@ export default function PurchasePage() {
     } finally {
       setConfirming(false);
     }
-  }, [sendTransaction, getAccessToken, effectivePrice, promoCode, promoResult]);
-
-  if (step === "success") {
-    return (
-      <div className="min-h-screen bg-[#06080f] text-white flex items-center justify-center px-4">
-        <div className="max-w-md text-center">
-          <CheckCircle size={64} className="text-green-400 mx-auto mb-6" />
-          <h1 className="text-3xl font-bold mb-3">You're In!</h1>
-          <p className="text-white/50 mb-8">
-            Payment confirmed. Let's set up your branded predictions app.
-          </p>
-          <Button
-            onClick={() => navigate("/onboarding")}
-            size="lg"
-            className="bg-blue-600 hover:bg-blue-500 text-white border-0"
-          >
-            Start Setup <ArrowRight size={18} />
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  }, [sendTransaction, getAccessToken, effectivePrice, promoCode, promoResult, navigate]);
 
   return (
     <div className="min-h-screen bg-[#06080f] text-white flex items-center justify-center px-4 py-20">
