@@ -1,46 +1,160 @@
 
 
-## Plan: Tiered live-odds requote UX in SimplePredictionModal
+## Operator Purchase Referral Attribution — Smallest Safe Patch
 
-### Problem
-Live WS prices already flow into the `fight` prop and silently re-render the payout. There's no protection against the user submitting against a price that just jumped, and the only "requote" UI is the backend 409 path. We need a tiered, client-side movement detector that runs while the modal is open.
+### Files Changed (5)
 
-### Approach (single file change)
-All changes go in `src/components/operator/SimplePredictionModal.tsx`. No backend, no parent, no other components.
+1. **NEW** `src/hooks/useOperatorReferralCapture.ts` — captures `?ref=CODE` to `localStorage`, key `1mg_operator_ref`. Helper exports: `getPendingOperatorRef()`, `clearPendingOperatorRef()`.
+2. `src/pages/platform/LandingPage.tsx` — call `useOperatorReferralCapture()` on mount.
+3. `src/pages/platform/BuyPredictionsApp.tsx` — call `useOperatorReferralCapture()` on mount.
+4. `src/pages/platform/PurchasePage.tsx` — call hook on mount; read pending ref via `getPendingOperatorRef()`; include `referral_code` in both `confirm_purchase` request bodies (free-promo path + standard path); call `clearPendingOperatorRef()` on success.
+5. `supabase/functions/operator-manage/index.ts` — extend `confirm_purchase` action with best-effort referral insert at the end of all 4 success branches (free-promo, partial-promo + new, partial-promo + existing, full-price + new, full-price + existing).
 
-1. **Track baseline price**
-   - On modal mount, snapshot the picked side's price into `baselinePriceRef` and a `baselinePrice` state.
-   - On every render, read the current price from `fight.price_a` / `fight.price_b` (already updated by WS via parent).
-   - Compute `drift = Math.abs(current - baseline) / baseline` (guard divide-by-zero; skip if baseline ≤ 0).
+### Migration SQL (additive only)
 
-2. **Three tiers**
-   - `small` (drift < 5%): silently update payout. Show a tiny `⟳ Odds updated` chip in amber near the payout box for ~2s after each change. Submit button stays active and uses the new price.
-   - `large` (5% ≤ drift < 15%): show the live payout with the **old return crossed out** and the new return bold next to it. Replace the primary submit button with a single gold "⚡ Accept New Odds — Place $X Prediction" button. On click, update baseline → new price and submit. Original submit is hidden (never two active buttons).
-   - `extreme` (drift ≥ 15%): replace the modal body with a centered warning screen: "⚠️ Market moved significantly — please review the updated odds before predicting" with two buttons: "Review Updated Odds" (resets baseline to current price, returns to normal modal state) and "Cancel" (calls `onClose`).
+```sql
+-- 1. Operators table: nullable additive columns
+alter table public.operators
+  add column if not exists referral_code text,
+  add column if not exists referred_by_wallet text;
 
-3. **State machine**
-   - `quoteState: "fresh" | "drifted-small" | "drifted-large" | "drifted-extreme"` derived from drift.
-   - On submit (any path), update baseline to the price actually being submitted so post-submit re-renders don't immediately re-trigger a tier.
-   - Reset baseline whenever `pick` changes or modal reopens.
+-- 2. New commission events table
+create table if not exists public.operator_purchase_referrals (
+  id uuid primary key default gen_random_uuid(),
+  operator_id uuid not null references public.operators(id) on delete cascade,
+  referral_code text not null,
+  referred_by_wallet text,
+  purchase_tx_hash text,
+  purchase_amount_usdc numeric not null default 0,
+  commission_usdc numeric not null default 0,
+  payout_status text not null default 'accrued',  -- accrued | paid | void
+  payout_tx_hash text,
+  created_at timestamptz not null default now()
+);
 
-4. **Coexistence with existing backend 409 requote**
-   - Keep the existing `requoteData` block exactly as-is — it handles the server-rejected case after submit. The new client-side tiers handle pre-submit drift. They cannot show simultaneously: if `requoteData` is present, skip rendering the drift banners (server requote takes priority since it's the authoritative final price).
+create index if not exists idx_op_purchase_ref_operator
+  on public.operator_purchase_referrals(operator_id);
+create index if not exists idx_op_purchase_ref_code
+  on public.operator_purchase_referrals(referral_code);
+create index if not exists idx_op_purchase_ref_wallet
+  on public.operator_purchase_referrals(referred_by_wallet);
 
-5. **i18n**
-   - Add 6 new keys under `operator.modal`: `oddsUpdated`, `marketMovedTitle`, `marketMovedBody`, `reviewUpdatedOdds`, `cancel`, `acceptNewOddsAndPlace` (with `{amount}` interpolation).
-   - Add to all 10 locale files.
+-- 3. RLS: deny all client writes; allow public read (mirrors operator_revenue policy pattern)
+alter table public.operator_purchase_referrals enable row level security;
 
-6. **Custom (non-Polymarket) events**
-   - Skip drift detection entirely — custom events use parimutuel pools, not live odds. Guard: only run drift logic when `!isCustomEvent`.
+create policy "deny_client_writes_operator_purchase_referrals"
+  on public.operator_purchase_referrals for all
+  using (false) with check (false);
 
-### Files changed
-- `src/components/operator/SimplePredictionModal.tsx` (single component, ~60 lines added)
-- `src/i18n/locales/{en,es,pt,fr,de,it,zh,ja,ar,hi}.json` (6 keys each)
+create policy "public_read_operator_purchase_referrals"
+  on public.operator_purchase_referrals for select
+  using (true);
+```
 
-### What does NOT change
-- No backend changes
-- No changes to `usePolymarketLivePrices` or parent `OperatorApp.tsx`
-- No changes to existing `requoteData` server-side flow, `TradeTicket`, or `PredictionModal.tsx` (flagship)
-- No changes to settlement, payout, sweep, or trading logic
-- Custom/operator events are unaffected
+### Edge Function Logic — `operator-manage` confirm_purchase (additive only)
+
+After every operator activation (`status: "active"`), run a single best-effort helper:
+
+```ts
+// Commission table: 2400 USDC tier → 400 USDC commission
+const COMMISSION_BY_PRICE: Array<{ price: number; commission: number }> = [
+  { price: 2400, commission: 400 },
+  // future: { price: 24000, commission: 4000 },
+];
+
+async function recordReferralBestEffort(
+  sb: any,
+  opts: {
+    operatorId: string;
+    privyDid: string;
+    referralCode?: string;
+    txHash?: string | null;
+    amountCharged: number;
+  },
+) {
+  try {
+    const code = opts.referralCode?.trim().toUpperCase();
+    if (!code) return;
+
+    // Validate code against player_profiles
+    const { data: refProfile } = await sb
+      .from("player_profiles")
+      .select("wallet, referral_code")
+      .eq("referral_code", code)
+      .maybeSingle();
+    if (!refProfile) return; // unknown code — silently ignore
+
+    // Self-referral guard: compare referrer wallet to operator's payout wallet OR privy_did mapping
+    const { data: opRow } = await sb
+      .from("operators")
+      .select("payout_wallet")
+      .eq("id", opts.operatorId)
+      .maybeSingle();
+    if (opRow?.payout_wallet && opRow.payout_wallet.toLowerCase() === refProfile.wallet.toLowerCase()) {
+      return; // self-referral
+    }
+
+    // Commission lookup (defaults to 0 if tier not configured)
+    const tier = COMMISSION_BY_PRICE.find(t => t.price === opts.amountCharged);
+    const commission = tier?.commission ?? 0;
+
+    // Stamp referral on operators row (idempotent — only if not already set)
+    await sb.from("operators").update({
+      referral_code: code,
+      referred_by_wallet: refProfile.wallet,
+    }).eq("id", opts.operatorId).is("referral_code", null);
+
+    // Insert commission event
+    await sb.from("operator_purchase_referrals").insert({
+      operator_id: opts.operatorId,
+      referral_code: code,
+      referred_by_wallet: refProfile.wallet,
+      purchase_tx_hash: opts.txHash ?? null,
+      purchase_amount_usdc: opts.amountCharged,
+      commission_usdc: commission,
+      payout_status: "accrued",
+    });
+  } catch (e) {
+    console.error("[referral] best-effort insert failed:", e);
+    // NEVER throw — purchase must succeed
+  }
+}
+```
+
+Called once per success branch with `amountCharged` = 0 (free promo), `discountedPrice` (partial promo), or 2400 (full price). The existing return statements stay exactly the same.
+
+### What Does NOT Change
+
+- Privy login, wallet funding, USDC.e Polygon payment
+- On-chain verification (`verifyTxOnChain`)
+- Replay protection (`purchase_tx_hash` uniqueness)
+- Operator creation logic (insert/update)
+- Ownership binding (`user_id = privyDid`)
+- Payout wallet auto-fill (onboarding)
+- Agreement v1.0 logic
+- Onboarding flow & public slug launch
+- Trading, settlement, payout, sweep
+- Existing player-side referral system (`useReferralCapture`, `referral-bind`)
+
+### Risk Check
+
+| Risk | Mitigation |
+|---|---|
+| Referral insert fails | Wrapped in try/catch; never throws; purchase always returns success |
+| Invalid referral code | Silent ignore (no error to user) |
+| Self-referral | Wallet comparison against `payout_wallet`; silent skip |
+| Race: same code used twice | `idx_op_purchase_ref_operator` allows multiple events per operator (intended for future re-attribution); operator row stamped only if `referral_code IS NULL` |
+| RLS regression | Additive deny-all policy + public read mirrors `operator_revenue` pattern |
+| `?ref=` collision with player referral | Different localStorage key (`1mg_operator_ref` vs `1mg_pending_referral`); both can coexist |
+
+### Test Plan
+
+1. **No referral**: visit `/`, sign in, buy → operator created, no row in `operator_purchase_referrals`. ✅
+2. **Valid referral**: visit `/?ref=PARTNER01`, complete purchase → operator row has `referral_code='PARTNER01'`, `referred_by_wallet` set; one row in `operator_purchase_referrals` with `commission_usdc=400`, `payout_status='accrued'`. ✅
+3. **Invalid referral code**: visit `/?ref=NOTREAL`, complete purchase → operator created, no referral row, no error to user. ✅
+4. **Self-referral**: referrer's own wallet visits with their own code, completes purchase → operator created, no referral row. ✅
+5. **Free promo + referral**: visit `/?ref=PARTNER01`, apply 100% promo → operator activated; referral row with `commission_usdc=0` (since amountCharged=0 has no tier match) + `purchase_tx_hash=null`. ✅
+6. **Capture persistence**: visit `/?ref=PARTNER01` → leave site → return to `/purchase` → ref still applied. ✅
+7. **URL cleanup**: after capture, `?ref=` is stripped from URL via `history.replaceState`. ✅
+8. **Migration safety**: re-run migration → `if not exists` guards prevent duplicate column/table errors. ✅
 
