@@ -207,6 +207,7 @@ Deno.serve(async (req) => {
     if (action === "confirm_purchase") {
       const txHash = body.tx_hash;
       const promoCode = body.promo_code;
+      const referralCode: string | undefined = typeof body.referral_code === "string" ? body.referral_code : undefined;
 
       // If promo code provided, validate and potentially skip payment
       if (promoCode) {
@@ -224,12 +225,19 @@ Deno.serve(async (req) => {
           // Full discount — activate without payment
           await sb.from("promo_codes").update({ uses_count: promo.uses_count + 1 }).eq("id", promo.id);
           const { data: existing } = await sb.from("operators").select("id, status, subdomain, fee_percent").eq("user_id", privyDid).maybeSingle();
+          let activatedOpId: string | null = null;
           if (existing) {
             await sb.from("operators").update({ status: "active", updated_at: new Date().toISOString() }).eq("id", existing.id);
+            activatedOpId = existing.id;
             sendWelcomeEmail(existing.subdomain || "your-app", existing.fee_percent ?? 5).catch(e => console.error("[email]", e));
           } else {
-            await sb.from("operators").insert({ user_id: privyDid, brand_name: "My App", subdomain: "pending-" + Date.now(), status: "active" });
-            sendWelcomeEmail("pending-" + Date.now(), 5).catch(e => console.error("[email]", e));
+            const pendingSub = "pending-" + Date.now();
+            const { data: inserted } = await sb.from("operators").insert({ user_id: privyDid, brand_name: "My App", subdomain: pendingSub, status: "active" }).select("id").single();
+            activatedOpId = inserted?.id ?? null;
+            sendWelcomeEmail(pendingSub, 5).catch(e => console.error("[email]", e));
+          }
+          if (activatedOpId) {
+            await recordReferralBestEffort(sb, { operatorId: activatedOpId, privyDid, referralCode, txHash: null, amountCharged: 0 });
           }
           return jsonResp({ success: true, status: "active", promo_applied: true, amount_charged: 0 });
         }
@@ -246,12 +254,19 @@ Deno.serve(async (req) => {
         if (!verification.valid) return jsonResp({ error: verification.error || "verification_failed" }, 400);
         await sb.from("promo_codes").update({ uses_count: promo.uses_count + 1 }).eq("id", promo.id);
         const { data: existing } = await sb.from("operators").select("id, status, subdomain, fee_percent").eq("user_id", privyDid).maybeSingle();
+        let activatedOpId: string | null = null;
         if (existing) {
           await sb.from("operators").update({ status: "active", purchase_tx_hash: txHash, updated_at: new Date().toISOString() }).eq("id", existing.id);
+          activatedOpId = existing.id;
           sendWelcomeEmail(existing.subdomain || "your-app", existing.fee_percent ?? 5).catch(e => console.error("[email]", e));
         } else {
-          await sb.from("operators").insert({ user_id: privyDid, brand_name: "My App", subdomain: "pending-" + Date.now(), status: "active", purchase_tx_hash: txHash });
+          const pendingSub = "pending-" + Date.now();
+          const { data: inserted } = await sb.from("operators").insert({ user_id: privyDid, brand_name: "My App", subdomain: pendingSub, status: "active", purchase_tx_hash: txHash }).select("id").single();
+          activatedOpId = inserted?.id ?? null;
           sendWelcomeEmail("pending", 5).catch(e => console.error("[email]", e));
+        }
+        if (activatedOpId) {
+          await recordReferralBestEffort(sb, { operatorId: activatedOpId, privyDid, referralCode, txHash, amountCharged: discountedPrice });
         }
         return jsonResp({ success: true, status: "active", promo_applied: true });
       }
@@ -266,12 +281,19 @@ Deno.serve(async (req) => {
       const verification = await verifyTxOnChain(txHash, FULL_PRICE_RAW);
       if (!verification.valid) return jsonResp({ error: verification.error || "verification_failed" }, 400);
       const { data: existing } = await sb.from("operators").select("id, status, subdomain, fee_percent").eq("user_id", privyDid).maybeSingle();
+      let activatedOpId: string | null = null;
       if (existing) {
         await sb.from("operators").update({ status: "active", purchase_tx_hash: txHash, updated_at: new Date().toISOString() }).eq("id", existing.id);
+        activatedOpId = existing.id;
         sendWelcomeEmail(existing.subdomain || "your-app", existing.fee_percent ?? 5).catch(e => console.error("[email]", e));
       } else {
-        await sb.from("operators").insert({ user_id: privyDid, brand_name: "My App", subdomain: "pending-" + Date.now(), status: "active", purchase_tx_hash: txHash });
+        const pendingSub = "pending-" + Date.now();
+        const { data: inserted } = await sb.from("operators").insert({ user_id: privyDid, brand_name: "My App", subdomain: pendingSub, status: "active", purchase_tx_hash: txHash }).select("id").single();
+        activatedOpId = inserted?.id ?? null;
         sendWelcomeEmail("pending", 5).catch(e => console.error("[email]", e));
+      }
+      if (activatedOpId) {
+        await recordReferralBestEffort(sb, { operatorId: activatedOpId, privyDid, referralCode, txHash, amountCharged: 2400 });
       }
       return jsonResp({ success: true, status: "active" });
     }
