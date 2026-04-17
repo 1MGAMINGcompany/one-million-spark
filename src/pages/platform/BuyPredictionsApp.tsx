@@ -76,8 +76,9 @@ export default function BuyPredictionsApp() {
   };
 
   useSeoMeta({
-    title: "Buy a Predictions App | Start Your Own Sports Predictions Business",
-    description: "Buy your own branded predictions app with built-in payments and liquidity. Launch a sports predictions business in minutes — no coding required. One-time $2,400 USDC setup.",
+    title: "1mg.live Operator App | Launch Your Own Sports Predictions App",
+    description: "Launch your own branded sports predictions app with live event liquidity, custom events, operator dashboard, and payout controls.",
+    ogImage: "https://1mg.live/images/operator-app-og.png",
   });
 
   return (
