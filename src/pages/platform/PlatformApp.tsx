@@ -11,6 +11,7 @@ import OperatorApp from "./OperatorApp";
 import PurchasePage from "./PurchasePage";
 import OperatorPurchaseSuccess from "./OperatorPurchaseSuccess";
 import BuyPredictionsApp from "./BuyPredictionsApp";
+import AffiliateProgram from "./AffiliateProgram";
 import HelpCenter from "@/pages/HelpCenter";
 import HelpArticle from "@/pages/HelpArticle";
 import PlatformAdmin from "./PlatformAdmin";
@@ -97,6 +98,8 @@ export default function PlatformApp({ context }: PlatformAppProps) {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/buy-predictions-app" element={<BuyPredictionsApp />} />
+      <Route path="/affiliate" element={<AffiliateProgram />} />
+      <Route path="/affiliates" element={<Navigate to="/affiliate" replace />} />
       <Route path="/purchase" element={<RequireAuth><PurchasePage /></RequireAuth>} />
       <Route path="/operator-purchase-success" element={<OperatorPurchaseSuccess />} />
       <Route path="/onboarding" element={<RequireActiveOperator><OperatorOnboarding /></RequireActiveOperator>} />
