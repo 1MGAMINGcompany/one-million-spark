@@ -8,7 +8,7 @@ import JsonLd from "@/components/seo/JsonLd";
 /**
  * 1mg.live Affiliate Program — public, indexable marketing page.
  * Pure static content. No business logic, no auth gate, no DB writes.
- * Trackdesk click tracking (already in index.html) attributes referrals via ?aff= param.
+ * Styled to match 1mg.live brand: dark #04060c bg, blue accents, white text, sans-serif.
  */
 
 // Affiliate applications are handled manually via email until the public Trackdesk
@@ -42,7 +42,7 @@ export default function AffiliateProgram() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-[#04060c] text-white" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
       <JsonLd
         data={{
           "@context": "https://schema.org",
@@ -55,17 +55,21 @@ export default function AffiliateProgram() {
       />
 
       {/* Top bar */}
-      <header className="border-b border-border/50 bg-background/80 backdrop-blur sticky top-0 z-40">
+      <header className="border-b border-white/5 bg-[#04060c]/80 backdrop-blur-xl sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <button
             onClick={() => navigate("/")}
-            className="text-lg font-bold tracking-tight hover:opacity-80 transition"
+            className="text-xl font-bold tracking-tight hover:opacity-80 transition"
           >
-            1mg.live
+            <span className="text-blue-400">1MG</span><span className="text-white/50">.live</span>
           </button>
           <div className="flex items-center gap-2">
             <PlatformLanguageSwitcher />
-            <Button size="sm" onClick={handleApply} className="gap-1.5">
+            <Button
+              size="sm"
+              onClick={handleApply}
+              className="gap-1.5 bg-blue-600 hover:bg-blue-500 text-white border-0"
+            >
               Apply by Email <ArrowRight className="h-3.5 w-3.5" />
             </Button>
           </div>
@@ -74,22 +78,31 @@ export default function AffiliateProgram() {
 
       {/* Hero */}
       <section className="max-w-4xl mx-auto px-4 pt-16 pb-12 text-center">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium mb-6">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 text-xs font-medium mb-6 border border-blue-500/20">
           <Megaphone className="h-3.5 w-3.5" />
           Affiliate Program
         </div>
-        <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">
-          Earn <span className="text-primary">$400 USDC</span> per referred operator
+        <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6 text-white">
+          Earn <span className="text-blue-400">$400 USDC</span> per referred operator
         </h1>
-        <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
+        <p className="text-lg md:text-xl text-white/60 max-w-2xl mx-auto mb-8 leading-relaxed">
           Refer creators, agencies, and sports brands to launch their own branded prediction app on 1mg.live.
           You earn $400 USDC for every confirmed sale — paid in under 48 hours.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <Button size="lg" onClick={handleApply} className="gap-2 text-base px-8">
+          <Button
+            size="lg"
+            onClick={handleApply}
+            className="gap-2 text-base px-8 bg-blue-600 hover:bg-blue-500 text-white border-0"
+          >
             Apply by Email <ArrowRight className="h-4 w-4" />
           </Button>
-          <Button size="lg" variant="outline" onClick={() => navigate("/buy-predictions-app")} className="text-base px-8">
+          <Button
+            size="lg"
+            variant="outline"
+            onClick={() => navigate("/buy-predictions-app")}
+            className="text-base px-8 bg-transparent border-white/10 text-white hover:bg-white/5 hover:text-white"
+          >
             See What You're Promoting
           </Button>
         </div>
@@ -97,19 +110,19 @@ export default function AffiliateProgram() {
 
       {/* How to apply by email */}
       <section className="max-w-3xl mx-auto px-4 py-12">
-        <div className="rounded-xl border border-primary/20 bg-primary/5 p-6 md:p-8">
-          <h2 className="text-xl md:text-2xl font-bold mb-3">How to apply</h2>
-          <p className="text-muted-foreground leading-relaxed mb-4">
+        <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-6 md:p-8">
+          <h2 className="text-xl md:text-2xl font-bold mb-3 text-white">How to apply</h2>
+          <p className="text-white/70 leading-relaxed mb-4">
             Apply by email to join the 1mg.live Affiliate Program. Send us your name, email,
             social links or website, and how you plan to promote 1mg.live. If approved, we
             will send you your custom affiliate tracking link and program details.
           </p>
-          <Button onClick={handleApply} className="gap-2">
+          <Button onClick={handleApply} className="gap-2 bg-blue-600 hover:bg-blue-500 text-white border-0">
             Apply by Email <ArrowRight className="h-4 w-4" />
           </Button>
-          <p className="text-xs text-muted-foreground mt-3">
+          <p className="text-xs text-white/50 mt-3">
             Or email us directly at{" "}
-            <a href={AFFILIATE_MAILTO} className="text-primary underline underline-offset-2">
+            <a href={AFFILIATE_MAILTO} className="text-blue-400 hover:text-blue-300 underline underline-offset-2">
               {AFFILIATE_EMAIL}
             </a>
           </p>
@@ -128,7 +141,7 @@ export default function AffiliateProgram() {
 
       {/* How it works */}
       <section className="max-w-5xl mx-auto px-4 py-16">
-        <h2 className="text-3xl font-bold text-center mb-12">How it works</h2>
+        <h2 className="text-3xl font-bold text-center mb-12 text-white">How it works</h2>
         <div className="grid md:grid-cols-3 gap-6">
           <Step
             num={1}
@@ -149,9 +162,9 @@ export default function AffiliateProgram() {
       </section>
 
       {/* Who it's for */}
-      <section className="max-w-5xl mx-auto px-4 py-16 border-t border-border/30">
-        <h2 className="text-3xl font-bold text-center mb-4">Who it's for</h2>
-        <p className="text-center text-muted-foreground mb-12 max-w-2xl mx-auto">
+      <section className="max-w-5xl mx-auto px-4 py-16 border-t border-white/5">
+        <h2 className="text-3xl font-bold text-center mb-4 text-white">Who it's for</h2>
+        <p className="text-center text-white/60 mb-12 max-w-2xl mx-auto">
           1mg.live affiliates earn the most when they have direct access to people who want to launch
           their own branded prediction app.
         </p>
@@ -164,9 +177,9 @@ export default function AffiliateProgram() {
       </section>
 
       {/* Program details */}
-      <section className="max-w-3xl mx-auto px-4 py-16 border-t border-border/30">
-        <h2 className="text-3xl font-bold text-center mb-12">Program details</h2>
-        <div className="space-y-3">
+      <section className="max-w-3xl mx-auto px-4 py-16 border-t border-white/5">
+        <h2 className="text-3xl font-bold text-center mb-12 text-white">Program details</h2>
+        <div className="space-y-1">
           <DetailRow label="Commission" value={`$${COMMISSION_USD} USDC per confirmed sale (${COMMISSION_PCT}% of $${PACKAGE_USD})`} />
           <DetailRow label="Cookie duration" value={`${COOKIE_DAYS} days`} />
           <DetailRow label="Payout method" value="USDC on Polygon, sent directly to your wallet" />
@@ -178,9 +191,9 @@ export default function AffiliateProgram() {
       </section>
 
       {/* FAQ */}
-      <section className="max-w-3xl mx-auto px-4 py-16 border-t border-border/30">
-        <h2 className="text-3xl font-bold text-center mb-12">FAQ</h2>
-        <div className="space-y-6">
+      <section className="max-w-3xl mx-auto px-4 py-16 border-t border-white/5">
+        <h2 className="text-3xl font-bold text-center mb-12 text-white">FAQ</h2>
+        <div className="space-y-4">
           <FAQ
             q="What exactly am I promoting?"
             a={`The 1mg.live Operator App — a $${PACKAGE_USD} one-time package that lets anyone launch their own branded sports predictions app with live event liquidity, custom events, and an operator dashboard.`}
@@ -205,20 +218,28 @@ export default function AffiliateProgram() {
       </section>
 
       {/* Final CTA */}
-      <section className="max-w-3xl mx-auto px-4 py-20 text-center border-t border-border/30">
-        <h2 className="text-3xl md:text-4xl font-bold mb-4">Ready to start earning?</h2>
-        <p className="text-muted-foreground mb-8 text-lg">
+      <section className="max-w-3xl mx-auto px-4 py-20 text-center border-t border-white/5">
+        <h2 className="text-3xl md:text-4xl font-bold mb-4 text-white">Ready to start earning?</h2>
+        <p className="text-white/60 mb-8 text-lg">
           Apply now — most affiliates are approved within 48 hours.
         </p>
-        <Button size="lg" onClick={handleApply} className="gap-2 text-base px-8">
+        <Button
+          size="lg"
+          onClick={handleApply}
+          className="gap-2 text-base px-8 bg-blue-600 hover:bg-blue-500 text-white border-0"
+        >
           Apply by Email <ArrowRight className="h-4 w-4" />
         </Button>
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-border/30 mt-12">
-        <div className="max-w-6xl mx-auto px-4 py-8 text-center text-sm text-muted-foreground">
-          <p>© {new Date().getFullYear()} 1mg.live · <button onClick={() => navigate("/terms")} className="hover:text-foreground underline">Terms</button> · <button onClick={() => navigate("/privacy")} className="hover:text-foreground underline">Privacy</button></p>
+      <footer className="border-t border-white/5 mt-12">
+        <div className="max-w-6xl mx-auto px-4 py-8 text-center text-sm text-white/50">
+          <p>
+            © {new Date().getFullYear()} 1mg.live ·{" "}
+            <button onClick={() => navigate("/terms")} className="hover:text-white/80 underline">Terms</button> ·{" "}
+            <button onClick={() => navigate("/privacy")} className="hover:text-white/80 underline">Privacy</button>
+          </p>
         </div>
       </footer>
     </div>
@@ -227,53 +248,53 @@ export default function AffiliateProgram() {
 
 function StatCard({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
   return (
-    <div className="rounded-xl border border-border/50 bg-card/50 p-4 text-center">
-      <div className="text-primary mx-auto w-fit mb-2">{icon}</div>
-      <div className="text-2xl font-bold">{value}</div>
-      <div className="text-xs text-muted-foreground uppercase tracking-wide mt-1">{label}</div>
+    <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-center">
+      <div className="text-blue-400 mx-auto w-fit mb-2">{icon}</div>
+      <div className="text-2xl font-bold text-white">{value}</div>
+      <div className="text-xs text-white/50 uppercase tracking-wide mt-1">{label}</div>
     </div>
   );
 }
 
 function Step({ num, title, body }: { num: number; title: string; body: string }) {
   return (
-    <div className="rounded-xl border border-border/50 bg-card/50 p-6">
-      <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold mb-4">
+    <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
+      <div className="w-8 h-8 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold mb-4 border border-blue-500/20">
         {num}
       </div>
-      <h3 className="font-semibold text-lg mb-2">{title}</h3>
-      <p className="text-sm text-muted-foreground">{body}</p>
+      <h3 className="font-semibold text-lg mb-2 text-white">{title}</h3>
+      <p className="text-sm text-white/60 leading-relaxed">{body}</p>
     </div>
   );
 }
 
 function Audience({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {
   return (
-    <div className="rounded-xl border border-border/50 bg-card/50 p-5">
-      <div className="text-primary mb-3">{icon}</div>
-      <h3 className="font-semibold mb-1">{title}</h3>
-      <p className="text-xs text-muted-foreground">{body}</p>
+    <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+      <div className="text-blue-400 mb-3">{icon}</div>
+      <h3 className="font-semibold mb-1 text-white">{title}</h3>
+      <p className="text-xs text-white/60">{body}</p>
     </div>
   );
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 py-3 border-b border-border/30 last:border-0">
-      <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-        <CheckCircle2 className="h-4 w-4 text-primary" />
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 py-3 border-b border-white/5 last:border-0">
+      <div className="flex items-center gap-2 text-sm font-medium text-white/60">
+        <CheckCircle2 className="h-4 w-4 text-blue-400" />
         {label}
       </div>
-      <div className="text-sm sm:text-right">{value}</div>
+      <div className="text-sm sm:text-right text-white/90">{value}</div>
     </div>
   );
 }
 
 function FAQ({ q, a }: { q: string; a: string }) {
   return (
-    <div className="rounded-xl border border-border/50 bg-card/50 p-5">
-      <h3 className="font-semibold mb-2">{q}</h3>
-      <p className="text-sm text-muted-foreground leading-relaxed">{a}</p>
+    <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+      <h3 className="font-semibold mb-2 text-white">{q}</h3>
+      <p className="text-sm text-white/60 leading-relaxed">{a}</p>
     </div>
   );
 }
