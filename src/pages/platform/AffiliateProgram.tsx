@@ -11,10 +11,15 @@ import JsonLd from "@/components/seo/JsonLd";
  * Trackdesk click tracking (already in index.html) attributes referrals via ?aff= param.
  */
 
-// Trackdesk public affiliate signup URL.
-// Pattern: https://{account-slug}.trackdesk.com/sign-up
-// Update if your Trackdesk account uses a different slug.
-const TRACKDESK_SIGNUP_URL = "https://1mg-live.trackdesk.com/sign-up";
+// Affiliate applications are handled manually via email until the public Trackdesk
+// signup form is available on a paid plan. Approved affiliates receive their custom
+// tracking link by reply.
+const AFFILIATE_EMAIL = "1mg.live.partnerships@gmail.com";
+const AFFILIATE_MAILTO = `mailto:${AFFILIATE_EMAIL}?subject=${encodeURIComponent(
+  "1mg.live Affiliate Program Application",
+)}&body=${encodeURIComponent(
+  "Hi 1mg.live team,\n\nI'd like to apply to the 1mg.live Affiliate Program.\n\nName:\nEmail:\nSocial links / website:\nHow I plan to promote 1mg.live:\n\nThanks!",
+)}`;
 
 const COMMISSION_USD = 400;
 const PACKAGE_USD = 2400;
@@ -33,7 +38,7 @@ export default function AffiliateProgram() {
   });
 
   const handleApply = () => {
-    window.open(TRACKDESK_SIGNUP_URL, "_blank", "noopener,noreferrer");
+    window.location.href = AFFILIATE_MAILTO;
   };
 
   return (
@@ -61,7 +66,7 @@ export default function AffiliateProgram() {
           <div className="flex items-center gap-2">
             <PlatformLanguageSwitcher />
             <Button size="sm" onClick={handleApply} className="gap-1.5">
-              Apply <ArrowRight className="h-3.5 w-3.5" />
+              Apply by Email <ArrowRight className="h-3.5 w-3.5" />
             </Button>
           </div>
         </div>
@@ -82,11 +87,32 @@ export default function AffiliateProgram() {
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Button size="lg" onClick={handleApply} className="gap-2 text-base px-8">
-            Apply to Join <ArrowRight className="h-4 w-4" />
+            Apply by Email <ArrowRight className="h-4 w-4" />
           </Button>
           <Button size="lg" variant="outline" onClick={() => navigate("/buy-predictions-app")} className="text-base px-8">
             See What You're Promoting
           </Button>
+        </div>
+      </section>
+
+      {/* How to apply by email */}
+      <section className="max-w-3xl mx-auto px-4 py-12">
+        <div className="rounded-xl border border-primary/20 bg-primary/5 p-6 md:p-8">
+          <h2 className="text-xl md:text-2xl font-bold mb-3">How to apply</h2>
+          <p className="text-muted-foreground leading-relaxed mb-4">
+            Apply by email to join the 1mg.live Affiliate Program. Send us your name, email,
+            social links or website, and how you plan to promote 1mg.live. If approved, we
+            will send you your custom affiliate tracking link and program details.
+          </p>
+          <Button onClick={handleApply} className="gap-2">
+            Apply by Email <ArrowRight className="h-4 w-4" />
+          </Button>
+          <p className="text-xs text-muted-foreground mt-3">
+            Or email us directly at{" "}
+            <a href={AFFILIATE_MAILTO} className="text-primary underline underline-offset-2">
+              {AFFILIATE_EMAIL}
+            </a>
+          </p>
         </div>
       </section>
 
@@ -106,8 +132,8 @@ export default function AffiliateProgram() {
         <div className="grid md:grid-cols-3 gap-6">
           <Step
             num={1}
-            title="Apply & get your link"
-            body="Sign up via Trackdesk and instantly get a unique tracking link to share."
+            title="Apply by email"
+            body="Email us your details. If approved, we'll send you your custom affiliate tracking link."
           />
           <Step
             num={2}
@@ -147,7 +173,7 @@ export default function AffiliateProgram() {
           <DetailRow label="Payout timing" value={`Within ${PAYOUT_HOURS} hours of confirmed sale`} />
           <DetailRow label="Tracking" value="Trackdesk — industry-standard affiliate platform" />
           <DetailRow label="Minimum payout" value="No minimum — every sale is paid out" />
-          <DetailRow label="Approval" value="Manual — applications reviewed within 48 hours" />
+          <DetailRow label="How to apply" value={`Email ${AFFILIATE_EMAIL} — reviewed within 48 hours`} />
         </div>
       </section>
 
@@ -185,7 +211,7 @@ export default function AffiliateProgram() {
           Apply now — most affiliates are approved within 48 hours.
         </p>
         <Button size="lg" onClick={handleApply} className="gap-2 text-base px-8">
-          Apply to Join <ArrowRight className="h-4 w-4" />
+          Apply by Email <ArrowRight className="h-4 w-4" />
         </Button>
       </section>
 
