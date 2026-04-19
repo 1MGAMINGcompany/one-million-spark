@@ -15,11 +15,8 @@ import JsonLd from "@/components/seo/JsonLd";
 // signup form is available on a paid plan. Approved affiliates receive their custom
 // tracking link by reply.
 const AFFILIATE_EMAIL = "1mg.live.partnerships@gmail.com";
-const AFFILIATE_MAILTO = `mailto:${AFFILIATE_EMAIL}?subject=${encodeURIComponent(
-  "1mg.live Affiliate Program Application",
-)}&body=${encodeURIComponent(
-  "Hi 1mg.live team,\n\nI'd like to apply to the 1mg.live Affiliate Program.\n\nName:\nEmail:\nSocial links / website:\nHow I plan to promote 1mg.live:\n\nThanks!",
-)}`;
+// Affiliate signups are now handled via GoAffPro self-serve portal.
+const AFFILIATE_PORTAL_URL = "https://1mg.goaffpro.com";
 
 const COMMISSION_USD = 400;
 const PACKAGE_USD = 2400;
@@ -38,7 +35,7 @@ export default function AffiliateProgram() {
   });
 
   const handleApply = () => {
-    window.location.href = AFFILIATE_MAILTO;
+    window.open(AFFILIATE_PORTAL_URL, "_blank", "noopener,noreferrer");
   };
 
   return (
