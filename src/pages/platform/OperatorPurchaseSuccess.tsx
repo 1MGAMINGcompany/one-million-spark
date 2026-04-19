@@ -24,23 +24,6 @@ export default function OperatorPurchaseSuccess() {
       ? Number(amountStr)
       : 2400;
 
-  // Fire Trackdesk conversion — best-effort, never blocks UI
-  useEffect(() => {
-    try {
-      if (typeof window === "undefined") return;
-      if (!/^(www\.)?1mg\.live$/i.test(window.location.hostname)) return;
-      const td = (window as any).trackdesk;
-      if (typeof td !== "function") return;
-      td("1mg-live", "conversion", {
-        conversionType: "sale",
-        amount: { value: amount ?? 2400, currency: "USD" },
-        externalId: txHash || `purchase_${Date.now()}`,
-      });
-    } catch (e) {
-      console.warn("[Trackdesk] conversion fire failed (non-blocking)", e);
-    }
-  }, [txHash, amount]);
-
   // Fire GoAffPro conversion — best-effort, never blocks UI
   useEffect(() => {
     try {
