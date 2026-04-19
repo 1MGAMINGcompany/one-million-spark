@@ -115,12 +115,17 @@ export default function AffiliateProgram() {
             will send you your custom affiliate tracking link and program details.
           </p>
           <Button onClick={handleApply} className="gap-2 bg-blue-600 hover:bg-blue-500 text-white border-0">
-            Apply by Email <ArrowRight className="h-4 w-4" />
+            Join the Affiliate Program <ArrowRight className="h-4 w-4" />
           </Button>
           <p className="text-xs text-white/50 mt-3">
-            Or email us directly at{" "}
-            <a href={AFFILIATE_MAILTO} className="text-blue-400 hover:text-blue-300 underline underline-offset-2">
-              {AFFILIATE_EMAIL}
+            Sign up at{" "}
+            <a
+              href={AFFILIATE_PORTAL_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-400 hover:text-blue-300 underline underline-offset-2"
+            >
+              1mg.goaffpro.com
             </a>
           </p>
         </div>
