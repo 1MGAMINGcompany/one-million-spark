@@ -1,87 +1,130 @@
 
-The user is seeing "1M Gaming | Premium Predictions Platform" as the link preview when sharing `https://1mg.live/affiliate` on a messaging platform (looks like iMessage/WhatsApp link unfurl).
+## Audit Findings
 
-## Root cause
+**Current real flow confirmed:**
+- Success page: `src/pages/platform/OperatorPurchaseSuccess.tsx` (route `/operator-purchase-success`)
+- Already fires Trackdesk conversion in a `useEffect`, hostname-guarded to `1mg.live` / `www.1mg.live`, with `try/catch`, using `txHash` + `amount`
+- Trackdesk loader is in `index.html` inside an existing hostname-guarded IIFE block
 
-The `AffiliateProgram.tsx` page calls `useSeoMeta(...)` which sets the title/OG tags **client-side via useEffect**. But link unfurlers (iMessage, WhatsApp, Telegram, Slack, Twitter, Facebook) **do NOT execute JavaScript** — they only read the static HTML returned from the server.
+**Affiliate page route:** `/affiliate` (with `/affiliates` redirect alias) → `src/pages/platform/AffiliateProgram.tsx`. Currently a static marketing page with a `mailto:` CTA. This is the page we will later redirect to GoAffPro's portal.
 
-The static `index.html` shipped to all routes contains the default 1M Gaming metadata:
-- `<title>1M Gaming | Premium Predictions Platform</title>`
-- `<meta property="og:title" content="1M Gaming...">` 
+**No conflicts:** GoAffPro's loader is independent from Trackdesk; both can coexist on `window`.
 
-So every route on `1mg.live` (including `/affiliate` and `/buy-predictions-app`) gets the same fallback preview when shared, regardless of what `useSeoMeta` does at runtime.
+---
 
-This is the exact same class of issue we fixed for `/buy-predictions-app` — but that fix only updated the runtime `useSeoMeta` call, NOT the static HTML. So the social preview is still wrong there too. The user just noticed it on `/affiliate` first.
+## The Patch (smallest safe, additive)
 
-## Why the browser tab shows the right title but link previews don't
+### File 1: `index.html` — add GoAffPro loader (1mg.live only)
 
-- Browser tab → React mounts → `useEffect` → `document.title` updates → ✅ correct
-- Link unfurler → fetches HTML → reads `<title>` from raw HTML → never runs JS → ❌ shows 1M Gaming
+Add a new IIFE next to the existing Trackdesk block (inside `<head>`, after the Trackdesk script). Same hostname guard pattern:
 
-## Fix options
+```html
+<!-- GoAffPro affiliate tracking — 1mg.live only -->
+<script>
+  (function(){
+    var h=location.hostname;
+    if(h!=='1mg.live'&&h!=='www.1mg.live')return;
+    var s=document.createElement('script');
+    s.async=1;
+    s.src='https://api.goaffpro.com/loader.js?shop=pfiwnywrwo';
+    var f=document.getElementsByTagName('script')[0];
+    f.parentNode.insertBefore(s,f);
+  })();
+</script>
+```
 
-**Option A — Domain-aware static HTML (smallest safe patch)**
-Update `index.html` so the default static metadata is 1mg.live branded (since 1mg.live is the production platform domain). Flagship `1mgaming.com` keeps its title via `useSeoMeta` runtime — but we'd hit the inverse problem.
+Why: matches existing Trackdesk pattern exactly. Async, non-blocking, never loads on `1mgaming.com` or preview/sandbox domains.
 
-**Option B — Per-route static prerendering**
-Requires SSR/SSG — too big, breaks the "small safe patch" rule.
+### File 2: `src/pages/platform/OperatorPurchaseSuccess.tsx` — fire GoAffPro conversion
 
-**Option C — Inject route-aware OG tags via a tiny script in index.html before unfurl**
-Doesn't work — unfurlers don't run JS.
+Add a second `useEffect` (alongside the existing Trackdesk one, do not modify Trackdesk):
 
-**Option D — Use a dynamic OG image/meta service or edge function**
-Overkill for this issue.
+```tsx
+// Fire GoAffPro conversion — best-effort, never blocks UI
+useEffect(() => {
+  try {
+    if (typeof window === "undefined") return;
+    if (!/^(www\.)?1mg\.live$/i.test(window.location.hostname)) return;
 
-**Recommended: Option A, with nuance.**
-Since `1mg.live` is the canonical platform shell and is the domain the user is sharing publicly, change the static `index.html` defaults to be neutral/1mg.live-branded. The `useSeoMeta` hook will still override correctly inside the SPA for both domains. Link previews will then show 1mg.live branding by default on both domains' raw HTML — which is acceptable because:
-- `1mg.live` shares should show 1mg.live branding ✅
-- `1mgaming.com` shares of specific deep links → flagship pages already call `useSeoMeta` for in-app, but link unfurls would show 1mg.live default. This is a tradeoff.
+    const w = window as any;
+    const orderNumber = txHash || `purchase_${Date.now()}`;
+    const orderTotal = typeof amount === "number" ? amount : 2400;
 
-**Better refinement**: Make the default static HTML metadata generic enough to work for both — e.g. "1MG — Predictions Platform" — and make the `/affiliate` and `/buy-predictions-app` fixes by leaving as-is (since unfurlers won't see the runtime updates anyway, but the generic default is acceptable).
+    w.goaffpro_order = {
+      number: orderNumber,
+      total: orderTotal,
+      // currency intentionally omitted — GoAffPro defaults to shop currency
+    };
 
-Actually, the cleanest minimal fix is just: update `index.html` to use 1mg.live branding as the default since that's the primary public marketing domain, and the flagship is mostly a logged-in app.
+    // GoAffPro auto-detects window.goaffpro_order on script load.
+    // If loader has already initialized, manually trigger conversion fire.
+    if (typeof w.goaffpro === "object" && typeof w.goaffpro.conversion === "function") {
+      w.goaffpro.conversion(w.goaffpro_order);
+    }
+  } catch (e) {
+    console.warn("[GoAffPro] conversion fire failed (non-blocking)", e);
+  }
+}, [txHash, amount]);
+```
 
-## Plan
+**Order data mapping (per spec):**
+- `number` = `purchase_tx_hash` if present, else stable fallback `purchase_${Date.now()}`
+- `total` = real `amount` from location state / query string → `2400` full-price, discounted value for partial promo, `0` for free promo (already handled by existing amount derivation)
 
-### Files changed (1)
+### Files NOT touched
+- `PurchasePage.tsx`, `confirm-purchase` flow, Privy login, wallet creation/funding, operator ownership, payout wallet, onboarding, purchase verification — all untouched
+- Trackdesk loader and conversion fire — untouched (coexist during testing)
+- `1mgaming.com` routes — untouched (hostname guard blocks both loader and conversion)
 
-**`index.html`** — Update the default static metadata to be 1mg.live branded (since 1mg.live is the public marketing domain):
-- `<title>` → `1MG.live — Launch Your Branded Sports Predictions App`
-- `<meta name="description">` → 1mg.live operator app description
-- `<meta property="og:title">` → 1MG.live tagline
-- `<meta property="og:description">` → matches above
-- `<meta property="og:image">` → `/images/operator-app-og.png` (the existing 1mg.live operator OG image)
-- `<meta property="og:url">` → `https://1mg.live`
-- `<meta name="twitter:title">`, `<meta name="twitter:description">`, `<meta name="twitter:image">` → matching values
+---
 
-This way:
-- Sharing `https://1mg.live/affiliate` → unfurler reads static HTML → shows 1mg.live branding ✅
-- Sharing `https://1mg.live/buy-predictions-app` → same ✅
-- Sharing `https://1mg.live/` → 1mg.live branding ✅
-- Inside the SPA, `useSeoMeta` still overrides per-route correctly for browser tabs and SEO crawlers that DO run JS (Google, Bing) ✅
+## Affiliate Page Redirect — Where It Will Go
 
-### What is NOT changed
-- No changes to `AffiliateProgram.tsx`, `BuyPredictionsApp.tsx`, `PlatformApp.tsx`
-- No changes to routing, Privy, Trackdesk, checkout, operator logic
-- No changes to `useSeoMeta` hook (still works at runtime)
-- No changes to `1mgaming.com` route components (they keep using `useSeoMeta` for runtime)
+**Location identified:** `src/pages/platform/PlatformApp.tsx`, lines 101–102.
 
-### Caveat for the user
-Link unfurlers (iMessage, WhatsApp, Slack, Twitter) cache previews aggressively — sometimes for **24–48 hours or longer**. After deploy:
-1. The static HTML will be correct immediately
-2. But existing previews in iMessage/WhatsApp may still show old 1M Gaming for hours/days
-3. To force-refresh: use Facebook's [Sharing Debugger](https://developers.facebook.com/tools/debug/) and Twitter's Card Validator to scrape fresh
-4. iMessage caches per-device; sometimes only fixed by clearing the URL preview cache or sharing in a new conversation
+When you provide the GoAffPro affiliate portal URL, the swap is a one-line change. The `/affiliate` route currently renders `<AffiliateProgram />`. We will replace it with a tiny redirect component (e.g.):
 
-### Risk
-- **Low**: Only static metadata defaults change. SPA runtime metadata behavior unchanged.
-- **Side effect**: If a user shares a deep link on `1mgaming.com` that doesn't render its own component fast enough for a JS-capable crawler, the unfurler would show 1mg.live branding. Mitigation: 1mgaming.com is mostly auth-gated app routes, not heavily shared marketing pages.
+```tsx
+<Route path="/affiliate" element={<ExternalRedirect to="https://YOUR-GOAFFPRO-PORTAL-URL" />} />
+<Route path="/affiliates" element={<ExternalRedirect to="https://YOUR-GOAFFPRO-PORTAL-URL" />} />
+```
 
-### Test plan
-1. Deploy
-2. View page source of `https://1mg.live/affiliate` → confirm `<title>` and OG tags are 1mg.live branded
-3. Use Facebook Sharing Debugger on `https://1mg.live/affiliate` → confirm preview shows 1mg.live + operator OG image
-4. Use Twitter Card Validator → same
-5. Browser tab on `/affiliate` still shows runtime title from `useSeoMeta` (1mg.live Affiliate Program | Earn $400 USDC...) ✅
-6. Browser tab on `/buy-predictions-app` still shows correct runtime title ✅
-7. Confirm `1mgaming.com` flagship app still loads, in-app SEO via `useSeoMeta` still works for crawlers
+`AffiliateProgram.tsx` will be left in the codebase (not deleted) so we can roll back instantly by reverting the route element. **Not part of this patch** — wait for the URL.
+
+---
+
+## Risk Check
+
+| Area | Risk | Mitigation |
+|---|---|---|
+| Purchase flow | None — no changes to checkout, Privy, wallet, confirm | N/A |
+| UI blocking | None — try/catch wraps GoAffPro call | Failures log to console only |
+| 1mgaming.com pollution | None — hostname guard on loader + conversion | Verified pattern matches existing Trackdesk guard |
+| Trackdesk regression | None — Trackdesk code path unmodified | Both fire independently |
+| Double-fire on remount | Low — `useEffect` deps `[txHash, amount]`, stable values | GoAffPro typically dedupes by order number; fallback ID uses `Date.now()` only when no txHash, which is rare |
+| Loader not yet initialized when conversion fires | Handled — we set `window.goaffpro_order` regardless, and GoAffPro's loader picks it up on init | Plus we call `goaffpro.conversion()` if already loaded |
+
+---
+
+## Test Plan
+
+1. **Loader presence on 1mg.live**: Open `https://1mg.live/`, DevTools → Network → confirm `loader.js?shop=pfiwnywrwo` loads. Console: `typeof window.goaffpro` should become `"object"`.
+2. **Loader absent on 1mgaming.com**: Open `https://1mgaming.com/`, confirm no `goaffpro` request, `window.goaffpro` is `undefined`.
+3. **Loader absent on preview**: Open Lovable preview URL, confirm no GoAffPro network request.
+4. **Full-price conversion**: Complete a real $2400 purchase → land on `/operator-purchase-success` → DevTools console: inspect `window.goaffpro_order` → should be `{ number: "<txHash>", total: 2400 }`. Check GoAffPro dashboard for the conversion within ~60s.
+5. **Discounted promo**: Complete a partial-promo purchase → confirm `total` reflects discounted amount (not 2400).
+6. **Free promo (100% off)**: Complete free purchase → confirm `total: 0` is sent.
+7. **Trackdesk still works**: Same purchase flow → Trackdesk dashboard still records the conversion. Both systems coexist.
+8. **No txHash fallback**: Force a state-loss refresh on `/operator-purchase-success` without `?tx=` → confirm `number` falls back to `purchase_<timestamp>`, no crash.
+9. **Network failure**: Block `api.goaffpro.com` in DevTools → page still renders, "Start Setup" button works, console shows the warn but no error.
+
+---
+
+## Summary of Files Changed
+
+| File | Change |
+|---|---|
+| `index.html` | Add GoAffPro loader IIFE (hostname-guarded), inside `<head>` after Trackdesk block |
+| `src/pages/platform/OperatorPurchaseSuccess.tsx` | Add second `useEffect` to set `window.goaffpro_order` and fire conversion (try/catch, hostname-guarded) |
+
+**Total: 2 files, additive only. Trackdesk untouched. No backend, no routing, no checkout, no auth changes.**
