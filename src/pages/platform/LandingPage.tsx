@@ -541,6 +541,14 @@ export default function LandingPage() {
             </div>
             <div className="flex flex-wrap gap-6 text-sm text-white/35">
               <a href="/buy-predictions-app" className="hover:text-white/60 transition-colors">{t("platform.footer.buyApp")}</a>
+              <a
+                href="https://1mg.goaffpro.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-white/60 transition-colors"
+              >
+                Affiliates
+              </a>
               <a href="/help/are-prediction-markets-legal" className="hover:text-white/60 transition-colors">{t("platform.footer.whyLegal")}</a>
               <a href="mailto:1mgaming@proton.me" className="hover:text-white/60 transition-colors">{t("platform.footer.contact")}</a>
               <a href="/terms" className="hover:text-white/60 transition-colors">{t("platform.footer.terms")}</a>

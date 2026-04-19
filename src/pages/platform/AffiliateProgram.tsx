@@ -15,11 +15,8 @@ import JsonLd from "@/components/seo/JsonLd";
 // signup form is available on a paid plan. Approved affiliates receive their custom
 // tracking link by reply.
 const AFFILIATE_EMAIL = "1mg.live.partnerships@gmail.com";
-const AFFILIATE_MAILTO = `mailto:${AFFILIATE_EMAIL}?subject=${encodeURIComponent(
-  "1mg.live Affiliate Program Application",
-)}&body=${encodeURIComponent(
-  "Hi 1mg.live team,\n\nI'd like to apply to the 1mg.live Affiliate Program.\n\nName:\nEmail:\nSocial links / website:\nHow I plan to promote 1mg.live:\n\nThanks!",
-)}`;
+// Affiliate signups are now handled via GoAffPro self-serve portal.
+const AFFILIATE_PORTAL_URL = "https://1mg.goaffpro.com";
 
 const COMMISSION_USD = 400;
 const PACKAGE_USD = 2400;
@@ -38,7 +35,7 @@ export default function AffiliateProgram() {
   });
 
   const handleApply = () => {
-    window.location.href = AFFILIATE_MAILTO;
+    window.open(AFFILIATE_PORTAL_URL, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -118,12 +115,17 @@ export default function AffiliateProgram() {
             will send you your custom affiliate tracking link and program details.
           </p>
           <Button onClick={handleApply} className="gap-2 bg-blue-600 hover:bg-blue-500 text-white border-0">
-            Apply by Email <ArrowRight className="h-4 w-4" />
+            Join the Affiliate Program <ArrowRight className="h-4 w-4" />
           </Button>
           <p className="text-xs text-white/50 mt-3">
-            Or email us directly at{" "}
-            <a href={AFFILIATE_MAILTO} className="text-blue-400 hover:text-blue-300 underline underline-offset-2">
-              {AFFILIATE_EMAIL}
+            Sign up at{" "}
+            <a
+              href={AFFILIATE_PORTAL_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-400 hover:text-blue-300 underline underline-offset-2"
+            >
+              1mg.goaffpro.com
             </a>
           </p>
         </div>
@@ -186,7 +188,7 @@ export default function AffiliateProgram() {
           <DetailRow label="Payout timing" value={`Within ${PAYOUT_HOURS} hours of confirmed sale`} />
           <DetailRow label="Tracking" value="Trackdesk — industry-standard affiliate platform" />
           <DetailRow label="Minimum payout" value="No minimum — every sale is paid out" />
-          <DetailRow label="How to apply" value={`Email ${AFFILIATE_EMAIL} — reviewed within 48 hours`} />
+          <DetailRow label="How to apply" value="Sign up self-serve at 1mg.goaffpro.com" />
         </div>
       </section>
 
