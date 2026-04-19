@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, DollarSign, Clock, Wallet, Users, Cookie, Megaphone, CheckCircle2 } from "lucide-react";
+import { ArrowRight, DollarSign, Clock, Wallet, Users, Cookie, Megaphone, CheckCircle2, Copy, Check, Package, MessageSquare, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSeoMeta } from "@/components/seo/SeoMeta";
 import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
@@ -67,7 +68,7 @@ export default function AffiliateProgram() {
               onClick={handleApply}
               className="gap-1.5 bg-blue-600 hover:bg-blue-500 text-white border-0"
             >
-              Apply by Email <ArrowRight className="h-3.5 w-3.5" />
+              Join via GoAffPro <ArrowRight className="h-3.5 w-3.5" />
             </Button>
           </div>
         </div>
@@ -92,7 +93,7 @@ export default function AffiliateProgram() {
             onClick={handleApply}
             className="gap-2 text-base px-8 bg-blue-600 hover:bg-blue-500 text-white border-0"
           >
-            Apply by Email <ArrowRight className="h-4 w-4" />
+            Join via GoAffPro <ArrowRight className="h-4 w-4" />
           </Button>
           <Button
             size="lg"
@@ -105,17 +106,17 @@ export default function AffiliateProgram() {
         </div>
       </section>
 
-      {/* How to apply by email */}
+      {/* How to apply via GoAffPro */}
       <section className="max-w-3xl mx-auto px-4 py-12">
         <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-6 md:p-8">
           <h2 className="text-xl md:text-2xl font-bold mb-3 text-white">How to apply</h2>
           <p className="text-white/70 leading-relaxed mb-4">
-            Apply by email to join the 1mg.live Affiliate Program. Send us your name, email,
-            social links or website, and how you plan to promote 1mg.live. If approved, we
-            will send you your custom affiliate tracking link and program details.
+            Sign up self-serve in under 2 minutes via our GoAffPro affiliate portal. You'll get
+            your own tracking link, real-time dashboard, and access to marketing assets the moment
+            your account is approved.
           </p>
           <Button onClick={handleApply} className="gap-2 bg-blue-600 hover:bg-blue-500 text-white border-0">
-            Join the Affiliate Program <ArrowRight className="h-4 w-4" />
+            Join via GoAffPro <ArrowRight className="h-4 w-4" />
           </Button>
           <p className="text-xs text-white/50 mt-3">
             Sign up at{" "}
@@ -147,8 +148,8 @@ export default function AffiliateProgram() {
         <div className="grid md:grid-cols-3 gap-6">
           <Step
             num={1}
-            title="Apply by email"
-            body="Email us your details. If approved, we'll send you your custom affiliate tracking link."
+            title="Sign up on GoAffPro"
+            body="Self-serve signup in under 2 minutes. Get your tracking link instantly."
           />
           <Step
             num={2}
@@ -186,9 +187,50 @@ export default function AffiliateProgram() {
           <DetailRow label="Cookie duration" value={`${COOKIE_DAYS} days`} />
           <DetailRow label="Payout method" value="USDC on Polygon, sent directly to your wallet" />
           <DetailRow label="Payout timing" value={`Within ${PAYOUT_HOURS} hours of confirmed sale`} />
-          <DetailRow label="Tracking" value="Trackdesk — industry-standard affiliate platform" />
+          <DetailRow label="Tracking" value="GoAffPro — industry-standard affiliate platform" />
           <DetailRow label="Minimum payout" value="No minimum — every sale is paid out" />
           <DetailRow label="How to apply" value="Sign up self-serve at 1mg.goaffpro.com" />
+        </div>
+      </section>
+
+      {/* Affiliate Marketing Kit */}
+      <section className="max-w-5xl mx-auto px-4 py-16 border-t border-white/5">
+        <h2 className="text-3xl font-bold text-center mb-3 text-white">Affiliate marketing kit</h2>
+        <p className="text-center text-white/60 mb-12 max-w-2xl mx-auto">
+          Everything you need to start promoting today. Copy, paste, and earn.
+        </p>
+
+        {/* Pitch card */}
+        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 md:p-8 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Package className="h-5 w-5 text-blue-400" />
+            <h3 className="font-semibold text-lg text-white">The pitch (memorize this)</h3>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
+            <KitRow label="What it is" value="A turnkey, branded sports prediction app — operator owns it end-to-end." />
+            <KitRow label="Price" value={`$${PACKAGE_USD} USDC, one-time`} />
+            <KitRow label="Your commission" value={`$${COMMISSION_USD} USDC per completed sale`} />
+            <KitRow label="Best buyers" value="Creators, sports influencers, marketing agencies, crypto communities, iGaming affiliates." />
+            <KitRow
+              label="What the buyer gets"
+              value="Custom-branded predictions app, live event liquidity from Polymarket, custom event creation, operator dashboard, fast USDC payouts, no coding required."
+            />
+            <KitRow label="Why it converts" value="Recurring upside for the buyer, fixed flat fee, instant launch — no dev team, no licensing." />
+          </div>
+        </div>
+
+        {/* Copyable outreach + social */}
+        <div className="grid md:grid-cols-2 gap-6">
+          <CopyBlock
+            icon={<MessageSquare className="h-5 w-5 text-blue-400" />}
+            title="Outreach message (DM / email)"
+            text={`Hey — quick one. I came across 1mg.live: it lets creators & agencies launch their own branded sports predictions app for a one-time $${PACKAGE_USD} USDC. You own the brand, set your own fees, and tap into live Polymarket liquidity from day one. No code, live in minutes. Worth a 2-min look? https://1mg.live`}
+          />
+          <CopyBlock
+            icon={<Share2 className="h-5 w-5 text-blue-400" />}
+            title="Social post"
+            text={`Launch your own branded sports predictions app in minutes.\n\n→ One-time $${PACKAGE_USD} USDC\n→ Live event liquidity\n→ Custom events + operator dashboard\n→ Fast USDC payouts\n→ No code\n\nYou own it. You brand it. You earn from it.\n\n👉 https://1mg.live`}
+          />
         </div>
       </section>
 
@@ -198,7 +240,11 @@ export default function AffiliateProgram() {
         <div className="space-y-4">
           <FAQ
             q="What exactly am I promoting?"
-            a={`The 1mg.live Operator App — a $${PACKAGE_USD} one-time package that lets anyone launch their own branded sports predictions app with live event liquidity, custom events, and an operator dashboard.`}
+            a={`The 1mg.live Operator App — a $${PACKAGE_USD} USDC one-time package that lets anyone launch their own branded sports predictions app with live event liquidity, custom events, and an operator dashboard.`}
+          />
+          <FAQ
+            q="How much do I earn?"
+            a={`$${COMMISSION_USD} USDC per completed operator app sale (${COMMISSION_PCT}% of the $${PACKAGE_USD} package). No caps, no tiers — every confirmed sale pays the same.`}
           />
           <FAQ
             q="When do I get paid?"
@@ -209,12 +255,12 @@ export default function AffiliateProgram() {
             a={`A confirmed sale = a buyer who clicks your tracking link, completes the $${PACKAGE_USD} USDC purchase on Polygon, and whose payment is verified on-chain.`}
           />
           <FAQ
-            q="Can I run paid ads?"
-            a="Yes — paid ads are allowed except direct bidding on '1mg.live' brand keywords. Email us if you're unsure."
+            q="How is tracking handled?"
+            a={`We use GoAffPro with a ${COOKIE_DAYS}-day cookie. As long as the buyer purchases within ${COOKIE_DAYS} days of clicking your link, the sale is attributed to you.`}
           />
           <FAQ
-            q="How is tracking handled?"
-            a={`We use Trackdesk with a ${COOKIE_DAYS}-day cookie. As long as the buyer purchases within ${COOKIE_DAYS} days of clicking your link, the sale is attributed to you.`}
+            q="Can I run paid ads?"
+            a="Yes — paid ads are allowed except direct bidding on '1mg.live' brand keywords. Reach out if you're unsure."
           />
         </div>
       </section>
@@ -230,7 +276,7 @@ export default function AffiliateProgram() {
           onClick={handleApply}
           className="gap-2 text-base px-8 bg-blue-600 hover:bg-blue-500 text-white border-0"
         >
-          Apply by Email <ArrowRight className="h-4 w-4" />
+          Join via GoAffPro <ArrowRight className="h-4 w-4" />
         </Button>
       </section>
 
@@ -297,6 +343,50 @@ function FAQ({ q, a }: { q: string; a: string }) {
     <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
       <h3 className="font-semibold mb-2 text-white">{q}</h3>
       <p className="text-sm text-white/60 leading-relaxed">{a}</p>
+    </div>
+  );
+}
+
+function KitRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-xs uppercase tracking-wide text-blue-400 mb-1">{label}</div>
+      <div className="text-sm text-white/80 leading-relaxed">{value}</div>
+    </div>
+  );
+}
+
+function CopyBlock({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard unavailable — non-blocking */
+    }
+  };
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5 flex flex-col">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          {icon}
+          <h3 className="font-semibold text-white">{title}</h3>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleCopy}
+          className="gap-1.5 h-8 bg-transparent border-white/10 text-white hover:bg-white/5 hover:text-white"
+        >
+          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+          {copied ? "Copied" : "Copy"}
+        </Button>
+      </div>
+      <pre className="text-sm text-white/70 whitespace-pre-wrap font-sans leading-relaxed flex-1">
+        {text}
+      </pre>
     </div>
   );
 }
