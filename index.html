@@ -78,6 +78,19 @@
         })(window,'1mg-live','TrackdeskObject');
       })();
     </script>
+
+    <!-- GoAffPro affiliate tracking — 1mg.live only -->
+    <script>
+      (function(){
+        var h=location.hostname;
+        if(h!=='1mg.live'&&h!=='www.1mg.live')return;
+        var s=document.createElement('script');
+        s.async=1;
+        s.src='https://api.goaffpro.com/loader.js?shop=pfiwnywrwo';
+        var f=document.getElementsByTagName('script')[0];
+        f.parentNode.insertBefore(s,f);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -41,6 +41,31 @@ export default function OperatorPurchaseSuccess() {
     }
   }, [txHash, amount]);
 
+  // Fire GoAffPro conversion — best-effort, never blocks UI
+  useEffect(() => {
+    try {
+      if (typeof window === "undefined") return;
+      if (!/^(www\.)?1mg\.live$/i.test(window.location.hostname)) return;
+
+      const w = window as any;
+      const orderNumber = txHash || `purchase_${Date.now()}`;
+      const orderTotal = typeof amount === "number" ? amount : 2400;
+
+      w.goaffpro_order = {
+        number: orderNumber,
+        total: orderTotal,
+      };
+
+      // GoAffPro auto-detects window.goaffpro_order on script load.
+      // If loader has already initialized, manually trigger conversion fire.
+      if (typeof w.goaffpro === "object" && typeof w.goaffpro.conversion === "function") {
+        w.goaffpro.conversion(w.goaffpro_order);
+      }
+    } catch (e) {
+      console.warn("[GoAffPro] conversion fire failed (non-blocking)", e);
+    }
+  }, [txHash, amount]);
+
   return (
     <div className="min-h-screen bg-[#06080f] text-white flex items-center justify-center px-4">
       <div className="max-w-md text-center">
