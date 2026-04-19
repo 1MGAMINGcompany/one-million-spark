@@ -188,7 +188,7 @@ export default function AffiliateProgram() {
           <DetailRow label="Payout timing" value={`Within ${PAYOUT_HOURS} hours of confirmed sale`} />
           <DetailRow label="Tracking" value="Trackdesk — industry-standard affiliate platform" />
           <DetailRow label="Minimum payout" value="No minimum — every sale is paid out" />
-          <DetailRow label="How to apply" value={`Email ${AFFILIATE_EMAIL} — reviewed within 48 hours`} />
+          <DetailRow label="How to apply" value="Sign up self-serve at 1mg.goaffpro.com" />
         </div>
       </section>
 
