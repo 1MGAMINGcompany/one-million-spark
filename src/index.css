@@ -134,6 +134,20 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .platform-blue-button {
+    background: hsl(221 83% 53%);
+    color: hsl(0 0% 100%);
+    border-color: transparent;
+    box-shadow: 0 10px 34px -10px hsl(217 91% 60% / 0.65);
+  }
+
+  .platform-blue-button:hover {
+    background: hsl(217 91% 60%);
+    box-shadow: 0 14px 42px -12px hsl(213 94% 68% / 0.75);
+  }
+}
+
 
 @layer base {
   /* Prevent horizontal overflow on mobile - critical for in-app browsers */
