@@ -624,6 +624,9 @@ function findWinnerMarket(ev: GammaEvent): GammaMarketExt | null {
     "map 1", "map 2", "map 3", "map1", "map2", "map3",
     "round ", "pistol round", "first blood", "first kill",
     "total kills", "total maps", "ace",
+    // Partial-game markets (NBA/NHL/MLB quarters, halves, periods, innings)
+    "1h", "2h", "first half", "second half", "quarter", "1q", "2q", "3q", "4q",
+    "period", "inning", "half moneyline",
     // Draw-only / special
     "draw or", "go the distance",
   ];
@@ -636,6 +639,9 @@ function findWinnerMarket(ev: GammaEvent): GammaMarketExt | null {
     /-first-blood/i, /-first-kill/i, /-total-kills/i,
     // MMA/UFC prop filters
     /-win-by-/i, /-totals-/i, /-go-the-distance/i, /-win-by-submission/i,
+    // Partial-game markets
+    /-1h-/i, /-2h-/i, /-1q-/i, /-2q-/i, /-3q-/i, /-4q-/i,
+    /-first-half/i, /-second-half/i, /-period-[0-9]/i, /-inning-[0-9]/i,
   ];
   const evSlug = (ev.slug || "").toLowerCase();
   if (slugRejectPatterns.some(re => re.test(evSlug))) return null;
