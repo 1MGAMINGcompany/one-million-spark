@@ -354,7 +354,7 @@ export default function LandingPage() {
               <Button
                 onClick={login}
                 size="sm"
-                className="bg-blue-600 hover:bg-blue-500 text-white border-0"
+                className="platform-blue-button border-0"
               >
                 {t("platform.nav.signIn")}
               </Button>
@@ -385,9 +385,11 @@ export default function LandingPage() {
                 <Button
                   onClick={handleBuyNow}
                   size="lg"
-                  className="bg-blue-600 hover:bg-blue-500 text-white text-lg px-10 h-16 border-0 btn-glow rounded-xl font-bold w-full sm:w-auto"
+                  className="platform-blue-button text-lg px-10 h-16 border-0 btn-glow rounded-xl font-bold w-full sm:w-auto"
                 >
-                  {t("platform.hero.buyNow")} <ArrowRight size={20} className="ml-2" />
+                  <span className="inline-flex items-center justify-center gap-2 text-center">
+                    {t("platform.hero.buyNow")} <ArrowRight size={20} />
+                  </span>
                 </Button>
                 <div className="text-sm text-white/40 space-y-1.5 max-w-md">
                   <p className="text-white/50 font-medium">{t("platform.hero.walletCreated")}</p>
@@ -515,9 +517,11 @@ export default function LandingPage() {
           <Button
             onClick={handleBuyNow}
             size="lg"
-            className="bg-blue-600 hover:bg-blue-500 text-white text-lg px-10 h-16 border-0 btn-glow rounded-xl font-bold"
+            className="platform-blue-button text-lg px-10 h-16 border-0 btn-glow rounded-xl font-bold"
           >
-            {t("platform.hero.buyNow")} <ArrowRight size={20} className="ml-2" />
+            <span className="inline-flex items-center justify-center gap-2 text-center">
+              {t("platform.hero.buyNow")} <ArrowRight size={20} />
+            </span>
           </Button>
           <div className="mt-4 text-sm text-white/40 space-y-1">
             <p className="text-white/50 font-medium">{t("platform.hero.walletCreated")}</p>
