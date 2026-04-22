@@ -624,6 +624,9 @@ function findWinnerMarket(ev: GammaEvent): GammaMarketExt | null {
     "map 1", "map 2", "map 3", "map1", "map2", "map3",
     "round ", "pistol round", "first blood", "first kill",
     "total kills", "total maps", "ace",
+    // Partial-game markets (NBA/NHL/MLB quarters, halves, periods, innings)
+    "1h", "2h", "first half", "second half", "quarter", "1q", "2q", "3q", "4q",
+    "period", "inning", "half moneyline",
     // Draw-only / special
     "draw or", "go the distance",
   ];
@@ -636,6 +639,9 @@ function findWinnerMarket(ev: GammaEvent): GammaMarketExt | null {
     /-first-blood/i, /-first-kill/i, /-total-kills/i,
     // MMA/UFC prop filters
     /-win-by-/i, /-totals-/i, /-go-the-distance/i, /-win-by-submission/i,
+    // Partial-game markets
+    /-1h-/i, /-2h-/i, /-1q-/i, /-2q-/i, /-3q-/i, /-4q-/i,
+    /-first-half/i, /-second-half/i, /-period-[0-9]/i, /-inning-[0-9]/i,
   ];
   const evSlug = (ev.slug || "").toLowerCase();
   if (slugRejectPatterns.some(re => re.test(evSlug))) return null;
@@ -1055,7 +1061,7 @@ const COUNTRY_CODE_MAP: Record<string, string> = {
   "angola": "ao", "ethiopia": "et", "uganda": "ug", "cape verde": "cv",
   "haiti": "ht", "dominican republic": "do", "curacao": "cw",
   "bermuda": "bm", "suriname": "sr", "guyana": "gy",
-  "wales": "gb-wls", "northern ireland": "gb-nir",
+  "northern ireland": "gb-nir",
 };
 
 function resolveCountryFlag(name: string): string | null {
@@ -1185,24 +1191,18 @@ async function importSingleEvent(
     const priceB = parseFloat(outcomePrices[1] || "0");
     if ((priceA <= 0.01 && priceB >= 0.99) || (priceB <= 0.01 && priceA >= 0.99)) continue;
 
+    const candidateTitle = (market.groupItemTitle || market.question || "").trim();
+
     // Dedup: skip if conditionId already exists in prediction_fights
     const { data: existingByCondition } = await supabase
       .from("prediction_fights")
       .select("id")
       .eq("polymarket_condition_id", market.conditionId)
       .maybeSingle();
-    if (existingByCondition) { imported++; continue; }
-
-    // Dedup: title-only match (case-insensitive, whitespace-stripped)
-    const candidateTitle = (market.groupItemTitle || market.question || "").trim();
-    const normalizedTitle = candidateTitle.toLowerCase().replace(/\s+/g, "");
-    if (normalizedTitle.length > 3) {
-      const { data: titleMatch } = await supabase
-        .from("prediction_fights")
-        .select("id")
-        .filter("title", "ilike", candidateTitle)
-        .limit(1);
-      if (titleMatch && titleMatch.length > 0) { imported++; continue; }
+    if (existingByCondition) {
+      console.log(`[polymarket-sync] duplicate skipped reason=same_condition_id title="${candidateTitle}" condition=${market.conditionId}`);
+      imported++;
+      continue;
     }
 
     // Dedup: normalized team names + event_date
@@ -1224,7 +1224,11 @@ async function importSingleEvent(
           const nB = normalizeTeamName(f.fighter_b_name);
           return (nA === candA && nB === candB) || (nA === candB && nB === candA);
         });
-        if (matchupExists) { imported++; continue; }
+        if (matchupExists) {
+          console.log(`[polymarket-sync] duplicate skipped reason=same_matchup_date title="${candidateTitle}" date=${dateStr}`);
+          imported++;
+          continue;
+        }
       }
     }
 
@@ -1235,6 +1239,7 @@ async function importSingleEvent(
       .maybeSingle();
 
     if (existingFight) {
+      console.log(`[polymarket-sync] duplicate skipped reason=same_market_id title="${candidateTitle}" market=${market.id}`);
       const updatePayload: Record<string, unknown> = {
         price_a: parseFloat(outcomePrices[0] || "0"),
         price_b: parseFloat(outcomePrices[1] || "0"),
