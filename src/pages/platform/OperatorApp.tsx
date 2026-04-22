@@ -24,6 +24,8 @@ import { USDC_E_CONTRACT, USDC_NATIVE_CONTRACT, USDC_DECIMALS } from "@/lib/poly
 import { toast } from "sonner";
 import { dbg } from "@/lib/debugLog";
 import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
+import { LayoutDashboard } from "lucide-react";
 import SimplePredictionCard from "@/components/operator/SimplePredictionCard";
 import SimplePredictionModal from "@/components/operator/SimplePredictionModal";
 import EnableTradingBanner from "@/components/predictions/EnableTradingBanner";
