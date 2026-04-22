@@ -1185,24 +1185,18 @@ async function importSingleEvent(
     const priceB = parseFloat(outcomePrices[1] || "0");
     if ((priceA <= 0.01 && priceB >= 0.99) || (priceB <= 0.01 && priceA >= 0.99)) continue;
 
+    const candidateTitle = (market.groupItemTitle || market.question || "").trim();
+
     // Dedup: skip if conditionId already exists in prediction_fights
     const { data: existingByCondition } = await supabase
       .from("prediction_fights")
       .select("id")
       .eq("polymarket_condition_id", market.conditionId)
       .maybeSingle();
-    if (existingByCondition) { imported++; continue; }
-
-    // Dedup: title-only match (case-insensitive, whitespace-stripped)
-    const candidateTitle = (market.groupItemTitle || market.question || "").trim();
-    const normalizedTitle = candidateTitle.toLowerCase().replace(/\s+/g, "");
-    if (normalizedTitle.length > 3) {
-      const { data: titleMatch } = await supabase
-        .from("prediction_fights")
-        .select("id")
-        .filter("title", "ilike", candidateTitle)
-        .limit(1);
-      if (titleMatch && titleMatch.length > 0) { imported++; continue; }
+    if (existingByCondition) {
+      console.log(`[polymarket-sync] duplicate skipped reason=same_condition_id title="${candidateTitle}" condition=${market.conditionId}`);
+      imported++;
+      continue;
     }
 
     // Dedup: normalized team names + event_date
@@ -1224,7 +1218,11 @@ async function importSingleEvent(
           const nB = normalizeTeamName(f.fighter_b_name);
           return (nA === candA && nB === candB) || (nA === candB && nB === candA);
         });
-        if (matchupExists) { imported++; continue; }
+        if (matchupExists) {
+          console.log(`[polymarket-sync] duplicate skipped reason=same_matchup_date title="${candidateTitle}" date=${dateStr}`);
+          imported++;
+          continue;
+        }
       }
     }
 
@@ -1235,6 +1233,7 @@ async function importSingleEvent(
       .maybeSingle();
 
     if (existingFight) {
+      console.log(`[polymarket-sync] duplicate skipped reason=same_market_id title="${candidateTitle}" market=${market.id}`);
       const updatePayload: Record<string, unknown> = {
         price_a: parseFloat(outcomePrices[0] || "0"),
         price_b: parseFloat(outcomePrices[1] || "0"),
