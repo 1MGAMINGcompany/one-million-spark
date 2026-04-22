@@ -91,6 +91,7 @@ export default function PurchasePage() {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [freeActivationFailed, setFreeActivationFailed] = useState(false);
 
   // Promo code
   const [promoCode, setPromoCode] = useState("");
@@ -104,6 +105,7 @@ export default function PurchasePage() {
   const validatePromo = useCallback(async () => {
     if (!promoCode.trim()) return;
     setValidatingPromo(true);
+    setFreeActivationFailed(false);
     try {
       const { data, error: err } = await supabase.functions.invoke("prediction-admin", {
         body: { action: "validatePromoCode", wallet: "system", code: promoCode.trim() },
@@ -144,7 +146,7 @@ export default function PurchasePage() {
         );
         const result = await res.json().catch(() => ({}));
         if (!res.ok || result?.success === false) {
-          throw new Error(purchaseErrorMessage(result?.error) || "Promo activation failed. Please try again.");
+          throw new Error(purchaseErrorMessage(result?.stage || result?.error) || "Promo activation failed. Please try again.");
         }
         clearPendingOperatorRef();
         navigate(`/operator-purchase-success?amount=0&promo=${encodeURIComponent(promoCode.trim().toUpperCase())}`, {
@@ -201,6 +203,7 @@ export default function PurchasePage() {
     } catch (e: any) {
       console.error("[PurchasePage] Error:", e);
       setError(e?.message || "Transaction failed");
+      if (effectivePrice === 0 && promoResult?.valid) setFreeActivationFailed(true);
       setStep("error");
     } finally {
       setConfirming(false);
