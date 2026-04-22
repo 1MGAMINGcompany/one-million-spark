@@ -354,7 +354,7 @@ export default function PurchasePage() {
               <Button
                 onClick={() => navigate("/add-funds")}
                 size="sm"
-                className="mt-3 bg-blue-600 hover:bg-blue-500 border-0 text-xs gap-1.5"
+                className="mt-3 platform-blue-button border-0 text-xs gap-1.5"
               >
                 <CreditCard size={14} /> {t("operator.dashboard.addFundsNow")}
               </Button>
@@ -374,24 +374,24 @@ export default function PurchasePage() {
             onClick={handlePayment}
             disabled={!agreedFee || !hasEnoughBalance || confirming || step === "confirming"}
             size="lg"
-            className="w-full bg-blue-600 hover:bg-blue-500 text-white border-0 h-14 text-lg"
+            className="w-full h-14 inline-flex items-center justify-center gap-2 px-4 text-base sm:text-lg text-center platform-blue-button border-0 rounded-xl font-bold [&_svg]:shrink-0"
           >
             {step === "confirming" ? (
-              <>
+              <span className="inline-flex items-center justify-center gap-2 text-center">
                 <Loader2 size={20} className="animate-spin" /> {effectivePrice === 0 ? "Activating free access..." : "Confirming on-chain..."}
-              </>
+              </span>
             ) : step === "payment" ? (
-              <>
+              <span className="inline-flex items-center justify-center gap-2 text-center">
                 <Loader2 size={20} className="animate-spin" /> Sending transaction...
-              </>
+              </span>
             ) : effectivePrice === 0 ? (
-              <>
+              <span className="inline-flex items-center justify-center gap-2 text-center">
                 {freeActivationFailed ? "Retry Free Activation" : "Activate for Free"} <ArrowRight size={18} />
-              </>
+              </span>
             ) : (
-              <>
+              <span className="inline-flex items-center justify-center gap-2 text-center">
                 Confirm Purchase — ${effectivePrice.toLocaleString()} USDC <ArrowRight size={18} />
-              </>
+              </span>
             )}
           </Button>
 
