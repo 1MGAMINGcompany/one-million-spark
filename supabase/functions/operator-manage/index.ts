@@ -27,7 +27,10 @@ function extractPrivyDid(token: string): string | null {
 const TREASURY = "0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d".toLowerCase();
 // Bridged USDC.e — canonical token for all prediction money flows (including purchase)
 const USDC_CONTRACT = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174".toLowerCase();
-const FULL_PRICE_RAW = BigInt(2400) * BigInt(10 ** 6);
+const BASE_PRICE_USDC = 2400;
+const USDC_DECIMALS = BigInt(10 ** 6);
+const CENTS_TO_USDC_RAW = BigInt(10 ** 4);
+const FULL_PRICE_RAW = BigInt(BASE_PRICE_USDC) * USDC_DECIMALS;
 
 const POLYGON_RPCS = [
   "https://polygon-bor-rpc.publicnode.com",
@@ -38,6 +41,26 @@ const POLYGON_RPCS = [
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
+
+function calculateDiscountedCents(promo: { discount_type: string; discount_value: number }): number {
+  const baseCents = BASE_PRICE_USDC * 100;
+  if (promo.discount_type === "full") return 0;
+  if (promo.discount_type === "percent") {
+    return Math.max(0, Math.round(baseCents * (1 - Number(promo.discount_value || 0) / 100)));
+  }
+  if (promo.discount_type === "fixed") {
+    return Math.max(0, baseCents - Math.round(Number(promo.discount_value || 0) * 100));
+  }
+  return baseCents;
+}
+
+function centsToUsdc(cents: number): number {
+  return cents / 100;
+}
+
+function centsToRaw(cents: number): bigint {
+  return BigInt(cents) * CENTS_TO_USDC_RAW;
+}
 
 const ALLOWED_SPORTS_SET = new Set([
   "NFL", "NBA", "NHL", "SOCCER", "MMA", "BOXING", "MLB", "TENNIS",
@@ -189,6 +212,52 @@ async function verifyTxOnChain(txHash: string, minAmountRaw: bigint): Promise<{ 
   return { valid: false, error: "all_rpcs_failed" };
 }
 
+// deno-lint-ignore no-explicit-any
+async function activatePurchasedOperator(sb: any, privyDid: string, txHash: string | null) {
+  const { data: existing, error: lookupErr } = await sb
+    .from("operators")
+    .select("id, status, subdomain, fee_percent")
+    .eq("user_id", privyDid)
+    .maybeSingle();
+  if (lookupErr) return { error: "operator_lookup_failed", message: "Your account could not be activated. Please contact support." };
+
+  let operatorId: string | null = null;
+  let slug = "your-app";
+  let feePercent = 5;
+
+  if (existing) {
+    const { error: updateErr } = await sb
+      .from("operators")
+      .update({ status: "active", ...(txHash ? { purchase_tx_hash: txHash } : {}), updated_at: new Date().toISOString() })
+      .eq("id", existing.id);
+    if (updateErr) return { error: "operator_activation_failed", message: "Your account could not be activated. Please contact support." };
+    operatorId = existing.id;
+    slug = existing.subdomain || slug;
+    feePercent = existing.fee_percent ?? feePercent;
+  } else {
+    const pendingSub = "pending-" + Date.now();
+    const { data: inserted, error: insertErr } = await sb
+      .from("operators")
+      .insert({ user_id: privyDid, brand_name: "My App", subdomain: pendingSub, status: "active", ...(txHash ? { purchase_tx_hash: txHash } : {}) })
+      .select("id")
+      .single();
+    if (insertErr || !inserted?.id) return { error: "operator_creation_failed", message: "Your account could not be activated. Please contact support." };
+    operatorId = inserted.id;
+    slug = pendingSub;
+  }
+
+  const { error: settingsErr } = await sb.from("operator_settings").upsert({
+    operator_id: operatorId,
+    allowed_sports: ["Soccer", "MMA", "Boxing"],
+    show_polymarket_events: true,
+    show_platform_events: true,
+    homepage_layout: "default",
+  }, { onConflict: "operator_id" });
+  if (settingsErr) return { error: "settings_creation_failed", message: "Your account settings could not be created. Please contact support." };
+
+  return { operatorId, slug, feePercent };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -216,67 +285,16 @@ Deno.serve(async (req) => {
         if (promo.uses_count >= promo.max_uses) return jsonResp({ error: "promo_code_exhausted" }, 400);
         if (promo.expires_at && new Date(promo.expires_at) < new Date()) return jsonResp({ error: "promo_code_expired" }, 400);
 
-        let discountedPrice = 2400;
-        if (promo.discount_type === "full") discountedPrice = 0;
-        else if (promo.discount_type === "percent") discountedPrice = Math.max(0, 2400 * (1 - promo.discount_value / 100));
-        else if (promo.discount_type === "fixed") discountedPrice = Math.max(0, 2400 - promo.discount_value);
+        const discountedCents = calculateDiscountedCents(promo);
+        const discountedPrice = centsToUsdc(discountedCents);
 
         if (discountedPrice === 0) {
           // Full discount — activate without payment, but only report success after all critical writes succeed.
           console.log("[operator-manage] full-discount promo activation started", { code: promo.code, privyDid });
-          const { data: existing, error: existingErr } = await sb
-            .from("operators")
-            .select("id, status, subdomain, fee_percent")
-            .eq("user_id", privyDid)
-            .maybeSingle();
-          if (existingErr) {
-            console.error("[operator-manage] full-discount operator lookup failed", existingErr);
-            return jsonResp({ success: false, error: "Your account could not be activated. Please contact support.", stage: "operator_lookup_failed" });
-          }
-
-          let activatedOpId: string | null = null;
-          let activatedSlug = "your-app";
-          let activatedFee = 5;
-
-          if (existing) {
-            const { error: updateErr } = await sb
-              .from("operators")
-              .update({ status: "active", updated_at: new Date().toISOString() })
-              .eq("id", existing.id);
-            if (updateErr) {
-              console.error("[operator-manage] full-discount operator activation failed", updateErr);
-              return jsonResp({ success: false, error: "Your account could not be activated. Please contact support.", stage: "operator_activation_failed" });
-            }
-            activatedOpId = existing.id;
-            activatedSlug = existing.subdomain || "your-app";
-            activatedFee = existing.fee_percent ?? 5;
-            console.log("[operator-manage] full-discount operator activated", { operatorId: activatedOpId });
-          } else {
-            const pendingSub = "pending-" + Date.now();
-            const { data: inserted, error: insertErr } = await sb
-              .from("operators")
-              .insert({ user_id: privyDid, brand_name: "My App", subdomain: pendingSub, status: "active" })
-              .select("id")
-              .single();
-            if (insertErr || !inserted?.id) {
-              console.error("[operator-manage] full-discount operator creation failed", insertErr);
-              return jsonResp({ success: false, error: "Your account could not be activated. Please contact support.", stage: "operator_creation_failed" });
-            }
-            activatedOpId = inserted?.id ?? null;
-            activatedSlug = pendingSub;
-            console.log("[operator-manage] full-discount operator created", { operatorId: activatedOpId });
-          }
-
-          const { error: settingsErr } = await sb.from("operator_settings").upsert({
-            operator_id: activatedOpId,
-            allowed_sports: ["Soccer", "MMA", "Boxing"],
-            show_polymarket_events: true,
-            show_platform_events: true,
-            homepage_layout: "default",
-          }, { onConflict: "operator_id" });
-          if (settingsErr) {
-            console.error("[operator-manage] full-discount settings creation failed", settingsErr);
-            return jsonResp({ success: false, error: "Your account settings could not be created. Please contact support.", stage: "settings_creation_failed" });
+          const activation = await activatePurchasedOperator(sb, privyDid, null);
+          if (activation.error) {
+            console.error("[operator-manage] full-discount activation failed", activation.error);
+            return jsonResp({ success: false, error: activation.message, stage: activation.error }, 500);
           }
 
           const { error: promoUpdateErr } = await sb
@@ -288,11 +306,11 @@ Deno.serve(async (req) => {
             return jsonResp({ success: false, error: "Promo activation failed. Please try again.", stage: "promo_usage_update_failed" });
           }
 
-          if (activatedOpId) {
-            await recordReferralBestEffort(sb, { operatorId: activatedOpId, privyDid, referralCode, txHash: null, amountCharged: 0 });
+          if (activation.operatorId) {
+            await recordReferralBestEffort(sb, { operatorId: activation.operatorId, privyDid, referralCode, txHash: null, amountCharged: 0 });
           }
-          console.log("[operator-manage] full-discount promo activation complete", { operatorId: activatedOpId, code: promo.code });
-          sendWelcomeEmail(activatedSlug, activatedFee).catch(e => console.error("[email]", e));
+          console.log("[operator-manage] full-discount promo activation complete", { operatorId: activation.operatorId, code: promo.code });
+          sendWelcomeEmail(activation.slug || "your-app", activation.feePercent ?? 5).catch(e => console.error("[email]", e));
           return jsonResp({ success: true, status: "active", promo_applied: true, amount_charged: 0, promo_code: promo.code });
         }
 
@@ -303,26 +321,18 @@ Deno.serve(async (req) => {
         const { data: replay } = await sb.from("operators").select("id").eq("purchase_tx_hash", txHash).maybeSingle();
         if (replay) return jsonResp({ error: "tx_already_used" }, 409);
 
-        const minRaw = BigInt(Math.round(discountedPrice)) * BigInt(10 ** 6);
+        const minRaw = centsToRaw(discountedCents);
         const verification = await verifyTxOnChain(txHash, minRaw);
         if (!verification.valid) return jsonResp({ error: verification.error || "verification_failed" }, 400);
-        await sb.from("promo_codes").update({ uses_count: promo.uses_count + 1 }).eq("id", promo.id);
-        const { data: existing } = await sb.from("operators").select("id, status, subdomain, fee_percent").eq("user_id", privyDid).maybeSingle();
-        let activatedOpId: string | null = null;
-        if (existing) {
-          await sb.from("operators").update({ status: "active", purchase_tx_hash: txHash, updated_at: new Date().toISOString() }).eq("id", existing.id);
-          activatedOpId = existing.id;
-          sendWelcomeEmail(existing.subdomain || "your-app", existing.fee_percent ?? 5).catch(e => console.error("[email]", e));
-        } else {
-          const pendingSub = "pending-" + Date.now();
-          const { data: inserted } = await sb.from("operators").insert({ user_id: privyDid, brand_name: "My App", subdomain: pendingSub, status: "active", purchase_tx_hash: txHash }).select("id").single();
-          activatedOpId = inserted?.id ?? null;
-          sendWelcomeEmail("pending", 5).catch(e => console.error("[email]", e));
+        const activation = await activatePurchasedOperator(sb, privyDid, txHash);
+        if (activation.error) return jsonResp({ success: false, error: activation.message, stage: activation.error }, 500);
+        const { error: promoUpdateErr } = await sb.from("promo_codes").update({ uses_count: promo.uses_count + 1 }).eq("id", promo.id);
+        if (promoUpdateErr) return jsonResp({ success: false, error: "Promo usage could not be recorded. Please contact support.", stage: "promo_usage_update_failed" }, 500);
+        if (activation.operatorId) {
+          await recordReferralBestEffort(sb, { operatorId: activation.operatorId, privyDid, referralCode, txHash, amountCharged: discountedPrice });
         }
-        if (activatedOpId) {
-          await recordReferralBestEffort(sb, { operatorId: activatedOpId, privyDid, referralCode, txHash, amountCharged: discountedPrice });
-        }
-        return jsonResp({ success: true, status: "active", promo_applied: true });
+        sendWelcomeEmail(activation.slug || "your-app", activation.feePercent ?? 5).catch(e => console.error("[email]", e));
+        return jsonResp({ success: true, status: "active", promo_applied: true, promo_code: promo.code, amount_charged: discountedPrice });
       }
 
       // No promo code — standard payment verification
@@ -334,22 +344,13 @@ Deno.serve(async (req) => {
 
       const verification = await verifyTxOnChain(txHash, FULL_PRICE_RAW);
       if (!verification.valid) return jsonResp({ error: verification.error || "verification_failed" }, 400);
-      const { data: existing } = await sb.from("operators").select("id, status, subdomain, fee_percent").eq("user_id", privyDid).maybeSingle();
-      let activatedOpId: string | null = null;
-      if (existing) {
-        await sb.from("operators").update({ status: "active", purchase_tx_hash: txHash, updated_at: new Date().toISOString() }).eq("id", existing.id);
-        activatedOpId = existing.id;
-        sendWelcomeEmail(existing.subdomain || "your-app", existing.fee_percent ?? 5).catch(e => console.error("[email]", e));
-      } else {
-        const pendingSub = "pending-" + Date.now();
-        const { data: inserted } = await sb.from("operators").insert({ user_id: privyDid, brand_name: "My App", subdomain: pendingSub, status: "active", purchase_tx_hash: txHash }).select("id").single();
-        activatedOpId = inserted?.id ?? null;
-        sendWelcomeEmail("pending", 5).catch(e => console.error("[email]", e));
+      const activation = await activatePurchasedOperator(sb, privyDid, txHash);
+      if (activation.error) return jsonResp({ success: false, error: activation.message, stage: activation.error }, 500);
+      if (activation.operatorId) {
+        await recordReferralBestEffort(sb, { operatorId: activation.operatorId, privyDid, referralCode, txHash, amountCharged: BASE_PRICE_USDC });
       }
-      if (activatedOpId) {
-        await recordReferralBestEffort(sb, { operatorId: activatedOpId, privyDid, referralCode, txHash, amountCharged: 2400 });
-      }
-      return jsonResp({ success: true, status: "active" });
+      sendWelcomeEmail(activation.slug || "your-app", activation.feePercent ?? 5).catch(e => console.error("[email]", e));
+      return jsonResp({ success: true, status: "active", promo_applied: false, amount_charged: BASE_PRICE_USDC });
     }
 
     // ── check_subdomain ──

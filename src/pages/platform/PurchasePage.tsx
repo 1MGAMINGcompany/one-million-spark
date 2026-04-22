@@ -32,6 +32,7 @@ const TREASURY_ADDRESS = "0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d";
 // Bridged USDC.e — canonical token for all prediction money flows
 const USDC_CONTRACT = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
 const BASE_PRICE = 2400;
+const CENTS_TO_USDC_RAW = BigInt(10 ** 4);
 
 // ERC-20 transfer(address,uint256) function selector
 const TRANSFER_SELECTOR = "0xa9059cbb";
@@ -40,6 +41,26 @@ function encodeTransferData(to: string, amountRaw: string): string {
   const paddedTo = to.slice(2).toLowerCase().padStart(64, "0");
   const paddedAmount = amountRaw.slice(2).padStart(64, "0");
   return TRANSFER_SELECTOR + paddedTo + paddedAmount;
+}
+
+function usdcToCents(amount: number): number {
+  return Math.round(amount * 100);
+}
+
+function centsToRawHex(cents: number): string {
+  return "0x" + (BigInt(cents) * CENTS_TO_USDC_RAW).toString(16);
+}
+
+function purchaseErrorMessage(error: string): string {
+  const messages: Record<string, string> = {
+    invalid_promo_code: "This promo code is not valid.",
+    promo_code_exhausted: "This code has already been redeemed.",
+    promo_code_expired: "This promo code has expired.",
+    verification_failed: "Transaction verification failed. Please try again.",
+    no_matching_transfer: "Transaction verification failed. Confirm the USDC payment amount and recipient.",
+    tx_already_used: "This transaction has already been used for a purchase.",
+  };
+  return messages[error] || error || "Purchase failed. Please try again.";
 }
 
 type Step = "disclosure" | "payment" | "confirming" | "success" | "error";
@@ -74,6 +95,7 @@ export default function PurchasePage() {
   const [validatingPromo, setValidatingPromo] = useState(false);
 
   const effectivePrice = promoResult?.valid ? (promoResult.discounted_price ?? BASE_PRICE) : BASE_PRICE;
+  const purchaseAmountCents = usdcToCents(effectivePrice);
   const hasEnoughBalance = effectivePrice === 0 || (usdc_balance !== null && usdc_balance >= effectivePrice);
 
   const validatePromo = useCallback(async () => {
@@ -119,7 +141,7 @@ export default function PurchasePage() {
         );
         const result = await res.json().catch(() => ({}));
         if (!res.ok || result?.success === false) {
-          throw new Error(result?.error || "Promo activation failed. Please try again.");
+          throw new Error(purchaseErrorMessage(result?.error) || "Promo activation failed. Please try again.");
         }
         clearPendingOperatorRef();
         navigate(`/operator-purchase-success?amount=0&promo=${encodeURIComponent(promoCode.trim().toUpperCase())}`, {
@@ -128,7 +150,7 @@ export default function PurchasePage() {
         return;
       }
 
-      const amountRaw = "0x" + (BigInt(Math.ceil(effectivePrice)) * BigInt(10 ** 6)).toString(16);
+      const amountRaw = centsToRawHex(purchaseAmountCents);
       const data = encodeTransferData(TREASURY_ADDRESS, amountRaw);
 
       const txReceipt = await sendTransaction({
@@ -158,17 +180,20 @@ export default function PurchasePage() {
             tx_hash: hash,
             promo_code: promoCode.trim() || undefined,
             referral_code: pendingRef,
+            expected_amount_usdc: effectivePrice,
           }),
         }
       );
-      const result = await res.json();
-      if (!res.ok) {
-        throw new Error(result.error || "Verification failed");
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok || result?.success === false) {
+        throw new Error(purchaseErrorMessage(result?.error) || "Verification failed");
       }
 
       clearPendingOperatorRef();
-      navigate("/operator-purchase-success", {
-        state: { txHash: hash, amount: effectivePrice },
+      const params = new URLSearchParams({ amount: String(result?.amount_charged ?? effectivePrice), tx: hash });
+      if (promoResult?.valid && promoCode.trim()) params.set("promo", promoCode.trim().toUpperCase());
+      navigate(`/operator-purchase-success?${params.toString()}`, {
+        state: { txHash: hash, amount: result?.amount_charged ?? effectivePrice },
       });
     } catch (e: any) {
       console.error("[PurchasePage] Error:", e);
@@ -177,7 +202,7 @@ export default function PurchasePage() {
     } finally {
       setConfirming(false);
     }
-  }, [sendTransaction, getAccessToken, effectivePrice, promoCode, promoResult, navigate]);
+  }, [sendTransaction, getAccessToken, effectivePrice, purchaseAmountCents, promoCode, promoResult, navigate]);
 
   return (
     <div className="min-h-screen bg-[#06080f] text-white flex items-center justify-center px-4 py-20">

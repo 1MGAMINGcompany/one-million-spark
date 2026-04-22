@@ -6,6 +6,20 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const BASE_PRICE_USDC = 2400;
+
+function calculateDiscountedCents(promo: { discount_type: string; discount_value: number }): number {
+  const baseCents = BASE_PRICE_USDC * 100;
+  if (promo.discount_type === "full") return 0;
+  if (promo.discount_type === "percent") {
+    return Math.max(0, Math.round(baseCents * (1 - Number(promo.discount_value || 0) / 100)));
+  }
+  if (promo.discount_type === "fixed") {
+    return Math.max(0, baseCents - Math.round(Number(promo.discount_value || 0) * 100));
+  }
+  return baseCents;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -38,10 +52,7 @@ Deno.serve(async (req) => {
   if (!promo) return new Response(JSON.stringify({ valid: false, error: "Code not found" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   if (promo.uses_count >= promo.max_uses) return new Response(JSON.stringify({ valid: false, error: "Code fully redeemed" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   if (promo.expires_at && new Date(promo.expires_at) < new Date()) return new Response(JSON.stringify({ valid: false, error: "Code expired" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-  let discounted_price = 2400;
-  if (promo.discount_type === "full") discounted_price = 0;
-  else if (promo.discount_type === "percent") discounted_price = Math.max(0, 2400 * (1 - promo.discount_value / 100));
-  else if (promo.discount_type === "fixed") discounted_price = Math.max(0, 2400 - promo.discount_value);
+  const discounted_price = calculateDiscountedCents(promo) / 100;
   return new Response(JSON.stringify({ valid: true, discount_type: promo.discount_type, discount_value: promo.discount_value, discounted_price, promo_id: promo.id }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
