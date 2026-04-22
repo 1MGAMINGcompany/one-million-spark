@@ -1214,12 +1214,18 @@ async function importSingleEvent(
       // Query fights with same date, then check normalized names in-memory
       const { data: sameDateFights } = await supabase
         .from("prediction_fights")
-        .select("id, fighter_a_name, fighter_b_name")
+        .select("id, title, fighter_a_name, fighter_b_name, status, polymarket_active")
         .gte("event_date", `${dateStr}T00:00:00Z`)
         .lte("event_date", `${dateStr}T23:59:59Z`)
+        .in("status", ["open", "live", "locked"])
+        .not("polymarket_active", "is", false)
         .limit(200);
       if (sameDateFights && sameDateFights.length > 0) {
         const matchupExists = sameDateFights.some((f: any) => {
+          const existingTitle = `${f.title || ""}`.toLowerCase();
+          if (rejectWords.some(w => existingTitle.includes(w)) || slugRejectPatterns.some(re => re.test(existingTitle))) {
+            return false;
+          }
           const nA = normalizeTeamName(f.fighter_a_name);
           const nB = normalizeTeamName(f.fighter_b_name);
           return (nA === candA && nB === candB) || (nA === candB && nB === candA);
