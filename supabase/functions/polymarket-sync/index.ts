@@ -1055,7 +1055,7 @@ const COUNTRY_CODE_MAP: Record<string, string> = {
   "angola": "ao", "ethiopia": "et", "uganda": "ug", "cape verde": "cv",
   "haiti": "ht", "dominican republic": "do", "curacao": "cw",
   "bermuda": "bm", "suriname": "sr", "guyana": "gy",
-  "wales": "gb-wls", "northern ireland": "gb-nir",
+  "northern ireland": "gb-nir",
 };
 
 function resolveCountryFlag(name: string): string | null {
