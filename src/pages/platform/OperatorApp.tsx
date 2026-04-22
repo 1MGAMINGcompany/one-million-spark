@@ -943,6 +943,18 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
             </span>
           </div>
           <div className="flex items-center gap-3">
+            {isOperatorOwner && (
+              <Button
+                onClick={() => navigate("/dashboard")}
+                size="sm"
+                className="text-xs font-bold border-0 gap-1.5"
+                style={{ backgroundColor: theme.primary, color: theme.primaryForeground }}
+                title="Open operator dashboard"
+              >
+                <LayoutDashboard size={14} />
+                {t("operator.app.dashboardCta", "Dashboard")}
+              </Button>
+            )}
             <PlatformLanguageSwitcher />
             {isConnected && address ? (
               <div className="flex items-center gap-1.5">
