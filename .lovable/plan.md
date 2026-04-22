@@ -1,277 +1,254 @@
 
-## Quick buy-flow audit findings + hardening plan
+## Fix free-code activation error and confusing “Activate for Free” state
 
-### Direct answer: USDC.e or USDC?
+### What I found
 
-Technically, the operator app purchase uses **Bridged USDC.e on Polygon**:
+The free-code failure is not because `BESTRONG` is invalid.
+
+`BESTRONG` is still available:
 
 ```text
-Token contract: 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174
-Network: Polygon
-Treasury wallet: 0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d
+code: BESTRONG
+discount_type: full
+discount_value: 2400
+uses_count: 0
+max_uses: 1
 ```
 
-For customers, the app correctly labels it as **USDC on Polygon**. Internally it is USDC.e, but the UI should keep saying **USDC** so buyers are not confused.
+The backend log shows the real failure:
+
+```text
+[operator-manage] full-discount activation failed operator_lookup_failed
+```
+
+The affected Privy user currently has multiple operator rows:
+
+```text
+did:privy:cmlqvouen00te0clhp5wog5ke
+- demo
+- myworld
+```
+
+Several backend paths use `.maybeSingle()` or `.single()` for `operators where user_id = ...`. That fails when a user has more than one operator record, so the free activation returns:
+
+```text
+Your account could not be activated. Please contact support.
+```
+
+The button still appears because the frontend keeps the valid promo-code state after the failed backend response. That makes the UI look like the code worked but activation failed.
 
 ---
 
-## Audit result
+## Patch
 
-### 1. Free discount codes
+### File 1: `supabase/functions/operator-manage/index.ts`
 
-Current available full/free codes include:
+Make operator lookup tolerant of duplicate historical operator rows.
 
-- `BESTRONG`
-  - full discount
-  - $2,400 discount
-  - 0 uses
-  - max 1 use
-  - no expiry
+#### Change 1: Add a canonical operator lookup helper
 
-The free-code flow now looks mostly correct:
+Add a helper that fetches all operators for the current Privy DID and chooses one deterministic row instead of using `.maybeSingle()`.
 
-- Buyer applies code
-- Price becomes `FREE`
-- No crypto transaction is requested
-- Purchase page calls the backend activation flow
-- Backend creates/activates the operator
-- Backend creates default operator settings
-- Promo usage is incremented only after activation
-- Buyer is redirected to:
+Priority:
+
+1. active configured operator
+2. active pending operator
+3. newest pending operator
+4. newest operator row
+
+This prevents duplicate existing rows from crashing activation.
+
+Example behavior:
+
+```text
+user has demo + myworld
+→ backend chooses one canonical active operator
+→ activation can continue instead of failing operator_lookup_failed
+```
+
+#### Change 2: Use the helper in purchase activation
+
+Update `activatePurchasedOperator()` so it no longer calls:
+
+```ts
+.eq("user_id", privyDid).maybeSingle()
+```
+
+Instead, use the canonical helper.
+
+The function should still:
+- activate the selected operator
+- create/upsert `operator_settings`
+- return success only after critical writes succeed
+
+#### Change 3: Use the helper in related operator routes
+
+Replace fragile `.single()` / `.maybeSingle()` lookups for the current user in:
+
+- `get_my_operator`
+- `create_operator`
+- `update_operator`
+- `update_settings`
+
+This prevents the same duplicate-row bug from breaking dashboard, onboarding, and settings.
+
+#### Change 4: Keep duplicates, but avoid breaking on them
+
+No deletion is required for the duplicate historical rows. The code should handle them safely.
+
+Optional log:
+
+```text
+[operator-manage] multiple operators found for user; selected canonical operator
+```
+
+---
+
+### File 2: `src/pages/platform/PurchasePage.tsx`
+
+Improve the free-code UX so the screen does not look contradictory.
+
+#### Change 1: Track activation-specific state
+
+Add a separate state for free promo activation:
+
+```ts
+const [freeActivationFailed, setFreeActivationFailed] = useState(false);
+```
+
+Reset it when:
+- promo code changes
+- promo code is applied again
+- activation starts
+
+#### Change 2: Better free-code loading copy
+
+For free activations, show:
+
+```text
+Activating free access...
+```
+
+not:
+
+```text
+Confirming on-chain...
+```
+
+because no blockchain transaction is happening.
+
+#### Change 3: Better retry state after failure
+
+If a valid full-discount code is applied and activation fails, show the CTA as:
+
+```text
+Retry Free Activation
+```
+
+instead of continuing to show the same untouched:
+
+```text
+Activate for Free
+```
+
+Also keep the error box visible with the backend message.
+
+#### Change 4: Map backend stages to clearer messages
+
+Add mappings for backend activation stages:
+
+```text
+operator_lookup_failed → We found more than one operator account for this login. Retrying will use your primary account.
+settings_creation_failed → Your account was activated, but settings could not be created. Please try again.
+promo_usage_update_failed → Your account was activated, but the promo could not be recorded. Please contact support.
+```
+
+After the backend duplicate-operator fix, the first message should no longer appear for this user.
+
+---
+
+### File 3: `src/pages/platform/PlatformApp.tsx`
+
+Update `RequireActiveOperator` so it does not use `.maybeSingle()` against operators by `user_id`.
+
+Current issue:
+
+```ts
+.from("operators")
+.select("status")
+.eq("user_id", did)
+.maybeSingle()
+```
+
+This can fail for users with multiple operator rows.
+
+Replace it with a list query ordered by `created_at desc`, then treat the user as active if any canonical/current operator is active.
+
+This keeps onboarding and dashboard access from failing after the free-code activation succeeds.
+
+---
+
+## Verification
+
+### Backend verification
+
+1. Apply `BESTRONG` again.
+2. Confirm `operator-manage` no longer logs:
+
+```text
+operator_lookup_failed
+```
+
+3. Confirm the backend returns:
+
+```json
+{
+  "success": true,
+  "status": "active",
+  "amount_charged": 0,
+  "promo_code": "BESTRONG"
+}
+```
+
+4. Confirm `BESTRONG` usage increments only after success.
+
+### UI verification
+
+1. Apply `BESTRONG`.
+2. Confirm price changes to `FREE`.
+3. Click activation.
+4. Confirm the button says:
+
+```text
+Activating free access...
+```
+
+5. Confirm no wallet transaction opens.
+6. Confirm success redirect:
 
 ```text
 /operator-purchase-success?amount=0&promo=BESTRONG
 ```
 
-### 2. Partial discount codes
-
-I found a current partial code:
-
-- `50OFF`
-  - percent discount
-  - 50%
-  - expected final price: `$1,200 USDC`
-
-The partial-code flow is present, but should be hardened.
-
-Current behavior:
-
-- Buyer applies the code
-- UI calculates discounted price
-- Buyer sends discounted USDC amount
-- Backend verifies the on-chain transfer amount
-- Backend activates/creates operator
-
-Main risk:
-
-- The frontend uses `Math.ceil(effectivePrice)`
-- The backend uses `Math.round(discountedPrice)`
-
-For clean discounts like 50%, this is fine. But for future discount codes that create decimals, frontend/backend rounding could disagree. This should be standardized.
-
-### 3. “5” code
-
-I did not find a promo code literally named `5`.
-
-Current recent promo codes are:
-
-```text
-BESTRONG
-50OFF
-V
-JDBOXING
-SILVERTOOTH
-MYCODE
-```
-
-If “5” means a 5% or $5 discount code, that code does not currently appear in the database list I checked.
-
-### 4. Full $2,400 paid flow
-
-The full paid flow is structurally correct:
-
-- Buyer must be signed in
-- Buyer clicks purchase
-- App sends a Polygon token transfer
-- Transfer goes to the treasury wallet
-- Backend verifies the transaction receipt
-- Backend checks the transfer is from the correct token contract
-- Backend checks the recipient is the treasury wallet
-- Backend checks the amount is at least `$2,400` with 6 decimals
-- Operator account is activated after verification
-
-Main hardening needed:
-
-- Paid and partial paid flows do not check every database write as strictly as the free-code path now does.
-- Paid/partial flows should also create default `operator_settings` immediately, just like the free-code flow.
-- Paid/partial success responses should return consistent fields like `amount_charged`, `promo_applied`, and `promo_code`.
-
----
-
-## Recommended patch
-
-### File 1: `src/pages/platform/PurchasePage.tsx`
-
-Update the purchase page to make all three paths consistent:
-
-1. Free code:
-   - Keep current no-transaction activation path.
-   - Keep success redirect with `amount=0&promo=CODE`.
-
-2. Partial discount:
-   - Use one integer-safe amount calculation.
-   - Send the exact discounted amount expected by the backend.
-   - Navigate to success with:
-
-```text
-/operator-purchase-success?amount=1200&promo=50OFF&tx=...
-```
-
-3. Full $2,400 payment:
-   - Keep sending USDC on Polygon to treasury.
-   - Navigate to success with:
-
-```text
-/operator-purchase-success?amount=2400&tx=...
-```
-
-4. Improve error display:
-   - Show clear messages for:
-     - code already redeemed
-     - transaction verification failed
-     - insufficient USDC
-     - activation failed after payment
-
-### File 2: `supabase/functions/operator-manage/index.ts`
-
-Harden paid and partial paid flows to match the free-code path.
-
-Changes:
-
-- Use integer-safe cents/USDC calculation for discounts.
-- Keep verifying the Polygon transfer against:
-  - USDC.e token contract
-  - treasury wallet
-  - required discounted amount
-- Check every critical database write:
-  - operator lookup
-  - operator activation/update
-  - new operator insert
-  - default settings upsert
-  - promo usage increment
-  - referral attribution best-effort only
-- Create `operator_settings` immediately for paid, partial, and free activations.
-- Return consistent success JSON:
-
-```json
-{
-  "success": true,
-  "status": "active",
-  "amount_charged": 2400,
-  "promo_applied": false
-}
-```
-
-or for discount:
-
-```json
-{
-  "success": true,
-  "status": "active",
-  "amount_charged": 1200,
-  "promo_applied": true,
-  "promo_code": "50OFF"
-}
-```
-
-### File 3: `supabase/functions/prediction-admin/index.ts`
-
-Make promo validation use the same discount calculation rules as `operator-manage`.
-
-This prevents the UI from showing one discounted price while the backend expects another.
-
-### File 4: `src/pages/platform/OperatorPurchaseSuccess.tsx`
-
-Keep the current free-code copy, and add accurate paid/discount copy:
-
-- Free code:
-
-```text
-Access activated. Your free operator app access is ready.
-```
-
-- Partial discount:
-
-```text
-Discounted payment confirmed. Let’s set up your branded predictions app.
-```
-
-- Full payment:
-
-```text
-Payment confirmed. Let’s set up your branded predictions app.
-```
-
----
-
-## Verification plan
-
-### Free code
-
-Test with `BESTRONG` or another unused full-discount code:
-
-1. Apply promo code.
-2. Confirm price changes to `FREE`.
-3. Confirm no wallet transaction opens.
-4. Confirm success page opens.
-5. Confirm onboarding opens.
-6. Confirm operator account is active.
-
-### Partial discount
-
-Test with `50OFF`:
-
-1. Apply promo code.
-2. Confirm price changes to `$1,200`.
-3. Confirm wallet transaction sends `$1,200 USDC` on Polygon.
-4. Confirm backend verifies the transaction.
-5. Confirm success page opens with discounted-payment copy.
-6. Confirm operator account is active.
-
-### Full price
-
-Test without a promo code:
-
-1. Confirm price is `$2,400`.
-2. Confirm wallet transaction sends `$2,400 USDC` on Polygon.
-3. Confirm backend verifies treasury receipt.
-4. Confirm success page opens with normal paid copy.
-5. Confirm operator account is active.
+7. Confirm success page says access was activated.
+8. Click “Start Setup”.
+9. Confirm onboarding opens.
+10. Confirm dashboard/app access does not break for a user with multiple historical operator rows.
 
 ---
 
 ## What will not be changed
 
-- Treasury wallet address
-- Token contract
-- Wallet provider
-- Operator dashboard
-- Operator app trading
+- Treasury wallet
+- USDC.e token contract
+- Paid $2,400 purchase verification
+- Partial-discount payment verification
 - Sports feeds
-- Payout logic
+- Trading
+- Payouts
 - Affiliate tracking
-- Existing active operators
+- Existing operator apps
 
----
+## Expected result
 
-## Expected outcome
-
-The buy flow will support all three cases cleanly:
-
-```text
-Free code → no crypto payment → account activated
-Partial code → discounted USDC payment → account activated
-No code → full $2,400 USDC payment → account activated
-```
-
-The crypto used remains **Bridged USDC.e on Polygon internally**, displayed to buyers as **USDC on Polygon**.
+`BESTRONG` should activate free access cleanly. Users with duplicate historical operator records should no longer see “Your account could not be activated,” and the purchase page should show a clear activation/retry state instead of a confusing generic “Activate for Free” button after failure.
