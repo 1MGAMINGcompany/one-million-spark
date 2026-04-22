@@ -92,7 +92,7 @@ export default function BuyPredictionsApp() {
           <a href="/" className="text-xl font-bold tracking-tight">
             <span className="text-blue-400">1MG</span><span className="text-white/50">.live</span>
           </a>
-          <Button onClick={handleCTA} size="sm" className="bg-blue-600 hover:bg-blue-500 text-white border-0">
+          <Button onClick={handleCTA} size="sm" className="platform-blue-button border-0">
             Buy Now
           </Button>
         </div>
@@ -109,8 +109,10 @@ export default function BuyPredictionsApp() {
           <p className="text-lg sm:text-xl text-white/50 max-w-2xl mx-auto mb-10 leading-relaxed">
             Launch a fully branded sports predictions business with built-in payments, liquidity, and real money flowing from day one. No coding. No infrastructure. Just your brand.
           </p>
-          <Button onClick={handleCTA} size="lg" className="bg-blue-600 hover:bg-blue-500 text-white text-lg px-10 h-16 border-0 rounded-xl font-bold">
-            BUY NOW — $2,400 USDC <ArrowRight size={20} className="ml-2" />
+          <Button onClick={handleCTA} size="lg" className="platform-blue-button text-lg px-10 h-16 border-0 rounded-xl font-bold">
+            <span className="inline-flex items-center justify-center gap-2 text-center">
+              BUY NOW — $2,400 USDC <ArrowRight size={20} />
+            </span>
           </Button>
           <p className="text-white/25 text-sm mt-4">One-time setup fee · No monthly costs · Start earning immediately</p>
         </div>
@@ -198,8 +200,10 @@ export default function BuyPredictionsApp() {
                 </li>
               ))}
             </ul>
-            <Button onClick={handleCTA} size="lg" className="w-full bg-blue-600 hover:bg-blue-500 text-white text-lg h-14 border-0 rounded-xl font-bold">
-              Buy Now <ArrowRight size={18} className="ml-2" />
+            <Button onClick={handleCTA} size="lg" className="w-full platform-blue-button text-lg h-14 border-0 rounded-xl font-bold">
+              <span className="inline-flex items-center justify-center gap-2 text-center">
+                Buy Now <ArrowRight size={18} />
+              </span>
             </Button>
           </div>
         </div>
@@ -225,8 +229,10 @@ export default function BuyPredictionsApp() {
         <div className="max-w-3xl mx-auto text-center">
           <h2 className="text-3xl sm:text-4xl font-bold mb-4">Ready to Launch Your Predictions Business?</h2>
           <p className="text-white/40 text-lg mb-10">Buy your app today and start earning from sports predictions.</p>
-          <Button onClick={handleCTA} size="lg" className="bg-blue-600 hover:bg-blue-500 text-white text-lg px-10 h-16 border-0 rounded-xl font-bold">
-            BUY NOW — $2,400 USDC <ArrowRight size={20} className="ml-2" />
+          <Button onClick={handleCTA} size="lg" className="platform-blue-button text-lg px-10 h-16 border-0 rounded-xl font-bold">
+            <span className="inline-flex items-center justify-center gap-2 text-center">
+              BUY NOW — $2,400 USDC <ArrowRight size={20} />
+            </span>
           </Button>
         </div>
       </section>

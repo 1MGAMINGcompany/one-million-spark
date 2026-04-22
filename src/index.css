@@ -136,15 +136,29 @@
 
 @layer components {
   .platform-blue-button {
+    --tw-shadow: 0 10px 34px -10px hsl(217 91% 60% / 0.65) !important;
+    --tw-shadow-colored: 0 10px 34px -10px hsl(217 91% 60% / 0.65) !important;
     background: hsl(221 83% 53%) !important;
+    background-image: none !important;
     color: hsl(0 0% 100%) !important;
     border-color: transparent !important;
-    box-shadow: 0 10px 34px -10px hsl(217 91% 60% / 0.65) !important;
+    box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow) !important;
   }
 
-  .platform-blue-button:hover {
+  .platform-blue-button:hover,
+  .platform-blue-button:focus-visible {
+    --tw-shadow: 0 14px 42px -12px hsl(213 94% 68% / 0.75) !important;
+    --tw-shadow-colored: 0 14px 42px -12px hsl(213 94% 68% / 0.75) !important;
     background: hsl(217 91% 60%) !important;
-    box-shadow: 0 14px 42px -12px hsl(213 94% 68% / 0.75) !important;
+    background-image: none !important;
+    box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow) !important;
+  }
+
+  .platform-blue-button:active {
+    --tw-shadow: 0 8px 24px -12px hsl(217 91% 60% / 0.7) !important;
+    --tw-shadow-colored: 0 8px 24px -12px hsl(217 91% 60% / 0.7) !important;
+    background: hsl(219 79% 48%) !important;
+    box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow) !important;
   }
 }
 
