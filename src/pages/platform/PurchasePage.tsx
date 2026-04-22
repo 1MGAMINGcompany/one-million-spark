@@ -59,6 +59,9 @@ function purchaseErrorMessage(error: string): string {
     verification_failed: "Transaction verification failed. Please try again.",
     no_matching_transfer: "Transaction verification failed. Confirm the USDC payment amount and recipient.",
     tx_already_used: "This transaction has already been used for a purchase.",
+    operator_lookup_failed: "We found more than one operator account for this login. Retrying will use your primary account.",
+    settings_creation_failed: "Your account was activated, but settings could not be created. Please try again.",
+    promo_usage_update_failed: "Your account was activated, but the promo could not be recorded. Please contact support.",
   };
   return messages[error] || error || "Purchase failed. Please try again.";
 }
