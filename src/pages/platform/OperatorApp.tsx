@@ -140,6 +140,20 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
 
   const isConnected = authenticated && isPrivyUser;
 
+  // Ownership check: render Dashboard button only when signed-in user owns this operator
+  const { data: isOperatorOwner } = useQuery({
+    queryKey: ["is_operator_owner", operator?.id],
+    queryFn: async () => {
+      if (!operator?.user_id) return false;
+      const token = await getAccessToken();
+      if (!token) return false;
+      const did = extractPrivyDid(token);
+      return !!did && did === operator.user_id;
+    },
+    enabled: !!authenticated && !!operator?.user_id,
+    staleTime: 60_000,
+  });
+
   const [selectedFight, setSelectedFight] = useState<Fight | null>(null);
   const [selectedPick, setSelectedPick] = useState<"fighter_a" | "fighter_b" | "draw" | null>(null);
   const [submitting, setSubmitting] = useState(false);
