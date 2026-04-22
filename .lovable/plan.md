@@ -1,130 +1,83 @@
 
-## Audit Findings
 
-**Current real flow confirmed:**
-- Success page: `src/pages/platform/OperatorPurchaseSuccess.tsx` (route `/operator-purchase-success`)
-- Already fires Trackdesk conversion in a `useEffect`, hostname-guarded to `1mg.live` / `www.1mg.live`, with `try/catch`, using `txHash` + `amount`
-- Trackdesk loader is in `index.html` inside an existing hostname-guarded IIFE block
+## Fix NHL ingest gap + harden all sports against partial-batch failures
 
-**Affiliate page route:** `/affiliate` (with `/affiliates` redirect alias) → `src/pages/platform/AffiliateProgram.tsx`. Currently a static marketing page with a `mailto:` CTA. This is the page we will later redirect to GoAffPro's portal.
+Two safe additive fixes in one patch.
 
-**No conflicts:** GoAffPro's loader is independent from Trackdesk; both can coexist on `window`.
+### Fix 1: Build error (unrelated but blocking deploys)
 
----
+`src/components/CinematicChess3DScene.tsx` line 506 — R3F's `Camera` union type doesn't expose `fov`. Cast to `PerspectiveCamera` before assigning. One-line change.
 
-## The Patch (smallest safe, additive)
+### Fix 2: Sports ingest hardening (root cause of missing Canadiens game)
 
-### File 1: `index.html` — add GoAffPro loader (1mg.live only)
+**File: `supabase/functions/polymarket-sync/index.ts`**
 
-Add a new IIFE next to the existing Trackdesk block (inside `<head>`, after the Trackdesk script). Same hostname guard pattern:
+Three additive changes inside `daily_import`, applied uniformly to **all leagues** (not NHL-only):
 
-```html
-<!-- GoAffPro affiliate tracking — 1mg.live only -->
-<script>
-  (function(){
-    var h=location.hostname;
-    if(h!=='1mg.live'&&h!=='www.1mg.live')return;
-    var s=document.createElement('script');
-    s.async=1;
-    s.src='https://api.goaffpro.com/loader.js?shop=pfiwnywrwo';
-    var f=document.getElementsByTagName('script')[0];
-    f.parentNode.insertBefore(s,f);
-  })();
-</script>
-```
+**A. Per-league error visibility**
+Replace the silent `try/catch` around each `fetchByLeagueSource` call with one that logs `[daily_import] league=<key> fetched=N accepted=M` on success and the full error stack on failure. No behaviour change — pure observability.
 
-Why: matches existing Trackdesk pattern exactly. Async, non-blocking, never loads on `1mgaming.com` or preview/sandbox domains.
-
-### File 2: `src/pages/platform/OperatorPurchaseSuccess.tsx` — fire GoAffPro conversion
-
-Add a second `useEffect` (alongside the existing Trackdesk one, do not modify Trackdesk):
-
-```tsx
-// Fire GoAffPro conversion — best-effort, never blocks UI
-useEffect(() => {
-  try {
-    if (typeof window === "undefined") return;
-    if (!/^(www\.)?1mg\.live$/i.test(window.location.hostname)) return;
-
-    const w = window as any;
-    const orderNumber = txHash || `purchase_${Date.now()}`;
-    const orderTotal = typeof amount === "number" ? amount : 2400;
-
-    w.goaffpro_order = {
-      number: orderNumber,
-      total: orderTotal,
-      // currency intentionally omitted — GoAffPro defaults to shop currency
-    };
-
-    // GoAffPro auto-detects window.goaffpro_order on script load.
-    // If loader has already initialized, manually trigger conversion fire.
-    if (typeof w.goaffpro === "object" && typeof w.goaffpro.conversion === "function") {
-      w.goaffpro.conversion(w.goaffpro_order);
-    }
-  } catch (e) {
-    console.warn("[GoAffPro] conversion fire failed (non-blocking)", e);
+**B. Universal self-healing top-up**
+After each batch's main loop completes, run a coverage check across **every league in that batch**:
+```ts
+for (const league of batch) {
+  const { count } = await supabase
+    .from("prediction_fights")
+    .select("id", { count: "exact", head: true })
+    .ilike("polymarket_slug", `${league.slugPrefix}-%`)
+    .gte("event_date", new Date(Date.now() - 12*3600_000).toISOString())
+    .lte("event_date", new Date(Date.now() + 72*3600_000).toISOString());
+  if ((count ?? 0) < league.minExpected) {
+    console.warn(`[daily_import] coverage gap league=${league.key} count=${count}, retrying`);
+    await fetchByLeagueSource(league); // one retry only
   }
-}, [txHash, amount]);
+}
 ```
+- `minExpected` defaults to **3** for all leagues (configurable per-league for off-season sports)
+- Only one retry per batch run — no infinite loops, bounded CPU cost
+- Runs sequentially after the main loop, never blocks other batches
 
-**Order data mapping (per spec):**
-- `number` = `purchase_tx_hash` if present, else stable fallback `purchase_${Date.now()}`
-- `total` = real `amount` from location state / query string → `2400` full-price, discounted value for partial promo, `0` for free promo (already handled by existing amount derivation)
+**C. Manual admin trigger documentation**
+The existing `action: "league_import", league_key: <key>` endpoint surface already supports per-league reimport. Confirm it works for all keys (`nhl`, `nba`, `mlb`, `nfl`, `ncaa`, soccer leagues, tennis, etc.) and add a one-line log so we can see it firing.
 
-### Files NOT touched
-- `PurchasePage.tsx`, `confirm-purchase` flow, Privy login, wallet creation/funding, operator ownership, payout wallet, onboarding, purchase verification — all untouched
-- Trackdesk loader and conversion fire — untouched (coexist during testing)
-- `1mgaming.com` routes — untouched (hostname guard blocks both loader and conversion)
-
----
-
-## Affiliate Page Redirect — Where It Will Go
-
-**Location identified:** `src/pages/platform/PlatformApp.tsx`, lines 101–102.
-
-When you provide the GoAffPro affiliate portal URL, the swap is a one-line change. The `/affiliate` route currently renders `<AffiliateProgram />`. We will replace it with a tiny redirect component (e.g.):
-
-```tsx
-<Route path="/affiliate" element={<ExternalRedirect to="https://YOUR-GOAFFPRO-PORTAL-URL" />} />
-<Route path="/affiliates" element={<ExternalRedirect to="https://YOUR-GOAFFPRO-PORTAL-URL" />} />
-```
-
-`AffiliateProgram.tsx` will be left in the codebase (not deleted) so we can roll back instantly by reverting the route element. **Not part of this patch** — wait for the URL.
-
----
-
-## Risk Check
-
-| Area | Risk | Mitigation |
-|---|---|---|
-| Purchase flow | None — no changes to checkout, Privy, wallet, confirm | N/A |
-| UI blocking | None — try/catch wraps GoAffPro call | Failures log to console only |
-| 1mgaming.com pollution | None — hostname guard on loader + conversion | Verified pattern matches existing Trackdesk guard |
-| Trackdesk regression | None — Trackdesk code path unmodified | Both fire independently |
-| Double-fire on remount | Low — `useEffect` deps `[txHash, amount]`, stable values | GoAffPro typically dedupes by order number; fallback ID uses `Date.now()` only when no txHash, which is rare |
-| Loader not yet initialized when conversion fires | Handled — we set `window.goaffpro_order` regardless, and GoAffPro's loader picks it up on init | Plus we call `goaffpro.conversion()` if already loaded |
-
----
-
-## Test Plan
-
-1. **Loader presence on 1mg.live**: Open `https://1mg.live/`, DevTools → Network → confirm `loader.js?shop=pfiwnywrwo` loads. Console: `typeof window.goaffpro` should become `"object"`.
-2. **Loader absent on 1mgaming.com**: Open `https://1mgaming.com/`, confirm no `goaffpro` request, `window.goaffpro` is `undefined`.
-3. **Loader absent on preview**: Open Lovable preview URL, confirm no GoAffPro network request.
-4. **Full-price conversion**: Complete a real $2400 purchase → land on `/operator-purchase-success` → DevTools console: inspect `window.goaffpro_order` → should be `{ number: "<txHash>", total: 2400 }`. Check GoAffPro dashboard for the conversion within ~60s.
-5. **Discounted promo**: Complete a partial-promo purchase → confirm `total` reflects discounted amount (not 2400).
-6. **Free promo (100% off)**: Complete free purchase → confirm `total: 0` is sent.
-7. **Trackdesk still works**: Same purchase flow → Trackdesk dashboard still records the conversion. Both systems coexist.
-8. **No txHash fallback**: Force a state-loss refresh on `/operator-purchase-success` without `?tx=` → confirm `number` falls back to `purchase_<timestamp>`, no crash.
-9. **Network failure**: Block `api.goaffpro.com` in DevTools → page still renders, "Start Setup" button works, console shows the warn but no error.
-
----
-
-## Summary of Files Changed
+### Files changed (exact)
 
 | File | Change |
 |---|---|
-| `index.html` | Add GoAffPro loader IIFE (hostname-guarded), inside `<head>` after Trackdesk block |
-| `src/pages/platform/OperatorPurchaseSuccess.tsx` | Add second `useEffect` to set `window.goaffpro_order` and fire conversion (try/catch, hostname-guarded) |
+| `src/components/CinematicChess3DScene.tsx` | Cast camera to `PerspectiveCamera` before reading/writing `fov` (line ~506) |
+| `supabase/functions/polymarket-sync/index.ts` | Add per-league logging + universal coverage-gap retry inside `daily_import` for all batches |
 
-**Total: 2 files, additive only. Trackdesk untouched. No backend, no routing, no checkout, no auth changes.**
+### What is NOT touched
+- `prediction-submit`, `prediction-confirm`, `prediction-claim`, `prediction-sell`
+- Polymarket CLOB browser execution, Privy, Smart Wallet, fee relayer
+- GoAffPro tracking, affiliate page, footer link
+- Allowlist policy, visibility rules, fee policy, slippage thresholds
+- Cron schedule cadence (still 4× daily, staggered batches)
+- Operator ownership, payout, sweep, onboarding, purchase flows
+
+### Risk
+
+| Area | Risk | Mitigation |
+|---|---|---|
+| CPU budget | Low — at most 1 extra HTTP fetch per missing league per batch | Hard-gated by row count, sequential, fires at most once |
+| Duplicate inserts | None — upsert is idempotent on `polymarket_slug` | Existing behaviour |
+| Other batches | None — top-up runs inside the batch's own invocation | No cross-batch state |
+| Logging cost | Negligible | One log line per league per run |
+| Build | Fixes existing TS error, no new types | Type cast is the standard R3F pattern |
+
+### Test plan
+
+1. Deploy the patched function + frontend build
+2. Verify TS build passes (no more `fov` error)
+3. Manually invoke `daily_import batch=1`: `SELECT net.http_post(url:='https://mhtikjiticopicziepnj.supabase.co/functions/v1/polymarket-sync', body:='{"action":"daily_import","batch":1}'::jsonb, headers:='{"Content-Type":"application/json","Authorization":"Bearer <anon>"}'::jsonb)`
+4. Watch edge logs for `[daily_import] league=nhl fetched=N accepted=M` lines for every league in batch 1
+5. If NHL had a coverage gap, confirm `[daily_import] coverage gap league=nhl ... retrying` appears, followed by a successful refetch
+6. Query DB: `SELECT polymarket_slug, title, event_date FROM prediction_fights WHERE polymarket_slug ILIKE 'nhl-%' AND event_date BETWEEN now() - interval '12 hours' AND now() + interval '72 hours' ORDER BY event_date` — confirm `nhl-mon-tb-2026-04-21` (Canadiens vs. Lightning) appears
+7. Repeat queries for `nba-`, `mlb-`, `nfl-`, `epl-`, `ucl-`, `atp-` slugs — confirm each league has expected coverage
+8. Open `1mg.live/{operator-slug}` → confirm Canadiens appears in NHL section, other sports unchanged
+9. Wait 6 hours for next scheduled batch run, confirm logs stay clean and no top-up needed (steady state)
+
+### Confirmation
+
+This patch is 2 files, additive only. The NHL fix is a side effect of the universal hardening — every sport benefits from the same coverage-gap recovery. No checkout, auth, payout, or affiliate logic touched.
+
