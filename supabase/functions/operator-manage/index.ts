@@ -27,7 +27,10 @@ function extractPrivyDid(token: string): string | null {
 const TREASURY = "0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d".toLowerCase();
 // Bridged USDC.e — canonical token for all prediction money flows (including purchase)
 const USDC_CONTRACT = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174".toLowerCase();
-const FULL_PRICE_RAW = BigInt(2400) * BigInt(10 ** 6);
+const BASE_PRICE_USDC = 2400;
+const USDC_DECIMALS = BigInt(10 ** 6);
+const CENTS_TO_USDC_RAW = BigInt(10 ** 4);
+const FULL_PRICE_RAW = BigInt(BASE_PRICE_USDC) * USDC_DECIMALS;
 
 const POLYGON_RPCS = [
   "https://polygon-bor-rpc.publicnode.com",
@@ -38,6 +41,26 @@ const POLYGON_RPCS = [
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
+
+function calculateDiscountedCents(promo: { discount_type: string; discount_value: number }): number {
+  const baseCents = BASE_PRICE_USDC * 100;
+  if (promo.discount_type === "full") return 0;
+  if (promo.discount_type === "percent") {
+    return Math.max(0, Math.round(baseCents * (1 - Number(promo.discount_value || 0) / 100)));
+  }
+  if (promo.discount_type === "fixed") {
+    return Math.max(0, baseCents - Math.round(Number(promo.discount_value || 0) * 100));
+  }
+  return baseCents;
+}
+
+function centsToUsdc(cents: number): number {
+  return cents / 100;
+}
+
+function centsToRaw(cents: number): bigint {
+  return BigInt(cents) * CENTS_TO_USDC_RAW;
+}
 
 const ALLOWED_SPORTS_SET = new Set([
   "NFL", "NBA", "NHL", "SOCCER", "MMA", "BOXING", "MLB", "TENNIS",
