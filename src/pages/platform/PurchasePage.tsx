@@ -117,11 +117,13 @@ export default function PurchasePage() {
             }),
           }
         );
-      const result = await res.json();
-        if (!res.ok) throw new Error(result.error || "Verification failed");
+        const result = await res.json().catch(() => ({}));
+        if (!res.ok || result?.success === false) {
+          throw new Error(result?.error || "Promo activation failed. Please try again.");
+        }
         clearPendingOperatorRef();
-        navigate("/operator-purchase-success", {
-          state: { txHash: null, amount: effectivePrice },
+        navigate(`/operator-purchase-success?amount=0&promo=${encodeURIComponent(promoCode.trim().toUpperCase())}`, {
+          state: { txHash: null, amount: 0 },
         });
         return;
       }

@@ -16,6 +16,7 @@ export default function OperatorPurchaseSuccess() {
   // Fall back to query string if state was lost (e.g. refresh)
   const params = new URLSearchParams(location.search);
   const txHash = state.txHash ?? params.get("tx") ?? null;
+  const promoCode = params.get("promo");
   const amountStr = params.get("amount");
   const amount =
     typeof state.amount === "number"
@@ -23,6 +24,7 @@ export default function OperatorPurchaseSuccess() {
       : amountStr
       ? Number(amountStr)
       : 2400;
+  const isFreeActivation = amount === 0 || promoCode?.toUpperCase() === "BESTRONG";
 
   // Fire GoAffPro conversion — best-effort, never blocks UI
   useEffect(() => {
@@ -55,7 +57,9 @@ export default function OperatorPurchaseSuccess() {
         <CheckCircle size={64} className="text-green-400 mx-auto mb-6" />
         <h1 className="text-3xl font-bold mb-3">You're In!</h1>
         <p className="text-white/50 mb-8">
-          Payment confirmed. Let's set up your branded predictions app.
+          {isFreeActivation
+            ? "Access activated. Your free operator app access is ready. Let’s set up your branded predictions app."
+            : "Payment confirmed. Let's set up your branded predictions app."}
         </p>
         <Button
           onClick={() => navigate("/onboarding")}
