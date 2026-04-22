@@ -1,83 +1,57 @@
 
 
-## Fix NHL ingest gap + harden all sports against partial-batch failures
+## Add round-trip nav between Operator App and Operator Dashboard
 
-Two safe additive fixes in one patch.
+Two tiny additive UI changes. No auth, payout, checkout, or routing logic touched.
 
-### Fix 1: Build error (unrelated but blocking deploys)
+### Change 1: App → Dashboard (only visible to the owner)
 
-`src/components/CinematicChess3DScene.tsx` line 506 — R3F's `Camera` union type doesn't expose `fov`. Cast to `PerspectiveCamera` before assigning. One-line change.
+**File:** `src/pages/platform/OperatorApp.tsx`
 
-### Fix 2: Sports ingest hardening (root cause of missing Canadiens game)
+In the existing navbar (around line 917, right side, before `PlatformLanguageSwitcher`), add a "Dashboard" button that only renders if the signed-in Privy DID matches `operator.user_id`.
 
-**File: `supabase/functions/polymarket-sync/index.ts`**
+- Decode the Privy DID from the access token using the same `extractPrivyDid` JWT-payload helper already used in `PlatformApp.tsx` (copy the 6-line function locally — no shared module needed).
+- Use a `useQuery` keyed on `["is_operator_owner", operator.id]` that returns `true`/`false`. Cached 60s.
+- When `true`, render a small button: icon + label "Dashboard", styled with `theme.primary` to match the existing sign-in button. Clicking it calls `navigate("/dashboard")` via `react-router-dom`'s `useNavigate`.
+- When `false` or not signed in: render nothing (existing UI unchanged for end-users).
 
-Three additive changes inside `daily_import`, applied uniformly to **all leagues** (not NHL-only):
+### Change 2: Dashboard → App (in-tab navigation button)
 
-**A. Per-league error visibility**
-Replace the silent `try/catch` around each `fetchByLeagueSource` call with one that logs `[daily_import] league=<key> fetched=N accepted=M` on success and the full error stack on failure. No behaviour change — pure observability.
+**File:** `src/pages/platform/OperatorDashboard.tsx`
 
-**B. Universal self-healing top-up**
-After each batch's main loop completes, run a coverage check across **every league in that batch**:
-```ts
-for (const league of batch) {
-  const { count } = await supabase
-    .from("prediction_fights")
-    .select("id", { count: "exact", head: true })
-    .ilike("polymarket_slug", `${league.slugPrefix}-%`)
-    .gte("event_date", new Date(Date.now() - 12*3600_000).toISOString())
-    .lte("event_date", new Date(Date.now() + 72*3600_000).toISOString());
-  if ((count ?? 0) < league.minExpected) {
-    console.warn(`[daily_import] coverage gap league=${league.key} count=${count}, retrying`);
-    await fetchByLeagueSource(league); // one retry only
-  }
-}
-```
-- `minExpected` defaults to **3** for all leagues (configurable per-league for off-season sports)
-- Only one retry per batch run — no infinite loops, bounded CPU cost
-- Runs sequentially after the main loop, never blocks other batches
+In the dashboard header (around lines 401–410, next to the existing "1mg.live/{slug} ↗" external link), add a primary-styled **"View App"** button that navigates in the same tab via `navigate(\`/${operator.subdomain}\`)`. Keep the existing external-link `<a target="_blank">` in place (some operators prefer the new-tab behavior — additive only).
 
-**C. Manual admin trigger documentation**
-The existing `action: "league_import", league_key: <key>` endpoint surface already supports per-league reimport. Confirm it works for all keys (`nhl`, `nba`, `mlb`, `nfl`, `ncaa`, soccer leagues, tennis, etc.) and add a one-line log so we can see it firing.
+Use the existing `Button` component with `size="sm"` and `ExternalLink` icon already imported. Label: `t("operator.dashboard.viewApp")` with English fallback `"View App"`.
 
 ### Files changed (exact)
 
 | File | Change |
 |---|---|
-| `src/components/CinematicChess3DScene.tsx` | Cast camera to `PerspectiveCamera` before reading/writing `fov` (line ~506) |
-| `supabase/functions/polymarket-sync/index.ts` | Add per-league logging + universal coverage-gap retry inside `daily_import` for all batches |
+| `src/pages/platform/OperatorApp.tsx` | Add owner-only "Dashboard" button in navbar; add `extractPrivyDid` helper + ownership `useQuery` |
+| `src/pages/platform/OperatorDashboard.tsx` | Add "View App" in-tab nav button next to existing external link in dashboard header |
 
 ### What is NOT touched
-- `prediction-submit`, `prediction-confirm`, `prediction-claim`, `prediction-sell`
-- Polymarket CLOB browser execution, Privy, Smart Wallet, fee relayer
-- GoAffPro tracking, affiliate page, footer link
-- Allowlist policy, visibility rules, fee policy, slippage thresholds
-- Cron schedule cadence (still 4× daily, staggered batches)
-- Operator ownership, payout, sweep, onboarding, purchase flows
+- `RequireActiveOperator` guard, Privy login flow, embedded wallet logic
+- Checkout, purchase confirmation, treasury address, payouts, sweep, onboarding
+- GoAffPro tracking, affiliate page, footer, Trackdesk removal
+- Operator data model, RLS policies, `operators` table, settings
+- All other operator app behavior for non-owner end-users (zero visual change)
 
 ### Risk
 
 | Area | Risk | Mitigation |
 |---|---|---|
-| CPU budget | Low — at most 1 extra HTTP fetch per missing league per batch | Hard-gated by row count, sequential, fires at most once |
-| Duplicate inserts | None — upsert is idempotent on `polymarket_slug` | Existing behaviour |
-| Other batches | None — top-up runs inside the batch's own invocation | No cross-batch state |
-| Logging cost | Negligible | One log line per league per run |
-| Build | Fixes existing TS error, no new types | Type cast is the standard R3F pattern |
+| Privacy / leakage | None — button only renders when DID matches owner | Server-trusted user_id comparison, cached query |
+| Performance | Negligible — one cached lookup per app load | 60s `staleTime`, `enabled` only when authenticated |
+| Mobile layout | Button is small icon+label, fits existing 833px navbar | Tested visually against current viewport |
+| i18n | New `operator.dashboard.viewApp` and `operator.app.dashboardCta` keys with EN fallbacks | Falls back gracefully if translation missing |
 
 ### Test plan
 
-1. Deploy the patched function + frontend build
-2. Verify TS build passes (no more `fov` error)
-3. Manually invoke `daily_import batch=1`: `SELECT net.http_post(url:='https://mhtikjiticopicziepnj.supabase.co/functions/v1/polymarket-sync', body:='{"action":"daily_import","batch":1}'::jsonb, headers:='{"Content-Type":"application/json","Authorization":"Bearer <anon>"}'::jsonb)`
-4. Watch edge logs for `[daily_import] league=nhl fetched=N accepted=M` lines for every league in batch 1
-5. If NHL had a coverage gap, confirm `[daily_import] coverage gap league=nhl ... retrying` appears, followed by a successful refetch
-6. Query DB: `SELECT polymarket_slug, title, event_date FROM prediction_fights WHERE polymarket_slug ILIKE 'nhl-%' AND event_date BETWEEN now() - interval '12 hours' AND now() + interval '72 hours' ORDER BY event_date` — confirm `nhl-mon-tb-2026-04-21` (Canadiens vs. Lightning) appears
-7. Repeat queries for `nba-`, `mlb-`, `nfl-`, `epl-`, `ucl-`, `atp-` slugs — confirm each league has expected coverage
-8. Open `1mg.live/{operator-slug}` → confirm Canadiens appears in NHL section, other sports unchanged
-9. Wait 6 hours for next scheduled batch run, confirm logs stay clean and no top-up needed (steady state)
-
-### Confirmation
-
-This patch is 2 files, additive only. The NHL fix is a side effect of the universal hardening — every sport benefits from the same coverage-gap recovery. No checkout, auth, payout, or affiliate logic touched.
+1. Sign in as operator owner on `1mg.live/{your-slug}` → confirm "Dashboard" button appears in navbar
+2. Click it → lands on `/dashboard` in the same tab
+3. On `/dashboard` → click new "View App" button → lands on `/{slug}` in the same tab (operator app)
+4. Sign in as a different (non-owner) Privy user on the same `1mg.live/{slug}` → confirm "Dashboard" button does NOT appear
+5. Sign out → confirm only the "Sign In" button shows (existing behavior unchanged)
+6. Confirm existing external-link `1mg.live/{slug} ↗` still opens in a new tab from the dashboard
 
