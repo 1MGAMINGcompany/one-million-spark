@@ -277,7 +277,7 @@ export default function PurchasePage() {
                 <Tag size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
                 <Input
                   value={promoCode}
-                  onChange={e => { setPromoCode(e.target.value); setPromoResult(null); }}
+                  onChange={e => { setPromoCode(e.target.value); setPromoResult(null); setFreeActivationFailed(false); }}
                   placeholder="Promo code"
                   className="pl-9 bg-white/5 border-white/10 text-white placeholder:text-white/20 uppercase font-mono"
                 />
@@ -377,7 +377,7 @@ export default function PurchasePage() {
           >
             {step === "confirming" ? (
               <>
-                <Loader2 size={20} className="animate-spin" /> Confirming on-chain...
+                <Loader2 size={20} className="animate-spin" /> {effectivePrice === 0 ? "Activating free access..." : "Confirming on-chain..."}
               </>
             ) : step === "payment" ? (
               <>
@@ -385,7 +385,7 @@ export default function PurchasePage() {
               </>
             ) : effectivePrice === 0 ? (
               <>
-                Activate for Free <ArrowRight size={18} />
+                {freeActivationFailed ? "Retry Free Activation" : "Activate for Free"} <ArrowRight size={18} />
               </>
             ) : (
               <>
