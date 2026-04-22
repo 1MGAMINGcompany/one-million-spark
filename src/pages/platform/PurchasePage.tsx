@@ -121,6 +121,7 @@ export default function PurchasePage() {
 
   const handlePayment = useCallback(async () => {
     setError(null);
+    setFreeActivationFailed(false);
     setStep("payment");
 
     try {
