@@ -380,7 +380,7 @@ export default function OperatorDashboard() {
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="text-center">
           <h2 className="text-2xl font-bold mb-4">{t("operator.dashboard.loginRequired")}</h2>
-          <Button onClick={login} className="bg-primary hover:bg-primary/90 border-0">{t("operator.dashboard.connectWallet")}</Button>
+          <Button onClick={login} className="platform-blue-button border-0">{t("operator.dashboard.connectWallet")}</Button>
         </div>
       </div>
     );
@@ -402,7 +402,7 @@ export default function OperatorDashboard() {
             <Button
               size="sm"
               onClick={() => navigate(`/${operator.subdomain}`)}
-              className="gap-1.5 text-xs font-bold"
+              className="platform-blue-button gap-1.5 border-0 text-xs font-bold"
             >
               <ExternalLink size={14} />
               {t("operator.dashboard.viewApp", "View App")}
@@ -625,7 +625,7 @@ export default function OperatorDashboard() {
             <Button
               onClick={saveSettings}
               disabled={savingSettings}
-              className="bg-blue-600 hover:bg-blue-500 border-0"
+              className="platform-blue-button border-0"
             >
               <Save size={16} /> {savingSettings ? t("operator.dashboard.saving") : t("operator.dashboard.saveSettings")}
             </Button>

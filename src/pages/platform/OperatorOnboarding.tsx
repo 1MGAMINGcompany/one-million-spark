@@ -266,7 +266,7 @@ export default function OperatorOnboarding() {
           </p>
           <Button
             onClick={login}
-            className="bg-blue-600 hover:bg-blue-500 border-0"
+            className="platform-blue-button border-0"
           >
             Connect Wallet
           </Button>
@@ -540,7 +540,7 @@ export default function OperatorOnboarding() {
           <div className="flex flex-col sm:flex-row gap-3 justify-center mt-6">
             <Button
               onClick={() => window.open(`https://1mg.live/${subdomain}`, "_blank")}
-              className="bg-blue-600 hover:bg-blue-500 border-0 font-bold"
+              className="platform-blue-button border-0 font-bold"
             >
               Open My App <ExternalLink size={16} className="ml-1" />
             </Button>
@@ -592,19 +592,19 @@ export default function OperatorOnboarding() {
             </Button>
           )}
           {step < steps.length - 1 ? (
-            <Button
-              onClick={() => setStep((s) => s + 1)}
-              disabled={!isStepValid()}
-              className="bg-blue-600 hover:bg-blue-500 border-0 ml-auto"
-            >
+              <Button
+                onClick={() => setStep((s) => s + 1)}
+                disabled={!isStepValid()}
+                className="platform-blue-button border-0 ml-auto"
+              >
               Next <ArrowRight size={16} />
             </Button>
           ) : (
-            <Button
-              onClick={handleCreate}
-              disabled={loading || !isStepValid()}
-              className="bg-blue-600 hover:bg-blue-500 border-0 ml-auto"
-            >
+              <Button
+                onClick={handleCreate}
+                disabled={loading || !isStepValid()}
+                className="platform-blue-button border-0 ml-auto"
+              >
               {loading ? "Creating..." : "Launch"} <Check size={16} />
             </Button>
           )}
