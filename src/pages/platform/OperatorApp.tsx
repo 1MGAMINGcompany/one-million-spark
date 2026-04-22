@@ -24,6 +24,8 @@ import { USDC_E_CONTRACT, USDC_NATIVE_CONTRACT, USDC_DECIMALS } from "@/lib/poly
 import { toast } from "sonner";
 import { dbg } from "@/lib/debugLog";
 import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
+import { LayoutDashboard } from "lucide-react";
 import SimplePredictionCard from "@/components/operator/SimplePredictionCard";
 import SimplePredictionModal from "@/components/operator/SimplePredictionModal";
 import EnableTradingBanner from "@/components/predictions/EnableTradingBanner";
@@ -99,9 +101,21 @@ function FeaturedEventHero({ fight, theme, t, onPredict }: {
   );
 }
 
+/** Extracts privy DID from JWT without remote verification */
+function extractPrivyDid(token: string): string | null {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    if (payload.iss !== "privy.io") return null;
+    return payload.sub ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const { t } = useTranslation();
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
   const { data: operator, isLoading } = useOperatorBySubdomain(subdomain);
   const { data: settings } = useOperatorSettings(operator?.id ?? null);
 
@@ -125,6 +139,20 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   // Live WebSocket prices — moved after operatorFights query declaration
 
   const isConnected = authenticated && isPrivyUser;
+
+  // Ownership check: render Dashboard button only when signed-in user owns this operator
+  const { data: isOperatorOwner } = useQuery({
+    queryKey: ["is_operator_owner", operator?.id],
+    queryFn: async () => {
+      if (!operator?.user_id) return false;
+      const token = await getAccessToken();
+      if (!token) return false;
+      const did = extractPrivyDid(token);
+      return !!did && did === operator.user_id;
+    },
+    enabled: !!authenticated && !!operator?.user_id,
+    staleTime: 60_000,
+  });
 
   const [selectedFight, setSelectedFight] = useState<Fight | null>(null);
   const [selectedPick, setSelectedPick] = useState<"fighter_a" | "fighter_b" | "draw" | null>(null);
@@ -915,6 +943,18 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
             </span>
           </div>
           <div className="flex items-center gap-3">
+            {isOperatorOwner && (
+              <Button
+                onClick={() => navigate("/dashboard")}
+                size="sm"
+                className="text-xs font-bold border-0 gap-1.5"
+                style={{ backgroundColor: theme.primary, color: theme.primaryForeground }}
+                title="Open operator dashboard"
+              >
+                <LayoutDashboard size={14} />
+                {t("operator.app.dashboardCta", "Dashboard")}
+              </Button>
+            )}
             <PlatformLanguageSwitcher />
             {isConnected && address ? (
               <div className="flex items-center gap-1.5">
