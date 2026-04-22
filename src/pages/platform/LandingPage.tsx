@@ -385,7 +385,7 @@ export default function LandingPage() {
                 <Button
                   onClick={handleBuyNow}
                   size="lg"
-                  className="platform-blue-button text-lg px-10 h-16 border-0 btn-glow rounded-xl font-bold w-full sm:w-auto"
+                  className="platform-blue-button text-lg px-10 h-16 border-0 rounded-xl font-bold w-full sm:w-auto"
                 >
                   <span className="inline-flex items-center justify-center gap-2 text-center">
                     {t("platform.hero.buyNow")} <ArrowRight size={20} />
@@ -517,7 +517,7 @@ export default function LandingPage() {
           <Button
             onClick={handleBuyNow}
             size="lg"
-            className="platform-blue-button text-lg px-10 h-16 border-0 btn-glow rounded-xl font-bold"
+            className="platform-blue-button text-lg px-10 h-16 border-0 rounded-xl font-bold"
           >
             <span className="inline-flex items-center justify-center gap-2 text-center">
               {t("platform.hero.buyNow")} <ArrowRight size={20} />
