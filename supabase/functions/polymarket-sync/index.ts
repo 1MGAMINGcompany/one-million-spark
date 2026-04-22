@@ -117,6 +117,11 @@ function isNonSport(text: string): boolean {
   return NON_SPORT_KEYWORDS.some(kw => lower.includes(kw));
 }
 
+function isPartialGameMarketText(text: string): boolean {
+  const lower = text.toLowerCase();
+  return /\b(1h|2h|1q|2q|3q|4q)\b|first half|second half|quarter|period|inning|half moneyline/.test(lower);
+}
+
 /**
  * Check if startDate is more than 30 days in the future (long-term market).
  */
@@ -1223,9 +1228,7 @@ async function importSingleEvent(
       if (sameDateFights && sameDateFights.length > 0) {
         const matchupExists = sameDateFights.some((f: any) => {
           const existingTitle = `${f.title || ""}`.toLowerCase();
-          if (rejectWords.some(w => existingTitle.includes(w)) || slugRejectPatterns.some(re => re.test(existingTitle))) {
-            return false;
-          }
+          if (isPartialGameMarketText(existingTitle)) return false;
           const nA = normalizeTeamName(f.fighter_a_name);
           const nB = normalizeTeamName(f.fighter_b_name);
           return (nA === candA && nB === candB) || (nA === candB && nB === candA);
