@@ -25,6 +25,7 @@ export default function OperatorPurchaseSuccess() {
       ? Number(amountStr)
       : 2400;
   const isFreeActivation = amount === 0 || promoCode?.toUpperCase() === "BESTRONG";
+  const isDiscountedPayment = !isFreeActivation && !!promoCode && amount < 2400;
 
   // Fire GoAffPro conversion — best-effort, never blocks UI
   useEffect(() => {
@@ -59,6 +60,8 @@ export default function OperatorPurchaseSuccess() {
         <p className="text-white/50 mb-8">
           {isFreeActivation
             ? "Access activated. Your free operator app access is ready. Let’s set up your branded predictions app."
+            : isDiscountedPayment
+            ? "Discounted payment confirmed. Let’s set up your branded predictions app."
             : "Payment confirmed. Let's set up your branded predictions app."}
         </p>
         <Button
