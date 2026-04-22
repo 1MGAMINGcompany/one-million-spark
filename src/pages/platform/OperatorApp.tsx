@@ -101,9 +101,21 @@ function FeaturedEventHero({ fight, theme, t, onPredict }: {
   );
 }
 
+/** Extracts privy DID from JWT without remote verification */
+function extractPrivyDid(token: string): string | null {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    if (payload.iss !== "privy.io") return null;
+    return payload.sub ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export default function OperatorApp({ subdomain }: OperatorAppProps) {
   const { t } = useTranslation();
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
   const { data: operator, isLoading } = useOperatorBySubdomain(subdomain);
   const { data: settings } = useOperatorSettings(operator?.id ?? null);
 
