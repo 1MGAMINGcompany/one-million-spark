@@ -380,7 +380,7 @@ export default function OperatorDashboard() {
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="text-center">
           <h2 className="text-2xl font-bold mb-4">{t("operator.dashboard.loginRequired")}</h2>
-          <Button onClick={login} className="bg-primary hover:bg-primary/90 border-0">{t("operator.dashboard.connectWallet")}</Button>
+          <Button onClick={login} className="platform-blue-button border-0">{t("operator.dashboard.connectWallet")}</Button>
         </div>
       </div>
     );
@@ -402,7 +402,7 @@ export default function OperatorDashboard() {
             <Button
               size="sm"
               onClick={() => navigate(`/${operator.subdomain}`)}
-              className="gap-1.5 text-xs font-bold"
+              className="platform-blue-button gap-1.5 border-0 text-xs font-bold"
             >
               <ExternalLink size={14} />
               {t("operator.dashboard.viewApp", "View App")}
@@ -625,7 +625,7 @@ export default function OperatorDashboard() {
             <Button
               onClick={saveSettings}
               disabled={savingSettings}
-              className="bg-blue-600 hover:bg-blue-500 border-0"
+              className="platform-blue-button border-0"
             >
               <Save size={16} /> {savingSettings ? t("operator.dashboard.saving") : t("operator.dashboard.saveSettings")}
             </Button>
@@ -637,7 +637,7 @@ export default function OperatorDashboard() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold">{t("operator.dashboard.yourEvents")}</h2>
-              <Button onClick={() => setShowNewEvent(true)} size="sm" className="bg-blue-600 hover:bg-blue-500 border-0">
+              <Button onClick={() => setShowNewEvent(true)} size="sm" className="platform-blue-button border-0">
                 <Plus size={16} /> {t("operator.dashboard.newEvent")}
               </Button>
             </div>
@@ -659,7 +659,7 @@ export default function OperatorDashboard() {
                   {t("operator.dashboard.featuredEvent")}
                 </label>
                 <div className="flex gap-2">
-                  <Button onClick={createEvent} disabled={!newTeamA || !newTeamB || creating} className="bg-blue-600 hover:bg-blue-500 border-0">
+                  <Button onClick={createEvent} disabled={!newTeamA || !newTeamB || creating} className="platform-blue-button border-0">
                     {creating ? t("operator.dashboard.creating") : t("operator.dashboard.createGoLive")}
                   </Button>
                   <Button onClick={() => setShowNewEvent(false)} variant="outline" className="border-white/10 text-white hover:bg-white/5">{t("operator.dashboard.cancel")}</Button>
@@ -705,7 +705,7 @@ export default function OperatorDashboard() {
                                 {t("operator.dashboard.featured")}
                               </label>
                               <div className="flex gap-2">
-                                <Button size="sm" onClick={() => saveEventEdit(ev.id)} disabled={savingEvent} className="bg-blue-600 hover:bg-blue-500 border-0 text-xs h-7">
+                                <Button size="sm" onClick={() => saveEventEdit(ev.id)} disabled={savingEvent} className="platform-blue-button border-0 text-xs h-7">
                                   {savingEvent ? t("operator.dashboard.saving") : t("operator.dashboard.save")}
                                 </Button>
                                 <Button size="sm" variant="outline" onClick={() => setEditingEventId(null)} className="border-white/10 text-white hover:bg-white/5 text-xs h-7">{t("operator.dashboard.cancel")}</Button>

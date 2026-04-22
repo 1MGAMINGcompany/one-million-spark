@@ -103,7 +103,7 @@ export default function OperatorEventActions({ event, fight, onAction }: Props) 
                     size="sm"
                     variant={selectedWinner === "fighter_a" ? "default" : "outline"}
                     className={selectedWinner === "fighter_a"
-                      ? "bg-blue-600 hover:bg-blue-500 border-0"
+                      ? "platform-blue-button border-0"
                       : "border-white/10 text-white hover:bg-white/5"
                     }
                     onClick={(e) => { e.stopPropagation(); setSelectedWinner("fighter_a"); }}
@@ -114,7 +114,7 @@ export default function OperatorEventActions({ event, fight, onAction }: Props) 
                     size="sm"
                     variant={selectedWinner === "fighter_b" ? "default" : "outline"}
                     className={selectedWinner === "fighter_b"
-                      ? "bg-blue-600 hover:bg-blue-500 border-0"
+                      ? "platform-blue-button border-0"
                       : "border-white/10 text-white hover:bg-white/5"
                     }
                     onClick={(e) => { e.stopPropagation(); setSelectedWinner("fighter_b"); }}
@@ -125,7 +125,7 @@ export default function OperatorEventActions({ event, fight, onAction }: Props) 
                     size="sm"
                     variant={selectedWinner === "draw" ? "default" : "outline"}
                     className={selectedWinner === "draw"
-                      ? "bg-blue-600 hover:bg-blue-500 border-0"
+                      ? "platform-blue-button border-0"
                       : "border-white/10 text-white hover:bg-white/5"
                     }
                     onClick={(e) => { e.stopPropagation(); setSelectedWinner("draw"); }}

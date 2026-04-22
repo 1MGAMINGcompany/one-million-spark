@@ -66,7 +66,7 @@ export default function AffiliateProgram() {
             <Button
               size="sm"
               onClick={handleApply}
-              className="gap-1.5 bg-blue-600 hover:bg-blue-500 text-white border-0"
+              className="platform-blue-button gap-1.5 border-0"
             >
               Join via GoAffPro <ArrowRight className="h-3.5 w-3.5" />
             </Button>
@@ -91,7 +91,7 @@ export default function AffiliateProgram() {
           <Button
             size="lg"
             onClick={handleApply}
-            className="gap-2 text-base px-8 bg-blue-600 hover:bg-blue-500 text-white border-0"
+            className="platform-blue-button gap-2 text-base px-8 border-0"
           >
             Join via GoAffPro <ArrowRight className="h-4 w-4" />
           </Button>
@@ -115,7 +115,7 @@ export default function AffiliateProgram() {
             your own tracking link, real-time dashboard, and access to marketing assets the moment
             your account is approved.
           </p>
-          <Button onClick={handleApply} className="gap-2 bg-blue-600 hover:bg-blue-500 text-white border-0">
+          <Button onClick={handleApply} className="platform-blue-button gap-2 border-0">
             Join via GoAffPro <ArrowRight className="h-4 w-4" />
           </Button>
           <p className="text-xs text-white/50 mt-3">
@@ -274,7 +274,7 @@ export default function AffiliateProgram() {
         <Button
           size="lg"
           onClick={handleApply}
-          className="gap-2 text-base px-8 bg-blue-600 hover:bg-blue-500 text-white border-0"
+          className="platform-blue-button gap-2 text-base px-8 border-0"
         >
           Join via GoAffPro <ArrowRight className="h-4 w-4" />
         </Button>
