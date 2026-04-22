@@ -1,254 +1,100 @@
 
-## Fix free-code activation error and confusing “Activate for Free” state
+## Fix buy-page button text alignment and replace yellow button halo with light blue
 
-### What I found
+### Goal
 
-The free-code failure is not because `BESTRONG` is invalid.
+Make the 1mg.live purchase buttons look polished on mobile and remove the unwanted yellow/gold glow under blue buttons. The blue buttons should have centered text/icons and a soft light-blue glow instead.
 
-`BESTRONG` is still available:
+### What I will change
 
-```text
-code: BESTRONG
-discount_type: full
-discount_value: 2400
-uses_count: 0
-max_uses: 1
-```
+#### 1. Fix the buy-page bottom CTA button layout
 
-The backend log shows the real failure:
+File: `src/pages/platform/PurchasePage.tsx`
 
-```text
-[operator-manage] full-discount activation failed operator_lookup_failed
-```
-
-The affected Privy user currently has multiple operator rows:
-
-```text
-did:privy:cmlqvouen00te0clhp5wog5ke
-- demo
-- myworld
-```
-
-Several backend paths use `.maybeSingle()` or `.single()` for `operators where user_id = ...`. That fails when a user has more than one operator record, so the free activation returns:
-
-```text
-Your account could not be activated. Please contact support.
-```
-
-The button still appears because the frontend keeps the valid promo-code state after the failed backend response. That makes the UI look like the code worked but activation failed.
-
----
-
-## Patch
-
-### File 1: `supabase/functions/operator-manage/index.ts`
-
-Make operator lookup tolerant of duplicate historical operator rows.
-
-#### Change 1: Add a canonical operator lookup helper
-
-Add a helper that fetches all operators for the current Privy DID and chooses one deterministic row instead of using `.maybeSingle()`.
-
-Priority:
-
-1. active configured operator
-2. active pending operator
-3. newest pending operator
-4. newest operator row
-
-This prevents duplicate existing rows from crashing activation.
-
-Example behavior:
-
-```text
-user has demo + myworld
-→ backend chooses one canonical active operator
-→ activation can continue instead of failing operator_lookup_failed
-```
-
-#### Change 2: Use the helper in purchase activation
-
-Update `activatePurchasedOperator()` so it no longer calls:
-
-```ts
-.eq("user_id", privyDid).maybeSingle()
-```
-
-Instead, use the canonical helper.
-
-The function should still:
-- activate the selected operator
-- create/upsert `operator_settings`
-- return success only after critical writes succeed
-
-#### Change 3: Use the helper in related operator routes
-
-Replace fragile `.single()` / `.maybeSingle()` lookups for the current user in:
-
-- `get_my_operator`
-- `create_operator`
-- `update_operator`
-- `update_settings`
-
-This prevents the same duplicate-row bug from breaking dashboard, onboarding, and settings.
-
-#### Change 4: Keep duplicates, but avoid breaking on them
-
-No deletion is required for the duplicate historical rows. The code should handle them safely.
-
-Optional log:
-
-```text
-[operator-manage] multiple operators found for user; selected canonical operator
-```
-
----
-
-### File 2: `src/pages/platform/PurchasePage.tsx`
-
-Improve the free-code UX so the screen does not look contradictory.
-
-#### Change 1: Track activation-specific state
-
-Add a separate state for free promo activation:
-
-```ts
-const [freeActivationFailed, setFreeActivationFailed] = useState(false);
-```
-
-Reset it when:
-- promo code changes
-- promo code is applied again
-- activation starts
-
-#### Change 2: Better free-code loading copy
-
-For free activations, show:
-
-```text
-Activating free access...
-```
-
-not:
-
-```text
-Confirming on-chain...
-```
-
-because no blockchain transaction is happening.
-
-#### Change 3: Better retry state after failure
-
-If a valid full-discount code is applied and activation fails, show the CTA as:
-
-```text
-Retry Free Activation
-```
-
-instead of continuing to show the same untouched:
-
-```text
-Activate for Free
-```
-
-Also keep the error box visible with the backend message.
-
-#### Change 4: Map backend stages to clearer messages
-
-Add mappings for backend activation stages:
-
-```text
-operator_lookup_failed → We found more than one operator account for this login. Retrying will use your primary account.
-settings_creation_failed → Your account was activated, but settings could not be created. Please try again.
-promo_usage_update_failed → Your account was activated, but the promo could not be recorded. Please contact support.
-```
-
-After the backend duplicate-operator fix, the first message should no longer appear for this user.
-
----
-
-### File 3: `src/pages/platform/PlatformApp.tsx`
-
-Update `RequireActiveOperator` so it does not use `.maybeSingle()` against operators by `user_id`.
+Update the main purchase/activation button so the text and arrow are centered cleanly on all screen sizes.
 
 Current issue:
+- The button inherits the default button styling.
+- The text/icon can appear pushed toward the sides on narrow mobile screens.
+- The blue button still inherits the global gold/yellow shadow.
 
-```ts
-.from("operators")
-.select("status")
-.eq("user_id", did)
-.maybeSingle()
+Planned button styling:
+- Full-width, centered content
+- Proper `gap` between text and arrow/spinner
+- No wrapping/side stretching
+- Better mobile typography
+- Light-blue shadow instead of yellow glow
+
+Example style direction:
+
+```tsx
+className="
+  w-full h-14
+  inline-flex items-center justify-center gap-2
+  px-4 text-base sm:text-lg text-center
+  bg-blue-600 hover:bg-blue-500 text-white border-0
+  rounded-xl
+  shadow-[0_10px_34px_-10px_rgba(59,130,246,0.65)]
+  hover:shadow-[0_14px_42px_-12px_rgba(96,165,250,0.75)]
+"
 ```
 
-This can fail for users with multiple operator rows.
+The button content will also be wrapped so each state remains visually balanced:
 
-Replace it with a list query ordered by `created_at desc`, then treat the user as active if any canonical/current operator is active.
-
-This keeps onboarding and dashboard access from failing after the free-code activation succeeds.
-
----
-
-## Verification
-
-### Backend verification
-
-1. Apply `BESTRONG` again.
-2. Confirm `operator-manage` no longer logs:
-
-```text
-operator_lookup_failed
+```tsx
+<span className="inline-flex items-center justify-center gap-2">
+  Activate for Free <ArrowRight size={18} />
+</span>
 ```
 
-3. Confirm the backend returns:
+#### 2. Replace yellow/gold halo on 1mg.live blue buttons
 
-```json
-{
-  "success": true,
-  "status": "active",
-  "amount_charged": 0,
-  "promo_code": "BESTRONG"
-}
+Files to update:
+- `src/pages/platform/PurchasePage.tsx`
+- `src/pages/platform/OperatorPurchaseSuccess.tsx`
+- `src/pages/platform/LandingPage.tsx`
+
+The shared `Button` component’s default variant includes a gold shadow. When platform pages use:
+
+```tsx
+<Button className="bg-blue-600 ...">
 ```
 
-4. Confirm `BESTRONG` usage increments only after success.
+the blue background changes, but the inherited default gold shadow can remain underneath.
 
-### UI verification
+I will override those platform blue buttons with explicit light-blue shadows so they no longer display yellow/gold glow.
 
-1. Apply `BESTRONG`.
-2. Confirm price changes to `FREE`.
-3. Click activation.
-4. Confirm the button says:
+Targets:
+- Buy page main CTA
+- Buy page “Apply” / secondary blue action where applicable
+- Purchase success “Start Setup”
+- 1mg.live landing page “Buy Now” CTA buttons
+- 1mg.live sign-in blue button if it shows the same halo
 
-```text
-Activating free access...
-```
+#### 3. Keep gold glow only where it belongs
 
-5. Confirm no wallet transaction opens.
-6. Confirm success redirect:
+I will not remove gold styling globally from the whole app because other game areas intentionally use the Egyptian/gold theme.
 
-```text
-/operator-purchase-success?amount=0&promo=BESTRONG
-```
+Instead:
+- Platform / 1mg.live blue buttons get blue glow.
+- Operator Gold theme can still use gold accents.
+- Non-platform game UI remains unchanged.
 
-7. Confirm success page says access was activated.
-8. Click “Start Setup”.
-9. Confirm onboarding opens.
-10. Confirm dashboard/app access does not break for a user with multiple historical operator rows.
+This follows the existing project rule: blue/red operator themes should not show gold glow; gold glow is exclusive to the Gold theme.
 
----
+### Verification
 
-## What will not be changed
+After implementation, I will check:
 
-- Treasury wallet
-- USDC.e token contract
-- Paid $2,400 purchase verification
-- Partial-discount payment verification
-- Sports feeds
-- Trading
-- Payouts
-- Affiliate tracking
-- Existing operator apps
+1. Buy page on mobile width similar to the screenshot.
+2. Bottom CTA text is centered inside the button.
+3. Arrow/spinner sits next to the text, not pushed to the edge.
+4. `Activate for Free`, `Retry Free Activation`, `Activating free access...`, and paid purchase states all look centered.
+5. The halo beneath the buy-page CTA is light blue, not yellow.
+6. 1mg.live landing CTA buttons use a light-blue glow.
+7. Purchase success “Start Setup” button uses a light-blue glow.
+8. No backend, payment, promo-code, wallet, or USDC logic is changed.
 
-## Expected result
+### Expected result
 
-`BESTRONG` should activate free access cleanly. Users with duplicate historical operator records should no longer see “Your account could not be activated,” and the purchase page should show a clear activation/retry state instead of a confusing generic “Activate for Free” button after failure.
+The buy page button will look clean and centered on mobile, and the 1mg.live blue buttons will have a premium light-blue glow instead of the current yellow/gold shading.
