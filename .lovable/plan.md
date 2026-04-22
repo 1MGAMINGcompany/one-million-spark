@@ -1,100 +1,81 @@
 
-## Fix buy-page button text alignment and replace yellow button halo with light blue
+## Restore 1mg.live button color and keep light-blue glow
 
-### Goal
+### Issue
 
-Make the 1mg.live purchase buttons look polished on mobile and remove the unwanted yellow/gold glow under blue buttons. The blue buttons should have centered text/icons and a soft light-blue glow instead.
+The button component’s default style still includes the global gold/yellow `bg-primary` and `shadow-gold` utilities. The new `.platform-blue-button` class was added, but because it sits in a lower-priority CSS layer, the default yellow button background can still win in the browser.
 
-### What I will change
+That is why the 1mg.live buttons turned yellow even though the intended platform style is blue.
 
-#### 1. Fix the buy-page bottom CTA button layout
+### Fix
 
-File: `src/pages/platform/PurchasePage.tsx`
+#### 1. Make platform blue button override the global yellow button style
 
-Update the main purchase/activation button so the text and arrow are centered cleanly on all screen sizes.
+File: `src/index.css`
 
-Current issue:
-- The button inherits the default button styling.
-- The text/icon can appear pushed toward the sides on narrow mobile screens.
-- The blue button still inherits the global gold/yellow shadow.
+Update `.platform-blue-button` so it forcefully overrides the shared default button background/shadow:
 
-Planned button styling:
-- Full-width, centered content
-- Proper `gap` between text and arrow/spinner
-- No wrapping/side stretching
-- Better mobile typography
-- Light-blue shadow instead of yellow glow
+```css
+.platform-blue-button {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+  box-shadow: 0 10px 34px -10px rgba(59, 130, 246, 0.65) !important;
+}
 
-Example style direction:
-
-```tsx
-className="
-  w-full h-14
-  inline-flex items-center justify-center gap-2
-  px-4 text-base sm:text-lg text-center
-  bg-blue-600 hover:bg-blue-500 text-white border-0
-  rounded-xl
-  shadow-[0_10px_34px_-10px_rgba(59,130,246,0.65)]
-  hover:shadow-[0_14px_42px_-12px_rgba(96,165,250,0.75)]
-"
+.platform-blue-button:hover {
+  background: #3b82f6 !important;
+  box-shadow: 0 14px 42px -12px rgba(96, 165, 250, 0.75) !important;
+}
 ```
 
-The button content will also be wrapped so each state remains visually balanced:
+This keeps:
+- Button fill: 1mg.live blue
+- Text: white
+- Halo underneath: soft light blue
+- No yellow/gold background or shadow on platform buttons
+
+#### 2. Remove conflicting glow classes from 1mg.live buttons
+
+File: `src/pages/platform/LandingPage.tsx`
+
+Remove `btn-glow` from the main “Buy Now” buttons if it conflicts with the clean blue button style.
+
+Keep the CTA button styling as:
 
 ```tsx
-<span className="inline-flex items-center justify-center gap-2">
-  Activate for Free <ArrowRight size={18} />
-</span>
+className="platform-blue-button text-lg px-10 h-16 border-0 rounded-xl font-bold ..."
 ```
 
-#### 2. Replace yellow/gold halo on 1mg.live blue buttons
+The button can still have a premium light-blue shadow from `.platform-blue-button`, but not the yellow fill.
 
-Files to update:
-- `src/pages/platform/PurchasePage.tsx`
-- `src/pages/platform/OperatorPurchaseSuccess.tsx`
-- `src/pages/platform/LandingPage.tsx`
+#### 3. Apply the same button treatment consistently
 
-The shared `Button` component’s default variant includes a gold shadow. When platform pages use:
+Confirm these buttons all use the corrected blue style:
 
-```tsx
-<Button className="bg-blue-600 ...">
-```
+- 1mg.live landing hero “Buy Now”
+- 1mg.live final CTA “Buy Now”
+- Sign-in button in the 1mg.live top nav
+- Buy page main purchase / free activation button
+- Buy page “Add Funds Now” button
+- Purchase success “Start Setup” button
 
-the blue background changes, but the inherited default gold shadow can remain underneath.
+#### 4. Keep yellow/gold styling elsewhere
 
-I will override those platform blue buttons with explicit light-blue shadows so they no longer display yellow/gold glow.
+Do not change the shared `Button` component globally because the gaming side still uses gold/yellow as part of its theme.
 
-Targets:
-- Buy page main CTA
-- Buy page “Apply” / secondary blue action where applicable
-- Purchase success “Start Setup”
-- 1mg.live landing page “Buy Now” CTA buttons
-- 1mg.live sign-in blue button if it shows the same halo
-
-#### 3. Keep gold glow only where it belongs
-
-I will not remove gold styling globally from the whole app because other game areas intentionally use the Egyptian/gold theme.
-
-Instead:
-- Platform / 1mg.live blue buttons get blue glow.
-- Operator Gold theme can still use gold accents.
-- Non-platform game UI remains unchanged.
-
-This follows the existing project rule: blue/red operator themes should not show gold glow; gold glow is exclusive to the Gold theme.
+Only platform-specific buttons should be corrected.
 
 ### Verification
 
-After implementation, I will check:
+After the change, verify:
 
-1. Buy page on mobile width similar to the screenshot.
-2. Bottom CTA text is centered inside the button.
-3. Arrow/spinner sits next to the text, not pushed to the edge.
-4. `Activate for Free`, `Retry Free Activation`, `Activating free access...`, and paid purchase states all look centered.
-5. The halo beneath the buy-page CTA is light blue, not yellow.
-6. 1mg.live landing CTA buttons use a light-blue glow.
-7. Purchase success “Start Setup” button uses a light-blue glow.
-8. No backend, payment, promo-code, wallet, or USDC logic is changed.
+1. 1mg.live landing buttons are blue, not yellow.
+2. The glow/halo under the buttons is light blue.
+3. The buy page CTA stays centered and blue.
+4. The free-code, paid, and discounted purchase button states still look aligned.
+5. No backend, wallet, promo-code, or payment logic is changed.
 
 ### Expected result
 
-The buy page button will look clean and centered on mobile, and the 1mg.live blue buttons will have a premium light-blue glow instead of the current yellow/gold shading.
+The 1mg.live buttons return to the previous blue brand color, with a refined light-blue glow underneath and no yellow/gold button styling on platform pages.
