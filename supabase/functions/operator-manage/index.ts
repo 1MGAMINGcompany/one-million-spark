@@ -384,7 +384,7 @@ Deno.serve(async (req) => {
 
     // ── get_my_operator ──
     if (action === "get_my_operator") {
-      const { data: op } = await sb.from("operators").select("*, operator_settings(*)").eq("user_id", privyDid).maybeSingle();
+      const { op } = await fetchCanonicalOperator(sb, privyDid, "*, operator_settings(*)");
       return jsonResp({ operator: op });
     }
 
@@ -394,7 +394,7 @@ Deno.serve(async (req) => {
       if (!body.agreement_version || typeof body.agreement_version !== "string" || body.agreement_version.trim().length === 0) {
         return jsonResp({ error: "agreement_version is required" }, 400);
       }
-      const { data: existing } = await sb.from("operators").select("id, status").eq("user_id", privyDid).maybeSingle();
+      const { op: existing } = await fetchCanonicalOperator(sb, privyDid, "id, status, subdomain, created_at");
       if (existing && existing.status !== "active") return jsonResp({ error: "payment_required", operator_id: existing.id }, 402);
       if (existing) {
         // Subdomain collision check on update path
@@ -433,7 +433,7 @@ Deno.serve(async (req) => {
 
     // ── update_operator ──
     if (action === "update_operator") {
-      const { data: op } = await sb.from("operators").select("id, status").eq("user_id", privyDid).single();
+      const { op } = await fetchCanonicalOperator(sb, privyDid, "id, status, subdomain, created_at");
       if (!op) return jsonResp({ error: "not_found" }, 404);
       const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
       if (body.brand_name) updates.brand_name = body.brand_name;
@@ -483,7 +483,7 @@ Deno.serve(async (req) => {
 
     // ── update_settings ──
     if (action === "update_settings") {
-      const { data: op } = await sb.from("operators").select("id").eq("user_id", privyDid).single();
+      const { op } = await fetchCanonicalOperator(sb, privyDid, "id, status, subdomain, created_at");
       if (!op) return jsonResp({ error: "not_found" }, 404);
       await sb.from("operator_settings").update({
         allowed_sports: body.allowed_sports, show_polymarket_events: body.show_polymarket_events,
