@@ -213,12 +213,31 @@ async function verifyTxOnChain(txHash: string, minAmountRaw: bigint): Promise<{ 
 }
 
 // deno-lint-ignore no-explicit-any
-async function activatePurchasedOperator(sb: any, privyDid: string, txHash: string | null) {
-  const { data: existing, error: lookupErr } = await sb
+function chooseCanonicalOperator(rows: any[] = []) {
+  if (!rows.length) return null;
+  const isConfigured = (op: any) => op?.status === "active" && op?.subdomain && !String(op.subdomain).startsWith("pending-");
+  return rows.find(isConfigured)
+    || rows.find((op) => op?.status === "active")
+    || rows.find((op) => op?.status === "pending")
+    || rows[0]
+    || null;
+}
+
+// deno-lint-ignore no-explicit-any
+async function fetchCanonicalOperator(sb: any, privyDid: string, select = "id, status, subdomain, fee_percent, created_at") {
+  const { data, error } = await sb
     .from("operators")
-    .select("id, status, subdomain, fee_percent")
+    .select(select)
     .eq("user_id", privyDid)
-    .maybeSingle();
+    .order("created_at", { ascending: false });
+  if (error) return { op: null, error };
+  if ((data || []).length > 1) console.warn("[operator-manage] multiple operators found for user; selected canonical operator", { privyDid, count: data.length });
+  return { op: chooseCanonicalOperator(data || []), error: null };
+}
+
+// deno-lint-ignore no-explicit-any
+async function activatePurchasedOperator(sb: any, privyDid: string, txHash: string | null) {
+  const { op: existing, error: lookupErr } = await fetchCanonicalOperator(sb, privyDid, "id, status, subdomain, fee_percent, created_at");
   if (lookupErr) return { error: "operator_lookup_failed", message: "Your account could not be activated. Please contact support." };
 
   let operatorId: string | null = null;
@@ -365,7 +384,7 @@ Deno.serve(async (req) => {
 
     // ── get_my_operator ──
     if (action === "get_my_operator") {
-      const { data: op } = await sb.from("operators").select("*, operator_settings(*)").eq("user_id", privyDid).maybeSingle();
+      const { op } = await fetchCanonicalOperator(sb, privyDid, "*, operator_settings(*)");
       return jsonResp({ operator: op });
     }
 
@@ -375,7 +394,7 @@ Deno.serve(async (req) => {
       if (!body.agreement_version || typeof body.agreement_version !== "string" || body.agreement_version.trim().length === 0) {
         return jsonResp({ error: "agreement_version is required" }, 400);
       }
-      const { data: existing } = await sb.from("operators").select("id, status").eq("user_id", privyDid).maybeSingle();
+      const { op: existing } = await fetchCanonicalOperator(sb, privyDid, "id, status, subdomain, created_at");
       if (existing && existing.status !== "active") return jsonResp({ error: "payment_required", operator_id: existing.id }, 402);
       if (existing) {
         // Subdomain collision check on update path
@@ -414,7 +433,7 @@ Deno.serve(async (req) => {
 
     // ── update_operator ──
     if (action === "update_operator") {
-      const { data: op } = await sb.from("operators").select("id, status").eq("user_id", privyDid).single();
+      const { op } = await fetchCanonicalOperator(sb, privyDid, "id, status, subdomain, created_at");
       if (!op) return jsonResp({ error: "not_found" }, 404);
       const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
       if (body.brand_name) updates.brand_name = body.brand_name;
@@ -464,7 +483,7 @@ Deno.serve(async (req) => {
 
     // ── update_settings ──
     if (action === "update_settings") {
-      const { data: op } = await sb.from("operators").select("id").eq("user_id", privyDid).single();
+      const { op } = await fetchCanonicalOperator(sb, privyDid, "id, status, subdomain, created_at");
       if (!op) return jsonResp({ error: "not_found" }, 404);
       await sb.from("operator_settings").update({
         allowed_sports: body.allowed_sports, show_polymarket_events: body.show_polymarket_events,

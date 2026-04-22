@@ -55,8 +55,8 @@ function RequireActiveOperator({ children }: { children: React.ReactNode }) {
         .from("operators")
         .select("status")
         .eq("user_id", did)
-        .maybeSingle();
-      return data?.status ?? null;
+        .order("created_at", { ascending: false });
+      return (data || []).some((op: { status?: string }) => op.status === "active") ? "active" : null;
     },
     enabled: ready && authenticated,
     staleTime: 30_000,

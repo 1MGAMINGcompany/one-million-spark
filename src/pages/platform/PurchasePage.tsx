@@ -59,6 +59,9 @@ function purchaseErrorMessage(error: string): string {
     verification_failed: "Transaction verification failed. Please try again.",
     no_matching_transfer: "Transaction verification failed. Confirm the USDC payment amount and recipient.",
     tx_already_used: "This transaction has already been used for a purchase.",
+    operator_lookup_failed: "We found more than one operator account for this login. Retrying will use your primary account.",
+    settings_creation_failed: "Your account was activated, but settings could not be created. Please try again.",
+    promo_usage_update_failed: "Your account was activated, but the promo could not be recorded. Please contact support.",
   };
   return messages[error] || error || "Purchase failed. Please try again.";
 }
@@ -88,6 +91,7 @@ export default function PurchasePage() {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [freeActivationFailed, setFreeActivationFailed] = useState(false);
 
   // Promo code
   const [promoCode, setPromoCode] = useState("");
@@ -101,6 +105,7 @@ export default function PurchasePage() {
   const validatePromo = useCallback(async () => {
     if (!promoCode.trim()) return;
     setValidatingPromo(true);
+    setFreeActivationFailed(false);
     try {
       const { data, error: err } = await supabase.functions.invoke("prediction-admin", {
         body: { action: "validatePromoCode", wallet: "system", code: promoCode.trim() },
@@ -116,6 +121,7 @@ export default function PurchasePage() {
 
   const handlePayment = useCallback(async () => {
     setError(null);
+    setFreeActivationFailed(false);
     setStep("payment");
 
     try {
@@ -141,7 +147,7 @@ export default function PurchasePage() {
         );
         const result = await res.json().catch(() => ({}));
         if (!res.ok || result?.success === false) {
-          throw new Error(purchaseErrorMessage(result?.error) || "Promo activation failed. Please try again.");
+          throw new Error(purchaseErrorMessage(result?.stage || result?.error) || "Promo activation failed. Please try again.");
         }
         clearPendingOperatorRef();
         navigate(`/operator-purchase-success?amount=0&promo=${encodeURIComponent(promoCode.trim().toUpperCase())}`, {
@@ -198,6 +204,7 @@ export default function PurchasePage() {
     } catch (e: any) {
       console.error("[PurchasePage] Error:", e);
       setError(e?.message || "Transaction failed");
+      if (effectivePrice === 0 && promoResult?.valid) setFreeActivationFailed(true);
       setStep("error");
     } finally {
       setConfirming(false);
@@ -271,7 +278,7 @@ export default function PurchasePage() {
                 <Tag size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
                 <Input
                   value={promoCode}
-                  onChange={e => { setPromoCode(e.target.value); setPromoResult(null); }}
+                  onChange={e => { setPromoCode(e.target.value); setPromoResult(null); setFreeActivationFailed(false); }}
                   placeholder="Promo code"
                   className="pl-9 bg-white/5 border-white/10 text-white placeholder:text-white/20 uppercase font-mono"
                 />
@@ -371,7 +378,7 @@ export default function PurchasePage() {
           >
             {step === "confirming" ? (
               <>
-                <Loader2 size={20} className="animate-spin" /> Confirming on-chain...
+                <Loader2 size={20} className="animate-spin" /> {effectivePrice === 0 ? "Activating free access..." : "Confirming on-chain..."}
               </>
             ) : step === "payment" ? (
               <>
@@ -379,7 +386,7 @@ export default function PurchasePage() {
               </>
             ) : effectivePrice === 0 ? (
               <>
-                Activate for Free <ArrowRight size={18} />
+                {freeActivationFailed ? "Retry Free Activation" : "Activate for Free"} <ArrowRight size={18} />
               </>
             ) : (
               <>
