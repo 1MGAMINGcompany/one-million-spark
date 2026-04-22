@@ -1,191 +1,120 @@
 
+## Fix BESTRONG free-code purchase redirect error
 
-## Fix missing same-team NBA games in operator apps + verify sports sync health
+### What I confirmed
 
-### Audit findings
-
-- The sports sync is running: latest `daily_auto_import` logs show Batch 1 ran today and processed NBA, NHL, MLB, tennis, cricket, etc.
-- NBA is being fetched correctly from the upstream source:
-  - `browse_league nba` currently returns **23 raw NBA events**
-  - **20 NBA events pass filters**
-  - Today’s **Magic vs. Pistons** event is accepted by the filter
-- The likely bug is in import deduplication:
-  - `polymarket-sync` has a **global title-only duplicate check**
-  - Repeated matchups like `Magic vs. Pistons`, `Lakers vs. Rockets`, `Celtics vs. 76ers`, etc. can happen on multiple dates
-  - The current title-only check can incorrectly skip a new game because an older game with the same title already exists
-- Other sports are updating:
-  - Recent live/upcoming DB counts show active coverage for MLB, NHL, NBA, ATP/WTA tennis, cricket, soccer, rugby, etc.
-  - Off-season/empty leagues like NFL or some niche cricket/table-tennis sources can correctly show zero if upstream has no active fixtures
-
-### Root cause
-
-The importer treats identical titles as duplicates globally:
-
-```ts
-title = "Magic vs. Pistons"
-```
-
-That is unsafe for sports schedules because the same teams can play again on a different date.
-
-The safer duplicate keys are:
-- Polymarket condition ID
-- Polymarket market ID
-- Normalized teams + same event date
-
-Those already exist in the importer. The broad title-only dedup should be removed or narrowed.
-
----
+- The `BESTRONG` promo code exists in the database.
+- It is a full-discount code:
+  - `discount_type = full`
+  - `discount_value = 2400`
+  - `uses_count = 0`
+  - `max_uses = 1`
+  - no expiry
+- The purchase page correctly treats a full discount as `$0 / FREE`.
+- The risk is in the free-code activation path after clicking the purchase button:
+  - `PurchasePage.tsx` calls `operator-manage` directly.
+  - `operator-manage` creates or activates the operator account.
+  - The current backend path does not fully check database write errors before returning success.
+  - The success/onboarding redirect path can therefore land the user on a broken or confusing error state if activation did not complete cleanly.
 
 ## Patch
 
-### File 1: `supabase/functions/polymarket-sync/index.ts`
+### File 1: `supabase/functions/operator-manage/index.ts`
 
-#### Change 1: Remove unsafe global title-only dedup
+Harden the `confirm_purchase` full-discount branch.
 
-Remove or replace this logic:
+Changes:
+- Validate the promo code as it already does.
+- For full-discount codes, activate the operator without requiring a transaction hash.
+- Check every database write result:
+  - promo usage update
+  - existing operator activation
+  - new operator insert
+  - default operator settings creation
+  - referral attribution
+- If any required write fails, return a clear JSON error instead of silently continuing.
+- When a new operator is created from a free code, also create default `operator_settings` immediately so the account is fully usable before onboarding.
+- Add safe logs for:
+  - promo applied
+  - operator activated
+  - operator created
+  - activation failure reason
 
-```ts
-.filter("title", "ilike", candidateTitle)
-.limit(1)
+This prevents a free promo from appearing successful while the operator record is incomplete.
+
+### File 2: `src/pages/platform/PurchasePage.tsx`
+
+Improve the free-code success flow.
+
+Changes:
+- Keep the existing “FREE” promo UI.
+- For `effectivePrice === 0`, call the backend activation path and handle JSON errors clearly.
+- If activation succeeds, navigate to:
+
+```text
+/operator-purchase-success?amount=0&promo=BESTRONG
 ```
 
-because it can skip valid same-team games on different dates.
+- If activation fails, show a readable on-page message such as:
+  - “Promo activation failed. Please try again.”
+  - “This code has already been redeemed.”
+  - “Your account could not be activated. Please contact support.”
 
-#### Change 2: Keep safe dedup checks intact
+This avoids redirecting the user to a generic error page.
 
-Keep these existing checks unchanged:
+### File 3: `src/pages/platform/OperatorPurchaseSuccess.tsx`
 
-- `polymarket_condition_id`
-- `polymarket_market_id`
-- normalized team names + same event date
+Make the success page accurate for free-code purchases.
 
-This still prevents real duplicates while allowing repeat matchups on new dates.
+Changes:
+- Detect `amount=0` or `promo=BESTRONG`.
+- Show free-code copy instead of “Payment confirmed”:
 
-#### Change 3: Add sport/date-aware logging when a duplicate is skipped
-
-Add log messages for skipped duplicates so future audits show whether a game was skipped because of:
-
-- same condition ID
-- same market ID
-- same teams on same date
-
-Example:
-
-```ts
-console.log(
-  `[polymarket-sync] duplicate skipped reason=same_matchup_date title="${candidateTitle}" date=${dateStr}`
-);
+```text
+Access activated.
+Your free operator app access is ready. Let’s set up your branded predictions app.
 ```
 
-#### Change 4: Add NBA repair/backfill path using existing import flow
+- Keep the same “Start Setup” button.
+- Preserve normal paid-purchase copy for $2,400 payments.
 
-After deployment, run the existing NBA import flow once:
+### Optional safety check: promo usage
 
-```json
-{ "action": "daily_import", "batch": 1 }
-```
-
-or:
-
-```json
-{ "action": "league_import", "league_key": "nba" }
-```
-
-depending on the currently supported deployed action names.
-
-This should backfill today’s missing NBA games, including Magic vs. Pistons, without changing checkout, wallets, payouts, or operator logic.
-
----
-
-## Verification
-
-### Database checks
-
-Confirm today/upcoming NBA events include same-title repeat matchups:
+If needed after testing, verify `BESTRONG` still has the intended availability:
 
 ```sql
-select title, polymarket_slug, event_date, status, visibility, polymarket_active
-from prediction_fights
-where polymarket_slug ilike 'nba-%'
-  and event_date between now() - interval '12 hours' and now() + interval '96 hours'
-order by event_date asc;
+select code, discount_type, uses_count, max_uses, expires_at
+from promo_codes
+where code = 'BESTRONG';
 ```
 
-Confirm Magic vs. Pistons exists specifically:
+Only adjust usage if the code was consumed by a failed activation attempt.
 
-```sql
-select title, polymarket_slug, event_date, status, visibility, polymarket_active
-from prediction_fights
-where polymarket_slug ilike 'nba-%'
-  and (
-    title ilike '%Magic%'
-    or title ilike '%Pistons%'
-    or polymarket_slug ilike '%orl%'
-    or polymarket_slug ilike '%det%'
-  )
-order by event_date asc;
-```
+## Verification after implementation
 
-### Sports health checks
+1. Apply `BESTRONG` on the 1mg.live purchase page.
+2. Confirm the price changes from `$2,400` to `FREE`.
+3. Click the purchase/activation button.
+4. Confirm no crypto transaction is requested.
+5. Confirm the user lands on the success page, not an error page.
+6. Confirm the success page says free access was activated.
+7. Click “Start Setup”.
+8. Confirm onboarding opens normally.
+9. Finish onboarding and confirm the operator app is created.
+10. Confirm the operator can go to dashboard and app normally.
 
-Check upcoming active events by sport prefix:
+## What is not touched
 
-```sql
-select
-  lower(split_part(polymarket_slug, '-', 1)) as prefix,
-  count(*) as count,
-  min(event_date) as next_event,
-  max(polymarket_last_synced_at) as last_sync
-from prediction_fights
-where event_date >= now() - interval '12 hours'
-  and event_date <= now() + interval '72 hours'
-  and status in ('open','live','locked')
-  and polymarket_active is not false
-group by 1
-order by count desc;
-```
-
-### Operator app checks
-
-- Open an operator app at `1mg.live/{slug}`
-- Confirm NBA appears if NBA is enabled for that operator
-- Confirm Magic vs. Pistons appears under NBA / Basketball
-- Confirm NHL, MLB, tennis, cricket, and soccer sections still render normally
-- Confirm disabled sports remain hidden per operator settings
-
----
-
-## Files changed
-
-| File | Change |
-|---|---|
-| `supabase/functions/polymarket-sync/index.ts` | Remove unsafe title-only dedup, keep safe market/condition/date dedup, add duplicate reason logging |
-
----
-
-## What will not be touched
-
-- Checkout
-- Privy
+- Paid $2,400 USDC purchase flow
+- Treasury wallet address
 - Wallet creation
-- Operator ownership
 - Payouts
-- GoAffPro
-- Operator onboarding
-- Trade submission
-- Trade confirmation
-- User betting UI logic
-- Operator settings logic
+- Trading
+- Sports/event feeds
+- Affiliate tracking
+- Operator dashboard logic
+- Existing paid operators
 
----
+## Expected result
 
-## Risk check
-
-| Risk | Level | Mitigation |
-|---|---:|---|
-| Duplicate events | Low | Existing condition ID, market ID, and same-date matchup checks remain |
-| Missing repeat matchups | Fixed | Same title on different dates will now import correctly |
-| Other sports affected | Positive | Fix applies to all sports with repeat team/player matchups |
-| Checkout/auth/payout regression | None | Only importer dedup logic changes |
-| Data volume increase | Low | Only legitimate new dated fixtures are added |
-
+Using `BESTRONG` should activate operator access immediately, redirect to a clean success page, and allow the user to start setup without seeing a generic error page.
