@@ -1929,7 +1929,8 @@ Deno.serve(async (req) => {
               );
               leagueImported += result.imported;
             } catch (e) {
-              console.error(`[daily_import] Error importing ${ev.title}: ${e}`);
+              const stack = e instanceof Error ? e.stack : String(e);
+              console.error(`[daily_import] Error importing ${ev.title}: ${stack}`);
               leagueErrors++;
             }
           }
@@ -1938,11 +1939,81 @@ Deno.serve(async (req) => {
           totalImported += leagueImported;
           totalErrors += leagueErrors;
 
-          console.log(`[daily_import] ${leagueKey}: ${accepted.length} fetched, ${leagueImported} imported, ${leagueErrors} errors`);
+          console.log(`[daily_import] league=${leagueKey} fetched=${accepted.length} accepted=${leagueImported} errors=${leagueErrors}`);
         } catch (e) {
-          console.error(`[daily_import] League ${leagueKey} failed: ${e}`);
+          const stack = e instanceof Error ? e.stack : String(e);
+          console.error(`[daily_import] League ${leagueKey} FAILED with stack: ${stack}`);
           summary[leagueKey] = { fetched: 0, imported: 0, errors: 1 };
           totalErrors++;
+        }
+      }
+
+      // ─── Universal self-healing coverage top-up ───
+      // For every league in this batch, check if DB has at least 3 upcoming fixtures
+      // in the -12h..+72h window. If not, retry the fetch ONCE. This recovers from
+      // partial-batch failures (e.g. NHL silently failing first-position in BATCH_1)
+      // without changing cron cadence or risking infinite loops.
+      const coverageWindowStart = new Date(Date.now() - 12 * 3600_000).toISOString();
+      const coverageWindowEnd = new Date(Date.now() + 72 * 3600_000).toISOString();
+      const MIN_EXPECTED_PER_LEAGUE = 3;
+
+      for (const leagueKey of leagueKeys) {
+        const cfg = LEAGUE_SOURCES[leagueKey];
+        if (!cfg) continue;
+
+        try {
+          const { count, error: countErr } = await supabase
+            .from("prediction_fights")
+            .select("id", { count: "exact", head: true })
+            .ilike("polymarket_slug", `${leagueKey}-%`)
+            .gte("event_date", coverageWindowStart)
+            .lte("event_date", coverageWindowEnd);
+
+          if (countErr) {
+            console.warn(`[daily_import] coverage check failed league=${leagueKey}: ${countErr.message}`);
+            continue;
+          }
+
+          const have = count ?? 0;
+          if (have >= MIN_EXPECTED_PER_LEAGUE) continue;
+
+          console.warn(`[daily_import] coverage gap league=${leagueKey} have=${have} min=${MIN_EXPECTED_PER_LEAGUE}, retrying once`);
+
+          const isAutoApproved = AUTO_APPROVED_KEYS.has(leagueKey);
+          const vis = isAutoApproved ? "all" : "platform";
+          const statusOverride = isAutoApproved ? "open" : "pending_review";
+
+          const { events: retryEvents } = await fetchByLeagueSource(cfg);
+          const { accepted: retryAccepted } = filterFixtures(retryEvents, true);
+
+          let retryImported = 0;
+          let retryErrors = 0;
+          for (const ev of retryAccepted) {
+            try {
+              const result = await importSingleEvent(
+                supabase, ev, null, `daily_import_retry_${leagueKey}`,
+                cfg.sportType, vis,
+                { eventStatusOverride: statusOverride, fightTradingAllowed: true },
+              );
+              retryImported += result.imported;
+            } catch (e) {
+              retryErrors++;
+              console.error(`[daily_import] retry import error ${leagueKey} ${ev.title}: ${e instanceof Error ? e.message : e}`);
+            }
+          }
+
+          totalImported += retryImported;
+          totalErrors += retryErrors;
+          summary[leagueKey] = {
+            fetched: (summary[leagueKey]?.fetched ?? 0) + retryAccepted.length,
+            imported: (summary[leagueKey]?.imported ?? 0) + retryImported,
+            errors: (summary[leagueKey]?.errors ?? 0) + retryErrors,
+          };
+
+          console.log(`[daily_import] coverage retry league=${leagueKey} fetched=${retryAccepted.length} imported=${retryImported} errors=${retryErrors}`);
+        } catch (e) {
+          const stack = e instanceof Error ? e.stack : String(e);
+          console.error(`[daily_import] coverage top-up FAILED league=${leagueKey}: ${stack}`);
         }
       }
 
