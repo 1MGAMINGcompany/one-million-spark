@@ -212,6 +212,52 @@ async function verifyTxOnChain(txHash: string, minAmountRaw: bigint): Promise<{ 
   return { valid: false, error: "all_rpcs_failed" };
 }
 
+// deno-lint-ignore no-explicit-any
+async function activatePurchasedOperator(sb: any, privyDid: string, txHash: string | null) {
+  const { data: existing, error: lookupErr } = await sb
+    .from("operators")
+    .select("id, status, subdomain, fee_percent")
+    .eq("user_id", privyDid)
+    .maybeSingle();
+  if (lookupErr) return { error: "operator_lookup_failed", message: "Your account could not be activated. Please contact support." };
+
+  let operatorId: string | null = null;
+  let slug = "your-app";
+  let feePercent = 5;
+
+  if (existing) {
+    const { error: updateErr } = await sb
+      .from("operators")
+      .update({ status: "active", ...(txHash ? { purchase_tx_hash: txHash } : {}), updated_at: new Date().toISOString() })
+      .eq("id", existing.id);
+    if (updateErr) return { error: "operator_activation_failed", message: "Your account could not be activated. Please contact support." };
+    operatorId = existing.id;
+    slug = existing.subdomain || slug;
+    feePercent = existing.fee_percent ?? feePercent;
+  } else {
+    const pendingSub = "pending-" + Date.now();
+    const { data: inserted, error: insertErr } = await sb
+      .from("operators")
+      .insert({ user_id: privyDid, brand_name: "My App", subdomain: pendingSub, status: "active", ...(txHash ? { purchase_tx_hash: txHash } : {}) })
+      .select("id")
+      .single();
+    if (insertErr || !inserted?.id) return { error: "operator_creation_failed", message: "Your account could not be activated. Please contact support." };
+    operatorId = inserted.id;
+    slug = pendingSub;
+  }
+
+  const { error: settingsErr } = await sb.from("operator_settings").upsert({
+    operator_id: operatorId,
+    allowed_sports: ["Soccer", "MMA", "Boxing"],
+    show_polymarket_events: true,
+    show_platform_events: true,
+    homepage_layout: "default",
+  }, { onConflict: "operator_id" });
+  if (settingsErr) return { error: "settings_creation_failed", message: "Your account settings could not be created. Please contact support." };
+
+  return { operatorId, slug, feePercent };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
