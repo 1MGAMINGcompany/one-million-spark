@@ -399,6 +399,14 @@ export default function OperatorDashboard() {
           <h1 className="font-bold text-lg">{operator.brand_name}</h1>
           <div className="flex items-center gap-3">
             <PlatformLanguageSwitcher />
+            <Button
+              size="sm"
+              onClick={() => navigate(`/${operator.subdomain}`)}
+              className="gap-1.5 text-xs font-bold"
+            >
+              <ExternalLink size={14} />
+              {t("operator.dashboard.viewApp", "View App")}
+            </Button>
             <a
               href={`https://1mg.live/${operator.subdomain}`}
               target="_blank"
