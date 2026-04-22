@@ -503,7 +503,7 @@ function CameraRig() {
     camera.position.copy(FIXED_CAM_POS);
     camera.lookAt(FIXED_CAM_LOOK);
     if (camera instanceof THREE.PerspectiveCamera) {
-      camera.fov = 45;
+      (camera as THREE.PerspectiveCamera).fov = 45;
       camera.updateProjectionMatrix();
     }
   }, [camera]);
