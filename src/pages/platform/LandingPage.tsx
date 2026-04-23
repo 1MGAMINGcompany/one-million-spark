@@ -382,15 +382,26 @@ export default function LandingPage() {
 
               {/* CTA */}
               <div className="flex flex-col gap-4 justify-center lg:justify-start mb-8">
-                <Button
-                  onClick={handleBuyNow}
-                  size="lg"
-                  className="platform-blue-button text-lg px-10 h-16 border-0 rounded-xl font-bold w-full sm:w-auto"
-                >
-                  <span className="inline-flex items-center justify-center gap-2 text-center">
-                    {t("platform.hero.buyNow")} <ArrowRight size={20} />
-                  </span>
-                </Button>
+                <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
+                  <Button
+                    onClick={handleBuyNow}
+                    size="lg"
+                    className="platform-blue-button text-lg px-10 h-16 border-0 rounded-xl font-bold w-full sm:w-auto"
+                  >
+                    <span className="inline-flex items-center justify-center gap-2 text-center">
+                      {t("platform.hero.buyNow")} <ArrowRight size={20} />
+                    </span>
+                  </Button>
+                  <Button
+                    asChild
+                    size="lg"
+                    className="platform-demo-button text-lg px-10 h-16 rounded-xl font-bold w-full sm:w-auto"
+                  >
+                    <a href="/demo" className="inline-flex items-center justify-center gap-2 text-center">
+                      {t("platform.hero.viewDemo")}
+                    </a>
+                  </Button>
+                </div>
                 <div className="text-sm text-white/40 space-y-1.5 max-w-md">
                   <p className="text-white/50 font-medium">{t("platform.hero.walletCreated")}</p>
                   <p className="text-white/40">{t("platform.hero.walletUsedFor")}</p>
@@ -400,12 +411,6 @@ export default function LandingPage() {
                     <p>{t("platform.hero.manageBusiness")}</p>
                   </div>
                 </div>
-                <a
-                  href="/demo"
-                  className="text-blue-400 hover:text-blue-300 text-sm font-medium underline underline-offset-2 transition-colors"
-                >
-                  {t("platform.hero.viewDemo")}
-                </a>
               </div>
 
               {/* Trust */}
@@ -514,25 +519,30 @@ export default function LandingPage() {
           <p className="text-white/40 text-lg mb-8">
             {t("platform.cta.readyDesc")}
           </p>
-          <Button
-            onClick={handleBuyNow}
-            size="lg"
-            className="platform-blue-button text-lg px-10 h-16 border-0 rounded-xl font-bold"
-          >
-            <span className="inline-flex items-center justify-center gap-2 text-center">
-              {t("platform.hero.buyNow")} <ArrowRight size={20} />
-            </span>
-          </Button>
+          <div className="flex flex-col sm:flex-row justify-center gap-3">
+            <Button
+              onClick={handleBuyNow}
+              size="lg"
+              className="platform-blue-button text-lg px-10 h-16 border-0 rounded-xl font-bold w-full sm:w-auto"
+            >
+              <span className="inline-flex items-center justify-center gap-2 text-center">
+                {t("platform.hero.buyNow")} <ArrowRight size={20} />
+              </span>
+            </Button>
+            <Button
+              asChild
+              size="lg"
+              className="platform-demo-button text-lg px-10 h-16 rounded-xl font-bold w-full sm:w-auto"
+            >
+              <a href="/demo" className="inline-flex items-center justify-center gap-2 text-center">
+                {t("platform.hero.viewDemo")}
+              </a>
+            </Button>
+          </div>
           <div className="mt-4 text-sm text-white/40 space-y-1">
             <p className="text-white/50 font-medium">{t("platform.hero.walletCreated")}</p>
             <p>{t("platform.hero.payForApp")} &nbsp; {t("platform.hero.collectEarnings")} &nbsp; {t("platform.hero.manageBusiness")}</p>
           </div>
-          <a
-            href="/demo"
-            className="inline-block mt-4 text-blue-400 hover:text-blue-300 text-sm font-medium underline underline-offset-2 transition-colors"
-          >
-            {t("platform.hero.viewDemo")}
-          </a>
         </div>
       </section>
 
