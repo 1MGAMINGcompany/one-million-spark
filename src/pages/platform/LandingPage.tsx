@@ -18,7 +18,7 @@ import {
   Mail,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { usePrivySafe } from "@/hooks/usePrivySafe";
 import { usePrivyLogin } from "@/hooks/usePrivyLogin";
 import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
@@ -221,6 +221,7 @@ function RevenueCalculator() {
 export default function LandingPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const { ready, authenticated, logout, user } = usePrivySafe();
   const { login } = usePrivyLogin();
 
@@ -249,6 +250,8 @@ export default function LandingPage() {
     if (authenticated) navigate("/purchase");
     else login();
   };
+
+  const demoHref = location.search.includes("platform=true") ? `/demo${location.search}` : "/demo";
 
   const STEPS = [
     {
@@ -397,7 +400,7 @@ export default function LandingPage() {
                     size="lg"
                     className="platform-demo-button text-lg px-10 h-16 rounded-xl font-bold w-full sm:w-auto"
                   >
-                    <a href="/demo" className="inline-flex items-center justify-center gap-2 text-center">
+                    <a href={demoHref} className="inline-flex items-center justify-center gap-2 text-center">
                       {t("platform.hero.viewDemo")}
                     </a>
                   </Button>
@@ -534,7 +537,7 @@ export default function LandingPage() {
               size="lg"
               className="platform-demo-button text-lg px-10 h-16 rounded-xl font-bold w-full sm:w-auto"
             >
-              <a href="/demo" className="inline-flex items-center justify-center gap-2 text-center">
+              <a href={demoHref} className="inline-flex items-center justify-center gap-2 text-center">
                 {t("platform.hero.viewDemo")}
               </a>
             </Button>
