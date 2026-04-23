@@ -27,6 +27,7 @@ const PLATFORM_ROUTES = new Set([
   "purchase",
   "onboarding",
   "dashboard",
+  "demo",
   "help",
   "admin",
   "support",
