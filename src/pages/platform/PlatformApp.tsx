@@ -106,6 +106,7 @@ export default function PlatformApp({ context }: PlatformAppProps) {
       <Route path="/dashboard" element={<RequireActiveOperator><OperatorDashboard /></RequireActiveOperator>} />
       <Route path="/help" element={<HelpCenter />} />
       <Route path="/help/:slug" element={<HelpArticle />} />
+      <Route path="/demo" element={<Navigate to="/silvertooth" replace />} />
       <Route path="/admin" element={<PlatformAdmin />} />
       <Route path="/terms" element={<PlatformTermsOfService />} />
       <Route path="/privacy" element={<PlatformPrivacyPolicy />} />

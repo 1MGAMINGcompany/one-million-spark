@@ -755,7 +755,7 @@ export default function OperatorDashboard() {
                   <div className="text-sm font-medium text-yellow-300">{t("operator.dashboard.payoutNotSet")}</div>
                   <div className="text-xs text-white/40">{t("operator.dashboard.payoutNotSetDesc")}</div>
                 </div>
-                <Button size="sm" onClick={() => setDashTab("earnings")} className="bg-yellow-600 hover:bg-yellow-500 border-0 text-xs whitespace-nowrap">
+                <Button size="sm" onClick={() => setDashTab("earnings")} className="platform-blue-button border-0 text-xs whitespace-nowrap">
                   {t("operator.dashboard.setWallet")}
                 </Button>
               </div>
