@@ -42,11 +42,15 @@ const PLATFORM_ROUTES = new Set([
 export function detectDomain(): DomainContext {
   const hostname = window.location.hostname;
   const params = new URLSearchParams(window.location.search);
+  const pathname = window.location.pathname;
 
   // Dev overrides
   if (params.get("platform") === "true") return { type: "platform" };
   const opOverride = params.get("operator");
   if (opOverride) return { type: "operator", subdomain: opOverride };
+
+  // Permanent public demo route: keep it in the platform router even on preview/flagship hosts.
+  if (pathname === "/demo") return { type: "platform" };
 
   // Platform domain: 1mg.live or www.1mg.live
   if (

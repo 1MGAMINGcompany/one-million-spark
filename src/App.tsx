@@ -183,8 +183,9 @@ const AppContent = () => {
 };
 
 const App = () => {
+  const runtimeDomainContext = detectDomain();
   // 1mg.live platform or operator subdomain — lightweight shell (no Solana/audio/game providers)
-  if (domainContext.type === "platform" || domainContext.type === "operator") {
+  if (runtimeDomainContext.type === "platform" || runtimeDomainContext.type === "operator") {
     return (
       <AppErrorBoundary>
         <PrivyProviderWrapper>
@@ -193,7 +194,7 @@ const App = () => {
               <Toaster />
               <Sonner />
               <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-                <PlatformApp context={domainContext} />
+                <PlatformApp context={runtimeDomainContext} />
               </BrowserRouter>
             </TooltipProvider>
           </QueryClientProvider>
