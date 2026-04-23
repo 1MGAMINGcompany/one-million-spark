@@ -160,6 +160,25 @@
     background: hsl(219 79% 48%) !important;
     box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow) !important;
   }
+
+  .platform-demo-button {
+    --tw-shadow: 0 10px 30px -14px hsl(213 94% 68% / 0.55) !important;
+    --tw-shadow-colored: 0 10px 30px -14px hsl(213 94% 68% / 0.55) !important;
+    background: hsl(217 91% 60% / 0.1) !important;
+    background-image: none !important;
+    color: hsl(213 94% 68%) !important;
+    border: 1px solid hsl(213 94% 68% / 0.35) !important;
+    box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow) !important;
+  }
+
+  .platform-demo-button:hover,
+  .platform-demo-button:focus-visible {
+    --tw-shadow: 0 14px 38px -16px hsl(213 94% 68% / 0.7) !important;
+    --tw-shadow-colored: 0 14px 38px -16px hsl(213 94% 68% / 0.7) !important;
+    background: hsl(217 91% 60% / 0.16) !important;
+    color: hsl(0 0% 100%) !important;
+    border-color: hsl(213 94% 68% / 0.55) !important;
+  }
 }
 
 

@@ -57,6 +57,7 @@ import {
 
 interface OperatorAppProps {
   subdomain: string;
+  isDemo?: boolean;
 }
 
 interface RequoteAcceptanceContext {
@@ -112,7 +113,7 @@ function extractPrivyDid(token: string): string | null {
   }
 }
 
-export default function OperatorApp({ subdomain }: OperatorAppProps) {
+export default function OperatorApp({ subdomain, isDemo = false }: OperatorAppProps) {
   const { t } = useTranslation();
   const isMobile = useIsMobile();
   const navigate = useNavigate();
@@ -891,6 +892,30 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
   }
 
   if (!operator) {
+    if (isDemo) {
+      return (
+        <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center px-6">
+          <div className="text-center max-w-md space-y-6">
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-muted border border-border flex items-center justify-center mb-2">
+              <Globe className="w-8 h-8 text-muted-foreground" />
+            </div>
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Live demo is temporarily unavailable.</h1>
+            <p className="text-muted-foreground text-base sm:text-lg leading-relaxed">
+              The official 1MG.live demo is being refreshed. Please return to the main site or contact support.
+            </p>
+            <div className="flex flex-col sm:flex-row justify-center gap-3">
+              <a href="/" className="platform-blue-button inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-bold transition-all duration-200 hover:scale-[1.02]">
+                Return to 1MG.live
+              </a>
+              <a href="mailto:support@1mg.live" className="platform-demo-button inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-bold transition-all duration-200">
+                Contact support
+              </a>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center px-6">
         <div className="text-center max-w-md space-y-6">

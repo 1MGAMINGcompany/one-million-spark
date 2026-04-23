@@ -22,6 +22,8 @@ import AcceptableUse from "./AcceptableUse";
 import TermsOfService from "@/pages/TermsOfService";
 import PrivacyPolicy from "@/pages/PrivacyPolicy";
 
+const OFFICIAL_DEMO_OPERATOR_SLUG = "demo";
+
 /** Extracts privy DID from JWT without remote verification */
 function extractPrivyDid(token: string): string | null {
   try {
@@ -84,6 +86,14 @@ function OperatorSlugRoute() {
   return <OperatorApp subdomain={slug} />;
 }
 
+/**
+ * /demo is a reserved public platform route.
+ * Do not redirect it to a customer/operator slug and do not auth-gate it.
+ */
+function DemoOperatorRoute() {
+  return <OperatorApp subdomain={OFFICIAL_DEMO_OPERATOR_SLUG} isDemo />;
+}
+
 interface PlatformAppProps {
   context: DomainContext;
 }
@@ -106,7 +116,7 @@ export default function PlatformApp({ context }: PlatformAppProps) {
       <Route path="/dashboard" element={<RequireActiveOperator><OperatorDashboard /></RequireActiveOperator>} />
       <Route path="/help" element={<HelpCenter />} />
       <Route path="/help/:slug" element={<HelpArticle />} />
-      <Route path="/demo" element={<Navigate to="/silvertooth" replace />} />
+      <Route path="/demo" element={<DemoOperatorRoute />} />
       <Route path="/admin" element={<PlatformAdmin />} />
       <Route path="/terms" element={<PlatformTermsOfService />} />
       <Route path="/privacy" element={<PlatformPrivacyPolicy />} />
