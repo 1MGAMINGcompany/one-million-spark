@@ -8,7 +8,27 @@ import { toast } from "sonner";
 const SESSION_KEY = "admin_session";
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-const ADMIN_REDIRECT = "https://1mgaming.com/predictions/admin";
+/**
+ * Returns the correct admin redirect URL for the current domain.
+ * - 1mg.live  → https://1mg.live/admin       (PlatformApp route)
+ * - 1mgaming.com → https://1mgaming.com/predictions/admin
+ * - other (preview/dev) → current origin + current admin path
+ */
+function getAdminRedirectUrl(): string {
+  if (typeof window === "undefined") return "https://1mg.live/admin";
+  const host = window.location.hostname;
+  if (host === "1mg.live" || host === "www.1mg.live") {
+    return "https://1mg.live/admin";
+  }
+  if (host === "1mgaming.com" || host === "www.1mgaming.com") {
+    return "https://1mgaming.com/predictions/admin";
+  }
+  // Preview/dev — use current path so the magic link comes back to where the user started.
+  const path = window.location.pathname.includes("/admin")
+    ? window.location.pathname
+    : "/admin";
+  return `${window.location.origin}${path}`;
+}
 
 /** Parse auth error from URL hash (e.g. #error=access_denied&error_code=otp_expired) */
 function parseHashError(): { code: string; description: string } | null {
@@ -184,10 +204,9 @@ export default function AdminAuth({ children }: AdminAuthProps) {
         return;
       }
 
-      // Send magic link — use production URL to avoid redirect allowlist issues
-      const redirectUrl = window.location.hostname === "1mgaming.com"
-        ? ADMIN_REDIRECT
-        : `${window.location.origin}/predictions/admin`;
+      // Send magic link — domain-aware redirect so 1mg.live users land on /admin
+      // and 1mgaming.com users land on /predictions/admin.
+      const redirectUrl = getAdminRedirectUrl();
       const { error } = await supabase.auth.signInWithOtp({
         email: email.trim().toLowerCase(),
         options: {
