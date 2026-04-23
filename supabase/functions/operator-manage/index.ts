@@ -864,6 +864,44 @@ Deno.serve(async (req) => {
       return jsonResp({ success: true });
     }
 
+    // ── admin_link_operator_owner (admin-only) ──
+    if (action === "admin_link_operator_owner") {
+      const adminWallet = await requireAdmin();
+      if (!adminWallet) return jsonResp({ error: "forbidden" }, 403);
+      const operatorId = typeof body.operator_id === "string" ? body.operator_id.trim() : "";
+      const ownerPrivyDid = typeof body.owner_privy_did === "string" ? body.owner_privy_did.trim() : "";
+      const payoutWallet = typeof body.payout_wallet === "string" ? body.payout_wallet.trim() : "";
+      if (!operatorId) return jsonResp({ error: "operator_id required" }, 400);
+      if (!ownerPrivyDid.startsWith("did:privy:")) return jsonResp({ error: "invalid_owner_privy_did" }, 400);
+      if (!/^0x[a-fA-F0-9]{40}$/.test(payoutWallet)) return jsonResp({ error: "invalid_wallet_address" }, 400);
+
+      const { data: op } = await sb.from("operators").select("id, user_id, payout_wallet, subdomain").eq("id", operatorId).single();
+      if (!op) return jsonResp({ error: "operator_not_found" }, 404);
+
+      const now = new Date().toISOString();
+      const { error: updateErr } = await sb.from("operators").update({
+        user_id: ownerPrivyDid,
+        payout_wallet: payoutWallet,
+        updated_at: now,
+      }).eq("id", operatorId);
+      if (updateErr) throw updateErr;
+
+      await sb.from("automation_logs").insert({
+        action: "admin_link_operator_owner",
+        source: "operator-manage",
+        details: {
+          operator_id: operatorId,
+          subdomain: op.subdomain,
+          previous_user_id: op.user_id,
+          previous_payout_wallet: op.payout_wallet,
+          owner_privy_did: ownerPrivyDid,
+          payout_wallet: payoutWallet,
+          admin: adminWallet,
+        },
+      });
+      return jsonResp({ success: true, operator_id: operatorId, owner_privy_did: ownerPrivyDid, payout_wallet: payoutWallet });
+    }
+
     // ── admin_create_event (admin-only, create event for any operator) ──
     if (action === "admin_create_event") {
       const adminWallet = await requireAdmin();
