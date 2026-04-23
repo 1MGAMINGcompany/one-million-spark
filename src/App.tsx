@@ -60,12 +60,32 @@ import { useWallet } from "@/hooks/useWallet";
 import { detectDomain } from "@/lib/domainDetection";
 import PlatformApp from "@/pages/platform/PlatformApp";
 
-/** Catches auth hash errors on "/" and redirects to admin page so AdminAuth can display them */
+/**
+ * Catches Supabase auth hash on "/" (errors OR successful magic-link tokens)
+ * and forwards to the correct admin page so AdminAuth can pick up the session.
+ *
+ * Domain-aware:
+ *  - 1mg.live      → /admin     (PlatformApp)
+ *  - 1mgaming.com  → /predictions/admin
+ */
 function AuthHashRedirect({ children }: { children: React.ReactNode }) {
-  const hash = window.location.hash;
-  if (hash && hash.includes("error=") && hash.includes("otp_expired")) {
-    window.location.replace(`/predictions/admin${hash}`);
-    return null;
+  const hash = typeof window !== "undefined" ? window.location.hash : "";
+  const looksLikeAuthHash =
+    hash &&
+    (hash.includes("access_token=") ||
+      hash.includes("error=") ||
+      hash.includes("type=magiclink") ||
+      hash.includes("type=recovery"));
+
+  if (looksLikeAuthHash) {
+    const host = window.location.hostname;
+    const adminPath =
+      host === "1mg.live" || host === "www.1mg.live" ? "/admin" : "/predictions/admin";
+    // Only redirect if we're not already on the admin page
+    if (!window.location.pathname.startsWith(adminPath)) {
+      window.location.replace(`${adminPath}${hash}`);
+      return null;
+    }
   }
   return <>{children}</>;
 }
