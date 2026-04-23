@@ -1,242 +1,256 @@
 
-## Explanation and prevention plan for the broken “View Live Demo”
+## Silvertooth operator owner/linking fix plan
 
-### What happened
+### What I found
 
-The demo stopped working because `/demo` is not currently a real, independent demo app.
-
-The 1mg.live routing system treats paths like this:
+The Silvertooth operator app exists in the backend as:
 
 ```text
-1mg.live/                → main 1mg.live sales page
-1mg.live/{operatorSlug}  → a live operator app
+Operator: SILVERTOOTH Promotions
+Slug: silvertooth
+Status: active
+Support email: silvertoothpromo@gmail.com
+Current owner user_id: platform-admin-silvertooth
+Payout wallet: not set
 ```
 
-So a path such as:
+The problem is that `platform-admin-silvertooth` is a manual placeholder owner ID, not the real Privy login ID created when the Silvertooth owner signed in.
+
+The dashboard button is currently controlled here:
 
 ```text
-1mg.live/silvertooth
+src/pages/platform/OperatorApp.tsx
 ```
 
-loads the operator app whose database slug is `silvertooth`.
-
-The problem is that the demo link was handled like a normal operator path instead of being protected as a permanent demo destination. That created two possible failure modes:
+Logic:
 
 ```text
-1mg.live/demo
+Show Dashboard button only if:
+current logged-in Privy DID === operators.user_id
 ```
 
-could be interpreted as an operator slug called `demo`.
-
-If there is no active operator record for `demo`, users see:
+So when the Silvertooth owner logged in with `silvertoothpromo@gamil.com`, Privy created a real account with a real DID/wallet, but the Silvertooth operator row still belongs to:
 
 ```text
-This page / app does not exist
+platform-admin-silvertooth
 ```
 
-Then the temporary fix redirected:
+That is why:
 
 ```text
-/demo → /silvertooth
+1. The Dashboard button did not appear.
+2. The payout wallet did not auto-connect.
+3. Admin still shows “wallet not connected.”
 ```
 
-That made the demo depend on the `silvertooth` operator app. This is fragile because if that operator slug changes, is deleted, becomes inactive, or fails to load, the public demo disappears.
-
-That is why this happened. It was not a payment issue or login issue. It was a routing/demo-app stability issue.
-
-### Why users should never see that again
-
-The public demo should not depend on a customer/operator app that can change.
-
-The correct model is:
+The payout wallet auto-set logic exists, but only after ownership is already correct:
 
 ```text
-/demo = permanent platform demo route
+src/components/operator/OperatorEarningsTab.tsx
 ```
 
-not:
+It only runs when:
 
 ```text
-/demo = redirect to some existing operator app
+operator.user_id === loggedInUserId
 ```
 
-The demo needs to be treated as a protected system page, like `/purchase`, `/dashboard`, `/help`, and `/admin`, not as a normal operator slug.
+Because Silvertooth ownership does not match the logged-in account, the auto-set never runs.
 
-### Why “View Live Demo” disappeared when not signed in
+### Important note
 
-It should not have been changed to require sign-in.
+The user typed:
 
-The live demo is a sales preview. Visitors should be able to view it before logging in or buying.
+```text
+silvertoothpromo@gamil.com
+```
 
-From the current landing page code, the `View Live Demo` link is not intentionally auth-gated. It appears in the hero CTA area and final CTA area. However, the current placement is too subtle: it is a small text link under the buy button and wallet explanation, so on mobile or certain viewport sizes it can feel missing, especially when the signed-out state shows only a prominent Sign In button in the nav.
+The existing Silvertooth app record has:
 
-The fix should make the demo CTA clearly visible to signed-out users as a proper secondary button, not a small buried text link.
+```text
+silvertoothpromo@gmail.com
+```
+
+Those are different emails. If the typo email was actually used, Privy may have created a separate identity. Before permanently linking, I will verify the latest Privy DID and wallet tied to the owner’s current login.
 
 ## Fix plan
 
-### 1. Make `/demo` a permanent public route
+### 1. Confirm the correct Silvertooth owner identity
 
-File:
+Inspect the latest Privy-created identity/wallet records and match them against the owner’s recent login.
 
-```text
-src/pages/platform/PlatformApp.tsx
-```
-
-Replace the fragile redirect:
-
-```tsx
-<Route path="/demo" element={<Navigate to="/silvertooth" replace />} />
-```
-
-with a dedicated demo route component.
-
-Target behavior:
+Current likely recent identity from backend activity:
 
 ```text
-/demo → always loads the official demo app
+Privy DID: did:privy:cmobumj8901p00bjymj3gw8ck
+Wallet: 0x3c50801bc8e0b411ed967a40423ae09ec8d914a9
 ```
 
-No login required.
+But I will treat this as “likely” until verified, because the backend stores Privy DID/wallet but does not currently store the login email in the operator row.
 
-### 2. Stop relying on `silvertooth` as the demo
+### 2. Repair the Silvertooth operator row safely
 
-Create a single source of truth for the official demo slug.
-
-Example:
-
-```tsx
-const OFFICIAL_DEMO_OPERATOR_SLUG = "demo";
-```
-
-Then `/demo` should render:
-
-```tsx
-<OperatorApp subdomain={OFFICIAL_DEMO_OPERATOR_SLUG} isDemo />
-```
-
-or a small `DemoOperatorRoute` wrapper.
-
-This avoids using a real customer/operator app as the demo.
-
-### 3. Ensure the `demo` operator record exists and is protected
-
-Use the backend database to ensure there is a stable official demo operator:
+Once the correct identity is confirmed, update only the Silvertooth operator record:
 
 ```text
-subdomain: demo
-brand_name: 1MG Live Demo
-status: active
+operators.subdomain = silvertooth
 ```
 
-This record should be treated as platform-owned demo content, not a customer app.
-
-If there is already a demo-like record, update it instead of creating duplicates.
-
-### 4. Add a safe fallback if the demo record is missing
-
-If `/demo` fails to load the official demo operator, users should not see “This app does not exist.”
-
-Instead, show a branded recovery screen:
+Set:
 
 ```text
-Live demo is temporarily unavailable.
-Return to 1MG.live
-Contact support
+user_id = correct Silvertooth Privy DID
+payout_wallet = correct Silvertooth EVM wallet
+updated_at = now
 ```
 
-This makes the failure clear and prevents users from thinking the platform is broken or their app disappeared.
-
-### 5. Make “View Live Demo” clearly visible when signed out
-
-File:
+This should immediately make:
 
 ```text
-src/pages/platform/LandingPage.tsx
+1mg.live/silvertooth → Dashboard button visible for the owner
+/admin Operators tab → payout wallet connected
+/dashboard → accessible for Silvertooth owner
 ```
 
-Change the small text link into a visible secondary CTA next to the buy button.
+No app content, events, fees, sports, purchases, or revenue records will be changed.
 
-Signed-out users should see:
+### 3. Add a backend-safe admin repair action
+
+Update:
 
 ```text
-[BUY NOW — $2,400 USDC]  [View Live Demo]
+supabase/functions/operator-manage/index.ts
 ```
 
-On mobile:
+Add an admin-only action:
 
 ```text
-[BUY NOW — $2,400 USDC]
-[View Live Demo]
+admin_link_operator_owner
 ```
 
-The demo button should:
-
-- Use a blue/transparent platform style
-- Not require login
-- Link to `/demo`
-- Be visible whether signed in or signed out
-
-### 6. Keep buy/login behavior unchanged
-
-Only the purchase flow should require login:
+It will accept:
 
 ```text
-Buy Now → login if needed → purchase page
-View Live Demo → no login → public demo
+operator_id
+owner_privy_did
+payout_wallet
 ```
 
-This restores the original sales behavior: visitors can preview the app before creating an account.
-
-### 7. Add a routing audit so this does not regress
-
-Audit these paths:
+And atomically update:
 
 ```text
-/
- /demo
- /buy-predictions-app
- /purchase
- /dashboard
- /onboarding
- /help
- /admin
- /demo on signed-out session
- /demo on signed-in session
+operators.user_id
+operators.payout_wallet
+operators.updated_at
 ```
 
-Verify:
+Security rules:
 
 ```text
-/demo never falls into the generic operator slug fallback
-/demo never requires login
-/demo never redirects to a mutable customer slug
-View Live Demo is visible when signed out
-View Live Demo is visible on mobile
-View Live Demo opens the demo app
+Only platform admins can call it.
+Wallet must be valid 0x EVM address.
+Operator must exist.
+Action is logged to automation/admin activity logs.
 ```
 
-### 8. Add code-level guardrails
+This prevents future manual database edits and gives us a safe repair path if another operator account is provisioned with a placeholder owner.
 
-Update comments in the routing file so future edits do not accidentally break this again:
+### 4. Add admin UI support for owner repair
+
+Update:
 
 ```text
-/demo is a reserved public platform route.
-Do not redirect it to a customer/operator slug.
-Do not auth-gate it.
+src/components/admin/OperatorManagementTab.tsx
 ```
 
-Also ensure `demo` remains listed as a reserved platform route in the domain routing utility so it cannot collide with normal operator slugs.
+For operator rows with:
 
-## Expected result
+```text
+No payout wallet
+or user_id not starting with did:privy:
+```
+
+show an admin repair section:
+
+```text
+Link Owner
+- Privy DID
+- Payout wallet
+- Save
+```
+
+This gives the platform admin a controlled way to link a real owner account after a promo/manual setup.
+
+### 5. Improve payout wallet auto-healing for real owners
+
+Update:
+
+```text
+src/pages/platform/OperatorApp.tsx
+src/pages/platform/OperatorDashboard.tsx
+```
+
+When the logged-in user is confirmed as the operator owner and the operator has no payout wallet:
+
+```text
+If current Privy wallet exists:
+  call set_payout_wallet automatically
+```
+
+This ensures that once ownership is correct, the owner’s current embedded wallet becomes the % fee recipient without requiring them to find the Earnings tab first.
+
+### 6. Add safer diagnostics so this is obvious next time
+
+Add clear admin display fields in the Operators tab:
+
+```text
+Owner status:
+- Linked Privy owner
+- Placeholder/manual owner
+- Missing payout wallet
+```
+
+For Silvertooth today, it would show:
+
+```text
+Owner: placeholder/manual
+Payout: not set
+```
+
+After repair:
+
+```text
+Owner: linked Privy account
+Payout: 0x3c50…14a9
+```
+
+### 7. Audit after the fix
+
+After implementation, run a focused audit:
+
+```text
+1. Open 1mg.live/silvertooth while signed out.
+2. Confirm public app still loads.
+3. Sign in as the Silvertooth owner.
+4. Confirm Dashboard button appears.
+5. Open /dashboard.
+6. Confirm it loads the Silvertooth dashboard, not onboarding.
+7. Confirm payout wallet is populated.
+8. Confirm admin Operators tab no longer says wallet not connected.
+9. Confirm no other operator ownership changed.
+```
+
+### Expected result
 
 After the fix:
 
 ```text
-1mg.live main page → View Live Demo visible while signed out
-Click View Live Demo → opens public demo immediately
-No login required
-No “page does not exist”
-No dependency on silvertooth or any customer operator app
+Silvertooth owner logs in
+→ app recognizes the real owner account
+→ Dashboard button appears
+→ dashboard opens correctly
+→ owner’s wallet is set as the % fee payout wallet
+→ admin no longer shows wallet not connected
 ```
 
-This will make the demo route stable and prevent user apps or demo previews from “disappearing” because of slug changes, missing records, or auth changes.
+This fixes the current Silvertooth problem and adds a safe admin workflow so future manually created promo/operator apps do not get stuck with placeholder ownership.
