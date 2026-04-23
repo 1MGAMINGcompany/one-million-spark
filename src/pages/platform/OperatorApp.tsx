@@ -903,8 +903,7 @@ export default function OperatorApp({ subdomain }: OperatorAppProps) {
           </p>
           <a
             href="https://1mg.live"
-            className="inline-flex items-center justify-center gap-2 rounded-xl px-8 py-4 text-base font-bold text-black transition-all duration-200 hover:scale-[1.02] shadow-lg"
-            style={{ background: "linear-gradient(135deg, #d4a017, #f5c842)" }}
+            className="platform-blue-button inline-flex items-center justify-center gap-2 rounded-xl px-8 py-4 text-base font-bold transition-all duration-200 hover:scale-[1.02]"
           >
             {t("operator.buyYourApp")}
           </a>
