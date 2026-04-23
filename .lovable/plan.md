@@ -1,81 +1,242 @@
 
-## Restore 1mg.live button color and keep light-blue glow
+## Explanation and prevention plan for the broken “View Live Demo”
 
-### Issue
+### What happened
 
-The button component’s default style still includes the global gold/yellow `bg-primary` and `shadow-gold` utilities. The new `.platform-blue-button` class was added, but because it sits in a lower-priority CSS layer, the default yellow button background can still win in the browser.
+The demo stopped working because `/demo` is not currently a real, independent demo app.
 
-That is why the 1mg.live buttons turned yellow even though the intended platform style is blue.
+The 1mg.live routing system treats paths like this:
 
-### Fix
-
-#### 1. Make platform blue button override the global yellow button style
-
-File: `src/index.css`
-
-Update `.platform-blue-button` so it forcefully overrides the shared default button background/shadow:
-
-```css
-.platform-blue-button {
-  background: #2563eb !important;
-  color: #ffffff !important;
-  border-color: transparent !important;
-  box-shadow: 0 10px 34px -10px rgba(59, 130, 246, 0.65) !important;
-}
-
-.platform-blue-button:hover {
-  background: #3b82f6 !important;
-  box-shadow: 0 14px 42px -12px rgba(96, 165, 250, 0.75) !important;
-}
+```text
+1mg.live/                → main 1mg.live sales page
+1mg.live/{operatorSlug}  → a live operator app
 ```
 
-This keeps:
-- Button fill: 1mg.live blue
-- Text: white
-- Halo underneath: soft light blue
-- No yellow/gold background or shadow on platform buttons
+So a path such as:
 
-#### 2. Remove conflicting glow classes from 1mg.live buttons
+```text
+1mg.live/silvertooth
+```
 
-File: `src/pages/platform/LandingPage.tsx`
+loads the operator app whose database slug is `silvertooth`.
 
-Remove `btn-glow` from the main “Buy Now” buttons if it conflicts with the clean blue button style.
+The problem is that the demo link was handled like a normal operator path instead of being protected as a permanent demo destination. That created two possible failure modes:
 
-Keep the CTA button styling as:
+```text
+1mg.live/demo
+```
+
+could be interpreted as an operator slug called `demo`.
+
+If there is no active operator record for `demo`, users see:
+
+```text
+This page / app does not exist
+```
+
+Then the temporary fix redirected:
+
+```text
+/demo → /silvertooth
+```
+
+That made the demo depend on the `silvertooth` operator app. This is fragile because if that operator slug changes, is deleted, becomes inactive, or fails to load, the public demo disappears.
+
+That is why this happened. It was not a payment issue or login issue. It was a routing/demo-app stability issue.
+
+### Why users should never see that again
+
+The public demo should not depend on a customer/operator app that can change.
+
+The correct model is:
+
+```text
+/demo = permanent platform demo route
+```
+
+not:
+
+```text
+/demo = redirect to some existing operator app
+```
+
+The demo needs to be treated as a protected system page, like `/purchase`, `/dashboard`, `/help`, and `/admin`, not as a normal operator slug.
+
+### Why “View Live Demo” disappeared when not signed in
+
+It should not have been changed to require sign-in.
+
+The live demo is a sales preview. Visitors should be able to view it before logging in or buying.
+
+From the current landing page code, the `View Live Demo` link is not intentionally auth-gated. It appears in the hero CTA area and final CTA area. However, the current placement is too subtle: it is a small text link under the buy button and wallet explanation, so on mobile or certain viewport sizes it can feel missing, especially when the signed-out state shows only a prominent Sign In button in the nav.
+
+The fix should make the demo CTA clearly visible to signed-out users as a proper secondary button, not a small buried text link.
+
+## Fix plan
+
+### 1. Make `/demo` a permanent public route
+
+File:
+
+```text
+src/pages/platform/PlatformApp.tsx
+```
+
+Replace the fragile redirect:
 
 ```tsx
-className="platform-blue-button text-lg px-10 h-16 border-0 rounded-xl font-bold ..."
+<Route path="/demo" element={<Navigate to="/silvertooth" replace />} />
 ```
 
-The button can still have a premium light-blue shadow from `.platform-blue-button`, but not the yellow fill.
+with a dedicated demo route component.
 
-#### 3. Apply the same button treatment consistently
+Target behavior:
 
-Confirm these buttons all use the corrected blue style:
+```text
+/demo → always loads the official demo app
+```
 
-- 1mg.live landing hero “Buy Now”
-- 1mg.live final CTA “Buy Now”
-- Sign-in button in the 1mg.live top nav
-- Buy page main purchase / free activation button
-- Buy page “Add Funds Now” button
-- Purchase success “Start Setup” button
+No login required.
 
-#### 4. Keep yellow/gold styling elsewhere
+### 2. Stop relying on `silvertooth` as the demo
 
-Do not change the shared `Button` component globally because the gaming side still uses gold/yellow as part of its theme.
+Create a single source of truth for the official demo slug.
 
-Only platform-specific buttons should be corrected.
+Example:
 
-### Verification
+```tsx
+const OFFICIAL_DEMO_OPERATOR_SLUG = "demo";
+```
 
-After the change, verify:
+Then `/demo` should render:
 
-1. 1mg.live landing buttons are blue, not yellow.
-2. The glow/halo under the buttons is light blue.
-3. The buy page CTA stays centered and blue.
-4. The free-code, paid, and discounted purchase button states still look aligned.
-5. No backend, wallet, promo-code, or payment logic is changed.
+```tsx
+<OperatorApp subdomain={OFFICIAL_DEMO_OPERATOR_SLUG} isDemo />
+```
 
-### Expected result
+or a small `DemoOperatorRoute` wrapper.
 
-The 1mg.live buttons return to the previous blue brand color, with a refined light-blue glow underneath and no yellow/gold button styling on platform pages.
+This avoids using a real customer/operator app as the demo.
+
+### 3. Ensure the `demo` operator record exists and is protected
+
+Use the backend database to ensure there is a stable official demo operator:
+
+```text
+subdomain: demo
+brand_name: 1MG Live Demo
+status: active
+```
+
+This record should be treated as platform-owned demo content, not a customer app.
+
+If there is already a demo-like record, update it instead of creating duplicates.
+
+### 4. Add a safe fallback if the demo record is missing
+
+If `/demo` fails to load the official demo operator, users should not see “This app does not exist.”
+
+Instead, show a branded recovery screen:
+
+```text
+Live demo is temporarily unavailable.
+Return to 1MG.live
+Contact support
+```
+
+This makes the failure clear and prevents users from thinking the platform is broken or their app disappeared.
+
+### 5. Make “View Live Demo” clearly visible when signed out
+
+File:
+
+```text
+src/pages/platform/LandingPage.tsx
+```
+
+Change the small text link into a visible secondary CTA next to the buy button.
+
+Signed-out users should see:
+
+```text
+[BUY NOW — $2,400 USDC]  [View Live Demo]
+```
+
+On mobile:
+
+```text
+[BUY NOW — $2,400 USDC]
+[View Live Demo]
+```
+
+The demo button should:
+
+- Use a blue/transparent platform style
+- Not require login
+- Link to `/demo`
+- Be visible whether signed in or signed out
+
+### 6. Keep buy/login behavior unchanged
+
+Only the purchase flow should require login:
+
+```text
+Buy Now → login if needed → purchase page
+View Live Demo → no login → public demo
+```
+
+This restores the original sales behavior: visitors can preview the app before creating an account.
+
+### 7. Add a routing audit so this does not regress
+
+Audit these paths:
+
+```text
+/
+ /demo
+ /buy-predictions-app
+ /purchase
+ /dashboard
+ /onboarding
+ /help
+ /admin
+ /demo on signed-out session
+ /demo on signed-in session
+```
+
+Verify:
+
+```text
+/demo never falls into the generic operator slug fallback
+/demo never requires login
+/demo never redirects to a mutable customer slug
+View Live Demo is visible when signed out
+View Live Demo is visible on mobile
+View Live Demo opens the demo app
+```
+
+### 8. Add code-level guardrails
+
+Update comments in the routing file so future edits do not accidentally break this again:
+
+```text
+/demo is a reserved public platform route.
+Do not redirect it to a customer/operator slug.
+Do not auth-gate it.
+```
+
+Also ensure `demo` remains listed as a reserved platform route in the domain routing utility so it cannot collide with normal operator slugs.
+
+## Expected result
+
+After the fix:
+
+```text
+1mg.live main page → View Live Demo visible while signed out
+Click View Live Demo → opens public demo immediately
+No login required
+No “page does not exist”
+No dependency on silvertooth or any customer operator app
+```
+
+This will make the demo route stable and prevent user apps or demo previews from “disappearing” because of slug changes, missing records, or auth changes.
