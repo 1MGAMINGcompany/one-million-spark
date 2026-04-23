@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { usePrivySafe } from "@/hooks/usePrivySafe";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
@@ -81,6 +81,7 @@ export default function OperatorDashboard() {
   const [appPaused, setAppPaused] = useState(false);
   const [togglingPause, setTogglingPause] = useState(false);
   const [showPauseConfirm, setShowPauseConfirm] = useState(false);
+  const autoPayoutAttemptedRef = useRef(false);
 
   // Fee editing state (in Settings)
   const [editingFee, setEditingFee] = useState(false);
@@ -95,6 +96,26 @@ export default function OperatorDashboard() {
   const [savingEvent, setSavingEvent] = useState(false);
 
   const contactEmail = user?.email?.address || user?.google?.email || null;
+
+  useEffect(() => {
+    if (autoPayoutAttemptedRef.current) return;
+    if (!authenticated || !operator || operator.payout_wallet || !walletAddress) return;
+    autoPayoutAttemptedRef.current = true;
+    (async () => {
+      try {
+        const token = await getAccessToken();
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/operator-manage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-privy-token": token || "" },
+          body: JSON.stringify({ action: "set_payout_wallet", payout_wallet: walletAddress }),
+        });
+        const json = await res.json();
+        if (json.success) setOperator(prev => prev ? { ...prev, payout_wallet: walletAddress } : prev);
+      } catch (e) {
+        console.warn("[OperatorDashboard] payout wallet auto-heal failed", e);
+      }
+    })();
+  }, [authenticated, operator, walletAddress, getAccessToken]);
 
   useEffect(() => {
     if (!authenticated) return;

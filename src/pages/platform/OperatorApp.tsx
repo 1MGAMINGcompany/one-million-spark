@@ -155,6 +155,26 @@ export default function OperatorApp({ subdomain, isDemo = false }: OperatorAppPr
     staleTime: 60_000,
   });
 
+  const autoPayoutAttemptedRef = useRef(false);
+
+  useEffect(() => {
+    if (autoPayoutAttemptedRef.current) return;
+    if (!isOperatorOwner || !operator || (operator as any).payout_wallet || !address) return;
+    autoPayoutAttemptedRef.current = true;
+    (async () => {
+      try {
+        const token = await getAccessToken();
+        await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/operator-manage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-privy-token": token || "" },
+          body: JSON.stringify({ action: "set_payout_wallet", payout_wallet: address }),
+        });
+      } catch (e) {
+        console.warn("[OperatorApp] payout wallet auto-heal failed", e);
+      }
+    })();
+  }, [isOperatorOwner, operator, address, getAccessToken]);
+
   const [selectedFight, setSelectedFight] = useState<Fight | null>(null);
   const [selectedPick, setSelectedPick] = useState<"fighter_a" | "fighter_b" | "draw" | null>(null);
   const [submitting, setSubmitting] = useState(false);

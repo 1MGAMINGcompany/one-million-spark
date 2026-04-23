@@ -246,6 +246,8 @@ function OperatorExpandedPanel({
   const [showQR, setShowQR] = useState(false);
   const [showCreateEvent, setShowCreateEvent] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [ownerDid, setOwnerDid] = useState(op.user_id?.startsWith("did:privy:") ? op.user_id : "");
+  const [ownerWallet, setOwnerWallet] = useState(op.payout_wallet || "");
 
   const url = `https://1mg.live/${op.subdomain}`;
 
@@ -314,6 +316,8 @@ function OperatorExpandedPanel({
 
   const settings = op.operator_settings?.[0] || op.operator_settings;
   const onboardingComplete = !!op.agreement_accepted_at && op.status !== "pending";
+  const hasLinkedPrivyOwner = op.user_id?.startsWith("did:privy:");
+  const needsOwnerRepair = !hasLinkedPrivyOwner || !op.payout_wallet;
 
   return (
     <div className="px-3 pb-4 border-t border-border pt-3 space-y-4">
@@ -381,7 +385,35 @@ function OperatorExpandedPanel({
           <span className="text-muted-foreground text-[10px]">User ID:</span>
           <span className="font-mono text-[10px] text-foreground/50">{op.user_id.slice(0, 24)}…</span>
         </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Lock className="w-3 h-3 text-muted-foreground" />
+          <span className="text-muted-foreground">Owner:</span>
+          <span className={hasLinkedPrivyOwner ? "text-green-400" : "text-yellow-400"}>
+            {hasLinkedPrivyOwner ? "Linked Privy owner" : "Placeholder/manual owner"}
+          </span>
+          {!op.payout_wallet && <span className="text-destructive">Missing payout wallet</span>}
+        </div>
       </div>
+
+      {needsOwnerRepair && (
+        <div className="bg-muted/30 border border-border rounded-lg p-3 space-y-2">
+          <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
+            <Wallet className="w-3 h-3 text-primary" /> Link Owner
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Input value={ownerDid} onChange={(e) => setOwnerDid(e.target.value)} placeholder="did:privy:..." className="text-xs h-8 font-mono" />
+            <Input value={ownerWallet} onChange={(e) => setOwnerWallet(e.target.value)} placeholder="0x payout wallet" className="text-xs h-8 font-mono" />
+          </div>
+          <Button
+            size="sm"
+            className="h-7 text-xs gap-1"
+            disabled={busy || !ownerDid || !ownerWallet}
+            onClick={() => adminAction("admin_link_operator_owner", { owner_privy_did: ownerDid, payout_wallet: ownerWallet })}
+          >
+            <Check className="w-3 h-3" /> Save Owner Link
+          </Button>
+        </div>
+      )}
 
       {/* Quick actions */}
       <div className="flex flex-wrap gap-2">
