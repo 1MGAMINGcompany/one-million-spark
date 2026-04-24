@@ -17,8 +17,8 @@ export const USDC_DECIMALS = 6;
 /** Platform treasury wallet */
 export const TREASURY_WALLET = "0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d";
 
-/** Fee relayer wallet */
-export const FEE_RELAYER_ADDRESS = "0x3b3bf64329CCf08a727e4fEd41821E8534685fAD";
+/** Fee relayer wallet — pays gas, executes transferFrom. Never holds USDC long-term. */
+export const FEE_RELAYER_ADDRESS = "0x06928d32ffffCC8247a26aD4B4Dc441380194d0D";
 
 /** Multi-provider RPC fallback list */
 export const POLYGON_RPCS = [
