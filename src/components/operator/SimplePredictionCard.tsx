@@ -111,7 +111,10 @@ export default function SimplePredictionCard({
   const hasDrawOption = !!(fight as any).draw_allowed;
   const isStarted = (fight as any).event_date && new Date((fight as any).event_date).getTime() < Date.now();
   const isPolymarket = !!(fight as any).polymarket_slug;
-  const isOpen = fight.status === "open" || fight.status === "live" || (fight.status === "locked" && isStarted && isPolymarket);
+  // Trading-allowed flag: treated as ON when undefined (legacy fights), OFF only when explicitly false
+  const tradingAllowed = (fight as any).trading_allowed !== false;
+  const statusOpen = fight.status === "open" || fight.status === "live" || (fight.status === "locked" && isStarted && isPolymarket);
+  const isOpen = statusOpen && tradingAllowed;
   const isSettled = ["settled", "confirmed", "result_selected"].includes(fight.status);
   const userPicked = userEntry?.fighter_pick;
   const userWon = isSettled && fight.winner === userPicked;
