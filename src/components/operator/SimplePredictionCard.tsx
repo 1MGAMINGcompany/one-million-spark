@@ -346,6 +346,15 @@ export default function SimplePredictionCard({
         </div>
       )}
 
+      {/* Trading not yet open notice (status would be open but admin hasn't enabled trading) */}
+      {statusOpen && !tradingAllowed && (
+        <div className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium"
+          style={{ backgroundColor: theme.primary + "15", color: theme.primary, border: `1px solid ${theme.primary}33` }}>
+          <Clock className="w-3.5 h-3.5 shrink-0" />
+          <span>{t("operator.tradingNotOpen", { defaultValue: "Trading not yet open — check back soon" })}</span>
+        </div>
+      )}
+
       {/* Row 5: Pick buttons — multiplier + implied probability */}
       <div className={`grid ${gridCols} gap-2`}>
         <button
