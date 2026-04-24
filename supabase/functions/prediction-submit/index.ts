@@ -522,15 +522,23 @@ async function collectFeeViaRelayer(
     return { success: true, txHash: result.txHash, from_address: fromAddress };
   } catch (err) {
     console.error("[prediction-submit] Relayer transferFrom failed:", err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : String(err),
+      error_code: "fee_collection_failed",
+    };
+  }
 }
 
 /**
- * Collect the 95% net stake into the relayer/pool wallet for NATIVE (custom) events only.
- * Uses transferFrom (user → relayer wallet) under the user's existing USDC.e approval.
+ * Collect the 95% net stake into the TREASURY wallet for NATIVE (custom) events only.
+ * Uses transferFrom (user → Treasury) under the user's existing USDC.e approval.
+ * The relayer wallet pays gas; the Treasury holds the pooled stakes.
+ *
  * Polymarket-backed events do NOT call this — their stake goes directly to CLOB client-side.
  *
- * The relayer wallet doubles as the native pool: stakes flow in here at submit,
- * and prediction-claim pays winners out from the same wallet.
+ * Treasury (0x72F3…d88d) holds all native-event stakes + fees and pays winners
+ * out of the same wallet via prediction-claim using TREASURY_PRIVATE_KEY.
  */
 async function collectStakeViaRelayer(
   userWallet: string,
@@ -580,13 +588,14 @@ async function collectStakeViaRelayer(
       };
     }
 
-    // transferFrom(user → relayer/pool wallet)
+    // transferFrom(user → TREASURY wallet)
+    // Treasury pools all native-event stakes and pays winners directly.
     const txData = encodeFunctionData({
       abi: erc20TransferFromAbi,
       functionName: "transferFrom",
       args: [
         fromAddress as `0x${string}`,
-        account.address,
+        TREASURY_WALLET as `0x${string}`,
         stakeRaw,
       ],
     });
@@ -628,7 +637,7 @@ async function collectStakeViaRelayer(
       "stake_collection",
     );
 
-    console.log(`[prediction-submit] Stake collected to pool: ${result.txHash}, stake=$${stakeUsdc}, from=${fromAddress}, nonce=${result.nonce}`);
+    console.log(`[prediction-submit] Stake collected to TREASURY: ${result.txHash}, stake=$${stakeUsdc}, from=${fromAddress}, nonce=${result.nonce}`);
     return { success: true, txHash: result.txHash, from_address: fromAddress };
   } catch (err) {
     console.error("[prediction-submit] Stake transferFrom failed:", err);
