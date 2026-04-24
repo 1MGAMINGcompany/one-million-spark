@@ -268,13 +268,19 @@ async function transferFromDerived(
   return { success: true, txHash, amountUsdc };
 }
 
-// ── Native event: treasury transfer ──
+// ── Native (custom) event payout: send winnings from TREASURY wallet ──
+// Treasury holds all native-event stakes (deposited via prediction-submit) and
+// pays winners directly. Falls back to FEE_RELAYER_PRIVATE_KEY for backwards
+// compatibility with old events whose pool was never moved to Treasury.
 async function transferUsdcFromTreasury(
   recipientWallet: string,
   amountUsd: number,
 ): Promise<{ success: boolean; txHash?: string; error?: string }> {
+  const treasuryKey = Deno.env.get("TREASURY_PRIVATE_KEY");
   const relayerKey = Deno.env.get("FEE_RELAYER_PRIVATE_KEY");
-  if (!relayerKey) return { success: false, error: "relayer_key_not_configured" };
+  const payerKey = treasuryKey || relayerKey;
+  const payerLabel = treasuryKey ? "treasury" : "relayer_fallback";
+  if (!payerKey) return { success: false, error: "no_payer_key_configured" };
 
   try {
     const account = privateKeyToAccount(
