@@ -194,17 +194,23 @@ async function withdrawFromDerived(
   return { txHash, amountUsdc: Number(balance) / 10 ** USDC_DECIMALS };
 }
 
-// ── Native treasury transfer ──
-async function transferUsdcFromTreasury(
+// ── Native pool payout ──
+// New entries (with stake_tx_hash) → pay from TREASURY (where the pool sits).
+// Legacy entries (no stake_tx_hash) → fall back to FEE_RELAYER (old flow).
+async function transferUsdcFromPool(
   recipient: string,
   amountUsd: number,
-): Promise<{ success: boolean; txHash?: string; error?: string }> {
+  isLegacyEntry: boolean,
+): Promise<{ success: boolean; txHash?: string; error?: string; payer?: string }> {
+  const treasuryKey = Deno.env.get("TREASURY_PRIVATE_KEY");
   const relayerKey = Deno.env.get("FEE_RELAYER_PRIVATE_KEY");
-  if (!relayerKey) return { success: false, error: "relayer_key_not_configured" };
+  const payerKey = isLegacyEntry ? (relayerKey || treasuryKey) : (treasuryKey || relayerKey);
+  const payerLabel = isLegacyEntry ? (relayerKey ? "relayer_legacy" : "treasury_fallback") : (treasuryKey ? "treasury" : "relayer_fallback");
+  if (!payerKey) return { success: false, error: "no_payer_key_configured" };
 
   try {
     const account = privateKeyToAccount(
-      (relayerKey.startsWith("0x") ? relayerKey : `0x${relayerKey}`) as `0x${string}`,
+      (payerKey.startsWith("0x") ? payerKey : `0x${payerKey}`) as `0x${string}`,
     );
     const amountRaw = BigInt(Math.round(amountUsd * 10 ** USDC_DECIMALS));
     const txData = encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [recipient as `0x${string}`, amountRaw] });
@@ -397,7 +403,7 @@ Deno.serve(async (req) => {
           totalProcessed += wEntries.length;
           totalPaid += rewardUsd;
         } else {
-          // ── NATIVE PATH: parimutuel math + treasury transfer ──
+          // ── NATIVE PATH: parimutuel math + pool transfer ──
           const totalWinningShares = fight.winner === "fighter_a"
             ? Number(fight.shares_a)
             : Number(fight.shares_b);
@@ -407,7 +413,11 @@ Deno.serve(async (req) => {
           if (rewardUsd <= 0 || rewardUsd > MAX_CLAIM_USD) continue;
           if (dailyTotal + totalPaid + rewardUsd > DAILY_CEILING_USD) break;
 
-          const payoutResult = await transferUsdcFromTreasury(wallet, rewardUsd);
+          // Legacy detection: if ANY entry in this group lacks stake_tx_hash,
+          // the stake never reached Treasury → pay from relayer (old flow).
+          const isLegacyEntry = wEntries.some((e: any) => !e.stake_tx_hash);
+
+          const payoutResult = await transferUsdcFromPool(wallet, rewardUsd, isLegacyEntry);
 
           if (!payoutResult.success) {
             errors.push({ wallet, fight_id: fight.id, error: payoutResult.error || "unknown" });
@@ -415,7 +425,7 @@ Deno.serve(async (req) => {
               action: "auto_claim_payout_failed",
               source: "prediction-auto-claim",
               fight_id: fight.id,
-              details: { wallet, reward_usd: rewardUsd, error: payoutResult.error, entries: entryIds.length },
+              details: { wallet, reward_usd: rewardUsd, error: payoutResult.error, entries: entryIds.length, is_legacy: isLegacyEntry },
             });
             continue;
           }
@@ -428,7 +438,7 @@ Deno.serve(async (req) => {
             action: "auto_claim_paid",
             source: "prediction-auto-claim",
             fight_id: fight.id,
-            details: { wallet, reward_usd: rewardUsd, tx_hash: payoutResult.txHash, entries: entryIds.length },
+            details: { wallet, reward_usd: rewardUsd, tx_hash: payoutResult.txHash, entries: entryIds.length, payer: payoutResult.payer, is_legacy: isLegacyEntry },
           });
 
           totalProcessed += wEntries.length;
