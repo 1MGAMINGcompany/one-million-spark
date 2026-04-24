@@ -23,8 +23,14 @@ import { usePrivyWallet } from "./usePrivyWallet";
 const USDC_CONTRACT = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174" as const;
 const USDC_DECIMALS = 6;
 
-/** Approval cap: 100 USDC — enough for ~100+ predictions before re-approval */
-const APPROVAL_CAP_USDC = 100;
+/** Approval cap: 500 USDC — covers stake (95%) + fee (5%) for native/custom events
+ * across many trades before re-approval. The relayer wallet executes:
+ *   - transferFrom(user → treasury) for the 5% platform/operator fee, AND
+ *   - transferFrom(user → relayer) for the 95% stake on native pool events.
+ * Polymarket-backed events still only consume the fee leg from this allowance —
+ * the stake leg is sent client-side directly to Polymarket CLOB.
+ */
+const APPROVAL_CAP_USDC = 500;
 const APPROVAL_CAP_RAW = BigInt(APPROVAL_CAP_USDC * 10 ** USDC_DECIMALS);
 
 const erc20Abi = parseAbi([

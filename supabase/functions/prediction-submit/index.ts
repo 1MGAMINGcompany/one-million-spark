@@ -522,11 +522,183 @@ async function collectFeeViaRelayer(
     return { success: true, txHash: result.txHash, from_address: fromAddress };
   } catch (err) {
     console.error("[prediction-submit] Relayer transferFrom failed:", err);
+}
+
+/**
+ * Collect the 95% net stake into the relayer/pool wallet for NATIVE (custom) events only.
+ * Uses transferFrom (user → relayer wallet) under the user's existing USDC.e approval.
+ * Polymarket-backed events do NOT call this — their stake goes directly to CLOB client-side.
+ *
+ * The relayer wallet doubles as the native pool: stakes flow in here at submit,
+ * and prediction-claim pays winners out from the same wallet.
+ */
+async function collectStakeViaRelayer(
+  userWallet: string,
+  stakeUsdc: number,
+  walletEoa: string | undefined,
+  nonceManager: RelayerNonceManager,
+): Promise<{ success: boolean; txHash?: string; error?: string; error_code?: string; from_address?: string }> {
+  const relayerKey = Deno.env.get("FEE_RELAYER_PRIVATE_KEY");
+  if (!relayerKey) {
+    return { success: false, error: "relayer_not_configured", error_code: "relayer_not_configured" };
+  }
+
+  try {
+    const account = privateKeyToAccount(relayerKey as `0x${string}`);
+    const stakeRaw = BigInt(Math.floor(stakeUsdc * 10 ** USDC_DECIMALS));
+
+    const candidates: string[] = [userWallet];
+    if (walletEoa && walletEoa.toLowerCase() !== userWallet.toLowerCase()) {
+      candidates.push(walletEoa);
+    }
+
+    let fromAddress: string | null = null;
+    for (const candidate of candidates) {
+      const allowanceCallData = encodeFunctionData({
+        abi: erc20TransferFromAbi,
+        functionName: "allowance",
+        args: [candidate as `0x${string}`, account.address],
+      });
+      const allowanceRpc = await polygonRpcCall({
+        jsonrpc: "2.0", id: 1,
+        method: "eth_call",
+        params: [{ to: USDC_CONTRACT, data: allowanceCallData }, "latest"],
+      });
+      if (allowanceRpc.error || !allowanceRpc.result) continue;
+      const currentAllowance = BigInt(allowanceRpc.result);
+      if (currentAllowance >= stakeRaw) {
+        fromAddress = candidate;
+        break;
+      }
+    }
+
+    if (!fromAddress) {
+      return {
+        success: false,
+        error: `insufficient_allowance_for_stake on ${candidates.join(", ")}`,
+        error_code: "insufficient_allowance_for_stake",
+      };
+    }
+
+    // transferFrom(user → relayer/pool wallet)
+    const txData = encodeFunctionData({
+      abi: erc20TransferFromAbi,
+      functionName: "transferFrom",
+      args: [
+        fromAddress as `0x${string}`,
+        account.address,
+        stakeRaw,
+      ],
+    });
+
+    const { nonce, error: nonceError } = await nonceManager.getNextNonce();
+    if (nonceError) {
+      return { success: false, error: nonceError, error_code: "rpc_nonce_unavailable" };
+    }
+
+    const gasPriceRpc = await polygonRpcCall({
+      jsonrpc: "2.0", id: 3,
+      method: "eth_gasPrice",
+      params: [],
+    });
+    if (gasPriceRpc.error || gasPriceRpc.result == null) {
+      return { success: false, error: "rpc_gas_price_unavailable", error_code: "rpc_gas_price_unavailable" };
+    }
+
+    const gasPrice = BigInt(gasPriceRpc.result);
+    const workingRpc = gasPriceRpc.rpc || POLYGON_RPCS[0];
+
+    const walletClient = createWalletClient({
+      account,
+      chain: polygon,
+      transport: http(workingRpc),
+    });
+
+    const result = await sendRelayerTxWithRetry(
+      walletClient,
+      {
+        to: USDC_CONTRACT as `0x${string}`,
+        data: txData as `0x${string}`,
+        gas: 100_000n,
+        gasPrice: gasPrice * 12n / 10n,
+        nonce,
+        value: 0n,
+      },
+      nonceManager,
+      "stake_collection",
+    );
+
+    console.log(`[prediction-submit] Stake collected to pool: ${result.txHash}, stake=$${stakeUsdc}, from=${fromAddress}, nonce=${result.nonce}`);
+    return { success: true, txHash: result.txHash, from_address: fromAddress };
+  } catch (err) {
+    console.error("[prediction-submit] Stake transferFrom failed:", err);
     return {
       success: false,
       error: err instanceof Error ? err.message : String(err),
-      error_code: "relayer_tx_failed",
+      error_code: "stake_collection_failed",
     };
+  }
+}
+
+/**
+ * Best-effort refund of a previously-collected fee from the Treasury wallet
+ * back to the user. Used when the stake transfer fails after the fee has
+ * already been moved on-chain. Treasury must have a private key configured
+ * via TREASURY_PRIVATE_KEY for this to succeed; otherwise we mark the trade
+ * order as `refund_pending` for manual reconciliation.
+ */
+async function refundFeeFromTreasury(
+  userWallet: string,
+  feeUsdc: number,
+): Promise<{ success: boolean; txHash?: string; error?: string }> {
+  const treasuryKey = Deno.env.get("TREASURY_PRIVATE_KEY");
+  if (!treasuryKey) {
+    return { success: false, error: "treasury_key_not_configured" };
+  }
+  try {
+    const account = privateKeyToAccount(
+      (treasuryKey.startsWith("0x") ? treasuryKey : `0x${treasuryKey}`) as `0x${string}`,
+    );
+    const amountRaw = BigInt(Math.floor(feeUsdc * 10 ** USDC_DECIMALS));
+    const txData = encodeFunctionData({
+      abi: erc20TransferAbi,
+      functionName: "transfer",
+      args: [userWallet as `0x${string}`, amountRaw],
+    });
+
+    const [nonceRpc, gasPriceRpc] = await Promise.all([
+      polygonRpcCall({
+        jsonrpc: "2.0", id: 1,
+        method: "eth_getTransactionCount",
+        params: [account.address, "pending"],
+      }),
+      polygonRpcCall({
+        jsonrpc: "2.0", id: 2,
+        method: "eth_gasPrice",
+        params: [],
+      }),
+    ]);
+    if (nonceRpc.error || !nonceRpc.result || gasPriceRpc.error || !gasPriceRpc.result) {
+      return { success: false, error: "rpc_unavailable" };
+    }
+
+    const walletClient = createWalletClient({
+      account,
+      chain: polygon,
+      transport: http(gasPriceRpc.rpc || POLYGON_RPCS[0]),
+    });
+
+    const txHash = await walletClient.sendTransaction({
+      to: USDC_CONTRACT as `0x${string}`,
+      data: txData as `0x${string}`,
+      gas: 80_000n,
+      gasPrice: BigInt(gasPriceRpc.result) * 12n / 10n,
+      nonce: Number(BigInt(nonceRpc.result)),
+      value: 0n,
+    });
+    return { success: true, txHash };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
 
@@ -1510,15 +1682,96 @@ Deno.serve(async (req) => {
         polymarket_backed: true,
       });
     } else {
-      // Native 1MGAMING event — mark as filled immediately (local pool)
-      const tradeStatus = "filled";
+      // ─────────────────────────────────────────────────────────────
+      // Native 1MGAMING event — pool model
+      // 1) Move the 95% stake on-chain into the relayer/pool wallet
+      //    (fee was already moved to Treasury in step 7 above).
+      // 2) Mark trade as filled & insert prediction_entries row.
+      // 3) On stake failure, refund the fee (best effort) and bail.
+      // Polymarket events do NOT execute this path.
+      // ─────────────────────────────────────────────────────────────
       const filledAmountUsdc = net_amount_usdc;
       const filledShares = shares;
 
+      let stakeTxHash: string | null = null;
+      if (net_amount_usdc > 0.01) {
+        if (!nonceManager) {
+          await updateTradeOrder(supabase, tradeOrderId, {
+            status: "failed",
+            error_code: "relayer_not_configured",
+            error_message: "Pool relayer not configured for stake transfer",
+            finalized_at: new Date().toISOString(),
+          });
+          return json({ error: "Trading infrastructure not available", error_code: "relayer_not_configured", trade_order_id: tradeOrderId }, 502);
+        }
+
+        const normalizedEoaForStake = wallet_eoa ? String(wallet_eoa).trim().toLowerCase() : undefined;
+        await auditLog(supabase, tradeOrderId, normalizedWallet, "stake_collection_started", {
+          stake_usdc: net_amount_usdc,
+        });
+
+        const stakeResult = await collectStakeViaRelayer(
+          normalizedWallet!,
+          net_amount_usdc,
+          normalizedEoaForStake,
+          nonceManager,
+        );
+
+        if (stakeResult.success && stakeResult.txHash) {
+          stakeTxHash = stakeResult.txHash;
+          await auditLog(supabase, tradeOrderId, normalizedWallet, "stake_collected_via_relayer", null, {
+            tx_hash: stakeTxHash,
+            stake_usdc: net_amount_usdc,
+            from_address: stakeResult.from_address,
+          });
+        } else {
+          // Stake failed AFTER fee was moved — try to refund the fee from Treasury
+          await auditLog(supabase, tradeOrderId, normalizedWallet, "stake_collection_failed", null, {
+            error: stakeResult.error,
+            error_code: stakeResult.error_code,
+          });
+
+          let refundOutcome: { success: boolean; txHash?: string; error?: string } = { success: false };
+          if (feeCollected && fee_usd > 0.01) {
+            refundOutcome = await refundFeeFromTreasury(normalizedWallet!, fee_usd);
+            await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_refund_attempted", null, {
+              ...refundOutcome,
+              fee_usd,
+            });
+          }
+
+          await updateTradeOrder(supabase, tradeOrderId, {
+            status: "failed",
+            error_code: stakeResult.error_code || "stake_collection_failed",
+            error_message: (stakeResult.error || "Stake transfer failed").substring(0, 500),
+            finalized_at: new Date().toISOString(),
+          });
+
+          const isAllowance = stakeResult.error_code === "insufficient_allowance_for_stake";
+          return json(
+            {
+              error: isAllowance
+                ? "USDC approval is too low to cover your stake. Please approve a higher amount and try again."
+                : "Could not move your stake into the pool. " +
+                  (refundOutcome.success
+                    ? "Your fee was refunded."
+                    : "Please contact support — the fee may need manual refund."),
+              error_code: stakeResult.error_code || "stake_collection_failed",
+              fee_refunded: refundOutcome.success,
+              fee_refund_tx: refundOutcome.txHash,
+              trade_order_id: tradeOrderId,
+            },
+            isAllowance ? 403 : 502,
+          );
+        }
+      }
+
+      const tradeStatus = "filled";
       await updateTradeOrder(supabase, tradeOrderId, {
         status: "filled",
         filled_amount_usdc: filledAmountUsdc,
         filled_shares: filledShares,
+        stake_tx_hash: stakeTxHash,
         finalized_at: new Date().toISOString(),
       });
 
@@ -1538,6 +1791,7 @@ Deno.serve(async (req) => {
           amount_lamports: 0,
           fee_lamports: 0,
           pool_lamports: 0,
+          stake_tx_hash: stakeTxHash,
           source_operator_id: source_operator_id || fight.operator_id || null,
         })
         .select()
