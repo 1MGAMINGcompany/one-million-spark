@@ -30,7 +30,7 @@ const BALANCE_OF_SELECTOR = "0x70a08231";
 const ALLOWANCE_SELECTOR = "0xdd62ed3e"; // allowance(owner, spender)
 
 /** Fee relayer address — must match the address derived from FEE_RELAYER_PRIVATE_KEY on the backend */
-export const FEE_RELAYER_ADDRESS = "0x3b3bf64329CCf08a727e4fEd41821E8534685fAD";
+export const FEE_RELAYER_ADDRESS = "0x06928d32ffffCC8247a26aD4B4Dc441380194d0D";
 
 export interface PolygonUSDCBalance {
   /** User's EVM wallet address */

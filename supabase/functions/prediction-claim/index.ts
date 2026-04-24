@@ -268,21 +268,27 @@ async function transferFromDerived(
   return { success: true, txHash, amountUsdc };
 }
 
-// ── Native event: treasury transfer ──
+// ── Native (custom) event payout: send winnings from TREASURY wallet ──
+// Treasury holds all native-event stakes (deposited via prediction-submit) and
+// pays winners directly. Falls back to FEE_RELAYER_PRIVATE_KEY for backwards
+// compatibility with old events whose pool was never moved to Treasury.
 async function transferUsdcFromTreasury(
   recipientWallet: string,
   amountUsd: number,
 ): Promise<{ success: boolean; txHash?: string; error?: string }> {
+  const treasuryKey = Deno.env.get("TREASURY_PRIVATE_KEY");
   const relayerKey = Deno.env.get("FEE_RELAYER_PRIVATE_KEY");
-  if (!relayerKey) return { success: false, error: "relayer_key_not_configured" };
+  const payerKey = treasuryKey || relayerKey;
+  const payerLabel = treasuryKey ? "treasury" : "relayer_fallback";
+  if (!payerKey) return { success: false, error: "no_payer_key_configured" };
 
   try {
     const account = privateKeyToAccount(
-      (relayerKey.startsWith("0x") ? relayerKey : `0x${relayerKey}`) as `0x${string}`,
+      (payerKey.startsWith("0x") ? payerKey : `0x${payerKey}`) as `0x${string}`,
     );
     const amountRaw = BigInt(Math.round(amountUsd * 10 ** USDC_DECIMALS));
 
-    // Check treasury balance
+    // Check payer USDC balance
     const balData = "0x70a08231" + padAddress(account.address);
     const balJson = await callWithFallback(async (rpc) => {
       const res = await fetch(rpc, {
@@ -297,7 +303,7 @@ async function transferUsdcFromTreasury(
       return await res.json();
     });
     if (balJson.result && BigInt(balJson.result) < amountRaw) {
-      return { success: false, error: `insufficient_treasury_balance` };
+      return { success: false, error: `insufficient_${payerLabel}_balance` };
     }
 
     const txData = encodeFunctionData({
@@ -344,7 +350,7 @@ async function transferUsdcFromTreasury(
       value: 0n,
     });
 
-    console.log(`[prediction-claim] Treasury payout: $${amountUsd} → ${recipientWallet}, tx=${txHash}`);
+    console.log(`[prediction-claim] Native payout from ${payerLabel}: $${amountUsd} → ${recipientWallet}, tx=${txHash}`);
     return { success: true, txHash };
   } catch (err) {
     console.error("[prediction-claim] Treasury payout failed:", err);
