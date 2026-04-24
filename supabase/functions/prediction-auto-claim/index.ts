@@ -194,17 +194,23 @@ async function withdrawFromDerived(
   return { txHash, amountUsdc: Number(balance) / 10 ** USDC_DECIMALS };
 }
 
-// ── Native treasury transfer ──
-async function transferUsdcFromTreasury(
+// ── Native pool payout ──
+// New entries (with stake_tx_hash) → pay from TREASURY (where the pool sits).
+// Legacy entries (no stake_tx_hash) → fall back to FEE_RELAYER (old flow).
+async function transferUsdcFromPool(
   recipient: string,
   amountUsd: number,
-): Promise<{ success: boolean; txHash?: string; error?: string }> {
+  isLegacyEntry: boolean,
+): Promise<{ success: boolean; txHash?: string; error?: string; payer?: string }> {
+  const treasuryKey = Deno.env.get("TREASURY_PRIVATE_KEY");
   const relayerKey = Deno.env.get("FEE_RELAYER_PRIVATE_KEY");
-  if (!relayerKey) return { success: false, error: "relayer_key_not_configured" };
+  const payerKey = isLegacyEntry ? (relayerKey || treasuryKey) : (treasuryKey || relayerKey);
+  const payerLabel = isLegacyEntry ? (relayerKey ? "relayer_legacy" : "treasury_fallback") : (treasuryKey ? "treasury" : "relayer_fallback");
+  if (!payerKey) return { success: false, error: "no_payer_key_configured" };
 
   try {
     const account = privateKeyToAccount(
-      (relayerKey.startsWith("0x") ? relayerKey : `0x${relayerKey}`) as `0x${string}`,
+      (payerKey.startsWith("0x") ? payerKey : `0x${payerKey}`) as `0x${string}`,
     );
     const amountRaw = BigInt(Math.round(amountUsd * 10 ** USDC_DECIMALS));
     const txData = encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [recipient as `0x${string}`, amountRaw] });
