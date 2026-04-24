@@ -1848,11 +1848,13 @@ Deno.serve(async (req) => {
                   .single();
 
                 if (!casErr && claimed) {
-                  const relayerKey = Deno.env.get("FEE_RELAYER_PRIVATE_KEY");
-                  if (relayerKey) {
+                  // Custom-event fees now sit in the Treasury (pool model).
+                  // Sweep operator commission FROM Treasury, not Relayer.
+                  const treasuryKey = Deno.env.get("TREASURY_PRIVATE_KEY");
+                  if (treasuryKey) {
                     try {
                       const sweepAccount = privateKeyToAccount(
-                        (relayerKey.startsWith("0x") ? relayerKey : `0x${relayerKey}`) as `0x${string}`,
+                        (treasuryKey.startsWith("0x") ? treasuryKey : `0x${treasuryKey}`) as `0x${string}`,
                       );
                       const sweepAmountRaw = BigInt(Math.floor(operatorFeeUsd * 10 ** USDC_DECIMALS));
                       const sweepTxData = encodeFunctionData({
@@ -1899,7 +1901,7 @@ Deno.serve(async (req) => {
                     }
                   } else {
                     await supabase.from("operator_revenue").update({
-                      sweep_status: "failed", sweep_error: "relayer_not_configured",
+                      sweep_status: "failed", sweep_error: "treasury_not_configured",
                     }).eq("id", revRow.id);
                   }
                 }
