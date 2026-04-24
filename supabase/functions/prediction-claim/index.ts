@@ -284,11 +284,11 @@ async function transferUsdcFromTreasury(
 
   try {
     const account = privateKeyToAccount(
-      (relayerKey.startsWith("0x") ? relayerKey : `0x${relayerKey}`) as `0x${string}`,
+      (payerKey.startsWith("0x") ? payerKey : `0x${payerKey}`) as `0x${string}`,
     );
     const amountRaw = BigInt(Math.round(amountUsd * 10 ** USDC_DECIMALS));
 
-    // Check treasury balance
+    // Check payer USDC balance
     const balData = "0x70a08231" + padAddress(account.address);
     const balJson = await callWithFallback(async (rpc) => {
       const res = await fetch(rpc, {
@@ -303,7 +303,7 @@ async function transferUsdcFromTreasury(
       return await res.json();
     });
     if (balJson.result && BigInt(balJson.result) < amountRaw) {
-      return { success: false, error: `insufficient_treasury_balance` };
+      return { success: false, error: `insufficient_${payerLabel}_balance` };
     }
 
     const txData = encodeFunctionData({
