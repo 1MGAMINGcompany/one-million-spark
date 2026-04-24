@@ -350,7 +350,7 @@ async function transferUsdcFromTreasury(
       value: 0n,
     });
 
-    console.log(`[prediction-claim] Treasury payout: $${amountUsd} → ${recipientWallet}, tx=${txHash}`);
+    console.log(`[prediction-claim] Native payout from ${payerLabel}: $${amountUsd} → ${recipientWallet}, tx=${txHash}`);
     return { success: true, txHash };
   } catch (err) {
     console.error("[prediction-claim] Treasury payout failed:", err);
