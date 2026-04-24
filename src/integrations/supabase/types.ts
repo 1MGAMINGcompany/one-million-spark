@@ -1330,6 +1330,7 @@ export type Database = {
           reward_usd: number | null
           shares: number
           source_operator_id: string | null
+          stake_tx_hash: string | null
           tx_signature: string | null
           wallet: string
         }
@@ -1351,6 +1352,7 @@ export type Database = {
           reward_usd?: number | null
           shares: number
           source_operator_id?: string | null
+          stake_tx_hash?: string | null
           tx_signature?: string | null
           wallet: string
         }
@@ -1372,6 +1374,7 @@ export type Database = {
           reward_usd?: number | null
           shares?: number
           source_operator_id?: string | null
+          stake_tx_hash?: string | null
           tx_signature?: string | null
           wallet?: string
         }
