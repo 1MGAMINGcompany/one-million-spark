@@ -1,256 +1,40 @@
+## Enable Silvertooth Tulum Championship trading
 
-## Silvertooth operator owner/linking fix plan
+Verified via `supabase--read_query`: the 4 fights are still `trading_allowed = false`, status `open`. That is exactly what is causing the `market_not_allowlisted` 403 from `prediction-submit` for users trying to predict on Caron/Aviles, Garcia/Pignolet, Zhou/Olvera, and Yahiatene/Cruz.
 
-### What I found
+### 1. Database UPDATE (data, not schema — uses insert tool)
 
-The Silvertooth operator app exists in the backend as:
-
-```text
-Operator: SILVERTOOTH Promotions
-Slug: silvertooth
-Status: active
-Support email: silvertoothpromo@gmail.com
-Current owner user_id: platform-admin-silvertooth
-Payout wallet: not set
+```sql
+UPDATE prediction_fights
+SET trading_allowed = true,
+    updated_at = now()
+WHERE id IN (
+  '9b0d64a3-5dd5-41da-847b-395d3780fc54', -- Caron vs Aviles
+  '60f651ee-1a95-48d5-ab71-1817be0a7242', -- Garcia vs Pignolet
+  '879061c6-b56e-49b8-8070-e7e1fb7ada72', -- Zhou vs Olvera
+  '6ebf86ff-dd5f-48bf-9ad9-bbdcb91a59f0'  -- Yahiatene vs Cruz
+);
 ```
 
-The problem is that `platform-admin-silvertooth` is a manual placeholder owner ID, not the real Privy login ID created when the Silvertooth owner signed in.
+Effect: `prediction-submit` allowlist gate (per `mem://architecture/prediction/market-allowlist-policy`) will pass for these 4 markets and users can place predictions immediately. No other fights or operators are touched.
 
-The dashboard button is currently controlled here:
+### 2. UI hardening — `src/components/operator/SimplePredictionCard.tsx`
 
-```text
-src/pages/platform/OperatorApp.tsx
-```
+Add a single safety net so this never silently fails again:
 
-Logic:
+- Read `trading_allowed` from the fight prop.
+- If `false`: disable both Yes/No buttons (`disabled` + reduced opacity) and render a small pill below the matchup reading `⏳ Trading not yet open` (i18n key `prediction.tradingNotOpen` with English fallback).
+- If `true` (current): no visual change.
 
-```text
-Show Dashboard button only if:
-current logged-in Privy DID === operators.user_id
-```
+This means even if a future fight is published with the flag still off, prospects see a clear status instead of the trade modal opening and the backend rejecting the order. ~10 lines of additive JSX, no behaviour change for healthy fights.
 
-So when the Silvertooth owner logged in with `silvertoothpromo@gamil.com`, Privy created a real account with a real DID/wallet, but the Silvertooth operator row still belongs to:
+### Out of scope
 
-```text
-platform-admin-silvertooth
-```
+- No change to `prediction-submit`, allowlist policy, or any other operator's fights.
+- No change to ingest defaults — that's a separate decision.
 
-That is why:
+### Verification after deploy
 
-```text
-1. The Dashboard button did not appear.
-2. The payout wallet did not auto-connect.
-3. Admin still shows “wallet not connected.”
-```
-
-The payout wallet auto-set logic exists, but only after ownership is already correct:
-
-```text
-src/components/operator/OperatorEarningsTab.tsx
-```
-
-It only runs when:
-
-```text
-operator.user_id === loggedInUserId
-```
-
-Because Silvertooth ownership does not match the logged-in account, the auto-set never runs.
-
-### Important note
-
-The user typed:
-
-```text
-silvertoothpromo@gamil.com
-```
-
-The existing Silvertooth app record has:
-
-```text
-silvertoothpromo@gmail.com
-```
-
-Those are different emails. If the typo email was actually used, Privy may have created a separate identity. Before permanently linking, I will verify the latest Privy DID and wallet tied to the owner’s current login.
-
-## Fix plan
-
-### 1. Confirm the correct Silvertooth owner identity
-
-Inspect the latest Privy-created identity/wallet records and match them against the owner’s recent login.
-
-Current likely recent identity from backend activity:
-
-```text
-Privy DID: did:privy:cmobumj8901p00bjymj3gw8ck
-Wallet: 0x3c50801bc8e0b411ed967a40423ae09ec8d914a9
-```
-
-But I will treat this as “likely” until verified, because the backend stores Privy DID/wallet but does not currently store the login email in the operator row.
-
-### 2. Repair the Silvertooth operator row safely
-
-Once the correct identity is confirmed, update only the Silvertooth operator record:
-
-```text
-operators.subdomain = silvertooth
-```
-
-Set:
-
-```text
-user_id = correct Silvertooth Privy DID
-payout_wallet = correct Silvertooth EVM wallet
-updated_at = now
-```
-
-This should immediately make:
-
-```text
-1mg.live/silvertooth → Dashboard button visible for the owner
-/admin Operators tab → payout wallet connected
-/dashboard → accessible for Silvertooth owner
-```
-
-No app content, events, fees, sports, purchases, or revenue records will be changed.
-
-### 3. Add a backend-safe admin repair action
-
-Update:
-
-```text
-supabase/functions/operator-manage/index.ts
-```
-
-Add an admin-only action:
-
-```text
-admin_link_operator_owner
-```
-
-It will accept:
-
-```text
-operator_id
-owner_privy_did
-payout_wallet
-```
-
-And atomically update:
-
-```text
-operators.user_id
-operators.payout_wallet
-operators.updated_at
-```
-
-Security rules:
-
-```text
-Only platform admins can call it.
-Wallet must be valid 0x EVM address.
-Operator must exist.
-Action is logged to automation/admin activity logs.
-```
-
-This prevents future manual database edits and gives us a safe repair path if another operator account is provisioned with a placeholder owner.
-
-### 4. Add admin UI support for owner repair
-
-Update:
-
-```text
-src/components/admin/OperatorManagementTab.tsx
-```
-
-For operator rows with:
-
-```text
-No payout wallet
-or user_id not starting with did:privy:
-```
-
-show an admin repair section:
-
-```text
-Link Owner
-- Privy DID
-- Payout wallet
-- Save
-```
-
-This gives the platform admin a controlled way to link a real owner account after a promo/manual setup.
-
-### 5. Improve payout wallet auto-healing for real owners
-
-Update:
-
-```text
-src/pages/platform/OperatorApp.tsx
-src/pages/platform/OperatorDashboard.tsx
-```
-
-When the logged-in user is confirmed as the operator owner and the operator has no payout wallet:
-
-```text
-If current Privy wallet exists:
-  call set_payout_wallet automatically
-```
-
-This ensures that once ownership is correct, the owner’s current embedded wallet becomes the % fee recipient without requiring them to find the Earnings tab first.
-
-### 6. Add safer diagnostics so this is obvious next time
-
-Add clear admin display fields in the Operators tab:
-
-```text
-Owner status:
-- Linked Privy owner
-- Placeholder/manual owner
-- Missing payout wallet
-```
-
-For Silvertooth today, it would show:
-
-```text
-Owner: placeholder/manual
-Payout: not set
-```
-
-After repair:
-
-```text
-Owner: linked Privy account
-Payout: 0x3c50…14a9
-```
-
-### 7. Audit after the fix
-
-After implementation, run a focused audit:
-
-```text
-1. Open 1mg.live/silvertooth while signed out.
-2. Confirm public app still loads.
-3. Sign in as the Silvertooth owner.
-4. Confirm Dashboard button appears.
-5. Open /dashboard.
-6. Confirm it loads the Silvertooth dashboard, not onboarding.
-7. Confirm payout wallet is populated.
-8. Confirm admin Operators tab no longer says wallet not connected.
-9. Confirm no other operator ownership changed.
-```
-
-### Expected result
-
-After the fix:
-
-```text
-Silvertooth owner logs in
-→ app recognizes the real owner account
-→ Dashboard button appears
-→ dashboard opens correctly
-→ owner’s wallet is set as the % fee payout wallet
-→ admin no longer shows wallet not connected
-```
-
-This fixes the current Silvertooth problem and adds a safe admin workflow so future manually created promo/operator apps do not get stuck with placeholder ownership.
+1. Re-run the SELECT — all 4 rows show `trading_allowed = true`.
+2. Sign in as a prospect on Silvertooth Tulum event → place a $5 prediction on Caron/Aviles → trade succeeds, no `market_not_allowlisted`.
+3. The pill renders for any fight where `trading_allowed = false` (none in current Silvertooth inventory after fix).
