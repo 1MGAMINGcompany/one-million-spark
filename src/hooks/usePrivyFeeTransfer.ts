@@ -10,8 +10,8 @@
  * gas sponsorship policy.
  *
  * USDC.e (Bridged) on Polygon: 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 (6 decimals)
- * Relayer/Spender: 0x3b3bf64329CCf08a727e4fEd41821E8534685fAD (derived from FEE_RELAYER_PRIVATE_KEY)
- * Treasury/Destination: 0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d (receives fees via transferFrom)
+ * Relayer/Spender: 0x06928d32ffffCC8247a26aD4B4Dc441380194d0D (derived from FEE_RELAYER_PRIVATE_KEY)
+ * Treasury/Destination: 0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d (receives fees + stakes via transferFrom; pays out to winners)
  */
 import { useCallback } from "react";
 import { useSendTransaction } from "@privy-io/react-auth";
