@@ -1901,7 +1901,7 @@ Deno.serve(async (req) => {
                     }
                   } else {
                     await supabase.from("operator_revenue").update({
-                      sweep_status: "failed", sweep_error: "relayer_not_configured",
+                      sweep_status: "failed", sweep_error: "treasury_not_configured",
                     }).eq("id", revRow.id);
                   }
                 }
