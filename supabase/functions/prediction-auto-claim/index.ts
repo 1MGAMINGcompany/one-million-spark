@@ -403,7 +403,7 @@ Deno.serve(async (req) => {
           totalProcessed += wEntries.length;
           totalPaid += rewardUsd;
         } else {
-          // ── NATIVE PATH: parimutuel math + treasury transfer ──
+          // ── NATIVE PATH: parimutuel math + pool transfer ──
           const totalWinningShares = fight.winner === "fighter_a"
             ? Number(fight.shares_a)
             : Number(fight.shares_b);
@@ -413,7 +413,11 @@ Deno.serve(async (req) => {
           if (rewardUsd <= 0 || rewardUsd > MAX_CLAIM_USD) continue;
           if (dailyTotal + totalPaid + rewardUsd > DAILY_CEILING_USD) break;
 
-          const payoutResult = await transferUsdcFromTreasury(wallet, rewardUsd);
+          // Legacy detection: if ANY entry in this group lacks stake_tx_hash,
+          // the stake never reached Treasury → pay from relayer (old flow).
+          const isLegacyEntry = wEntries.some((e: any) => !e.stake_tx_hash);
+
+          const payoutResult = await transferUsdcFromPool(wallet, rewardUsd, isLegacyEntry);
 
           if (!payoutResult.success) {
             errors.push({ wallet, fight_id: fight.id, error: payoutResult.error || "unknown" });
@@ -421,7 +425,7 @@ Deno.serve(async (req) => {
               action: "auto_claim_payout_failed",
               source: "prediction-auto-claim",
               fight_id: fight.id,
-              details: { wallet, reward_usd: rewardUsd, error: payoutResult.error, entries: entryIds.length },
+              details: { wallet, reward_usd: rewardUsd, error: payoutResult.error, entries: entryIds.length, is_legacy: isLegacyEntry },
             });
             continue;
           }
@@ -434,7 +438,7 @@ Deno.serve(async (req) => {
             action: "auto_claim_paid",
             source: "prediction-auto-claim",
             fight_id: fight.id,
-            details: { wallet, reward_usd: rewardUsd, tx_hash: payoutResult.txHash, entries: entryIds.length },
+            details: { wallet, reward_usd: rewardUsd, tx_hash: payoutResult.txHash, entries: entryIds.length, payer: payoutResult.payer, is_legacy: isLegacyEntry },
           });
 
           totalProcessed += wEntries.length;
