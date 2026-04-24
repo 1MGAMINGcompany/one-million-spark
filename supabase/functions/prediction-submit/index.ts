@@ -1682,15 +1682,96 @@ Deno.serve(async (req) => {
         polymarket_backed: true,
       });
     } else {
-      // Native 1MGAMING event — mark as filled immediately (local pool)
-      const tradeStatus = "filled";
+      // ─────────────────────────────────────────────────────────────
+      // Native 1MGAMING event — pool model
+      // 1) Move the 95% stake on-chain into the relayer/pool wallet
+      //    (fee was already moved to Treasury in step 7 above).
+      // 2) Mark trade as filled & insert prediction_entries row.
+      // 3) On stake failure, refund the fee (best effort) and bail.
+      // Polymarket events do NOT execute this path.
+      // ─────────────────────────────────────────────────────────────
       const filledAmountUsdc = net_amount_usdc;
       const filledShares = shares;
 
+      let stakeTxHash: string | null = null;
+      if (net_amount_usdc > 0.01) {
+        if (!nonceManager) {
+          await updateTradeOrder(supabase, tradeOrderId, {
+            status: "failed",
+            error_code: "relayer_not_configured",
+            error_message: "Pool relayer not configured for stake transfer",
+            finalized_at: new Date().toISOString(),
+          });
+          return json({ error: "Trading infrastructure not available", error_code: "relayer_not_configured", trade_order_id: tradeOrderId }, 502);
+        }
+
+        const normalizedEoaForStake = wallet_eoa ? String(wallet_eoa).trim().toLowerCase() : undefined;
+        await auditLog(supabase, tradeOrderId, normalizedWallet, "stake_collection_started", {
+          stake_usdc: net_amount_usdc,
+        });
+
+        const stakeResult = await collectStakeViaRelayer(
+          normalizedWallet!,
+          net_amount_usdc,
+          normalizedEoaForStake,
+          nonceManager,
+        );
+
+        if (stakeResult.success && stakeResult.txHash) {
+          stakeTxHash = stakeResult.txHash;
+          await auditLog(supabase, tradeOrderId, normalizedWallet, "stake_collected_via_relayer", null, {
+            tx_hash: stakeTxHash,
+            stake_usdc: net_amount_usdc,
+            from_address: stakeResult.from_address,
+          });
+        } else {
+          // Stake failed AFTER fee was moved — try to refund the fee from Treasury
+          await auditLog(supabase, tradeOrderId, normalizedWallet, "stake_collection_failed", null, {
+            error: stakeResult.error,
+            error_code: stakeResult.error_code,
+          });
+
+          let refundOutcome: { success: boolean; txHash?: string; error?: string } = { success: false };
+          if (feeCollected && fee_usd > 0.01) {
+            refundOutcome = await refundFeeFromTreasury(normalizedWallet!, fee_usd);
+            await auditLog(supabase, tradeOrderId, normalizedWallet, "fee_refund_attempted", null, {
+              ...refundOutcome,
+              fee_usd,
+            });
+          }
+
+          await updateTradeOrder(supabase, tradeOrderId, {
+            status: "failed",
+            error_code: stakeResult.error_code || "stake_collection_failed",
+            error_message: (stakeResult.error || "Stake transfer failed").substring(0, 500),
+            finalized_at: new Date().toISOString(),
+          });
+
+          const isAllowance = stakeResult.error_code === "insufficient_allowance_for_stake";
+          return json(
+            {
+              error: isAllowance
+                ? "USDC approval is too low to cover your stake. Please approve a higher amount and try again."
+                : "Could not move your stake into the pool. " +
+                  (refundOutcome.success
+                    ? "Your fee was refunded."
+                    : "Please contact support — the fee may need manual refund."),
+              error_code: stakeResult.error_code || "stake_collection_failed",
+              fee_refunded: refundOutcome.success,
+              fee_refund_tx: refundOutcome.txHash,
+              trade_order_id: tradeOrderId,
+            },
+            isAllowance ? 403 : 502,
+          );
+        }
+      }
+
+      const tradeStatus = "filled";
       await updateTradeOrder(supabase, tradeOrderId, {
         status: "filled",
         filled_amount_usdc: filledAmountUsdc,
         filled_shares: filledShares,
+        stake_tx_hash: stakeTxHash,
         finalized_at: new Date().toISOString(),
       });
 
@@ -1710,6 +1791,7 @@ Deno.serve(async (req) => {
           amount_lamports: 0,
           fee_lamports: 0,
           pool_lamports: 0,
+          stake_tx_hash: stakeTxHash,
           source_operator_id: source_operator_id || fight.operator_id || null,
         })
         .select()
