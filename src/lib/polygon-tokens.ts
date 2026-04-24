@@ -19,8 +19,12 @@ export const USDC_DECIMALS = 6;
 /** Platform treasury wallet */
 export const TREASURY_WALLET = "0x72F3AA1B3B0815033AD6037edC1586dE592Ed88d" as const;
 
-/** Fee relayer wallet (executes transferFrom) */
-export const FEE_RELAYER_ADDRESS = "0x3b3bf64329CCf08a727e4fEd41821E8534685fAD" as const;
+/**
+ * Fee relayer wallet (executes transferFrom for fees + funding).
+ * Holds POL for gas only — never holds USDC long-term.
+ * Spender for all user USDC.e approvals.
+ */
+export const FEE_RELAYER_ADDRESS = "0x06928d32ffffCC8247a26aD4B4Dc441380194d0D" as const;
 
 /** Multi-provider RPC fallback list */
 export const POLYGON_RPCS = [
