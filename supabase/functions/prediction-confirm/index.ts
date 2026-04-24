@@ -87,18 +87,21 @@ async function sweepOperatorFee(
     return { success: false, error: "cas_failed_already_processing" };
   }
 
-  const relayerKey = Deno.env.get("FEE_RELAYER_PRIVATE_KEY");
-  if (!relayerKey) {
+  // Polymarket fees are collected by the Relayer (gas-only) into the Treasury
+  // wallet via transferFrom. The funds live in Treasury, so commission sweeps
+  // must be SIGNED by Treasury — not the Relayer (which holds no USDC.e).
+  const treasuryKey = Deno.env.get("TREASURY_PRIVATE_KEY");
+  if (!treasuryKey) {
     await supabase.from("operator_revenue").update({
       sweep_status: "failed",
-      sweep_error: "relayer_not_configured",
+      sweep_error: "treasury_not_configured",
     }).eq("id", revenueId);
-    return { success: false, error: "relayer_not_configured" };
+    return { success: false, error: "treasury_not_configured" };
   }
 
   try {
     const account = privateKeyToAccount(
-      (relayerKey.startsWith("0x") ? relayerKey : `0x${relayerKey}`) as `0x${string}`,
+      (treasuryKey.startsWith("0x") ? treasuryKey : `0x${treasuryKey}`) as `0x${string}`,
     );
     const amountRaw = BigInt(Math.floor(operatorFeeUsdc * 10 ** USDC_DECIMALS));
 
