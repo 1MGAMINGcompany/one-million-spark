@@ -64,11 +64,19 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
-    <!-- GoAffPro affiliate tracking — 1mg.live only -->
+    <!--
+      GoAffPro affiliate tracking — loads ONLY on 1mg.live sales pages.
+      Currently restricted to "/" (main sales page).
+      To also include /demo, change SALES_PATHS below to ['/', '/demo'].
+      Never load on operator pages (/silvertooth, /anyoperator), /admin, or any sub-routes.
+    -->
     <script>
       (function(){
         var h=location.hostname;
         if(h!=='1mg.live'&&h!=='www.1mg.live')return;
+        var SALES_PATHS=['/'];
+        var p=location.pathname;
+        if(SALES_PATHS.indexOf(p)===-1)return;
         var s=document.createElement('script');
         s.async=1;
         s.src='https://api.goaffpro.com/loader.js?shop=pfiwnywrwo';
