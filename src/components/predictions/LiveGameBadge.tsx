@@ -75,6 +75,10 @@ function formatPeriod(period?: string, elapsed?: string, sport?: string, status?
   if (sport?.includes("baseball") || sport?.includes("mlb")) return e ? `${p} ${e}` : p;
   if (sport?.includes("tennis")) return p ? `Set ${p}` : "";
   if (sport?.includes("cricket")) return p || "";
+  if (sport?.includes("mma") || sport?.includes("ufc") || sport?.includes("boxing") || sport?.includes("fight")) {
+    const label = p ? (p.startsWith("R") ? p : `R${p}`) : "";
+    return e ? `${label} ${e}`.trim() : label;
+  }
   if (sport?.includes("esport") || sport?.includes("csgo") || sport?.includes("dota") || sport?.includes("lol")) {
     if (p && p.includes("/")) return `Map ${p.split("/")[0]}`;
     return p ? `Map ${p}` : "";

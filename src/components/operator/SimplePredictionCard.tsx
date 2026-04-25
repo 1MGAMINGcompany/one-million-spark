@@ -134,6 +134,22 @@ export default function SimplePredictionCard({
   const isEnded = !!(liveState && liveState.ended);
   const liveDetailText = formatLiveDetail(liveState, t);
 
+  // Score-rendering decisions:
+  //  - hasScoreData: WS/snapshot has actually delivered score numbers
+  //  - isScoreSport: this sport type displays scores (MMA/UFC/boxing don't)
+  //  - showsScoreBlock: render the prominent score block (with 0-0 placeholder
+  //    if the sport supports scores but data hasn't arrived yet)
+  //  - showsLiveDetailRow: render a compact period+clock line when live but
+  //    no score block (MMA, boxing) — keeps clock/period visible to the user
+  const liveSportLower = (liveState?.sport || (fight as any)._broadSport || "").toLowerCase();
+  const hasScoreData = !!(liveState?.score || liveState?.scoreA != null || liveState?.scoreB != null);
+  const isScoreSport = isLive && !(
+    liveSportLower.includes("mma") || liveSportLower.includes("ufc") ||
+    liveSportLower.includes("boxing") || liveSportLower.includes("fight")
+  );
+  const showsScoreBlock = isLive && (hasScoreData || isScoreSport);
+  const showsLiveDetailRow = isLive && !!liveDetailText && !showsScoreBlock;
+
   // Lopsided market safety: if one side is ≥95% implied, warn users
   const isLopsided = (priceA >= 0.95 || priceB >= 0.95) && (fight.status === "live" || fight.status === "locked");
 
@@ -244,12 +260,19 @@ export default function SimplePredictionCard({
         </div>
 
         {/* Live score prominently */}
-        {isLive && liveState?.score && (
+        {showsScoreBlock && (
           <LiveScoreBlock nameA={nameA} nameB={nameB} logoA={logoA} logoB={logoB} liveState={liveState} liveDetailText={liveDetailText} theme={theme} />
         )}
 
-        {/* Teams (when no live score) */}
-        {(!isLive || !liveState?.score) && (
+        {/* Live detail row — for sports without scores (MMA/boxing) */}
+        {showsLiveDetailRow && (
+          <div className="text-center text-[11px] font-mono mt-1 mb-1" style={{ color: theme.textMuted }}>
+            {liveDetailText}
+          </div>
+        )}
+
+        {/* Teams (when no live score block) */}
+        {!showsScoreBlock && (
           <div className="flex items-center justify-between mb-3 mt-1">
             <TeamLabel name={nameA} logo={logoA} theme={theme} />
             <span className="text-xs font-bold mx-2 shrink-0" style={{ color: theme.textMuted }}>{t("operator.vs")}</span>
@@ -313,12 +336,19 @@ export default function SimplePredictionCard({
       </div>
 
       {/* Row 2: LIVE score block (prominent, above everything else) */}
-      {isLive && liveState?.score && (
+      {showsScoreBlock && (
         <LiveScoreBlock nameA={nameA} nameB={nameB} logoA={logoA} logoB={logoB} liveState={liveState} liveDetailText={liveDetailText} theme={theme} />
       )}
 
-      {/* Row 3: Teams (shown when NOT live or no score) */}
-      {(!isLive || !liveState?.score) && (
+      {/* Row 2b: LIVE detail row — sports without scores (MMA/boxing) */}
+      {showsLiveDetailRow && (
+        <div className="text-center text-[11px] font-mono" style={{ color: theme.textMuted }}>
+          {liveDetailText}
+        </div>
+      )}
+
+      {/* Row 3: Teams (shown when no score block) */}
+      {!showsScoreBlock && (
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             {logoA && <img src={logoA} className="w-7 h-7 sm:w-8 sm:h-8 object-contain shrink-0" alt="" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />}
