@@ -300,7 +300,7 @@ function parseGammaEvent(event: any, internalSlug: string) {
 
   if (event.score && typeof event.score === "string") {
     score = event.score;
-    const parts = score.split("-").map((s: string) => parseInt(s.trim(), 10));
+    const parts = (score as string).split("-").map((s: string) => parseInt(s.trim(), 10));
     if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
       scoreA = parts[0];
       scoreB = parts[1];
