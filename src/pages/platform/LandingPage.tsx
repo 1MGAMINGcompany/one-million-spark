@@ -53,6 +53,8 @@ function FloatingIcons() {
           key={i}
           src={ic.src}
           alt=""
+          loading="lazy"
+          decoding="async"
           className="absolute select-none object-contain"
           style={{
             left: `${ic.x}%`,

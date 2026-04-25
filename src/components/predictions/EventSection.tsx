@@ -346,7 +346,7 @@ export default function EventSection({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
            {config.image ? (
-              <img src={config.image} alt={sport} className="w-6 h-6 object-contain" />
+              <img src={config.image} alt={sport} loading="lazy" decoding="async" className="w-6 h-6 object-contain" />
             ) : (
               <span className="text-xl">{config.icon}</span>
             )}
