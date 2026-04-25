@@ -1,4 +1,5 @@
-// App Root
+// Flagship app shell — shipped to 1mgaming.com / localhost / preview only.
+// Contains all Solana, game, audio, and multiplayer routing.
 import { useEffect } from "react";
 import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -53,20 +54,16 @@ import MatchCenter from "./pages/MatchCenter";
 import ReferralAdmin from "./pages/ReferralAdmin";
 import PlatformAdminPage from "./pages/platform/PlatformAdmin";
 import DebugHUD from "./components/DebugHUD";
-// import AIAgentHelperOverlay from "./components/AIAgentHelperOverlay";
 import { isDebugEnabled } from "@/lib/debugLog";
 import { useReferralCapture } from "@/hooks/useReferralCapture";
 import { useWallet } from "@/hooks/useWallet";
-import { detectDomain } from "@/lib/domainDetection";
-import PlatformApp from "@/pages/platform/PlatformApp";
+
+// DEV-ONLY: Import to auto-run config check on app load
+import "./lib/devConfigCheck";
 
 /**
  * Catches Supabase auth hash on "/" (errors OR successful magic-link tokens)
- * and forwards to the correct admin page so AdminAuth can pick up the session.
- *
- * Domain-aware:
- *  - 1mg.live      → /admin     (PlatformApp)
- *  - 1mgaming.com  → /predictions/admin
+ * and forwards to /predictions/admin so AdminAuth can pick up the session.
  */
 function AuthHashRedirect({ children }: { children: React.ReactNode }) {
   const hash = typeof window !== "undefined" ? window.location.hash : "";
@@ -78,10 +75,7 @@ function AuthHashRedirect({ children }: { children: React.ReactNode }) {
       hash.includes("type=recovery"));
 
   if (looksLikeAuthHash) {
-    const host = window.location.hostname;
-    const adminPath =
-      host === "1mg.live" || host === "www.1mg.live" ? "/admin" : "/predictions/admin";
-    // Only redirect if we're not already on the admin page
+    const adminPath = "/predictions/admin";
     if (!window.location.pathname.startsWith(adminPath)) {
       window.location.replace(`${adminPath}${hash}`);
       return null;
@@ -90,23 +84,16 @@ function AuthHashRedirect({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// DEV-ONLY: Import to auto-run config check on app load
-import "./lib/devConfigCheck";
-
-// Detect domain context once at module level
-const domainContext = detectDomain();
-
-// Create QueryClient instance outside component to prevent recreation on re-renders
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60, // 1 minute
+      staleTime: 1000 * 60,
       retry: 1,
     },
   },
 });
 
-// PART D: visualViewport fallback for mobile browsers
+// visualViewport fallback for mobile browsers
 function useVisualViewportHeight() {
   useEffect(() => {
     function setVVH() {
@@ -123,14 +110,11 @@ function useVisualViewportHeight() {
   }, []);
 }
 
-// PART E: App content with conditional footer
 const AppContent = () => {
   const location = useLocation();
   const { address } = useWallet();
   useVisualViewportHeight();
   useReferralCapture(address);
-  // Global presence heartbeat — fires for every visitor on every page.
-  // AI game pages augment this with useAIGameTracker (same session_id, richer metadata).
   const page = location.pathname === "/"
     ? "home"
     : location.pathname.startsWith("/play-ai/")
@@ -140,14 +124,12 @@ const AppContent = () => {
     : location.pathname.startsWith("/room/")
     ? "room"
     : location.pathname.replace("/", "") || "home";
-  // Extract game name from AI play routes (e.g. /play-ai/chess → chess)
   const game = location.pathname.startsWith("/play-ai/")
     ? location.pathname.replace("/play-ai/", "")
     : undefined;
   usePresenceHeartbeat(page, game);
-  
-  // Hide footer on game/play routes to maximize vertical space
-  const hideFooter = location.pathname.startsWith('/play/') || 
+
+  const hideFooter = location.pathname.startsWith('/play/') ||
                      location.pathname.startsWith('/room/');
 
   return (
@@ -157,17 +139,13 @@ const AppContent = () => {
       <GlobalActiveRoomBanner />
       <main className="pt-16 relative flex-1 min-h-[calc(100dvh-4rem)]">
         <Routes>
-          {/* Redirect auth hash errors from root to admin page */}
           <Route path="/" element={<AuthHashRedirect><Home /></AuthHashRedirect>} />
           <Route path="/add-funds" element={<AddFunds />} />
           <Route path="/create-room" element={<CreateRoom />} />
           <Route path="/room-list" element={<RoomList />} />
-          {/* Canonical routes: PDA is the ONLY source of truth */}
           <Route path="/room/:roomPda" element={<RoomRouter />} />
-          {/* Canonical play route - game type from on-chain data ONLY */}
           <Route path="/play/:roomPda" element={<PlayRoom />} />
           <Route path="/join" element={<JoinRoom />} />
-          {/* Legacy routes redirect to canonical /room/:pda - slug is IGNORED */}
           <Route path="/game/:slug/:roomPda" element={<GameRedirect />} />
           <Route path="/play-ai" element={<PlayAILobby />} />
           <Route path="/quick-match" element={<QuickMatch />} />
@@ -196,34 +174,12 @@ const AppContent = () => {
         </Routes>
       </main>
       {!hideFooter && <Footer />}
-      {/* <AIAgentHelperOverlay /> */}
       {isDebugEnabled() && <DebugHUD />}
     </div>
   );
 };
 
-const App = () => {
-  const runtimeDomainContext = detectDomain();
-  // 1mg.live platform or operator subdomain — lightweight shell (no Solana/audio/game providers)
-  if (runtimeDomainContext.type === "platform" || runtimeDomainContext.type === "operator") {
-    return (
-      <AppErrorBoundary>
-        <PrivyProviderWrapper>
-          <QueryClientProvider client={queryClient}>
-            <TooltipProvider>
-              <Toaster />
-              <Sonner />
-              <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-                <PlatformApp context={runtimeDomainContext} />
-              </BrowserRouter>
-            </TooltipProvider>
-          </QueryClientProvider>
-        </PrivyProviderWrapper>
-      </AppErrorBoundary>
-    );
-  }
-
-  // Flagship app (1mgaming.com / localhost / preview)
+export default function AppFlagship() {
   return (
     <AppErrorBoundary>
       <PrivyProviderWrapper>
@@ -253,6 +209,4 @@ const App = () => {
       </PrivyProviderWrapper>
     </AppErrorBoundary>
   );
-};
-
-export default App;
+}
