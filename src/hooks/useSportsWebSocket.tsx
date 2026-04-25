@@ -15,6 +15,9 @@ export interface LiveGameState {
   raw?: any;
   realSlug?: string;
   eventSlug?: string;
+  homeTeam?: string;
+  awayTeam?: string;
+  leagueAbbreviation?: string;
 }
 
 interface SportsWSContextValue {
@@ -30,48 +33,65 @@ const SportsWSContext = createContext<SportsWSContextValue>({
 const WS_URL = "wss://sports-api.polymarket.com/ws";
 const MAX_BACKOFF = 30000;
 
+/** Build a normalized team-pair key for matching WS messages to internal slugs. */
+function teamKey(home: string, away: string, league: string): string {
+  return `${home.trim().toLowerCase()}|${away.trim().toLowerCase()}|${league.trim().toLowerCase()}`;
+}
+
 /**
  * Parse a WebSocket message from the Polymarket Sports API.
  * Per docs: no subscription needed. Messages are `sport_result` type JSON objects.
  *
+ * The WS feed does NOT include a slug field. Actual payload keys observed:
+ * homeTeam, awayTeam, leagueAbbreviation, score, period, elapsed, live, ended, status, ...
+ *
  * Match strategy:
- * 1. Direct slug match against tracked slugs
- * 2. Reverse slug map: WS slug → internal slug (built from snapshot realSlug data)
- * 3. Partial prefix match as last resort
+ * 1. Team-pair key match (home|away|league) — primary path
+ * 2. Reversed pair (away|home|league) — handles fight ordering differences
+ * 3. Direct slug match if Polymarket adds the field later — kept as fallback
+ * 4. Reverse slug map (realSlug → internalSlug)
+ * 5. If still no match, ignore silently
  */
 function parseLiveMessage(
   msg: any,
   slugSet: Set<string>,
   reverseSlugMap: Map<string, string>,
+  teamKeyMap: Map<string, string>,
 ): LiveGameState | null {
   if (!msg) return null;
 
   let slug: string | null = null;
-  const wsSlug = msg.slug || msg.market_slug || null;
 
-  // Direct match
-  if (wsSlug && slugSet.has(wsSlug)) {
-    slug = wsSlug;
-  }
+  // Primary: team-pair key match
+  const home = msg.homeTeam || msg.home_team || msg.home;
+  const away = msg.awayTeam || msg.away_team || msg.away;
+  const league = msg.leagueAbbreviation || msg.league || "";
 
-  // Reverse slug map: WS sends realSlug, we map back to internal slug
-  if (!slug && wsSlug && reverseSlugMap.has(wsSlug)) {
-    slug = reverseSlugMap.get(wsSlug)!;
-  }
-
-  // Partial prefix match
-  if (!slug && wsSlug) {
-    for (const tracked of slugSet) {
-      if (tracked.startsWith(wsSlug) || wsSlug.startsWith(tracked)) {
-        slug = tracked;
-        break;
+  if (home && away && league) {
+    const k1 = teamKey(String(home), String(away), String(league));
+    if (teamKeyMap.has(k1)) {
+      slug = teamKeyMap.get(k1)!;
+    } else {
+      // Try reversed sides
+      const k2 = teamKey(String(away), String(home), String(league));
+      if (teamKeyMap.has(k2)) {
+        slug = teamKeyMap.get(k2)!;
       }
     }
   }
 
+  // Fallback: legacy slug-based match (kept for forward compatibility)
+  const wsSlug = msg.slug || msg.market_slug || null;
+  if (!slug && wsSlug && slugSet.has(wsSlug)) {
+    slug = wsSlug;
+  }
+  if (!slug && wsSlug && reverseSlugMap.has(wsSlug)) {
+    slug = reverseSlugMap.get(wsSlug)!;
+  }
+
   if (!slug) return null;
 
-  const status = (msg.status || "unknown").toString();
+  const status = (msg.status || msg.eventState || "unknown").toString();
   const live = typeof msg.live === "boolean"
     ? msg.live
     : ["InProgress", "in_progress", "live", "halftime", "in_play",
@@ -96,7 +116,7 @@ function parseLiveMessage(
     }
   }
 
-  const league = (msg.leagueAbbreviation || msg.league || "").toLowerCase();
+  const leagueLower = String(league || "").toLowerCase();
 
   return {
     slug,
@@ -108,7 +128,10 @@ function parseLiveMessage(
     status,
     live,
     ended,
-    sport: league || undefined,
+    sport: leagueLower || undefined,
+    homeTeam: home ? String(home).trim().toLowerCase() : undefined,
+    awayTeam: away ? String(away).trim().toLowerCase() : undefined,
+    leagueAbbreviation: leagueLower || undefined,
     raw: msg,
   };
 }
@@ -130,7 +153,6 @@ export function SportsWebSocketProvider({
   const wsRef = useRef<WebSocket | null>(null);
   const backoffRef = useRef(1000);
   const mountedRef = useRef(true);
-  const unmatchedCountRef = useRef(0);
 
   const slugSet = useMemo(() => new Set(slugs), [slugs]);
   const slugSetRef = useRef(slugSet);
@@ -138,6 +160,8 @@ export function SportsWebSocketProvider({
 
   // Reverse slug map: realSlug → internalSlug (populated from snapshot)
   const reverseSlugMapRef = useRef<Map<string, string>>(new Map());
+  // Team-pair map: "home|away|league" → internalSlug (populated from snapshot)
+  const teamKeyMapRef = useRef<Map<string, string>>(new Map());
 
   // Log tracked slugs on change
   useEffect(() => {
@@ -168,22 +192,35 @@ export function SportsWebSocketProvider({
           return;
         }
 
-        // Build reverse slug map from snapshot data
+        // Build reverse slug map AND team-pair map from snapshot data
         const newReverseMap = new Map<string, string>(reverseSlugMapRef.current);
+        const newTeamKeyMap = new Map<string, string>(teamKeyMapRef.current);
+
         for (const [internalSlug, state] of entries) {
           if (state && typeof state === "object") {
             const s = state as any;
-            if (s.realSlug) {
-              newReverseMap.set(s.realSlug, internalSlug);
-            }
-            if (s.eventSlug) {
-              newReverseMap.set(s.eventSlug, internalSlug);
+            if (s.realSlug) newReverseMap.set(s.realSlug, internalSlug);
+            if (s.eventSlug) newReverseMap.set(s.eventSlug, internalSlug);
+
+            // Primary match path: team-pair + league key
+            if (s.homeTeam && s.awayTeam && s.leagueAbbreviation) {
+              const k = teamKey(s.homeTeam, s.awayTeam, s.leagueAbbreviation);
+              newTeamKeyMap.set(k, internalSlug);
+              // Also index reversed sides for fight ordering robustness
+              const kRev = teamKey(s.awayTeam, s.homeTeam, s.leagueAbbreviation);
+              newTeamKeyMap.set(kRev, internalSlug);
             }
           }
         }
         reverseSlugMapRef.current = newReverseMap;
-        if (newReverseMap.size > 0) {
-          console.log("[SportsWS] Reverse slug map has %d entries (real→internal)", newReverseMap.size);
+        teamKeyMapRef.current = newTeamKeyMap;
+
+        if (newTeamKeyMap.size > 0) {
+          console.log(
+            "[SportsWS] Match maps: %d team-pair keys, %d real-slug keys",
+            newTeamKeyMap.size,
+            newReverseMap.size
+          );
         }
 
         // Always merge snapshot data — don't skip existing entries
@@ -217,7 +254,7 @@ export function SportsWebSocketProvider({
     };
 
     fetchSnapshot();
-    const interval = setInterval(fetchSnapshot, 30_000);
+    const interval = setInterval(fetchSnapshot, 60_000);
     return () => { cancelled = true; clearInterval(interval); };
   }, [slugs.join(","), JSON.stringify(slugToMarketId)]);
 
@@ -235,7 +272,6 @@ export function SportsWebSocketProvider({
         console.log("[SportsWS] Connected");
         setConnected(true);
         backoffRef.current = 1000;
-        unmatchedCountRef.current = 0;
       };
 
       ws.onmessage = (ev) => {
@@ -251,16 +287,27 @@ export function SportsWebSocketProvider({
             const next = new Map(prev);
             let changed = false;
             for (const msg of messages) {
-              const state = parseLiveMessage(msg, slugSetRef.current, reverseSlugMapRef.current);
+              const state = parseLiveMessage(
+                msg,
+                slugSetRef.current,
+                reverseSlugMapRef.current,
+                teamKeyMapRef.current,
+              );
               if (state) {
-                next.set(state.slug, state);
+                // Merge over existing snapshot fields (preserve teams/league for re-matching)
+                const existing = next.get(state.slug);
+                next.set(state.slug, {
+                  ...existing,
+                  ...state,
+                  homeTeam: state.homeTeam || existing?.homeTeam,
+                  awayTeam: state.awayTeam || existing?.awayTeam,
+                  leagueAbbreviation: state.leagueAbbreviation || existing?.leagueAbbreviation,
+                  realSlug: existing?.realSlug,
+                  eventSlug: existing?.eventSlug,
+                });
                 changed = true;
-              } else if (unmatchedCountRef.current < 5 && (msg.slug || msg.market_slug)) {
-                unmatchedCountRef.current++;
-                console.log("[SportsWS] Unmatched WS slug:", msg.slug || msg.market_slug,
-                  "| tracked sample:", Array.from(slugSetRef.current).slice(0, 3),
-                  "| reverseMap sample:", Array.from(reverseSlugMapRef.current.keys()).slice(0, 3));
               }
+              // Silently ignore unmatched messages — no log spam
             }
             return changed ? next : prev;
           });
