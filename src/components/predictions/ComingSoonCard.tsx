@@ -1,8 +1,8 @@
 import { Card } from "@/components/ui/card";
 import { Bell } from "lucide-react";
-import boxingGlove from "@/assets/boxinggloves-1mg.png";
-import mmaGloves from "@/assets/mmagloves-1mg.png";
-import futbolBall from "@/assets/soccerball-1mg.png";
+import boxingGlove from "@/assets/boxinggloves-1mg.webp";
+import mmaGloves from "@/assets/mmagloves-1mg.webp";
+import futbolBall from "@/assets/soccerball-1mg.webp";
 import muayThai from "@/assets/muay-thai.png";
 import bareKnuckle from "@/assets/bare-knuckle.png";
 

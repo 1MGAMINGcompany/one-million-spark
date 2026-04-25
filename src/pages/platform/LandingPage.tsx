@@ -25,11 +25,11 @@ import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
 import { useSeoMeta } from "@/components/seo/SeoMeta";
 import { useOperatorReferralCapture } from "@/hooks/useOperatorReferralCapture";
 
-import footballImg from "@/assets/football-1mg.png";
-import basketballImg from "@/assets/basketball-1mg.png";
-import soccerballImg from "@/assets/soccerball-1mg.png";
-import boxingImg from "@/assets/boxinggloves-1mg.png";
-import btcImg from "@/assets/btclogo-1mg.png";
+import footballImg from "@/assets/football-1mg.webp";
+import basketballImg from "@/assets/basketball-1mg.webp";
+import soccerballImg from "@/assets/soccerball-1mg.webp";
+import boxingImg from "@/assets/boxinggloves-1mg.webp";
+import btcImg from "@/assets/btclogo-1mg.webp";
 
 /* ── Floating Background Icons ── */
 const FLOAT_ICONS = [
