@@ -58,12 +58,17 @@ const articleFAQs: Record<string, FAQItem[]> = {
 };
 
 interface Props {
-  slug: string;
+  /** Optional slug to look up FAQ items from the built-in article dictionary. */
+  slug?: string;
+  /** Optional explicit FAQ items. Takes precedence over slug. */
+  items?: FAQItem[];
+  /** Optional heading override. */
+  heading?: string;
 }
 
-const FAQSection = ({ slug }: Props) => {
-  const faqs = articleFAQs[slug];
-  if (!faqs) return null;
+const FAQSection = ({ slug, items, heading }: Props) => {
+  const faqs: FAQItem[] | undefined = items ?? (slug ? articleFAQs[slug] : undefined);
+  if (!faqs || faqs.length === 0) return null;
 
   const faqJsonLd = {
     "@context": "https://schema.org",
@@ -82,7 +87,7 @@ const FAQSection = ({ slug }: Props) => {
     <div className="mt-12">
       <JsonLd data={faqJsonLd} />
       <h2 className="text-2xl font-semibold text-blue-400 mb-4">
-        Frequently Asked Questions
+        {heading ?? "Frequently Asked Questions"}
       </h2>
       <Accordion type="single" collapsible className="w-full">
         {faqs.map((faq, i) => (
