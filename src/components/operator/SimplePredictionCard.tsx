@@ -336,12 +336,19 @@ export default function SimplePredictionCard({
       </div>
 
       {/* Row 2: LIVE score block (prominent, above everything else) */}
-      {isLive && liveState?.score && (
+      {showsScoreBlock && (
         <LiveScoreBlock nameA={nameA} nameB={nameB} logoA={logoA} logoB={logoB} liveState={liveState} liveDetailText={liveDetailText} theme={theme} />
       )}
 
-      {/* Row 3: Teams (shown when NOT live or no score) */}
-      {(!isLive || !liveState?.score) && (
+      {/* Row 2b: LIVE detail row — sports without scores (MMA/boxing) */}
+      {showsLiveDetailRow && (
+        <div className="text-center text-[11px] font-mono" style={{ color: theme.textMuted }}>
+          {liveDetailText}
+        </div>
+      )}
+
+      {/* Row 3: Teams (shown when no score block) */}
+      {!showsScoreBlock && (
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             {logoA && <img src={logoA} className="w-7 h-7 sm:w-8 sm:h-8 object-contain shrink-0" alt="" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />}
