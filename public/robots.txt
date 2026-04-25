@@ -2,3 +2,4 @@ User-agent: *
 Disallow:
 
 Sitemap: https://1mgaming.com/sitemap.xml
+Sitemap: https://1mg.live/sitemap-1mg.xml
