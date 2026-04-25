@@ -568,6 +568,7 @@ export default function LandingPage() {
               >
                 Affiliates
               </a>
+              <a href="/predictions/sport/nba" className="hover:text-white/60 transition-colors">NBA Predictions</a>
               <a href="/help/are-prediction-markets-legal" className="hover:text-white/60 transition-colors">{t("platform.footer.whyLegal")}</a>
               <a href="mailto:1mgaming@proton.me" className="hover:text-white/60 transition-colors">{t("platform.footer.contact")}</a>
               <a href="/terms" className="hover:text-white/60 transition-colors">{t("platform.footer.terms")}</a>
