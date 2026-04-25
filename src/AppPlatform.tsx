@@ -12,8 +12,8 @@ import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import type { DomainContext } from "@/lib/domainDetection";
 import PlatformApp from "@/pages/platform/PlatformApp";
 
-// DEV-ONLY: Import to auto-run config check on app load
-import "./lib/devConfigCheck";
+// NOTE: devConfigCheck is intentionally NOT imported here — it pulls @solana/web3.js
+// and would balloon the platform bundle. It only runs in the flagship app.
 
 const queryClient = new QueryClient({
   defaultOptions: {
