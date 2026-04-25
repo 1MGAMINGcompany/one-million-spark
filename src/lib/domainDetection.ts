@@ -37,6 +37,7 @@ const PLATFORM_ROUTES = new Set([
   "privacy",
   "disclaimer",
   "acceptable-use",
+  "predictions",
 ]);
 
 export function detectDomain(): DomainContext {
