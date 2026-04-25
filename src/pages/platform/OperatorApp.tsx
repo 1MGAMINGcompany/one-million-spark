@@ -121,6 +121,17 @@ export default function OperatorApp({ subdomain, isDemo = false }: OperatorAppPr
   const { data: operator, isLoading } = useOperatorBySubdomain(subdomain);
   const { data: settings } = useOperatorSettings(operator?.id ?? null);
 
+  // Document title — fires on every render path (loading, not-found, ready).
+  // Premium white-label requirement: no "1MG.live" suffix on operator pages.
+  const documentTitle = isDemo
+    ? "Live Demo | 1MG.live"
+    : isLoading
+    ? "Loading…"
+    : operator
+    ? `${operator.brand_name} | Sports Predictions`
+    : "Loading…";
+  useDocumentTitle(documentTitle);
+
   const { authenticated, getAccessToken, logout } = usePrivySafe();
   const { login } = usePrivyLogin();
   const { walletAddress: address, eoaAddress, isPrivyUser } = usePrivyWallet();
