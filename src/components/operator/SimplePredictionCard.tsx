@@ -260,12 +260,19 @@ export default function SimplePredictionCard({
         </div>
 
         {/* Live score prominently */}
-        {isLive && liveState?.score && (
+        {showsScoreBlock && (
           <LiveScoreBlock nameA={nameA} nameB={nameB} logoA={logoA} logoB={logoB} liveState={liveState} liveDetailText={liveDetailText} theme={theme} />
         )}
 
-        {/* Teams (when no live score) */}
-        {(!isLive || !liveState?.score) && (
+        {/* Live detail row — for sports without scores (MMA/boxing) */}
+        {showsLiveDetailRow && (
+          <div className="text-center text-[11px] font-mono mt-1 mb-1" style={{ color: theme.textMuted }}>
+            {liveDetailText}
+          </div>
+        )}
+
+        {/* Teams (when no live score block) */}
+        {!showsScoreBlock && (
           <div className="flex items-center justify-between mb-3 mt-1">
             <TeamLabel name={nameA} logo={logoA} theme={theme} />
             <span className="text-xs font-bold mx-2 shrink-0" style={{ color: theme.textMuted }}>{t("operator.vs")}</span>
