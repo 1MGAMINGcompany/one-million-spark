@@ -4,9 +4,9 @@ import FightCard from "./FightCard";
 import type { Fight } from "./FightCard";
 import SoccerMatchCard from "./SoccerMatchCard";
 import muayThaiImg from "@/assets/muay-thai.png";
-import boxingGloveImg from "@/assets/boxinggloves-1mg.png";
-import mmaGlovesImg from "@/assets/mmagloves-1mg.png";
-import futbolImg from "@/assets/soccerball-1mg.png";
+import boxingGloveImg from "@/assets/boxinggloves-1mg.webp";
+import mmaGlovesImg from "@/assets/mmagloves-1mg.webp";
+import futbolImg from "@/assets/soccerball-1mg.webp";
 import bareKnuckleImg from "@/assets/bare-knuckle.png";
 import { getSportItemLabel } from "@/lib/sportLabels";
 import { formatEventDateTime, formatEventTime } from "@/lib/formatEventLocalDateTime";
@@ -346,7 +346,7 @@ export default function EventSection({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
            {config.image ? (
-              <img src={config.image} alt={sport} className="w-6 h-6 object-contain" />
+              <img src={config.image} alt={sport} loading="lazy" decoding="async" className="w-6 h-6 object-contain" />
             ) : (
               <span className="text-xl">{config.icon}</span>
             )}

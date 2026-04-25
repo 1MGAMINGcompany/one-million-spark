@@ -25,11 +25,11 @@ import PlatformLanguageSwitcher from "@/components/PlatformLanguageSwitcher";
 import { useSeoMeta } from "@/components/seo/SeoMeta";
 import { useOperatorReferralCapture } from "@/hooks/useOperatorReferralCapture";
 
-import footballImg from "@/assets/football-1mg.png";
-import basketballImg from "@/assets/basketball-1mg.png";
-import soccerballImg from "@/assets/soccerball-1mg.png";
-import boxingImg from "@/assets/boxinggloves-1mg.png";
-import btcImg from "@/assets/btclogo-1mg.png";
+import footballImg from "@/assets/football-1mg.webp";
+import basketballImg from "@/assets/basketball-1mg.webp";
+import soccerballImg from "@/assets/soccerball-1mg.webp";
+import boxingImg from "@/assets/boxinggloves-1mg.webp";
+import btcImg from "@/assets/btclogo-1mg.webp";
 
 /* ── Floating Background Icons ── */
 const FLOAT_ICONS = [
@@ -53,6 +53,8 @@ function FloatingIcons() {
           key={i}
           src={ic.src}
           alt=""
+          loading="lazy"
+          decoding="async"
           className="absolute select-none object-contain"
           style={{
             left: `${ic.x}%`,
@@ -230,7 +232,7 @@ export default function LandingPage() {
   useSeoMeta({
     title: "1MG.live — Launch Your Own Predictions App in Minutes",
     description: "Start a sports predictions business with your own branded app. Built-in payments, live events, and instant payouts. No coding required.",
-    ogImage: "https://1mg.live/images/1mglive-logo-3.png",
+    ogImage: "https://1mg.live/images/1mglive-logo-3.webp",
   });
 
   const evmWallet = user?.linkedAccounts?.find(

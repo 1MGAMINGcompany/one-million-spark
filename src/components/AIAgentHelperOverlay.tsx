@@ -23,8 +23,8 @@ import { getSessionId } from "@/hooks/usePresenceHeartbeat";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import monkeyHappy from "@/assets/monkey-happy.png";
-import monkeyThinking from "@/assets/monkey-thinking.png";
-import monkeyWarning from "@/assets/monkey-warning.png";
+import monkeyThinking from "@/assets/monkey-thinking.webp";
+import monkeyWarning from "@/assets/monkey-warning.webp";
 
 // ─── Types ───
 type BubbleState = "idle" | "thinking" | "warning" | "success";
