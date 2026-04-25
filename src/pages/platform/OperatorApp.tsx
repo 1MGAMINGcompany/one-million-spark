@@ -342,11 +342,17 @@ export default function OperatorApp({ subdomain, isDemo = false }: OperatorAppPr
       const isFuture = d.getTime() > Date.now();
       if (!isActive && !isFuture) return false;
       const eventAgeMs = Date.now() - d.getTime();
-      const lastSync = (f as any).polymarket_last_synced_at;
-      const syncAgeMs = lastSync ? Date.now() - new Date(lastSync).getTime() : Infinity;
-      const pricesStale = syncAgeMs > 30 * 60_000;
-      if ((f.status === "locked" || f.status === "live") && eventAgeMs > 2 * 3600_000 && pricesStale) return false;
-      if ((f.status === "locked" || f.status === "live") && eventAgeMs > 5 * 3600_000) return false;
+      // Staleness guards only apply to Polymarket-sourced events that rely on
+      // periodic sync. Manual / operator-created events (no polymarket_market_id)
+      // are managed by admins and must not be auto-hidden mid-event.
+      const isPolymarketSourced = !!(f as any).polymarket_market_id;
+      if (isPolymarketSourced) {
+        const lastSync = (f as any).polymarket_last_synced_at;
+        const syncAgeMs = lastSync ? Date.now() - new Date(lastSync).getTime() : Infinity;
+        const pricesStale = syncAgeMs > 30 * 60_000;
+        if ((f.status === "locked" || f.status === "live") && eventAgeMs > 2 * 3600_000 && pricesStale) return false;
+        if ((f.status === "locked" || f.status === "live") && eventAgeMs > 5 * 3600_000) return false;
+      }
 
       const sport = normalizeOperatorSport(
         f.event_name,
