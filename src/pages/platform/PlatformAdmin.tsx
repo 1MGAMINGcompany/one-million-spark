@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 import { toast } from "sonner";
 import { detectSport, type SportType } from "@/lib/detectSport";
@@ -271,6 +272,8 @@ const PAGE_SIZE = 50;
 // ══════════════════════════════════════════════════
 
 export default function PlatformAdmin() {
+  // Set title regardless of auth state — both gate and inner panel share it.
+  useDocumentTitle("Admin Access | 1MG.live");
   return (
     <AdminAuth>
       {({ adminWallet }) => <PlatformAdminInner address={adminWallet} />}

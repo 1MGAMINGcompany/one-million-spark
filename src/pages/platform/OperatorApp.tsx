@@ -4,6 +4,7 @@ import { SportsWebSocketProvider, useLiveGameState } from "@/hooks/useSportsWebS
 import LiveGameBadge, { LiveScoreDisplay } from "@/components/predictions/LiveGameBadge";
 import { useTranslation } from "react-i18next";
 import { useOperatorBySubdomain, useOperatorSettings } from "@/hooks/useOperator";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePrivySafe } from "@/hooks/usePrivySafe";
@@ -119,6 +120,17 @@ export default function OperatorApp({ subdomain, isDemo = false }: OperatorAppPr
   const navigate = useNavigate();
   const { data: operator, isLoading } = useOperatorBySubdomain(subdomain);
   const { data: settings } = useOperatorSettings(operator?.id ?? null);
+
+  // Document title — fires on every render path (loading, not-found, ready).
+  // Premium white-label requirement: no "1MG.live" suffix on operator pages.
+  const documentTitle = isDemo
+    ? "Live Demo | 1MG.live"
+    : isLoading
+    ? "Loading…"
+    : operator
+    ? `${operator.brand_name} | Sports Predictions`
+    : "Loading…";
+  useDocumentTitle(documentTitle);
 
   const { authenticated, getAccessToken, logout } = usePrivySafe();
   const { login } = usePrivyLogin();
