@@ -193,7 +193,7 @@ export default function LudoOnboardingOverlay({
           {/* Money image */}
           <div className="flex-shrink-0 w-10 h-10 rounded-xl overflow-hidden bg-amber-100">
             <img
-              src="/images/monkey-idle.webp"
+              src="/images/monkey-idle.webp" loading="lazy" decoding="async"
               alt="Money"
               className="w-full h-full object-contain"
             />

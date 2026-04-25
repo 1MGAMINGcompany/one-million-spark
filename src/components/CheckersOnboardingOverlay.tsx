@@ -120,7 +120,7 @@ export default function CheckersOnboardingOverlay({ currentPlayer, isAiThinking,
             <X size={14} />
           </button>
           <div className="flex-shrink-0 w-10 h-10 rounded-xl overflow-hidden bg-amber-100">
-            <img src="/images/monkey-idle.webp" alt="Money" className="w-full h-full object-contain" />
+            <img src="/images/monkey-idle.webp" loading="lazy" decoding="async" alt="Money" className="w-full h-full object-contain" />
           </div>
           <p className="text-sm font-medium text-amber-900 pr-4 leading-snug">{message}</p>
         </div>
