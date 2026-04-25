@@ -134,6 +134,22 @@ export default function SimplePredictionCard({
   const isEnded = !!(liveState && liveState.ended);
   const liveDetailText = formatLiveDetail(liveState, t);
 
+  // Score-rendering decisions:
+  //  - hasScoreData: WS/snapshot has actually delivered score numbers
+  //  - isScoreSport: this sport type displays scores (MMA/UFC/boxing don't)
+  //  - showsScoreBlock: render the prominent score block (with 0-0 placeholder
+  //    if the sport supports scores but data hasn't arrived yet)
+  //  - showsLiveDetailRow: render a compact period+clock line when live but
+  //    no score block (MMA, boxing) — keeps clock/period visible to the user
+  const liveSportLower = (liveState?.sport || (fight as any)._broadSport || "").toLowerCase();
+  const hasScoreData = !!(liveState?.score || liveState?.scoreA != null || liveState?.scoreB != null);
+  const isScoreSport = isLive && !(
+    liveSportLower.includes("mma") || liveSportLower.includes("ufc") ||
+    liveSportLower.includes("boxing") || liveSportLower.includes("fight")
+  );
+  const showsScoreBlock = isLive && (hasScoreData || isScoreSport);
+  const showsLiveDetailRow = isLive && !!liveDetailText && !showsScoreBlock;
+
   // Lopsided market safety: if one side is ≥95% implied, warn users
   const isLopsided = (priceA >= 0.95 || priceB >= 0.95) && (fight.status === "live" || fight.status === "locked");
 
