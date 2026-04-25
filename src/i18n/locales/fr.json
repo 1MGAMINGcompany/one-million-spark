@@ -1423,7 +1423,7 @@
       "title": "Voyez combien vous pourriez gagner",
       "subtitle": "Ajustez les chiffres selon votre marché",
       "activeUsers": "Utilisateurs actifs",
-      "avgBet": "Mise moy. / Semaine ($)",
+      "avgBet": "Taille moy. de transaction / Semaine ($)",
       "yourFee": "Votre commission %",
       "perWeek": "par semaine",
       "perMonth": "par mois",
