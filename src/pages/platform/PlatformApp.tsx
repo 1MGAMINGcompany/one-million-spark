@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { DomainContext } from "@/lib/domainDetection";
 import { extractOperatorSlug } from "@/lib/domainDetection";
 import LandingPage from "./LandingPage";
+import SportPredictionsPage from "./seo/SportPredictionsPage";
 import OperatorOnboarding from "./OperatorOnboarding";
 import OperatorDashboard from "./OperatorDashboard";
 import OperatorApp from "./OperatorApp";
@@ -124,6 +125,8 @@ export default function PlatformApp({ context }: PlatformAppProps) {
       <Route path="/acceptable-use" element={<AcceptableUse />} />
       <Route path="/terms-of-service" element={<TermsOfService />} />
       <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+      {/* SEO: sport-specific landing pages — must come before /:slug catch-all */}
+      <Route path="/predictions/sport/:sport" element={<SportPredictionsPage />} />
       {/* Catch-all: treat any unknown path as a potential operator slug */}
       <Route path="/:slug" element={<OperatorSlugRoute />} />
       <Route path="*" element={<Navigate to="/" replace />} />
