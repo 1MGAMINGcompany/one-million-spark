@@ -26,8 +26,10 @@ const BrandLogo = ({ size = "md", className = "" }: BrandLogoProps) => {
       {is1mgLive ? (
         <>
           <img
-            src="/images/1mglive-logo-3.png"
+            src="/images/1mglive-logo-3.webp"
             alt="1MG.live"
+            fetchPriority="high"
+            decoding="async"
             style={{ width: config.icon, height: config.icon }}
             className="object-contain"
           />

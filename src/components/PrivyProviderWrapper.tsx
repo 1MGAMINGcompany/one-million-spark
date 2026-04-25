@@ -32,7 +32,7 @@ export function PrivyProviderWrapper({ children }: PrivyProviderWrapperProps) {
       config={{
         appearance: {
           showWalletLoginFirst: false,
-          logo: `${window.location.origin}/images/privy-logo.png`,
+          logo: `${window.location.origin}/images/privy-logo.webp`,
         },
         defaultChain: polygon,
         supportedChains: [polygon],

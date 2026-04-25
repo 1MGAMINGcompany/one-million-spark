@@ -29,8 +29,8 @@ export function useSeoMeta({ title, description, path, ogType = "website", ogIma
       rawPath !== "/" && rawPath.endsWith("/") ? rawPath.slice(0, -1) : rawPath;
     const canonicalUrl = `${SITE_URL}${normalizedPath}`;
     const defaultImage = isPlatformDomain()
-      ? `${SITE_URL}/images/1mglive-logo-3.png?v=4`
-      : `${SITE_URL}/images/og-logo.png`;
+      ? `${SITE_URL}/images/1mglive-logo-3.webp?v=5`
+      : `${SITE_URL}/images/og-logo.webp`;
     const image = ogImage || defaultImage;
 
     document.title = title;

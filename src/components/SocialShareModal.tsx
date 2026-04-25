@@ -7,7 +7,7 @@ import pyramidLogo from "@/assets/1m-pyramid-logo-hd.png";
 import { supabase } from "@/integrations/supabase/client";
 import { detectDomain } from "@/lib/domainDetection";
 
-const PLATFORM_LOGO = "/images/1mg-bethebookie.png";
+const PLATFORM_LOGO = "/images/1mg-bethebookie.webp";
 
 function shortWallet(addr: string, chars = 4) {
   if (!addr || addr.length < 10) return addr;
