@@ -32,7 +32,7 @@ export default function AffiliateProgram() {
     title: "1mg.live Affiliate Program | Earn $400 USDC Per Referred Operator",
     description:
       "Join the 1mg.live affiliate program and earn $400 USDC for every operator you refer. 30-day cookie, fast 48-hour USDC payouts, built for creators, agencies & sportsbook affiliates.",
-    ogImage: "https://1mg.live/images/operator-app-og.png",
+    ogImage: "https://1mg.live/images/operator-app-og.webp",
   });
 
   const handleApply = () => {

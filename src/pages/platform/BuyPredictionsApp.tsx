@@ -78,7 +78,7 @@ export default function BuyPredictionsApp() {
   useSeoMeta({
     title: "1mg.live Operator App | Launch Your Own Sports Predictions App",
     description: "Launch your own branded sports predictions app with live event liquidity, custom events, operator dashboard, and payout controls.",
-    ogImage: "https://1mg.live/images/operator-app-og.png",
+    ogImage: "https://1mg.live/images/operator-app-og.webp",
   });
 
   return (

@@ -230,7 +230,7 @@ export default function LandingPage() {
   useSeoMeta({
     title: "1MG.live — Launch Your Own Predictions App in Minutes",
     description: "Start a sports predictions business with your own branded app. Built-in payments, live events, and instant payouts. No coding required.",
-    ogImage: "https://1mg.live/images/1mglive-logo-3.png",
+    ogImage: "https://1mg.live/images/1mglive-logo-3.webp",
   });
 
   const evmWallet = user?.linkedAccounts?.find(
