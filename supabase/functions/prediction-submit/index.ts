@@ -104,9 +104,10 @@ async function generateClobHmac(
 ): Promise<string> {
   const message = timestamp + method + path + body;
   const encoder = new TextEncoder();
+  const secretBytes = base64ToUint8Array(apiSecret);
   const key = await crypto.subtle.importKey(
     "raw",
-    base64ToUint8Array(apiSecret),
+    secretBytes.buffer.slice(secretBytes.byteOffset, secretBytes.byteOffset + secretBytes.byteLength),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],
@@ -388,6 +389,7 @@ async function sendRelayerTxWithRetry(
       const txHash = await walletClient.sendTransaction({
         ...txParams,
         nonce: currentNonce,
+        account: walletClient.account,
       });
       console.log(`[relayer-tx] ${label} SUCCESS tx=${txHash} nonce=${currentNonce}`);
       return { txHash, nonce: currentNonce };
