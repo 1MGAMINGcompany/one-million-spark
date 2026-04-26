@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { privateKeyToAccount } from "npm:viem@2/accounts";
 import { createWalletClient, http, encodeFunctionData, parseAbi, keccak256, toBytes, hashTypedData } from "npm:viem@2";
 import { polygon } from "npm:viem@2/chains";
@@ -26,6 +27,55 @@ const corsHeaders = {
 };
 
 const CLOB_BASE = "https://clob.polymarket.com";
+
+type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+
+type PolymarketSetupDatabase = {
+  public: {
+    Tables: {
+      automation_logs: {
+        Row: { action: string; source: string | null; details: Json | null };
+        Insert: { action: string; source?: string | null; details?: Json | null };
+        Update: { action?: string; source?: string | null; details?: Json | null };
+        Relationships: [];
+      };
+      prediction_accounts: {
+        Row: { id: string; wallet_evm: string | null; privy_did: string | null };
+        Insert: { wallet_evm?: string | null; privy_did?: string | null; auth_provider?: string | null };
+        Update: { wallet_evm?: string | null; privy_did?: string | null; auth_provider?: string | null; last_active_at?: string };
+        Relationships: [];
+      };
+      polymarket_user_sessions: {
+        Row: {
+          id: string;
+          wallet: string;
+          status: string;
+          safe_address: string | null;
+          safe_deployed: boolean;
+          approvals_set: boolean;
+          pm_derived_address: string | null;
+          authenticated_at: string | null;
+          expires_at: string | null;
+          pm_api_key: string | null;
+          pm_api_secret: string | null;
+          pm_passphrase: string | null;
+          pm_trading_key: string | null;
+          privy_wallet_id: string | null;
+          updated_at: string;
+        };
+        Insert: Partial<PolymarketSetupDatabase["public"]["Tables"]["polymarket_user_sessions"]["Row"]> & { wallet: string };
+        Update: Partial<PolymarketSetupDatabase["public"]["Tables"]["polymarket_user_sessions"]["Row"]>;
+        Relationships: [];
+      };
+    };
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
+  };
+};
+
+type PolymarketSetupClient = SupabaseClient<PolymarketSetupDatabase>;
 
 /** Use proxy URL if configured to avoid geo-blocking on edge function IPs */
 function getClobUrl(): string {
@@ -70,9 +120,9 @@ function isSessionTradeReady(session: {
 }
 
 async function logSetupEvent(
-  supabase: ReturnType<typeof createClient>,
+  supabase: PolymarketSetupClient,
   action: string,
-  details: Record<string, unknown>,
+  details: Json,
 ) {
   try {
     await supabase.from("automation_logs").insert({
@@ -86,7 +136,7 @@ async function logSetupEvent(
 }
 
 async function resolveCanonicalWallet(
-  supabase: ReturnType<typeof createClient>,
+  supabase: PolymarketSetupClient,
   privyDid: string,
   requestedAppWallet: string | null,
   requestedWallet: string | null,
@@ -291,7 +341,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const supabase = createClient(
+    const supabase = createClient<PolymarketSetupDatabase>(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
