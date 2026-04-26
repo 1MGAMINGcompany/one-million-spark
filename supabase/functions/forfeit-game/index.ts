@@ -32,6 +32,7 @@ interface ForfeitRequest {
   forfeitingWallet: string; // loser / forfeiter
   gameType?: string;
   winnerWallet?: string; // OPTIONAL: explicit winner for "win" settlement reuse
+  mode?: string; // OPTIONAL: "timeout" for service-role timeout settlements
 }
 
 // Room account layout from IDL:

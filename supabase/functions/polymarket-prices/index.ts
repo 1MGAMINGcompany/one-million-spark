@@ -218,7 +218,7 @@ Deno.serve(async (req) => {
             if (fight.fighter_b_name === "No" && nameB !== "No") updatePayload.fighter_b_name = nameB;
           }
 
-          if (gammaDescription && !fight.polymarket_question) {
+          if (gammaDescription && !(fight as any).polymarket_question) {
             updatePayload.polymarket_question = gammaDescription;
           }
 

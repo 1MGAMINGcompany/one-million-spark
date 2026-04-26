@@ -170,9 +170,10 @@ Deno.serve(async (req) => {
 
           if (clobOrder) {
             // Update status from CLOB
-            const newStatus = clobOrder.status === "FILLED" ? "filled"
-              : clobOrder.status === "CANCELED" ? "cancelled"
-              : clobOrder.status === "LIVE" ? "live"
+            const orderStatus = (clobOrder as any).status;
+            const newStatus = orderStatus === "FILLED" ? "filled"
+              : orderStatus === "CANCELED" ? "cancelled"
+              : orderStatus === "LIVE" ? "live"
               : "submitted";
 
             if (newStatus !== entry.polymarket_status) {
