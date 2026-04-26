@@ -170,7 +170,7 @@ async function resolveCanonicalWallet(
   }
 
   if (account) {
-    const updatePayload: Record<string, unknown> = {
+    const updatePayload: PolymarketSetupDatabase["public"]["Tables"]["prediction_accounts"]["Update"] = {
       last_active_at: new Date().toISOString(),
       auth_provider: "privy",
     };
