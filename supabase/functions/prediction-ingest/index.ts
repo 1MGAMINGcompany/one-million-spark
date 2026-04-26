@@ -72,7 +72,7 @@ async function bdlFetchAll(path: string, apiKey: string, params?: Record<string,
   const baseParams = { ...(params || {}), per_page: "100" };
 
   for (let page = 0; page < 20; page++) {
-    const p = { ...baseParams };
+    const p: Record<string, string> = { ...baseParams };
     if (cursor) p.cursor = cursor;
     const data = await bdlFetch(path, apiKey, p);
     const items = data.data || [];

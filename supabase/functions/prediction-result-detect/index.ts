@@ -48,6 +48,7 @@ interface FightRow {
   polymarket_outcome_b_token: string | null;
   status: string;
   winner: string | null;
+  event_date: string | null;
 }
 
 /**
@@ -230,7 +231,7 @@ Deno.serve(async (req) => {
     const { data: fights, error: fetchErr } = await supabase
       .from("prediction_fights")
       .select(
-        "id, fighter_a_name, fighter_b_name, polymarket_condition_id, polymarket_market_id, polymarket_outcome_a_token, polymarket_outcome_b_token, status, winner, confirmed_at, settled_at",
+        "id, fighter_a_name, fighter_b_name, polymarket_condition_id, polymarket_market_id, polymarket_outcome_a_token, polymarket_outcome_b_token, status, winner, event_date, confirmed_at, settled_at",
       )
       .in("status", ["live", "locked", "open"])
       .order("event_date", { ascending: false, nullsFirst: false })

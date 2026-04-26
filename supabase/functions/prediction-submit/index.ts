@@ -104,9 +104,12 @@ async function generateClobHmac(
 ): Promise<string> {
   const message = timestamp + method + path + body;
   const encoder = new TextEncoder();
+  const secretBytes = base64ToUint8Array(apiSecret);
+  const keyData = new Uint8Array(secretBytes.byteLength);
+  keyData.set(secretBytes);
   const key = await crypto.subtle.importKey(
     "raw",
-    base64ToUint8Array(apiSecret),
+    keyData,
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],
@@ -375,6 +378,7 @@ async function sendRelayerTxWithRetry(
     gasPrice: bigint;
     nonce: number;
     value: bigint;
+    account: ReturnType<typeof privateKeyToAccount>;
   },
   nonceManager: RelayerNonceManager,
   label: string,
@@ -511,6 +515,7 @@ async function collectFeeViaRelayer(
         data: txData as `0x${string}`,
         gas: 100_000n,
         gasPrice: gasPrice * 12n / 10n,
+        account,
         nonce,
         value: 0n,
       },

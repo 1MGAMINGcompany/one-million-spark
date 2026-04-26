@@ -72,9 +72,12 @@ async function generateClobHmac(
 ): Promise<string> {
   const message = timestamp + method + path + body;
   const encoder = new TextEncoder();
+  const secretBytes = base64ToUint8Array(apiSecret);
+  const keyData = new Uint8Array(secretBytes.byteLength);
+  keyData.set(secretBytes);
   const key = await crypto.subtle.importKey(
     "raw",
-    base64ToUint8Array(apiSecret),
+    keyData,
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],
