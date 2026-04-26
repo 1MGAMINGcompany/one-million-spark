@@ -33,7 +33,7 @@ async function buildHeaders(apiKey: string, secret: string, passphrase: string, 
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",
-    base64ToUint8Array(secret),
+    base64ToUint8Array(secret).buffer as ArrayBuffer,
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"]
