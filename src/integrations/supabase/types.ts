@@ -697,6 +697,7 @@ export type Database = {
       operator_events: {
         Row: {
           created_at: string
+          deleted_at: string | null
           event_date: string | null
           id: string
           image_url: string | null
@@ -711,6 +712,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          deleted_at?: string | null
           event_date?: string | null
           id?: string
           image_url?: string | null
@@ -725,6 +727,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          deleted_at?: string | null
           event_date?: string | null
           id?: string
           image_url?: string | null
@@ -926,6 +929,7 @@ export type Database = {
           brand_color: string | null
           brand_name: string
           created_at: string
+          deleted_at: string | null
           disabled_sports: string[] | null
           fee_percent: number
           id: string
@@ -948,6 +952,7 @@ export type Database = {
           brand_color?: string | null
           brand_name: string
           created_at?: string
+          deleted_at?: string | null
           disabled_sports?: string[] | null
           fee_percent?: number
           id?: string
@@ -970,6 +975,7 @@ export type Database = {
           brand_color?: string | null
           brand_name?: string
           created_at?: string
+          deleted_at?: string | null
           disabled_sports?: string[] | null
           fee_percent?: number
           id?: string
@@ -1559,6 +1565,7 @@ export type Database = {
           commission_bps: number
           confirmed_at: string | null
           created_at: string
+          deleted_at: string | null
           draw_allowed: boolean | null
           enrichment_notes: string | null
           event_banner_url: string | null
@@ -1629,6 +1636,7 @@ export type Database = {
           commission_bps?: number
           confirmed_at?: string | null
           created_at?: string
+          deleted_at?: string | null
           draw_allowed?: boolean | null
           enrichment_notes?: string | null
           event_banner_url?: string | null
@@ -1699,6 +1707,7 @@ export type Database = {
           commission_bps?: number
           confirmed_at?: string | null
           created_at?: string
+          deleted_at?: string | null
           draw_allowed?: boolean | null
           enrichment_notes?: string | null
           event_banner_url?: string | null
