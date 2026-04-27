@@ -742,13 +742,38 @@ function AdminEventRow({
   const [expanded, setExpanded] = useState(false);
   const [selectedWinner, setSelectedWinner] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [settleOpen, setSettleOpen] = useState(false);
+  const [refundOpen, setRefundOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const fightStatus = fight?.status || "unknown";
   const isOpen = fightStatus === "open";
   const isLocked = fightStatus === "locked";
   const isSettled = fightStatus === "settled" || fightStatus === "confirmed";
+  const isRefunding = ["refund_pending", "refunds_processing", "refunds_complete"].includes(fightStatus);
+  const isDeleted = !!event.deleted_at || !!fight?.deleted_at;
   const hasWinner = !!fight?.winner;
   const poolTotal = Number(fight?.pool_a_usd || 0) + Number(fight?.pool_b_usd || 0);
+
+  // Live count of unclaimed predictions on this fight (drives confirm dialogs)
+  const { data: predictorStats } = useQuery({
+    queryKey: ["admin_event_predictors", fight?.id],
+    queryFn: async () => {
+      if (!fight?.id) return { count: 0, totalUsd: 0 };
+      const { data } = await (supabase as any)
+        .from("prediction_entries")
+        .select("amount_usd, claimed")
+        .eq("fight_id", fight.id);
+      const rows = (data || []) as any[];
+      const unclaimed = rows.filter((r) => !r.claimed);
+      return {
+        count: unclaimed.length,
+        totalUsd: unclaimed.reduce((s, r) => s + Number(r.amount_usd || 0), 0),
+      };
+    },
+    enabled: !!fight?.id && expanded,
+    staleTime: 10_000,
+  });
 
   const doAction = async (action: string, extra: Record<string, unknown> = {}) => {
     setBusy(true);
