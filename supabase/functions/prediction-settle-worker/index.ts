@@ -221,7 +221,7 @@ Deno.serve(async (req) => {
 });
 
 async function completeJob(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient<any>,
   jobId: string,
   fightId: string,
   outcome: string
