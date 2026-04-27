@@ -270,10 +270,12 @@ function OperatorExpandedPanel({
   op,
   getAccessToken,
   onRefresh,
+  isPrimaryAdmin,
 }: {
   op: OperatorRow;
   getAccessToken: () => Promise<string | null>;
   onRefresh: () => void;
+  isPrimaryAdmin: boolean;
 }) {
   const [linkCopied, setLinkCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
@@ -281,6 +283,8 @@ function OperatorExpandedPanel({
   const [busy, setBusy] = useState(false);
   const [ownerDid, setOwnerDid] = useState(op.user_id?.startsWith("did:privy:") ? op.user_id : "");
   const [ownerWallet, setOwnerWallet] = useState(op.payout_wallet || "");
+  const [deleteOpOpen, setDeleteOpOpen] = useState(false);
+  const [deleteOpConfirm, setDeleteOpConfirm] = useState("");
 
   const url = `https://1mg.live/${op.subdomain}`;
 
