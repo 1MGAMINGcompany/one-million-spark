@@ -392,6 +392,7 @@ async function sendRelayerTxWithRetry(
       const txHash = await walletClient.sendTransaction({
         ...txParams,
         nonce: currentNonce,
+        chain: polygon,
       });
       console.log(`[relayer-tx] ${label} SUCCESS tx=${txHash} nonce=${currentNonce}`);
       return { txHash, nonce: currentNonce };
@@ -631,6 +632,7 @@ async function collectStakeViaRelayer(
     const result = await sendRelayerTxWithRetry(
       walletClient,
       {
+        account,
         to: USDC_CONTRACT as `0x${string}`,
         data: txData as `0x${string}`,
         gas: 100_000n,
@@ -808,6 +810,7 @@ async function fundDerivedWallet(
     const result = await sendRelayerTxWithRetry(
       walletClient,
       {
+        account,
         to: USDC_CONTRACT as `0x${string}`,
         data: txData as `0x${string}`,
         gas: 100_000n,
