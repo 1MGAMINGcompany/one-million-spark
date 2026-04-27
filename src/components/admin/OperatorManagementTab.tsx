@@ -256,7 +256,7 @@ function OperatorCard({
 
       {/* Expanded details */}
       {expanded && (
-        <OperatorExpandedPanel op={op} getAccessToken={getAccessToken} onRefresh={onRefresh} />
+        <OperatorExpandedPanel op={op} getAccessToken={getAccessToken} onRefresh={onRefresh} isPrimaryAdmin={isPrimaryAdmin} />
       )}
     </div>
   );
