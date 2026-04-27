@@ -58,6 +58,29 @@ export default function OperatorManagementTab() {
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  // Determine if current user is primary admin (Morgan)
+  const { data: isPrimaryAdmin } = useQuery({
+    queryKey: ["is_primary_admin"],
+    queryFn: async () => {
+      try {
+        const token = await getAccessToken();
+        if (!token) return false;
+        // Decode privy token client-side just to fetch wallet for email check
+        const payload = JSON.parse(atob(token.split(".")[1]));
+        const did = payload?.sub;
+        if (!did) return false;
+        const { data: acct } = await (supabase as any)
+          .from("prediction_accounts").select("wallet_evm").eq("privy_did", did).maybeSingle();
+        const w = acct?.wallet_evm?.toLowerCase();
+        if (!w) return false;
+        const { data: row } = await (supabase as any)
+          .from("prediction_admins").select("email").eq("wallet", w).maybeSingle();
+        return row?.email?.toLowerCase() === PRIMARY_ADMIN_EMAIL;
+      } catch { return false; }
+    },
+    staleTime: 60_000,
+  });
+
   // Load all operators
   const { data: operators, isLoading } = useQuery({
     queryKey: ["admin_all_operators"],
