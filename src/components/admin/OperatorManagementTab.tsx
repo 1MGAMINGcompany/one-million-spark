@@ -138,6 +138,7 @@ export default function OperatorManagementTab() {
             onToggle={() => setExpandedId(expandedId === op.id ? null : op.id)}
             getAccessToken={getAccessToken}
             onRefresh={() => queryClient.invalidateQueries({ queryKey: ["admin_all_operators"] })}
+            isPrimaryAdmin={!!isPrimaryAdmin}
           />
         ))}
       </div>
