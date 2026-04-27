@@ -566,13 +566,60 @@ function OperatorExpandedPanel({
           );
         })}
       </div>
+
+      {/* Delete Operator confirmation dialog (primary admin only) */}
+      <AlertDialog open={deleteOpOpen} onOpenChange={setDeleteOpOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <ShieldAlert className="w-5 h-5" /> Delete Operator App
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-left">
+              <div>You are about to soft-delete the operator app:</div>
+              <div className="bg-muted/40 rounded p-2 text-foreground text-sm">
+                <div><strong>{op.brand_name}</strong></div>
+                <div className="text-xs text-muted-foreground">1mg.live/{op.subdomain}</div>
+              </div>
+              <div className="text-xs space-y-1">
+                <div>• Events on this app: <strong>{events.length}</strong></div>
+                <div>• Operator revenue collected: <strong>${(revenue?.opTotal || 0).toFixed(2)}</strong></div>
+                <div>• Platform revenue collected: <strong>${(revenue?.platformTotal || 0).toFixed(2)}</strong></div>
+              </div>
+              <div className="text-xs text-destructive">
+                Public URL <code>1mg.live/{op.subdomain}</code> will return not-found. Existing settled trades remain
+                in the database. This action is blocked if any active events have unclaimed predictions.
+              </div>
+              <div className="pt-2 text-xs text-muted-foreground">
+                Type the brand name <strong>{op.brand_name}</strong> to confirm:
+              </div>
+              <Input
+                value={deleteOpConfirm}
+                onChange={(e) => setDeleteOpConfirm(e.target.value)}
+                placeholder={op.brand_name}
+                className="text-xs h-8"
+              />
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busy || deleteOpConfirm !== op.brand_name}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async (e) => {
+                e.preventDefault();
+                await adminAction("admin_delete_operator", { confirm_brand_name: deleteOpConfirm });
+                setDeleteOpOpen(false);
+                onRefresh();
+              }}
+            >
+              {busy ? "Deleting…" : "Delete operator app"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
-
-// ═══════════════════════════════════════
-// Create event form for admin
-// ═══════════════════════════════════════
 
 function AdminCreateEventForm({
   operatorId,
