@@ -855,9 +855,10 @@ async function auditLog(
 /** Update trade order status + optional fields */
 async function updateTradeOrder(
   supabase: any,
-  tradeOrderId: string,
+  tradeOrderId: string | null,
   updates: Record<string, unknown>,
 ) {
+  if (!tradeOrderId) return;
   await supabase
     .from("prediction_trade_orders")
     .update(updates)
