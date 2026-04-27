@@ -844,26 +844,22 @@ function AdminEventRow({
           <div className="flex flex-wrap gap-1.5">
             {isOpen && (
               <Button
-                size="sm"
-                variant="outline"
+                size="sm" variant="outline"
                 className="text-[10px] h-6 gap-1 border-orange-500/30 text-orange-400"
                 disabled={busy}
-                onClick={() =>
-                  doAction("admin_close_event", { event_id: event.id, fight_id: fight?.id })
-                }
+                onClick={() => doAction("admin_close_event", { event_id: event.id, fight_id: fight?.id })}
               >
                 <Lock className="w-3 h-3" /> Close
               </Button>
             )}
 
-            {(isLocked || isOpen) && !isSettled && fight && (
+            {(isLocked || isOpen) && !isSettled && !isRefunding && !isDeleted && fight && (
               <div className="w-full space-y-1.5 mt-1">
-                <div className="text-[10px] text-muted-foreground font-medium">Set Winner:</div>
+                <div className="text-[10px] text-muted-foreground font-medium">Set Winner & Settle (triggers payout):</div>
                 <div className="flex gap-1.5">
                   {["fighter_a", "fighter_b", "draw"].map((w) => (
                     <Button
-                      key={w}
-                      size="sm"
+                      key={w} size="sm"
                       variant={selectedWinner === w ? "default" : "outline"}
                       className="text-[10px] h-6"
                       onClick={() => setSelectedWinner(w)}
@@ -874,38 +870,133 @@ function AdminEventRow({
                 </div>
                 {selectedWinner && (
                   <Button
-                    size="sm"
-                    className="h-6 text-[10px] gap-1 w-full bg-primary"
-                    disabled={busy}
-                    onClick={() =>
-                      doAction("admin_settle_event", {
-                        fight_id: fight.id,
-                        event_id: event.id,
-                        winner: selectedWinner,
-                      })
-                    }
+                    size="sm" className="h-6 text-[10px] gap-1 w-full bg-primary"
+                    disabled={busy} onClick={() => setSettleOpen(true)}
                   >
-                    <Trophy className="w-3 h-3" /> {busy ? "Settling..." : "Confirm & Settle"}
+                    <Trophy className="w-3 h-3" /> Confirm & Settle…
                   </Button>
                 )}
               </div>
             )}
 
+            {!isSettled && !isRefunding && !isDeleted && fight && (
+              <Button
+                size="sm" variant="outline"
+                className="text-[10px] h-6 gap-1 border-yellow-500/30 text-yellow-400"
+                disabled={busy} onClick={() => setRefundOpen(true)}
+              >
+                <RefreshCw className="w-3 h-3" /> Refund All…
+              </Button>
+            )}
+
+            {!isDeleted && (
+              <Button
+                size="sm" variant="outline"
+                className="text-[10px] h-6 gap-1 border-destructive/40 text-destructive"
+                disabled={busy} onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 className="w-3 h-3" /> Delete Event…
+              </Button>
+            )}
+
             {isSettled && hasWinner && (
               <div className="text-[10px] text-primary">
-                Winner:{" "}
-                <span className="font-bold">
-                  {fight.winner === "fighter_a"
-                    ? event.team_a
-                    : fight.winner === "fighter_b"
-                    ? event.team_b
-                    : "Draw"}
+                Winner: <span className="font-bold">
+                  {fight.winner === "fighter_a" ? event.team_a : fight.winner === "fighter_b" ? event.team_b : "Draw"}
                 </span>
               </div>
             )}
+            {isDeleted && <div className="text-[10px] text-muted-foreground">Deleted</div>}
+            {isRefunding && <div className="text-[10px] text-yellow-400">Refunding…</div>}
           </div>
         </div>
       )}
+
+      {/* Settle confirmation */}
+      <AlertDialog open={settleOpen} onOpenChange={setSettleOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2"><Trophy className="w-5 h-5 text-primary"/> Confirm settlement</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-left text-xs">
+              <div>Settling <strong>{event.title}</strong> with winner:&nbsp;
+                <strong>{selectedWinner === "fighter_a" ? event.team_a : selectedWinner === "fighter_b" ? event.team_b : "Draw"}</strong>
+              </div>
+              <div>• Total pool: <strong>${poolTotal.toFixed(2)}</strong></div>
+              <div>• Predictors awaiting payout: <strong>{predictorStats?.count ?? "…"}</strong></div>
+              <div>• Predictor stake at risk: <strong>${(predictorStats?.totalUsd ?? 0).toFixed(2)}</strong></div>
+              <div className="text-destructive">This triggers payouts via the existing settle worker. Cannot be undone.</div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busy}
+              onClick={async (e) => {
+                e.preventDefault();
+                await doAction("admin_settle_event", { fight_id: fight.id, event_id: event.id, winner: selectedWinner });
+                setSettleOpen(false);
+              }}
+            >{busy ? "Settling…" : "Settle now"}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Refund confirmation */}
+      <AlertDialog open={refundOpen} onOpenChange={setRefundOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-yellow-400"><RefreshCw className="w-5 h-5"/> Refund all predictors</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-left text-xs">
+              <div>Refunding all unclaimed predictions on <strong>{event.title}</strong>.</div>
+              <div>• Total pool: <strong>${poolTotal.toFixed(2)}</strong></div>
+              <div>• Predictors to refund: <strong>{predictorStats?.count ?? "…"}</strong></div>
+              <div>• Refund amount: <strong>${(predictorStats?.totalUsd ?? 0).toFixed(2)}</strong></div>
+              <div className="text-destructive">Reuses the existing refund worker. Cannot be undone.</div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busy}
+              className="bg-yellow-500 text-black hover:bg-yellow-400"
+              onClick={async (e) => {
+                e.preventDefault();
+                await doAction("admin_refund_operator_event", { fight_id: fight.id, event_id: event.id });
+                setRefundOpen(false);
+              }}
+            >{busy ? "Refunding…" : "Refund all"}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete confirmation */}
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive"><Trash2 className="w-5 h-5"/> Delete event</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-left text-xs">
+              <div>Soft-deleting <strong>{event.title}</strong>. The event and its market will be hidden everywhere.</div>
+              <div>• Total pool: <strong>${poolTotal.toFixed(2)}</strong></div>
+              <div>• Unclaimed predictors: <strong>{predictorStats?.count ?? "…"}</strong></div>
+              <div className="text-destructive">
+                Blocked if any unclaimed predictions exist — refund first.
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busy}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async (e) => {
+                e.preventDefault();
+                await doAction("admin_delete_operator_event", { event_id: event.id });
+                setDeleteOpen(false);
+              }}
+            >{busy ? "Deleting…" : "Delete event"}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
