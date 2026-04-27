@@ -7,13 +7,20 @@ import {
   Globe, ExternalLink, Search, Copy, Download, Check,
   ChevronDown, ChevronUp, Lock, Trophy, Pause, Play,
   Wallet, Mail, Calendar, Plus, QrCode, AlertTriangle,
+  RefreshCw, Trash2, ShieldAlert,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import OperatorQRCode from "@/components/operator/OperatorQRCode";
 
 const SPORT_OPTIONS = ["Soccer", "MMA", "Boxing", "NFL", "NBA", "NHL", "MLB", "NCAA", "Tennis", "Cricket", "F1", "Golf"];
+
+const PRIMARY_ADMIN_EMAIL = "morganlaurent@live.ca";
 
 interface OperatorRow {
   id: string;
@@ -50,6 +57,29 @@ export default function OperatorManagementTab() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Determine if current user is primary admin (Morgan)
+  const { data: isPrimaryAdmin } = useQuery({
+    queryKey: ["is_primary_admin"],
+    queryFn: async () => {
+      try {
+        const token = await getAccessToken();
+        if (!token) return false;
+        // Decode privy token client-side just to fetch wallet for email check
+        const payload = JSON.parse(atob(token.split(".")[1]));
+        const did = payload?.sub;
+        if (!did) return false;
+        const { data: acct } = await (supabase as any)
+          .from("prediction_accounts").select("wallet_evm").eq("privy_did", did).maybeSingle();
+        const w = acct?.wallet_evm?.toLowerCase();
+        if (!w) return false;
+        const { data: row } = await (supabase as any)
+          .from("prediction_admins").select("email").eq("wallet", w).maybeSingle();
+        return row?.email?.toLowerCase() === PRIMARY_ADMIN_EMAIL;
+      } catch { return false; }
+    },
+    staleTime: 60_000,
+  });
 
   // Load all operators
   const { data: operators, isLoading } = useQuery({
@@ -108,6 +138,7 @@ export default function OperatorManagementTab() {
             onToggle={() => setExpandedId(expandedId === op.id ? null : op.id)}
             getAccessToken={getAccessToken}
             onRefresh={() => queryClient.invalidateQueries({ queryKey: ["admin_all_operators"] })}
+            isPrimaryAdmin={!!isPrimaryAdmin}
           />
         ))}
       </div>
@@ -125,12 +156,14 @@ function OperatorCard({
   onToggle,
   getAccessToken,
   onRefresh,
+  isPrimaryAdmin,
 }: {
   op: OperatorRow;
   expanded: boolean;
   onToggle: () => void;
   getAccessToken: () => Promise<string | null>;
   onRefresh: () => void;
+  isPrimaryAdmin: boolean;
 }) {
   const [linkCopied, setLinkCopied] = useState(false);
   const url = `https://1mg.live/${op.subdomain}`;
@@ -223,7 +256,7 @@ function OperatorCard({
 
       {/* Expanded details */}
       {expanded && (
-        <OperatorExpandedPanel op={op} getAccessToken={getAccessToken} onRefresh={onRefresh} />
+        <OperatorExpandedPanel op={op} getAccessToken={getAccessToken} onRefresh={onRefresh} isPrimaryAdmin={isPrimaryAdmin} />
       )}
     </div>
   );
@@ -237,10 +270,12 @@ function OperatorExpandedPanel({
   op,
   getAccessToken,
   onRefresh,
+  isPrimaryAdmin,
 }: {
   op: OperatorRow;
   getAccessToken: () => Promise<string | null>;
   onRefresh: () => void;
+  isPrimaryAdmin: boolean;
 }) {
   const [linkCopied, setLinkCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
@@ -248,6 +283,8 @@ function OperatorExpandedPanel({
   const [busy, setBusy] = useState(false);
   const [ownerDid, setOwnerDid] = useState(op.user_id?.startsWith("did:privy:") ? op.user_id : "");
   const [ownerWallet, setOwnerWallet] = useState(op.payout_wallet || "");
+  const [deleteOpOpen, setDeleteOpOpen] = useState(false);
+  const [deleteOpConfirm, setDeleteOpConfirm] = useState("");
 
   const url = `https://1mg.live/${op.subdomain}`;
 
@@ -467,6 +504,16 @@ function OperatorExpandedPanel({
             </>
           )}
         </Button>
+        {isPrimaryAdmin && !((op as any).deleted_at) && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-xs gap-1 h-7 border-destructive/40 text-destructive hover:bg-destructive/10"
+            onClick={() => { setDeleteOpConfirm(""); setDeleteOpOpen(true); }}
+          >
+            <Trash2 className="w-3 h-3" /> Delete App
+          </Button>
+        )}
       </div>
 
       {/* QR Code */}
@@ -519,13 +566,60 @@ function OperatorExpandedPanel({
           );
         })}
       </div>
+
+      {/* Delete Operator confirmation dialog (primary admin only) */}
+      <AlertDialog open={deleteOpOpen} onOpenChange={setDeleteOpOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <ShieldAlert className="w-5 h-5" /> Delete Operator App
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-left">
+              <div>You are about to soft-delete the operator app:</div>
+              <div className="bg-muted/40 rounded p-2 text-foreground text-sm">
+                <div><strong>{op.brand_name}</strong></div>
+                <div className="text-xs text-muted-foreground">1mg.live/{op.subdomain}</div>
+              </div>
+              <div className="text-xs space-y-1">
+                <div>• Events on this app: <strong>{events.length}</strong></div>
+                <div>• Operator revenue collected: <strong>${(revenue?.opTotal || 0).toFixed(2)}</strong></div>
+                <div>• Platform revenue collected: <strong>${(revenue?.platformTotal || 0).toFixed(2)}</strong></div>
+              </div>
+              <div className="text-xs text-destructive">
+                Public URL <code>1mg.live/{op.subdomain}</code> will return not-found. Existing settled trades remain
+                in the database. This action is blocked if any active events have unclaimed predictions.
+              </div>
+              <div className="pt-2 text-xs text-muted-foreground">
+                Type the brand name <strong>{op.brand_name}</strong> to confirm:
+              </div>
+              <Input
+                value={deleteOpConfirm}
+                onChange={(e) => setDeleteOpConfirm(e.target.value)}
+                placeholder={op.brand_name}
+                className="text-xs h-8"
+              />
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busy || deleteOpConfirm !== op.brand_name}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async (e) => {
+                e.preventDefault();
+                await adminAction("admin_delete_operator", { confirm_brand_name: deleteOpConfirm });
+                setDeleteOpOpen(false);
+                onRefresh();
+              }}
+            >
+              {busy ? "Deleting…" : "Delete operator app"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
-
-// ═══════════════════════════════════════
-// Create event form for admin
-// ═══════════════════════════════════════
 
 function AdminCreateEventForm({
   operatorId,
@@ -648,13 +742,38 @@ function AdminEventRow({
   const [expanded, setExpanded] = useState(false);
   const [selectedWinner, setSelectedWinner] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [settleOpen, setSettleOpen] = useState(false);
+  const [refundOpen, setRefundOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const fightStatus = fight?.status || "unknown";
   const isOpen = fightStatus === "open";
   const isLocked = fightStatus === "locked";
   const isSettled = fightStatus === "settled" || fightStatus === "confirmed";
+  const isRefunding = ["refund_pending", "refunds_processing", "refunds_complete"].includes(fightStatus);
+  const isDeleted = !!event.deleted_at || !!fight?.deleted_at;
   const hasWinner = !!fight?.winner;
   const poolTotal = Number(fight?.pool_a_usd || 0) + Number(fight?.pool_b_usd || 0);
+
+  // Live count of unclaimed predictions on this fight (drives confirm dialogs)
+  const { data: predictorStats } = useQuery({
+    queryKey: ["admin_event_predictors", fight?.id],
+    queryFn: async () => {
+      if (!fight?.id) return { count: 0, totalUsd: 0 };
+      const { data } = await (supabase as any)
+        .from("prediction_entries")
+        .select("amount_usd, claimed")
+        .eq("fight_id", fight.id);
+      const rows = (data || []) as any[];
+      const unclaimed = rows.filter((r) => !r.claimed);
+      return {
+        count: unclaimed.length,
+        totalUsd: unclaimed.reduce((s, r) => s + Number(r.amount_usd || 0), 0),
+      };
+    },
+    enabled: !!fight?.id && expanded,
+    staleTime: 10_000,
+  });
 
   const doAction = async (action: string, extra: Record<string, unknown> = {}) => {
     setBusy(true);
@@ -725,26 +844,22 @@ function AdminEventRow({
           <div className="flex flex-wrap gap-1.5">
             {isOpen && (
               <Button
-                size="sm"
-                variant="outline"
+                size="sm" variant="outline"
                 className="text-[10px] h-6 gap-1 border-orange-500/30 text-orange-400"
                 disabled={busy}
-                onClick={() =>
-                  doAction("admin_close_event", { event_id: event.id, fight_id: fight?.id })
-                }
+                onClick={() => doAction("admin_close_event", { event_id: event.id, fight_id: fight?.id })}
               >
                 <Lock className="w-3 h-3" /> Close
               </Button>
             )}
 
-            {(isLocked || isOpen) && !isSettled && fight && (
+            {(isLocked || isOpen) && !isSettled && !isRefunding && !isDeleted && fight && (
               <div className="w-full space-y-1.5 mt-1">
-                <div className="text-[10px] text-muted-foreground font-medium">Set Winner:</div>
+                <div className="text-[10px] text-muted-foreground font-medium">Set Winner & Settle (triggers payout):</div>
                 <div className="flex gap-1.5">
                   {["fighter_a", "fighter_b", "draw"].map((w) => (
                     <Button
-                      key={w}
-                      size="sm"
+                      key={w} size="sm"
                       variant={selectedWinner === w ? "default" : "outline"}
                       className="text-[10px] h-6"
                       onClick={() => setSelectedWinner(w)}
@@ -755,38 +870,133 @@ function AdminEventRow({
                 </div>
                 {selectedWinner && (
                   <Button
-                    size="sm"
-                    className="h-6 text-[10px] gap-1 w-full bg-primary"
-                    disabled={busy}
-                    onClick={() =>
-                      doAction("admin_settle_event", {
-                        fight_id: fight.id,
-                        event_id: event.id,
-                        winner: selectedWinner,
-                      })
-                    }
+                    size="sm" className="h-6 text-[10px] gap-1 w-full bg-primary"
+                    disabled={busy} onClick={() => setSettleOpen(true)}
                   >
-                    <Trophy className="w-3 h-3" /> {busy ? "Settling..." : "Confirm & Settle"}
+                    <Trophy className="w-3 h-3" /> Confirm & Settle…
                   </Button>
                 )}
               </div>
             )}
 
+            {!isSettled && !isRefunding && !isDeleted && fight && (
+              <Button
+                size="sm" variant="outline"
+                className="text-[10px] h-6 gap-1 border-yellow-500/30 text-yellow-400"
+                disabled={busy} onClick={() => setRefundOpen(true)}
+              >
+                <RefreshCw className="w-3 h-3" /> Refund All…
+              </Button>
+            )}
+
+            {!isDeleted && (
+              <Button
+                size="sm" variant="outline"
+                className="text-[10px] h-6 gap-1 border-destructive/40 text-destructive"
+                disabled={busy} onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 className="w-3 h-3" /> Delete Event…
+              </Button>
+            )}
+
             {isSettled && hasWinner && (
               <div className="text-[10px] text-primary">
-                Winner:{" "}
-                <span className="font-bold">
-                  {fight.winner === "fighter_a"
-                    ? event.team_a
-                    : fight.winner === "fighter_b"
-                    ? event.team_b
-                    : "Draw"}
+                Winner: <span className="font-bold">
+                  {fight.winner === "fighter_a" ? event.team_a : fight.winner === "fighter_b" ? event.team_b : "Draw"}
                 </span>
               </div>
             )}
+            {isDeleted && <div className="text-[10px] text-muted-foreground">Deleted</div>}
+            {isRefunding && <div className="text-[10px] text-yellow-400">Refunding…</div>}
           </div>
         </div>
       )}
+
+      {/* Settle confirmation */}
+      <AlertDialog open={settleOpen} onOpenChange={setSettleOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2"><Trophy className="w-5 h-5 text-primary"/> Confirm settlement</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-left text-xs">
+              <div>Settling <strong>{event.title}</strong> with winner:&nbsp;
+                <strong>{selectedWinner === "fighter_a" ? event.team_a : selectedWinner === "fighter_b" ? event.team_b : "Draw"}</strong>
+              </div>
+              <div>• Total pool: <strong>${poolTotal.toFixed(2)}</strong></div>
+              <div>• Predictors awaiting payout: <strong>{predictorStats?.count ?? "…"}</strong></div>
+              <div>• Predictor stake at risk: <strong>${(predictorStats?.totalUsd ?? 0).toFixed(2)}</strong></div>
+              <div className="text-destructive">This triggers payouts via the existing settle worker. Cannot be undone.</div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busy}
+              onClick={async (e) => {
+                e.preventDefault();
+                await doAction("admin_settle_event", { fight_id: fight.id, event_id: event.id, winner: selectedWinner });
+                setSettleOpen(false);
+              }}
+            >{busy ? "Settling…" : "Settle now"}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Refund confirmation */}
+      <AlertDialog open={refundOpen} onOpenChange={setRefundOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-yellow-400"><RefreshCw className="w-5 h-5"/> Refund all predictors</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-left text-xs">
+              <div>Refunding all unclaimed predictions on <strong>{event.title}</strong>.</div>
+              <div>• Total pool: <strong>${poolTotal.toFixed(2)}</strong></div>
+              <div>• Predictors to refund: <strong>{predictorStats?.count ?? "…"}</strong></div>
+              <div>• Refund amount: <strong>${(predictorStats?.totalUsd ?? 0).toFixed(2)}</strong></div>
+              <div className="text-destructive">Reuses the existing refund worker. Cannot be undone.</div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busy}
+              className="bg-yellow-500 text-black hover:bg-yellow-400"
+              onClick={async (e) => {
+                e.preventDefault();
+                await doAction("admin_refund_operator_event", { fight_id: fight.id, event_id: event.id });
+                setRefundOpen(false);
+              }}
+            >{busy ? "Refunding…" : "Refund all"}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete confirmation */}
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive"><Trash2 className="w-5 h-5"/> Delete event</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-left text-xs">
+              <div>Soft-deleting <strong>{event.title}</strong>. The event and its market will be hidden everywhere.</div>
+              <div>• Total pool: <strong>${poolTotal.toFixed(2)}</strong></div>
+              <div>• Unclaimed predictors: <strong>{predictorStats?.count ?? "…"}</strong></div>
+              <div className="text-destructive">
+                Blocked if any unclaimed predictions exist — refund first.
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busy}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async (e) => {
+                e.preventDefault();
+                await doAction("admin_delete_operator_event", { event_id: event.id });
+                setDeleteOpen(false);
+              }}
+            >{busy ? "Deleting…" : "Delete event"}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -902,6 +902,184 @@ Deno.serve(async (req) => {
       return jsonResp({ success: true, operator_id: operatorId, owner_privy_did: ownerPrivyDid, payout_wallet: payoutWallet });
     }
 
+    // Helper: verify primary admin (Morgan only — destructive ops on operators)
+    async function requirePrimaryAdmin(): Promise<string | null> {
+      const adminWallet = await requireAdmin();
+      if (!adminWallet) return null;
+      const { data: row } = await sb.from("prediction_admins").select("email").eq("wallet", adminWallet).maybeSingle();
+      if (row?.email?.toLowerCase() === "morganlaurent@live.ca") return adminWallet;
+      return null;
+    }
+
+    // ── admin_refund_operator_event (admin-only) ──
+    // Marks fight as draw + starts refund flow. Reuses prediction-refund-worker for the actual refund pass.
+    if (action === "admin_refund_operator_event") {
+      const adminWallet = await requireAdmin();
+      if (!adminWallet) return jsonResp({ error: "forbidden" }, 403);
+      const { fight_id, event_id, operator_id, reason } = body;
+      if (!fight_id || !operator_id) return jsonResp({ error: "fight_id and operator_id required" }, 400);
+
+      const { data: fight } = await sb.from("prediction_fights")
+        .select("id, operator_id, status, settled_at, pool_a_usd, pool_b_usd, deleted_at")
+        .eq("id", fight_id).single();
+      if (!fight || fight.operator_id !== operator_id) return jsonResp({ error: "fight_not_found" }, 404);
+      if (fight.deleted_at) return jsonResp({ error: "fight_deleted" }, 400);
+      if (fight.settled_at) return jsonResp({ error: "already_settled" }, 400);
+      if (["refund_pending", "refunds_processing", "refunds_complete"].includes(fight.status)) {
+        return jsonResp({ error: "refund_already_in_progress" }, 400);
+      }
+
+      const now = new Date().toISOString();
+
+      // AUDIT FIRST — before destructive update
+      await sb.from("automation_logs").insert({
+        action: "admin_refund_operator_event",
+        fight_id,
+        source: "operator-manage",
+        details: { event_id, operator_id, admin: adminWallet, reason: reason || null,
+                   pool_a_usd: fight.pool_a_usd, pool_b_usd: fight.pool_b_usd },
+      });
+
+      // Transition through draw → refund_pending (matches existing refund worker contract)
+      await sb.from("prediction_fights").update({
+        status: "refund_pending",
+        winner: null,
+        method: null,
+        refund_status: "pending",
+        refunds_started_at: now,
+        trading_allowed: false,
+        updated_at: now,
+      }).eq("id", fight_id);
+
+      if (event_id) {
+        await sb.from("operator_events").update({ status: "refunding", updated_at: now })
+          .eq("id", event_id).eq("operator_id", operator_id);
+      }
+
+      // Invoke existing refund worker (do not duplicate refund logic)
+      try {
+        const workerRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/prediction-refund-worker`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({ fight_id, wallet: adminWallet }),
+        });
+        const workerJson = await workerRes.json();
+        return jsonResp({ success: true, refund_worker: workerJson });
+      } catch (workerErr: any) {
+        return jsonResp({ success: true, refund_worker_error: workerErr?.message || String(workerErr) });
+      }
+    }
+
+    // ── admin_delete_operator_event (admin-only, soft-delete) ──
+    if (action === "admin_delete_operator_event") {
+      const adminWallet = await requireAdmin();
+      if (!adminWallet) return jsonResp({ error: "forbidden" }, 403);
+      const { event_id, operator_id } = body;
+      if (!event_id || !operator_id) return jsonResp({ error: "event_id and operator_id required" }, 400);
+
+      const { data: ev } = await sb.from("operator_events")
+        .select("id, operator_id, title, deleted_at").eq("id", event_id).single();
+      if (!ev || ev.operator_id !== operator_id) return jsonResp({ error: "event_not_found" }, 404);
+      if (ev.deleted_at) return jsonResp({ error: "already_deleted" }, 400);
+
+      // Block delete if any active (non-refunded, non-claimed) predictions exist on linked fight(s)
+      const { data: linkedFights } = await sb.from("prediction_fights")
+        .select("id, status, deleted_at").eq("operator_event_id", event_id);
+      const fightIds = (linkedFights || []).filter((f: any) => !f.deleted_at).map((f: any) => f.id);
+
+      if (fightIds.length > 0) {
+        const { count: activeEntries } = await sb.from("prediction_entries")
+          .select("id", { count: "exact", head: true })
+          .in("fight_id", fightIds)
+          .eq("claimed", false);
+        if (activeEntries && activeEntries > 0) {
+          return jsonResp({
+            error: "has_active_predictions",
+            detail: `Event has ${activeEntries} unclaimed prediction(s). Refund first, then delete.`,
+          }, 400);
+        }
+      }
+
+      const now = new Date().toISOString();
+
+      // AUDIT FIRST
+      await sb.from("automation_logs").insert({
+        action: "admin_delete_operator_event",
+        source: "operator-manage",
+        details: { event_id, operator_id, admin: adminWallet, title: ev.title, fight_ids: fightIds },
+      });
+
+      await sb.from("operator_events").update({ deleted_at: now, updated_at: now }).eq("id", event_id);
+      if (fightIds.length > 0) {
+        await sb.from("prediction_fights").update({ deleted_at: now, trading_allowed: false, updated_at: now })
+          .in("id", fightIds);
+      }
+      return jsonResp({ success: true });
+    }
+
+    // ── admin_delete_operator (PRIMARY-admin only, soft-delete) ──
+    if (action === "admin_delete_operator") {
+      const adminWallet = await requirePrimaryAdmin();
+      if (!adminWallet) return jsonResp({ error: "forbidden_primary_admin_only" }, 403);
+      const { operator_id, confirm_brand_name } = body;
+      if (!operator_id) return jsonResp({ error: "operator_id required" }, 400);
+
+      const { data: op } = await sb.from("operators")
+        .select("id, brand_name, subdomain, deleted_at").eq("id", operator_id).single();
+      if (!op) return jsonResp({ error: "operator_not_found" }, 404);
+      if (op.deleted_at) return jsonResp({ error: "already_deleted" }, 400);
+      if (!confirm_brand_name || confirm_brand_name !== op.brand_name) {
+        return jsonResp({ error: "brand_name_confirmation_mismatch", expected: op.brand_name }, 400);
+      }
+
+      // Block if there are active fights with unclaimed predictions
+      const { data: opFights } = await sb.from("prediction_fights")
+        .select("id, status, deleted_at").eq("operator_id", operator_id);
+      const liveFightIds = (opFights || []).filter((f: any) =>
+        !f.deleted_at && !["settled", "refunds_complete", "cancelled"].includes(f.status)
+      ).map((f: any) => f.id);
+
+      if (liveFightIds.length > 0) {
+        const { count: openEntries } = await sb.from("prediction_entries")
+          .select("id", { count: "exact", head: true })
+          .in("fight_id", liveFightIds)
+          .eq("claimed", false);
+        if (openEntries && openEntries > 0) {
+          return jsonResp({
+            error: "has_open_predictions",
+            detail: `Operator has ${openEntries} unclaimed prediction(s) on ${liveFightIds.length} active event(s). Settle or refund first.`,
+          }, 400);
+        }
+      }
+
+      const now = new Date().toISOString();
+
+      // AUDIT FIRST
+      await sb.from("automation_logs").insert({
+        action: "admin_delete_operator",
+        source: "operator-manage",
+        details: { operator_id, brand_name: op.brand_name, subdomain: op.subdomain, admin: adminWallet,
+                   fight_count: (opFights || []).length },
+      });
+
+      await sb.from("operators").update({
+        deleted_at: now,
+        status: "deleted",
+        updated_at: now,
+      }).eq("id", operator_id);
+
+      // Mark all the operator's events + fights as deleted to hide from UIs
+      await sb.from("operator_events").update({ deleted_at: now, updated_at: now })
+        .eq("operator_id", operator_id).is("deleted_at", null);
+      await sb.from("prediction_fights").update({ deleted_at: now, trading_allowed: false, updated_at: now })
+        .eq("operator_id", operator_id).is("deleted_at", null);
+
+      return jsonResp({ success: true });
+    }
+
     // ── admin_create_event (admin-only, create event for any operator) ──
     if (action === "admin_create_event") {
       const adminWallet = await requireAdmin();
