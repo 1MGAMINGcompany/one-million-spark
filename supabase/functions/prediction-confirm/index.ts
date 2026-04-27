@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { privateKeyToAccount } from "npm:viem@2/accounts";
 import { createWalletClient, http, encodeFunctionData, parseAbi } from "npm:viem@2";
 import { polygon } from "npm:viem@2/chains";
@@ -58,7 +58,7 @@ async function polygonRpcCall(
  * On failure, marks as 'failed' with error — funds remain in treasury.
  */
 async function sweepOperatorFee(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient<any>,
   revenueId: string,
   operatorFeeUsdc: number,
   payoutWallet: string,
@@ -190,7 +190,7 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabase = createClient(
+  const supabase: SupabaseClient<any> = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );

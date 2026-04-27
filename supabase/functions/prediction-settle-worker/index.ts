@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const supabase = createClient(
+    const supabase: SupabaseClient<any> = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
@@ -221,7 +221,7 @@ Deno.serve(async (req) => {
 });
 
 async function completeJob(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient<any>,
   jobId: string,
   fightId: string,
   outcome: string
