@@ -156,12 +156,14 @@ function OperatorCard({
   onToggle,
   getAccessToken,
   onRefresh,
+  isPrimaryAdmin,
 }: {
   op: OperatorRow;
   expanded: boolean;
   onToggle: () => void;
   getAccessToken: () => Promise<string | null>;
   onRefresh: () => void;
+  isPrimaryAdmin: boolean;
 }) {
   const [linkCopied, setLinkCopied] = useState(false);
   const url = `https://1mg.live/${op.subdomain}`;
