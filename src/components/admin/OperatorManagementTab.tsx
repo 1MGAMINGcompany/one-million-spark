@@ -504,6 +504,16 @@ function OperatorExpandedPanel({
             </>
           )}
         </Button>
+        {isPrimaryAdmin && !((op as any).deleted_at) && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-xs gap-1 h-7 border-destructive/40 text-destructive hover:bg-destructive/10"
+            onClick={() => { setDeleteOpConfirm(""); setDeleteOpOpen(true); }}
+          >
+            <Trash2 className="w-3 h-3" /> Delete App
+          </Button>
+        )}
       </div>
 
       {/* QR Code */}
