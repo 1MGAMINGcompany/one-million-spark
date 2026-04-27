@@ -37,6 +37,7 @@ export function useOperatorBySubdomain(subdomain: string | null) {
         .from("operators")
         .select("*")
         .eq("subdomain", subdomain)
+        .is("deleted_at", null)
         .maybeSingle();
       if (error) throw error;
       return data as Operator | null;
