@@ -7,13 +7,20 @@ import {
   Globe, ExternalLink, Search, Copy, Download, Check,
   ChevronDown, ChevronUp, Lock, Trophy, Pause, Play,
   Wallet, Mail, Calendar, Plus, QrCode, AlertTriangle,
+  RefreshCw, Trash2, ShieldAlert,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import OperatorQRCode from "@/components/operator/OperatorQRCode";
 
 const SPORT_OPTIONS = ["Soccer", "MMA", "Boxing", "NFL", "NBA", "NHL", "MLB", "NCAA", "Tennis", "Cricket", "F1", "Golf"];
+
+const PRIMARY_ADMIN_EMAIL = "morganlaurent@live.ca";
 
 interface OperatorRow {
   id: string;
