@@ -1338,6 +1338,25 @@ export default function OperatorApp({ subdomain, isDemo = false }: OperatorAppPr
                   Upcoming featured events will appear here.
                 </p>
               </>
+            ) : broadSportFilter !== "ALL" ? (
+              <>
+                <Clock className="w-12 h-12 mx-auto mb-4" style={{ color: theme.textMuted }} />
+                <h3 className="text-lg font-bold" style={{ color: theme.textSecondary }}>
+                  No {(BROAD_SPORTS[broadSportFilter]?.label || broadSportFilter).toLowerCase()} events available right now
+                </h3>
+                <p className="mt-2 text-sm max-w-sm mx-auto" style={{ color: theme.textMuted }}>
+                  New events sync from Polymarket every 6 hours automatically. Check back soon.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-5"
+                  onClick={() => queryClient.invalidateQueries({ queryKey: ["operator_fights", operator?.id] })}
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Refresh
+                </Button>
+              </>
             ) : (
               <>
                 <CalendarPlus className="w-12 h-12 mx-auto mb-4" style={{ color: theme.textMuted }} />
