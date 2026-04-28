@@ -419,20 +419,31 @@ export default function OperatorApp({ subdomain, isDemo = false }: OperatorAppPr
   }, [enrichedFights]);
 
   // ── Build broad sport tabs (Level 1) ──
+  // Tabs are built from operator.allowed_sports, NOT from event counts —
+  // every allowed sport renders a tab (even with 0 events) so the app never
+  // looks broken while a sync is in flight.
   const broadSportTabs = useMemo<SportTabGroup[]>(() => {
-    const tabs = Object.entries(sportCounts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([sport, count]) => ({
-        key: sport,
-        label: BROAD_SPORTS[sport]?.label || sport,
-        emoji: BROAD_SPORTS[sport]?.emoji || "🏆",
-        count,
-      }));
+    // Map each allowed sport (e.g. "NHL", "SOCCER", "MMA") to its broad
+    // sport bucket (e.g. "HOCKEY", "SOCCER", "MMA"), preserving order and
+    // de-duplicating buckets that multiple allowed sports map into.
+    const seen = new Set<string>();
+    const tabs: { key: string; label: string; emoji: string; count: number }[] = [];
+    for (const allowed of allowedSports) {
+      const broad = toBroadSport(String(allowed).toUpperCase()) || "OTHER";
+      if (broad === "OTHER" || seen.has(broad)) continue;
+      seen.add(broad);
+      tabs.push({
+        key: broad,
+        label: BROAD_SPORTS[broad]?.label || broad,
+        emoji: BROAD_SPORTS[broad]?.emoji || "🏆",
+        count: sportCounts[broad] || 0,
+      });
+    }
     return [{
       label: "Sports",
       tabs: [{ key: "ALL", label: t("operator.allSports"), emoji: "🔥", count: enrichedFights.length }, ...tabs],
     }];
-  }, [enrichedFights, sportCounts]);
+  }, [allowedSports, sportCounts, enrichedFights.length, t]);
 
   // ── Operator custom event count (for dynamic tab) ──
   const operatorCustomFights = useMemo(
