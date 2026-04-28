@@ -5,7 +5,7 @@ import LiveGameBadge, { LiveScoreDisplay } from "@/components/predictions/LiveGa
 import { useTranslation } from "react-i18next";
 import { useOperatorBySubdomain, useOperatorSettings } from "@/hooks/useOperator";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePrivySafe } from "@/hooks/usePrivySafe";
 import { usePrivyLogin } from "@/hooks/usePrivyLogin";
@@ -16,7 +16,7 @@ import { usePolymarketSession } from "@/hooks/usePolymarketSession";
 import { usePolymarketPrices } from "@/hooks/usePolymarketPrices";
 import { usePolymarketLivePrices } from "@/hooks/usePolymarketLivePrices";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Globe, Trophy, Loader2, ShieldCheck, Search, CalendarPlus, ChevronDown, Zap, Copy, ExternalLink, CreditCard, ArrowUpRight, AlertTriangle, LogOut } from "lucide-react";
+import { Globe, Trophy, Loader2, ShieldCheck, Search, CalendarPlus, ChevronDown, Zap, Copy, ExternalLink, CreditCard, ArrowUpRight, AlertTriangle, LogOut, Clock, RefreshCw } from "lucide-react";
 import { useFundWallet, useSendTransaction } from "@privy-io/react-auth";
 import { polygon } from "viem/chains";
 import { encodeFunctionData, parseAbi } from "viem";
@@ -168,6 +168,7 @@ export default function OperatorApp({ subdomain, isDemo = false }: OperatorAppPr
   });
 
   const autoPayoutAttemptedRef = useRef(false);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (autoPayoutAttemptedRef.current) return;
@@ -419,20 +420,31 @@ export default function OperatorApp({ subdomain, isDemo = false }: OperatorAppPr
   }, [enrichedFights]);
 
   // ── Build broad sport tabs (Level 1) ──
+  // Tabs are built from operator.allowed_sports, NOT from event counts —
+  // every allowed sport renders a tab (even with 0 events) so the app never
+  // looks broken while a sync is in flight.
   const broadSportTabs = useMemo<SportTabGroup[]>(() => {
-    const tabs = Object.entries(sportCounts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([sport, count]) => ({
-        key: sport,
-        label: BROAD_SPORTS[sport]?.label || sport,
-        emoji: BROAD_SPORTS[sport]?.emoji || "🏆",
-        count,
-      }));
+    // Map each allowed sport (e.g. "NHL", "SOCCER", "MMA") to its broad
+    // sport bucket (e.g. "HOCKEY", "SOCCER", "MMA"), preserving order and
+    // de-duplicating buckets that multiple allowed sports map into.
+    const seen = new Set<string>();
+    const tabs: { key: string; label: string; emoji: string; count: number }[] = [];
+    for (const allowed of allowedSports) {
+      const broad = toBroadSport(String(allowed).toUpperCase()) || "OTHER";
+      if (broad === "OTHER" || seen.has(broad)) continue;
+      seen.add(broad);
+      tabs.push({
+        key: broad,
+        label: BROAD_SPORTS[broad]?.label || broad,
+        emoji: BROAD_SPORTS[broad]?.emoji || "🏆",
+        count: sportCounts[broad] || 0,
+      });
+    }
     return [{
       label: "Sports",
       tabs: [{ key: "ALL", label: t("operator.allSports"), emoji: "🔥", count: enrichedFights.length }, ...tabs],
     }];
-  }, [enrichedFights, sportCounts]);
+  }, [allowedSports, sportCounts, enrichedFights.length, t]);
 
   // ── Operator custom event count (for dynamic tab) ──
   const operatorCustomFights = useMemo(
@@ -1325,6 +1337,25 @@ export default function OperatorApp({ subdomain, isDemo = false }: OperatorAppPr
                 <p className="mt-2 text-sm max-w-sm mx-auto" style={{ color: theme.textMuted }}>
                   Upcoming featured events will appear here.
                 </p>
+              </>
+            ) : broadSportFilter !== "ALL" ? (
+              <>
+                <Clock className="w-12 h-12 mx-auto mb-4" style={{ color: theme.textMuted }} />
+                <h3 className="text-lg font-bold" style={{ color: theme.textSecondary }}>
+                  No {(BROAD_SPORTS[broadSportFilter]?.label || broadSportFilter).toLowerCase()} events available right now
+                </h3>
+                <p className="mt-2 text-sm max-w-sm mx-auto" style={{ color: theme.textMuted }}>
+                  New events sync from Polymarket every 6 hours automatically. Check back soon.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-5"
+                  onClick={() => queryClient.invalidateQueries({ queryKey: ["operator_fights", operator?.id] })}
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Refresh
+                </Button>
               </>
             ) : (
               <>
