@@ -16,7 +16,7 @@ import { usePolymarketSession } from "@/hooks/usePolymarketSession";
 import { usePolymarketPrices } from "@/hooks/usePolymarketPrices";
 import { usePolymarketLivePrices } from "@/hooks/usePolymarketLivePrices";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Globe, Trophy, Loader2, ShieldCheck, Search, CalendarPlus, ChevronDown, Zap, Copy, ExternalLink, CreditCard, ArrowUpRight, AlertTriangle, LogOut } from "lucide-react";
+import { Globe, Trophy, Loader2, ShieldCheck, Search, CalendarPlus, ChevronDown, Zap, Copy, ExternalLink, CreditCard, ArrowUpRight, AlertTriangle, LogOut, Clock, RefreshCw } from "lucide-react";
 import { useFundWallet, useSendTransaction } from "@privy-io/react-auth";
 import { polygon } from "viem/chains";
 import { encodeFunctionData, parseAbi } from "viem";
