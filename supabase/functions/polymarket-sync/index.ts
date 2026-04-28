@@ -688,69 +688,106 @@ function findWinnerMarket(ev: GammaEvent): GammaMarketExt | null {
   return null;
 }
 
-/** Execute the fetch strategy for a league source — now uses series_id + tag_id=100639 when available */
+/**
+ * Execute the fetch strategy for a league source.
+ *
+ * UNION discovery — all available strategies are ALWAYS executed and results
+ * merged with id-based dedup, so we catch markets that only appear in one view:
+ *   (a) series_id + tag_id=100639  — single-game / regular-season markets
+ *   (b) raw league tag_id          — series-winner, futures, playoff markets
+ *   (c) public-search seeds        — discovery for combat/golf/etc.
+ *
+ * Previously path (b) only ran as a fallback when (a) returned 0 events,
+ * which hid playoff series-winner markets (e.g. NHL Canadiens vs Lightning).
+ */
 async function fetchByLeagueSource(src: LeagueSource): Promise<{ events: GammaEvent[]; endpoints: string[] }> {
   const endpoints: string[] = [];
+  const merged: GammaEvent[] = [];
+  const seen = new Set<string>();
+  const addAll = (events: GammaEvent[]) => {
+    for (const ev of events) {
+      const id = String(ev.id);
+      if (!seen.has(id)) {
+        seen.add(id);
+        merged.push(ev);
+      }
+    }
+  };
 
-  // Step 1: For tag-based leagues, try to resolve series_id from /sports cache
+  // ── Tag-based leagues (most major leagues) ──
   if (src.fetchStrategy === "tag" && src.tagId) {
-    // Try series_id + tag_id=100639 first (best filtering)
     const seriesId = src.seriesId || await resolveSeriesId(src.key, src.label);
+
+    // Strategy (a): series_id + tag_id=100639 (single-game filter)
+    let seriesEvents: GammaEvent[] = [];
     if (seriesId) {
       endpoints.push(`events?series_id=${seriesId}&tag_id=100639`);
-      const events = await fetchEventsBySeriesId(seriesId);
-      if (events.length > 0) return { events, endpoints };
-      // Fall through to tag-only if series_id returned nothing
-    }
-
-    // Fallback: tag_id only (without 100639 game filter)
-    endpoints.push(`events?tag_id=${src.tagId}`);
-    const events = await fetchEventsByTagId(src.tagId);
-    return { events, endpoints };
-  }
-
-  // Step 2: For search-based sports (UFC, Boxing, Golf, etc.), try manual tag ID first
-  if (src.fetchStrategy === "search") {
-    const manualTagId = MANUAL_SPORT_TAGS[src.key];
-    if (manualTagId) {
-      endpoints.push(`events?tag_id=${manualTagId}`);
-      const tagEvents = await fetchEventsByTagId(manualTagId);
-      if (tagEvents.length > 0) {
-        // Also do search to supplement
-        if (src.searchSeed) {
-          endpoints.push(...src.searchSeed.map(s => `public-search?q=${s}`));
-          const searchEvents = await fetchSearchEvents(src.searchSeed);
-          // Merge, dedup by id
-          const seen = new Set(tagEvents.map(e => String(e.id)));
-          for (const ev of searchEvents) {
-            if (!seen.has(String(ev.id))) {
-              seen.add(String(ev.id));
-              tagEvents.push(ev);
-            }
-          }
-        }
-        return { events: tagEvents, endpoints };
+      try {
+        seriesEvents = await fetchEventsBySeriesId(seriesId);
+      } catch (e) {
+        console.warn(`[fetchByLeagueSource] series fetch failed for ${src.key}:`, e);
       }
     }
 
-    // Fallback to search only
-    if (src.searchSeed) {
-      endpoints.push(...src.searchSeed.map(s => `public-search?q=${s}`));
-      const events = await fetchSearchEvents(src.searchSeed);
-      return { events, endpoints };
+    // Strategy (b): raw league tag (catches playoff/series/futures markets)
+    let tagEvents: GammaEvent[] = [];
+    endpoints.push(`events?tag_id=${src.tagId}`);
+    try {
+      tagEvents = await fetchEventsByTagId(src.tagId);
+    } catch (e) {
+      console.warn(`[fetchByLeagueSource] tag fetch failed for ${src.key}:`, e);
     }
+
+    addAll(seriesEvents);
+    addAll(tagEvents);
+    console.log(`[fetchByLeagueSource] ${src.key} UNION: series=${seriesEvents.length} tag=${tagEvents.length} merged=${merged.length}`);
+    return { events: merged, endpoints };
   }
 
-  // Fallback: try tag if available, else search by label
+  // ── Search-based leagues (UFC/Boxing/Golf/F1/Rugby/Tennis-search) ──
+  if (src.fetchStrategy === "search") {
+    // Strategy (b): manual sport tag if known
+    const manualTagId = MANUAL_SPORT_TAGS[src.key];
+    if (manualTagId) {
+      endpoints.push(`events?tag_id=${manualTagId}`);
+      try {
+        addAll(await fetchEventsByTagId(manualTagId));
+      } catch (e) {
+        console.warn(`[fetchByLeagueSource] manual tag fetch failed for ${src.key}:`, e);
+      }
+    }
+
+    // Strategy (c): public-search seeds
+    if (src.searchSeed) {
+      endpoints.push(...src.searchSeed.map(s => `public-search?q=${s}`));
+      try {
+        addAll(await fetchSearchEvents(src.searchSeed));
+      } catch (e) {
+        console.warn(`[fetchByLeagueSource] search fetch failed for ${src.key}:`, e);
+      }
+    }
+    console.log(`[fetchByLeagueSource] ${src.key} UNION (search): merged=${merged.length}`);
+    return { events: merged, endpoints };
+  }
+
+  // ── Fallback: tag if available, else search by label ──
   if (src.tagId) {
     endpoints.push(`events?tag_id=${src.tagId}`);
-    const events = await fetchEventsByTagId(src.tagId);
-    return { events, endpoints };
+    try {
+      addAll(await fetchEventsByTagId(src.tagId));
+    } catch (e) {
+      console.warn(`[fetchByLeagueSource] fallback tag fetch failed for ${src.key}:`, e);
+    }
+    return { events: merged, endpoints };
   }
 
   endpoints.push(`public-search?q=${src.label}`);
-  const events = await fetchSearchEvents([src.label]);
-  return { events, endpoints };
+  try {
+    addAll(await fetchSearchEvents([src.label]));
+  } catch (e) {
+    console.warn(`[fetchByLeagueSource] fallback search failed for ${src.key}:`, e);
+  }
+  return { events: merged, endpoints };
 }
 
 interface FilterResult {
