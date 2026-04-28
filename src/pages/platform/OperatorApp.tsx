@@ -168,6 +168,7 @@ export default function OperatorApp({ subdomain, isDemo = false }: OperatorAppPr
   });
 
   const autoPayoutAttemptedRef = useRef(false);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (autoPayoutAttemptedRef.current) return;
